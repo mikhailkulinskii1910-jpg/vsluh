@@ -2778,18 +2778,27 @@ async function ocrShot(shot){
   }
   const R = Math.max(1, Math.round(3 * Math.max(base.width, base.height) / 2600));
   const NORMAL = { flat: false }, SHARPEN = { bin: false, amount: 3, radius: R };   // подобрано на тестовых снимках
-  const run = async (deg, label, strong) => {
-    const canvas = renderForOcr(base, deg, strong ? SHARPEN : NORMAL);
+  const PLAIN = { flat: false, dewarp: false, mask: false };   // без выпрямления строк и без фильтра картинок — как в первых версиях
+  const run = async (deg, label, strong, opt, src) => {
+    const canvas = renderForOcr(src || base, deg, opt || (strong ? SHARPEN : NORMAL));
     ocrLog = m => { if (m.status === 'recognizing text') { shot.ui.status(`${label}… ${Math.round(m.progress*100)}%`); shot.ui.progress(m.progress); } };
     const { data } = await w.recognize(canvas);
-    return { ...assemble(data, allowLatin), deg, pics: canvas.pics, strong };
+    return { ...assemble(data, allowLatin), deg, pics: canvas.pics, strong, opt, src };
   };
   const better = (a, b) => (b.text && (b.read > a.read + 2 || (!a.text) || (b.read >= a.read - 1 && b.text.length > a.text.length * 1.15))) ? b : a;
   let res = await run(angle, 'Распознаю', false);
   // чёткость и контраст повышаем, только если читаемость ниже 50%
   if (res.read < 50) res = better(res, await run(angle, 'Читаемость ниже 50%, повышаю чёткость', true));
+  // выпрямление строк и фильтр картинок на части снимков (колонки, таблицы) мешают — сверяем с обработкой без них
+  if (res.read < 70) res = better(res, await run(angle, 'Сверяю с обычной обработкой', false, PLAIN));
+  // мелкий текст на большом снимке: пробуем в более высоком разрешении
+  const bigSide = Math.max(img.naturalWidth * (shot.crop ? shot.crop.w : 1), img.naturalHeight * (shot.crop ? shot.crop.h : 1));
+  if (res.read < 70 && bigSide > 3000) {
+    const hi = grayCanvas(img, shot.crop, 4000);
+    res = better(res, await run(angle, 'Пробую в высоком разрешении', false, res.opt || NORMAL, hi));
+  }
   if (res.conf < 70 && shot.rot == null) {            // возможно, фото вверх ногами
-    res = better(res, await run(angle + 180, 'Проверяю переворот', res.strong));
+    res = better(res, await run(angle + 180, 'Проверяю переворот', res.strong, res.opt, res.src));
   }
   ocrLog = null;
   shot.lastDeg = res.deg;
