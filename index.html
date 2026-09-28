@@ -1,0 +1,2623 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#D07805">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Вслух">
+<script>/* Веб-приложение: локальные библиотеки и работа без интернета (service worker). */
+(function(){
+  window.__LIB = new URL('lib/', location.href).href;
+  if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+<title>Вслух</title>
+<link rel="stylesheet" href="lib/fonts.css">
+<style>
+:root{
+  --bg:#EAEEF1; --surface:#FFFFFF; --surface-2:#F4F6F8; --line:#D5DCE2;
+  --ink:#141C24; --muted:#5A6774; --accent:#D07805; --accent-ink:#FFFFFF; --accent-text:#A35E00;
+  --sent:#FCEBD5; --word:#FFE14D; --word-ink:#141C24; --ok:#1E7A4C; --err:#B3261E;
+  --scrim:rgba(20,28,36,.38);
+  --ui:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --read:"Literata",Georgia,"PT Serif","Times New Roman",serif;
+  --mark:"Unbounded","Golos Text",system-ui,sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E1318; --surface:#161D25; --surface-2:#1C252F; --line:#2A3542;
+    --ink:#E4E9EE; --muted:#8B98A5; --accent:#D07805; --accent-ink:#FFFFFF; --accent-text:#F0A04B;
+    --sent:#3A2A14; --word:#F2D33B; --word-ink:#10151B; --ok:#5CC98E; --err:#FF8A80;
+    --scrim:rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E1318; --surface:#161D25; --surface-2:#1C252F; --line:#2A3542;
+  --ink:#E4E9EE; --muted:#8B98A5; --accent:#D07805; --accent-ink:#FFFFFF; --accent-text:#F0A04B;
+  --sent:#3A2A14; --word:#F2D33B; --word-ink:#10151B; --ok:#5CC98E; --err:#FF8A80;
+  --scrim:rgba(0,0,0,.55);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 150px;-webkit-tap-highlight-color:transparent}
+button,select,input,textarea{font:inherit;color:inherit}
+input[type=checkbox],input[type=radio],input[type=range]{accent-color:var(--accent)}
+button{cursor:pointer;touch-action:manipulation}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:1120px;margin:0 auto}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding-block:22px 18px}
+.brand{font-family:var(--mark);font-weight:600;font-size:26px;letter-spacing:-.01em;margin:0}
+.brand span{color:var(--accent-text)}
+.tag{color:var(--muted);margin:0}
+
+.grid{display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:1fr;gap:12px}}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.side{display:flex;flex-direction:column;gap:14px;padding:16px}
+.label{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0}
+
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+  border:1.5px dashed var(--line);border-radius:10px;padding:22px 14px;background:var(--surface-2);cursor:pointer;transition:border-color .15s,background .15s}
+.drop:hover,.drop.over{border-color:var(--accent)}
+.drop svg{width:34px;height:34px;color:var(--accent-text)}
+.drop strong{font-weight:600}
+.drop small{color:var(--muted);font-size:13px}
+/* Поле выбора файла лежит прозрачным слоем прямо над кнопкой: нажатие попадает в сам input.
+   Так выбор фото работает и во встроенных окнах приложений, где «label for» не срабатывает. */
+.fileover{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0;z-index:1}
+.drop{position:relative}
+.pick{display:none;gap:8px}
+.pick .pbtn{position:relative;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;min-height:48px;border-radius:10px;font-weight:600;border:1px solid var(--line);background:var(--surface-2);cursor:pointer}
+.pick .pbtn.main{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.pick svg{width:20px;height:20px}
+.pastebox{display:none;min-height:44px;border:1.5px dashed var(--line);border-radius:10px;padding:10px 12px;font-size:13px;color:var(--muted);background:var(--surface-2);outline:none;overflow:hidden;max-height:80px}
+.pastebox:empty::before{content:attr(data-ph)}
+.pastebox:focus{border-color:var(--accent)}
+
+.shots{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.shot{display:grid;grid-template-columns:48px 1fr;gap:10px;align-items:center;padding:6px;border-radius:8px;background:var(--surface-2)}
+.shot img{width:48px;height:48px;object-fit:cover;border-radius:6px;display:block}
+.shot .nm{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.shot .st{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.shot .st.ok{color:var(--ok)} .shot .st.err{color:var(--err)}
+.shotbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.mini{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:13px;min-height:34px}
+.mini:hover{border-color:var(--accent)}
+.shot{align-items:start}
+.cropcv{display:block;max-width:100%;margin:0 auto;border-radius:8px;touch-action:none;cursor:crosshair}
+.bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+
+.opts{display:flex;flex-direction:column;gap:8px;font-size:14px}
+.opts label{display:flex;gap:8px;align-items:center}
+.note{font-size:13px;color:var(--muted);margin:0}
+
+.reader{padding:0;display:flex;flex-direction:column;min-width:0}
+.rhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
+.rhead .stats{color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums;margin-right:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:13px;min-height:34px}
+.chip:hover{border-color:var(--accent)}
+.chip.acc{border-color:var(--accent);color:var(--accent-text);font-weight:600}
+.chip svg{width:16px;height:16px}
+.sample{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-text);border:1px solid currentColor;border-radius:4px;padding:1px 6px;margin-left:8px;vertical-align:2px;font-family:var(--ui)}
+
+.text{font-family:var(--read);font-size:20px;line-height:1.75;padding:22px clamp(16px,4vw,44px) 30px;max-width:44em;overflow-wrap:anywhere}
+.text p{margin:0 0 1em}
+.text .s{border-radius:4px;transition:background .15s}
+.text .s.cur{background:var(--sent);box-shadow:0 0 0 3px var(--sent)}
+.text .w{cursor:pointer;border-radius:3px}
+@media (hover:hover){.text .w:hover{text-decoration:underline;text-decoration-color:var(--accent);text-underline-offset:4px}}
+.text .w.on{background:var(--word);color:var(--word-ink);box-shadow:0 0 0 2px var(--word)}
+.text.big{font-size:24px}
+.empty{color:var(--muted);font-family:var(--ui);font-size:15px}
+#editor{width:100%;min-height:340px;border:0;resize:vertical;background:var(--surface);font-family:var(--read);font-size:18px;line-height:1.7;padding:22px clamp(16px,4vw,44px);border-radius:0 0 var(--r) var(--r)}
+#editor:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--accent)}
+
+/* player */
+.player{position:fixed;left:0;right:0;bottom:0;z-index:5;background:var(--surface);border-top:1px solid var(--line);
+  padding:12px 16px calc(12px + env(safe-area-inset-bottom,0px))}
+.pin{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"ctrls prog tune";gap:18px;align-items:center}
+.ctrls{grid-area:ctrls;display:flex;align-items:center;justify-content:center;gap:6px}
+.ib{width:44px;height:44px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;flex:none}
+.ib:hover{background:var(--surface-2)}
+.ib svg{width:22px;height:22px}
+.play{width:54px;height:54px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none;position:relative}
+.play svg{width:24px;height:24px}
+.play{transition:transform .12s ease, box-shadow .15s ease}
+.play:active{transform:scale(.92)}
+.play.on{box-shadow:0 0 0 4px var(--sent)}
+.play.busy::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:3px solid transparent;border-top-color:var(--accent);animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.prog{grid-area:prog;display:flex;flex-direction:column;gap:6px;min-width:0}
+.prog .row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;gap:8px}
+.prog .now{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.prog .row span:last-child{white-space:nowrap}
+#seek{width:100%;accent-color:var(--accent);margin:0}
+.mchip{display:none}
+.tune{grid-area:tune;display:flex;gap:14px;align-items:center}
+.tune .sheethead{display:none}
+.speed{display:flex;flex-direction:column;gap:2px;width:190px}
+.speed .row{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted)}
+.speed output{font-family:var(--mark);font-weight:600;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+#rate{width:100%;accent-color:var(--accent)}
+.presets{display:flex;gap:4px;flex-wrap:wrap}
+.presets button{border:1px solid var(--line);background:transparent;border-radius:6px;padding:1px 6px;font-size:12px;font-variant-numeric:tabular-nums}
+.presets button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.voice{display:flex;flex-direction:column;gap:4px;width:230px}
+.voice .row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);gap:6px}
+#voice{width:100%;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2)}
+.vhint{font-size:12px;color:var(--muted);margin:0}
+.more summary{cursor:pointer;font-size:12px;color:var(--accent-text);padding-block:2px}
+.morein{display:flex;flex-direction:column;gap:6px;margin-top:6px;max-height:45vh;overflow:auto}
+.ivona{font-size:12px;color:var(--muted)}
+.ivona summary{cursor:pointer;color:var(--accent-text);padding-block:2px}
+.ivona p,.ivona ol{margin:6px 0;padding-left:0}
+.ivona ol{padding-left:18px}
+.ivona a{color:var(--accent-text)}
+.tog{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink);line-height:1.35;cursor:pointer}
+.tog input{margin:2px 0 0;flex:none}
+.symlist{display:block;font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--muted);word-spacing:.1em;overflow-wrap:anywhere}
+.linkbtn{border:0;background:none;padding:0;color:var(--accent-text);font-size:12px}
+@media (max-width:1000px) and (min-width:641px){
+  .pin{grid-template-columns:auto 1fr;grid-template-areas:"ctrls prog" "tune tune"}
+  .tune{flex-wrap:wrap}
+  .speed,.voice{flex:1 1 200px;width:auto}
+  body{padding-block-end:240px}
+}
+
+/* phones */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:9}
+body.tune-open .player{z-index:11}
+@media (max-width:640px){
+  .tog{font-size:14px}
+  .tog input{width:20px;height:20px}
+  body{font-size:15px;padding-block-end:170px}
+  header{padding-block:14px 12px;gap:4px 10px}
+  .brand{font-size:22px}
+  .tag{font-size:13px;flex-basis:100%}
+  .side{padding:12px;gap:10px}
+  .side .label{display:none}
+  .drop{display:none}
+  .pick{display:flex}
+  .pastebox{display:block}
+  .rhead{padding:10px 12px}
+  .rhead .stats{flex-basis:100%;margin:0}
+  .text{font-size:18px;line-height:1.7;padding:16px 16px 24px}
+  .text.big{font-size:22px}
+  #editor{font-size:17px;padding:16px}
+  .player{padding:8px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+  .pin{grid-template-columns:1fr auto 1fr;grid-template-areas:"prog prog prog" "rate ctrls voice";gap:6px 8px}
+  .prog{gap:2px}
+  .prog .row{font-size:11px}
+  .mchip{display:inline-flex;align-items:center;gap:6px;min-height:40px;border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:4px 12px;font-size:13px;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  #rateChip{grid-area:rate;justify-self:start;font-family:var(--mark);font-weight:600;font-variant-numeric:tabular-nums}
+  #voiceChip{grid-area:voice;justify-self:end}
+  #voiceChip span{overflow:hidden;text-overflow:ellipsis}
+  .ib{width:44px;height:44px}
+  .play{width:56px;height:56px}
+  .tune{position:fixed;left:0;right:0;bottom:0;z-index:10;flex-direction:column;align-items:stretch;gap:18px;
+    background:var(--surface);border-radius:18px 18px 0 0;border-top:1px solid var(--line);
+    padding:14px 16px calc(18px + env(safe-area-inset-bottom,0px));transform:translateY(105%);transition:transform .22s ease;max-height:85vh;overflow:auto}
+  .tune.open{transform:none;box-shadow:0 -10px 40px rgba(0,0,0,.18)}
+  .tune .sheethead{display:flex;justify-content:space-between;align-items:center}
+  .tune .sheethead b{font-size:16px}
+  .speed,.voice{width:auto}
+  .speed .row,.voice .row{font-size:13px}
+  .speed output{font-size:20px}
+  #rate{height:32px}
+  .presets{gap:6px}
+  .presets button{padding:8px 0;font-size:14px;flex:1 1 22%;border-radius:8px}
+  #voice{padding:12px 10px;font-size:16px}
+  .linkbtn{font-size:14px;padding-block:6px}
+}
+
+/* dialog */
+dialog.sheet{border:1px solid var(--line);border-radius:16px;padding:0;background:var(--surface);color:var(--ink);width:min(480px,calc(100% - 32px));max-height:calc(100% - 32px)}
+dialog.sheet::backdrop{background:var(--scrim)}
+.sheet-in{display:flex;flex-direction:column;gap:16px;padding:18px 20px 20px;margin:0}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.sheet-head h2{margin:0;font-size:18px;font-weight:600}
+.fld{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted);border:0;margin:0;padding:0;min-width:0}
+.fld > span:first-child,.fld legend{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:0;margin-bottom:6px}
+.fld select{padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:15px}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg label{flex:1 1 140px;display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px;color:var(--ink);font-size:14px;cursor:pointer}
+.seg label:has(input:checked){border-color:var(--accent);background:var(--sent)}
+.rateline{display:flex;align-items:baseline;gap:10px;color:var(--ink)}
+.rateline b{font-family:var(--mark);font-size:18px;font-variant-numeric:tabular-nums}
+.big-bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.big-bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .25s}
+.progtxt{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:6px;gap:8px}
+.done audio{width:100%}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{min-height:46px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);padding:0 18px;font-weight:600;flex:1 1 auto}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.5;cursor:default}
+.err{color:var(--err)}
+@media (max-width:640px){
+  dialog.sheet{width:100%;max-width:100%;margin:auto 0 0;border-radius:18px 18px 0 0;max-height:92%;border-bottom:0}
+  .sheet-in{padding-bottom:calc(20px + env(safe-area-inset-bottom,0px))}
+}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(160px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);
+  padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px);z-index:30}
+
+.badge{display:inline-grid;place-items:center;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:var(--accent-ink);font-size:11px;font-weight:600;padding:0 5px;margin-left:2px}
+.badge.warn{background:var(--err);color:#fff}
+.text .w.typo{text-decoration:underline wavy var(--err);text-decoration-thickness:1.5px;text-underline-offset:5px}
+.text .w.abbr{border-bottom:1.5px dotted var(--accent)}
+dialog.sheet.wide{width:min(720px,calc(100% - 32px))}
+.sheet-in h3{margin:0 0 8px;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.asec{display:block;border-top:1px solid var(--line);padding-top:12px}
+.asec summary{cursor:pointer;font-weight:600;font-size:14px;padding-block:4px}
+.alist{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.arow{display:grid;grid-template-columns:minmax(60px,110px) 1fr auto;gap:4px 8px;align-items:center}
+.arow.off{opacity:.55}
+.arow code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.arow input,.addrow input,.asearch,.mini-in{min-width:0;padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:15px}
+.arow .src{font-size:11px;color:var(--muted)}
+.aacts{display:flex;gap:4px 8px;align-items:center;flex-wrap:wrap;grid-column:2 / -1}
+.arow{grid-template-columns:minmax(56px,110px) 1fr}
+.tgl{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.mini.good{border-color:var(--ok);color:var(--ok);font-weight:600}
+.addrow{display:grid;grid-template-columns:1fr 2fr;gap:8px}
+.addrow .tog,.addrow .btn{grid-column:1 / -1}
+.asearch{width:100%;margin-top:6px}
+.srow{display:flex;flex-direction:column;gap:4px;padding:10px 0;border-bottom:1px solid var(--line)}
+.srow .bad{color:var(--err);font-size:16px}
+.sctx{font-family:var(--read)}
+.sacts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.mini-in{width:120px;padding:6px 8px;font-size:14px}
+.tog.big{font-size:15px}
+.lock{position:fixed;inset:0;z-index:100;display:grid;place-items:center;background:var(--bg);padding:16px}
+.lockcard{width:min(360px,100%);display:flex;flex-direction:column;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:24px}
+.lockcard input[type=password]{padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);font-size:18px;letter-spacing:.2em;color:var(--ink)}
+body.locked .wrap,body.locked .player,body.locked .toast{display:none}
+.logout{margin-left:auto}
+@media (max-width:640px){ .arow{grid-template-columns:64px 1fr} .addrow{grid-template-columns:1fr} .tgl.mini{padding:4px 8px;min-height:30px} }
+
+.signature{position:fixed;top:calc(8px + env(safe-area-inset-top, 0px));right:calc(12px + env(safe-area-inset-right, 0px));z-index:110;
+  font-family:var(--ui);font-size:13px;font-weight:500;color:var(--accent-text);letter-spacing:.02em;pointer-events:none;user-select:none}
+.signature b{font-family:"Cambria Math","STIX Two Math","Noto Sans Math","Segoe UI Symbol",serif;font-weight:400;font-size:16px}
+header{padding-block-start:34px}
+@media (max-width:640px){ header{padding-block-start:30px} }
+
+.fishbar{display:flex;flex-direction:column;gap:8px}
+.fishbar input[type=search],.fishbar select{padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font-size:15px}
+.fishseg{flex-wrap:nowrap}
+.fishseg label{flex:1 1 0;min-width:0;padding:8px 6px;justify-content:center;gap:5px;font-size:13px}
+.fishlist{display:flex;flex-direction:column;gap:8px}
+.fcard{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.fcard .ft{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.fcard b{font-size:15px;overflow-wrap:anywhere}
+.fcard .fm{font-size:12px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.fcard .fd{font-size:13px;color:var(--ink);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fcard .ftags{display:flex;gap:4px;flex-wrap:wrap}
+.fcard .ftags span{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--muted)}
+.fcard a{font-size:13px;font-weight:600;color:var(--accent-text)}
+.facts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.fuse{flex:0 0 auto;min-height:38px;padding:0 14px;font-size:14px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<div class="signature" aria-label="by K.M">by <b>𝒦.𝑀</b></div>
+
+<div class="lock" id="lock" hidden>
+  <form class="lockcard" id="lockform" autocomplete="on">
+    <h1 class="brand">Вслух<span>.</span></h1>
+    <label for="pw" class="note">Введите пароль, чтобы продолжить</label>
+    <input type="password" id="pw" inputmode="numeric" autocomplete="current-password" required>
+    <label class="tog"><input type="checkbox" id="pwRemember"> Сохранить пароль на этом устройстве</label>
+    <p class="note err" id="pwErr" hidden>Неверный пароль. Попробуйте ещё раз.</p>
+    <button class="btn primary" type="submit">Войти</button>
+  </form>
+</div>
+<script>
+// Пароль на вход. Проверка идёт в браузере, поэтому это защита от случайного доступа, а не шифрование.
+(() => {
+  const HASH = 'a64332fe1df1790cb79d428bf5b5767ddd589b1cca825cb1b9eb30f7e9aaee03';   // SHA-256 от пароля
+  const read = k => { try { sessionStorage.removeItem(k); return localStorage.getItem(k); } catch (e) { return null; } };
+  if (read('vsluh.auth') === HASH) return;
+  document.body.classList.add('locked');
+  const lock = document.getElementById('lock'); lock.hidden = false;
+  const sha = async t => {
+    if (!(window.crypto && crypto.subtle)) return t === '1910' ? HASH : '';
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+  };
+  setTimeout(() => document.getElementById('pw').focus(), 50);
+  document.getElementById('lockform').addEventListener('submit', async e => {
+    e.preventDefault();
+    const h = await sha(document.getElementById('pw').value);
+    if (h !== HASH) { document.getElementById('pwErr').hidden = false; document.getElementById('pw').select(); return; }
+    // без галочки пароль нигде не сохраняется и спрашивается при каждом открытии страницы
+    try { if (document.getElementById('pwRemember').checked) localStorage.setItem('vsluh.auth', HASH); else localStorage.removeItem('vsluh.auth'); } catch (err) {}
+    lock.hidden = true; document.body.classList.remove('locked');
+  });
+})();
+</script>
+
+<div class="wrap">
+  <header>
+    <h1 class="brand">Вслух<span>.</span></h1>
+    <p class="tag">Сфотографируйте страницу, и текст прочитается вслух с подсветкой слов.</p>
+    <button class="linkbtn logout" id="logout" type="button">Выйти</button>
+  </header>
+
+  <div class="grid">
+    <aside class="panel side">
+      <p class="label">Фото с текстом</p>
+      <div class="drop" id="drop">
+        <input type="file" id="file" class="fileover" accept="image/*" multiple aria-label="Выбрать фото">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>
+        <strong>Выбрать фото</strong>
+        <small>или перетащите сюда, или вставьте Ctrl+V. Можно несколько страниц сразу.</small>
+      </div>
+      <div class="pick">
+        <div class="pbtn main"><input type="file" id="cam" class="fileover" accept="image/*" capture="environment" aria-label="Снять страницу камерой"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13.5" r="3.5"/></svg>Снять страницу</div>
+        <div class="pbtn"><input type="file" id="gal" class="fileover" accept="image/*" multiple aria-label="Выбрать фото из галереи"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m4 16 5-5 4 4 2-2 5 5"/></svg>Из галереи</div>
+      </div>
+      <div class="pastebox" id="pastebox" contenteditable="true" role="textbox" aria-label="Поле для вставки картинки" data-ph="Или скопируйте снимок и вставьте сюда долгим нажатием."></div>
+      <ul class="shots" id="shots"></ul>
+      <div class="opts">
+        <label><input type="checkbox" id="append"> Добавлять к текущему тексту</label>
+        <label><input type="checkbox" id="withEng" checked> Формулы, римские цифры, латиница</label>
+      </div>
+      <p class="note">Всё работает на устройстве: фото и текст никуда не отправляются.</p>
+    </aside>
+
+    <main class="panel reader">
+      <div class="rhead">
+        <span class="stats" id="stats"></span>
+        <button class="chip acc" id="mp3btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>MP3</button>
+        <button class="chip" id="abbrbtn" type="button">Сокращения<span class="badge" id="abbrCount" hidden></span></button>
+        <button class="chip" id="spellbtn" type="button">Орфография<span class="badge warn" id="spellCount" hidden></span></button>
+        <button class="chip" id="bigger" type="button">Крупнее</button>
+        <button class="chip" id="edit" type="button">Править текст</button>
+      </div>
+      <div class="text" id="text" aria-live="off"></div>
+      <textarea id="editor" hidden spellcheck="true" aria-label="Текст для чтения"></textarea>
+    </main>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="player" role="region" aria-label="Плеер">
+  <div class="pin">
+    <button class="mchip" id="rateChip" type="button" aria-label="Скорость и голос">×1</button>
+    <div class="ctrls">
+      <button class="ib" id="back" type="button" title="Предыдущее предложение (←)" aria-label="Предыдущее предложение">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button class="play" id="play" type="button" title="Слушать (пробел)" aria-label="Слушать">
+        <svg id="icPlay" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>
+        <svg id="icPause" viewBox="0 0 24 24" fill="currentColor" hidden><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+      </button>
+      <button class="ib" id="fwd" type="button" title="Следующее предложение (→)" aria-label="Следующее предложение">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+    </div>
+    <button class="mchip" id="voiceChip" type="button" aria-label="Голос"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v18M8 8v8M4 10v4M16 6v12M20 10v4"/></svg><span id="voiceChipName">Голос</span></button>
+    <div class="prog">
+      <input type="range" id="seek" min="0" max="0" value="0" step="1" aria-label="Позиция в тексте">
+      <div class="row"><span class="now" id="now">Готово к чтению</span><span id="left"></span></div>
+    </div>
+    <div class="tune" id="tune">
+      <div class="sheethead"><b>Скорость и голос</b><button class="btn" id="tuneClose" type="button" style="flex:none;min-height:38px">Готово</button></div>
+      <div class="speed">
+        <div class="row"><span>Скорость</span><output id="rateOut">×1</output></div>
+        <input type="range" id="rate" min="0.5" max="3" step="0.05" value="1" aria-label="Скорость чтения">
+        <div class="presets" data-presets></div>
+      </div>
+      <div class="voice">
+        <div class="row"><span>Голос</span><span><button class="linkbtn" id="fishbtn" type="button">Fish Audio</button> · <button class="linkbtn" id="allVoices" type="button">все языки</button></span></div>
+        <select id="voice" aria-label="Голос"></select>
+        <details class="more" id="moreSet"><summary>Ещё настройки</summary><div class="morein">
+        <p class="vhint" id="vhint" hidden></p>
+        <details class="ivona" id="realHelp"><summary>Самые реалистичные голоса</summary>
+          <p id="realFound"></p>
+          <ol>
+            <li><b>Компьютер:</b> откройте сервис в браузере Microsoft Edge — появятся Svetlana и Dmitry (Natural). Нужен интернет.</li>
+            <li><b>iPhone, iPad:</b> Настройки → Универсальный доступ → Устное содержимое → Голоса → Русский → скачайте «Милена» или «Юрий» (улучшенный). Затем откройте сервис в Safari.</li>
+            <li><b>Mac:</b> Системные настройки → Универсальный доступ → Устное содержимое → Системный голос → Управлять голосами → Русский → «Милена (премиум)» или «Юрий (улучшенный)».</li>
+            <li><b>Android:</b> Настройки → Синтез речи (Специальные возможности) → Google → Установить голосовые данные → Русский → скачайте голос высокого качества. Затем откройте сервис в Chrome.</li>
+          </ol>
+          <p>Эти голоса звучат естественнее всего, но в MP3 их не сохранить: браузер не даёт записывать голоса системы. Для MP3 используются нейро-голоса сервиса.</p>
+        </details>
+        <details class="ivona" id="ivonaHelp"><summary>Как добавить голос Maxim (IVONA)</summary>
+          <p>Maxim — платный мужской голос NextUp IVONA для Windows. Встроить его в страницу нельзя, но страница использует его, если он установлен на компьютере.</p>
+          <ol>
+            <li>Купите и установите «IVONA Maxim» на сайте <a href="https://nextup.com/ivona/" target="_blank" rel="noopener">nextup.com/ivona</a>.</li>
+            <li>Полностью закройте и снова откройте браузер. Лучше Chrome или Firefox: Edge может не показывать такие голоса.</li>
+            <li>Голос появится в этом списке первым и выберется сам.</li>
+          </ol>
+          <p>На телефонах и Mac голоса IVONA не работают. В MP3 Maxim сохранить нельзя: для файла используются нейро-голоса.</p>
+          <p>Бесплатная замена, которая работает везде и сохраняется в MP3, — голос «Руслан низкий»: он подобран по звучанию Maxim. <button type="button" class="linkbtn" id="pickMaximLike">Выбрать его</button></p>
+        </details>
+        <label class="tog"><input type="checkbox" id="saySym"><span>Проговаривать знаки<span class="symlist">: ; ! ? + - ( ) @ # _ / * " '</span></span></label>
+        <label class="tog"><input type="checkbox" id="sayRoman" checked> Римские цифры читать числами (XIX век → девятнадцатый век)</label>
+        <button class="linkbtn" id="test" type="button" style="align-self:flex-start">Прослушать голос</button>
+        </div></details>
+      </div>
+    </div>
+  </div>
+</div>
+
+<dialog class="sheet" id="mp3dlg" aria-labelledby="mp3title">
+  <form method="dialog" class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="mp3title">Сохранить в MP3</h2>
+      <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <p class="note">Текст озвучивается нейро-голосом прямо на этом устройстве. Системные голоса браузера записать в файл нельзя. При первом использовании голос загружается один раз (около 32 МБ).</p>
+    <label class="fld"><span>Голос</span><select id="mp3voice"></select></label>
+    <div class="fld"><span>Скорость</span>
+      <div class="rateline"><b id="mp3rate">×1</b></div>
+      <div class="presets" data-presets></div>
+    </div>
+    <p class="note" id="mp3say"></p>
+    <fieldset class="fld"><legend>Что озвучить</legend>
+      <div class="seg">
+        <label><input type="radio" name="mp3range" value="all" checked> Весь текст</label>
+        <label><input type="radio" name="mp3range" value="from"> <span id="mp3fromLbl">С текущего предложения</span></label>
+      </div>
+    </fieldset>
+    <div id="mp3prog" hidden>
+      <div class="big-bar"><i id="mp3bar"></i></div>
+      <div class="progtxt"><span id="mp3status">Подготовка…</span><span id="mp3pct"></span></div>
+    </div>
+    <div class="done" id="mp3done" hidden>
+      <audio id="mp3audio" controls preload="metadata"></audio>
+      <p class="note" id="mp3info"></p>
+    </div>
+    <p class="note err" id="mp3err" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="mp3go">Создать MP3</button>
+      <button type="button" class="btn primary" id="mp3save" hidden>Сохранить файл</button>
+      <button type="button" class="btn" id="mp3stop" hidden>Остановить</button>
+      <button type="button" class="btn" id="mp3again" hidden>Создать заново</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="sheet" id="cropdlg" aria-labelledby="croptitle">
+  <form method="dialog" class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="croptitle">Выделите текст</h2>
+      <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <p class="note">Проведите пальцем по фото, чтобы обвести только нужный текст без стола, рук и соседней страницы.</p>
+    <canvas id="cropcv" class="cropcv"></canvas>
+    <div class="actions">
+      <button type="button" class="btn primary" id="cropgo" disabled>Распознать выделенное</button>
+      <button type="button" class="btn" id="cropall">Всё фото</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="sheet wide" id="abbrdlg" aria-labelledby="abbrtitle">
+  <form method="dialog" class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="abbrtitle">Сокращения</h2>
+      <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <label class="tog big"><input type="checkbox" id="sayAbbr" checked><span>Расшифровывать сокращения при чтении<span class="symlist">5 кг → пять килограммов, т. е. → то есть</span></span></label>
+    <p class="note">Словарь — библиотека abbr2words и дополнения. Любую расшифровку можно исправить прямо в поле. Чтобы слово согласовалось с числом, укажите три формы через «|»: <code>килограмм|килограмма|килограммов</code>.</p>
+    <section class="asec"><h3>В этом тексте</h3><div id="abbrHere" class="alist"></div></section>
+    <section class="asec" id="abbrCandWrap" hidden><h3>Похоже на сокращения, но их нет в словаре</h3><div id="abbrCand" class="alist"></div></section>
+    <section class="asec"><h3>Добавить своё</h3>
+      <div class="addrow">
+        <input id="newA" placeholder="Сокращение, напр. «Кг»" aria-label="Сокращение">
+        <input id="newE" placeholder="Расшифровка, напр. «килограмм»" aria-label="Расшифровка">
+        <label class="tog"><input type="checkbox" id="newNum"> только после числа</label>
+        <button type="button" class="btn primary" id="addAbbr">Добавить</button>
+      </div>
+      <p class="note err" id="addErr" hidden></p>
+    </section>
+    <details class="asec"><summary>Мои сокращения (<span id="myCount">0</span>)</summary><div id="abbrMine" class="alist"></div></details>
+    <details class="asec" id="abbrAllBox"><summary>Весь словарь (<span id="libCount"></span>)</summary>
+      <input type="search" id="abbrSearch" class="asearch" placeholder="Найти сокращение" aria-label="Поиск по словарю"><div id="abbrAll" class="alist"></div></details>
+  </form>
+</dialog>
+<dialog class="sheet wide" id="spelldlg" aria-labelledby="spelltitle">
+  <form method="dialog" class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="spelltitle">Орфография</h2>
+      <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <p class="note" id="spellStatus"></p>
+    <div id="spellList" class="alist"></div>
+    <div class="actions"><button type="button" class="btn primary" id="spellAll" hidden>Исправить всё первым вариантом</button><span class="note">Слова с заглавной буквы (имена) исправляются только вручную.</span></div>
+    <label class="tog"><input type="checkbox" id="autoSpell" checked> Проверять сразу после распознавания фото</label>
+  </form>
+</dialog>
+<dialog class="sheet wide" id="fishdlg" aria-labelledby="fishtitle">
+  <form method="dialog" class="sheet-in">
+    <div class="sheet-head">
+      <h2 id="fishtitle">Голоса Fish Audio</h2>
+      <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <p class="note">Голоса из библиотеки fish.audio, созданные по описанию (без клонов реальных людей). «Использовать» — сразу собрать похожий голос из встроенных: высота, темп, интонация и тембр по замерам образца. Акцент и спецэффекты оригинала не повторяются.</p>
+    <div class="fishbar">
+      <input type="search" id="fishQ" placeholder="Поиск: имя, описание, «низкий», «сказочник»…" aria-label="Поиск голоса">
+      <div class="seg fishseg" role="group" aria-label="Пол">
+        <label><input type="radio" name="fishG" value="" checked> Все</label>
+        <label><input type="radio" name="fishG" value="male"> Мужские</label>
+        <label><input type="radio" name="fishG" value="female"> Женские</label>
+      </div>
+      <select id="fishTag" aria-label="Характер голоса"><option value="">Любой характер</option></select>
+    </div>
+    <div class="fishkey" id="fishKeyBox" hidden>
+      <label class="fld"><span>Ключ API Fish Audio — для оригинальных голосов</span>
+        <input type="password" id="fishKeyIn" placeholder="Вставьте ключ с fish.audio → API Keys" autocomplete="off"></label>
+      <p class="note">Ключ хранится только на этом телефоне. Озвучка оригиналом платная и списывается с вашего баланса Fish Audio; нужен интернет.</p>
+    </div>
+    <p class="note" id="fishCount"></p>
+    <div id="fishList" class="fishlist"></div>
+    <button type="button" class="btn" id="fishMore" hidden>Показать ещё</button>
+    <p class="note">Данные каталога: <span id="fishDate"></span>. Fish Audio — сторонний сервис.</p>
+  </form>
+</dialog>
+<div class="toast" id="toast" hidden></div>
+
+<script type="text/plain" id="ttsWorker">
+// Нейро-озвучка: espeak-ng (фонемы) + Piper VITS (ONNX) + lamejs (MP3). Работает в отдельном потоке.
+let BASE = '', session = null, voiceId = null, cfg = null, sr = 22050;
+let ph = null, phCalls = 0, phOut = null, phData = null, phWasm = null, cancelled = false, queue = Promise.resolve();
+const post = (m, t) => self.postMessage(m, t || []);
+const F16 = (() => { const t = new Float32Array(65536);
+  for (let h = 0; h < 65536; h++) { const s = h & 0x8000 ? -1 : 1, e = (h >> 10) & 31, f = h & 1023;
+    t[h] = e === 0 ? s * 5.960464477539063e-8 * f : e === 31 ? (f ? NaN : s * Infinity) : s * Math.pow(2, e - 15) * (1 + f / 1024); }
+  return t; })();
+
+async function getFile(path, onProgress){
+  const url = BASE + path;
+  let cache = null;
+  try { cache = await caches.open('vsluh-tts-v1'); const hit = await cache.match(url); if (hit) { const b = await hit.arrayBuffer(); onProgress && onProgress(b.byteLength); return b; } } catch (e) { cache = null; }
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('не загрузился файл ' + path + ' (' + r.status + ')');
+  let buf;
+  if (onProgress && r.body && r.body.getReader) {
+    const rd = r.body.getReader(), parts = []; let n = 0;
+    for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); n += value.length; onProgress(n); }
+    const u = new Uint8Array(n); let p = 0; for (const c of parts) { u.set(c, p); p += c.length; } buf = u.buffer;
+  } else buf = await r.arrayBuffer();
+  if (cache) { try { await cache.put(url, new Response(buf.slice(0))); } catch (e) {} }
+  return buf;
+}
+
+async function loadVoice(v, id){
+  if (voiceId === v && session) return;
+  if (session) { try { await session.release(); } catch (e) {} session = null; voiceId = null; }
+  const meta = JSON.parse(new TextDecoder().decode(await getFile('tts/' + v + '.json')));
+  const murl = 'https://huggingface.co/rhasspy/piper-voices/resolve/main/ru/ru_RU/' + v + '/medium/ru_RU-' + v + '-medium.onnx';
+  let cache = null, r = null;
+  try { cache = await caches.open('vsluh-voices-v1'); r = await cache.match(murl) || null; } catch (e) { cache = null; }
+  const fresh = !r;
+  if (!r) { try { r = await fetch(murl); } catch (e) { throw new Error('для первой загрузки голоса нужен интернет'); }
+    if (!r.ok) throw new Error('не загрузился голос (' + r.status + ')'); }
+  const model = new Uint8Array(meta.total), rd = r.body.getReader(); let n = 0;
+  for (;;) { const { done, value } = await rd.read(); if (done) break; model.set(value, n); n += value.length; post({ type: 'progress', id, loaded: n, total: meta.total }); }
+  if (n !== meta.total) throw new Error('голос загрузился не полностью, попробуйте ещё раз');
+  if (fresh && cache) { try { await cache.put(murl, new Response(model)); } catch (e) {} }
+  session = await ort.InferenceSession.create(model, { executionProviders: ['wasm'], graphOptimizationLevel: 'all' });
+  cfg = meta.inference; sr = meta.sampleRate; voiceId = v;
+}
+
+async function newPhonemizer(){
+  if (!phData) { phData = await getFile('tts/phonemize-data.wasm'); phWasm = new Uint8Array(await getFile('tts/phonemize.wasm')); }
+  ph = await createPiperPhonemize({ print: l => { phOut = l; }, printErr: () => {}, noExitRuntime: true,
+    wasmBinary: phWasm, getPreloadedPackage: () => phData.slice(0), locateFile: f => f });
+  phCalls = 0;
+}
+async function phonemize(text){
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!ph || phCalls >= 20) await newPhonemizer();
+    phCalls++; phOut = null;
+    try { ph.callMain(['-l', 'ru', '--input', JSON.stringify([{ text }]), '--espeak_data', '/espeak-ng-data']);
+      if (phOut) return JSON.parse(phOut).phoneme_ids; } catch (e) {}
+    ph = null;
+  }
+  throw new Error('не удалось разобрать текст');
+}
+
+function splitLong(text){
+  if (text.length <= 300) return [text];
+  const out = []; let cur = '';
+  for (const piece of text.split(/(?<=[,;:—–])\s+/)) {
+    if ((cur + ' ' + piece).length > 300 && cur) { out.push(cur); cur = piece; } else cur = cur ? cur + ' ' + piece : piece;
+  }
+  if (cur) out.push(cur);
+  return out.flatMap(s => s.length <= 400 ? [s] : s.match(/.{1,300}(\s|$)/g));
+}
+
+// pitch < 1 — голос ниже: синтезируем быстрее и растягиваем запись (тон и тембр опускаются, темп сохраняется)
+
+// звуковые эффекты для необычных голосов
+function applyFx(a, list){
+  for (const f of list) {
+    const n = a.length;
+    if (f.type === 'ring') {                    // кольцевая модуляция: металлический «робот»
+      const w = 2 * Math.PI * f.hz / sr, out = new Float32Array(n);
+      for (let i = 0; i < n; i++) out[i] = a[i] * ((1 - f.mix) + f.mix * Math.sin(w * i));
+      a = out;
+    } else if (f.type === 'comb') {             // гребенчатый фильтр: звонкий резонанс
+      const d = Math.round(sr * f.ms / 1000), out = new Float32Array(n);
+      for (let i = 0; i < n; i++) out[i] = a[i] + f.fb * (i >= d ? out[i - d] : 0);
+      a = out;
+    } else if (f.type === 'vibrato') {          // дрожание высоты: плавающая задержка
+      const out = new Float32Array(n), depth = sr * f.ms / 1000, w = 2 * Math.PI * f.hz / sr;
+      for (let i = 0; i < n; i++) { const x = i - depth * (1 + Math.sin(w * i)), j = Math.floor(x), fr = x - j;
+        out[i] = (a[j] || 0) * (1 - fr) + (a[j + 1] || 0) * fr; }
+      a = out;
+    } else if (f.type === 'tremolo') {          // дрожание громкости
+      const w = 2 * Math.PI * f.hz / sr;
+      for (let i = 0; i < n; i++) a[i] *= 1 - f.depth * (0.5 + 0.5 * Math.sin(w * i));
+    } else if (f.type === 'flanger') {          // «космический» перелив
+      const out = new Float32Array(n), w = 2 * Math.PI * f.hz / sr, base = sr * 0.002, depth = sr * f.ms / 1000;
+      for (let i = 0; i < n; i++) { const x = i - base - depth * (0.5 + 0.5 * Math.sin(w * i)), j = Math.floor(x), fr = x - j;
+        out[i] = 0.6 * a[i] + 0.6 * ((a[j] || 0) * (1 - fr) + (a[j + 1] || 0) * fr); }
+      a = out;
+    } else if (f.type === 'drive') {            // лёгкий хрип динамика
+      let pk = 0.01; for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(a[i]));
+      const g = f.gain / pk; for (let i = 0; i < n; i++) a[i] = Math.tanh(a[i] * g);
+    } else if (f.type === 'noise') {            // шипение эфира
+      let pk = 0.01; for (let i = 0; i < n; i++) pk = Math.max(pk, Math.abs(a[i]));
+      let seed = 12345; for (let i = 0; i < n; i++) { seed = (seed * 1103515245 + 12345) & 0x7fffffff; a[i] += (seed / 0x7fffffff - 0.5) * 2 * f.level * pk; }
+    } else if (f.type === 'eq') {
+      a = applyEq(a, f.points);
+    } else if (f.type === 'echo') {             // эхо: несколько затухающих отражений, хвост добавляется в конец
+      const taps = f.taps, tail = Math.round(sr * Math.max(...taps.map(t => t[0])) / 1000), out = new Float32Array(n + tail);
+      out.set(a);
+      for (const [ms, g] of taps) { const d = Math.round(sr * ms / 1000); for (let i = 0; i < n; i++) out[i + d] += a[i] * g; }
+      a = out;
+    }
+  }
+  return a;
+}
+// эквалайзер: линейно-фазовый КИХ-фильтр по опорным точкам [частота, дБ]
+const eqCache = new Map();
+function eqFilter(points){
+  const key = JSON.stringify(points);
+  if (eqCache.has(key)) return eqCache.get(key);
+  const N = 257, M = 512, h = new Float32Array(N), gain = new Float32Array(M + 1);
+  for (let k = 0; k <= M; k++) {
+    const f = Math.max(20, k / M * sr / 2), lf = Math.log(f);
+    let db = points[0][1];
+    for (let i = 0; i < points.length - 1; i++) { const [f1, d1] = points[i], [f2, d2] = points[i + 1];
+      if (f >= f1 && f <= f2) { db = d1 + (d2 - d1) * (lf - Math.log(f1)) / (Math.log(f2) - Math.log(f1)); break; } }
+    if (f > points[points.length - 1][0]) db = points[points.length - 1][1];
+    gain[k] = Math.pow(10, db / 20);
+  }
+  for (let n = 0; n < N; n++) { let v = gain[0] / 2 + gain[M] / 2 * Math.cos(Math.PI * (n - 128));
+    for (let k = 1; k < M; k++) v += gain[k] * Math.cos(Math.PI * k * (n - 128) / M);
+    h[n] = v / M * (0.5 - 0.5 * Math.cos(2 * Math.PI * n / (N - 1))); }
+  eqCache.set(key, h); return h;
+}
+function applyEq(a, points){
+  const h = eqFilter(points), N = h.length, half = N >> 1, out = new Float32Array(a.length);
+  for (let i = 0; i < a.length; i++) { let v = 0; const j0 = Math.max(0, i - half), j1 = Math.min(a.length - 1, i + half);
+    for (let j = j0; j <= j1; j++) v += a[j] * h[i - j + half]; out[i] = v; }
+  return out;
+}
+async function synth(text, lengthScale, pitch = 1, opts = {}){
+  const pieces = splitLong(text.replace(/[«»„“”"]/g, '').trim()), outs = [];
+  for (const t of pieces) {
+    const ids = await phonemize(t);
+    if (ids.length < 3) continue;
+    const feeds = {
+      input: new ort.Tensor('int64', BigInt64Array.from(ids, BigInt), [1, ids.length]),
+      input_lengths: new ort.Tensor('int64', BigInt64Array.from([BigInt(ids.length)]), [1]),
+      scales: new ort.Tensor('float32', Float32Array.from([opts.ns ?? cfg.noise_scale, lengthScale * pitch, opts.nw ?? cfg.noise_w]), [3])
+    };
+    const r = await session.run(feeds);
+    outs.push(new Float32Array(r.output.data));
+    if (pieces.length > 1) outs.push(new Float32Array(Math.round(sr * 0.12 * lengthScale)));
+  }
+  const len0 = outs.reduce((a, b) => a + b.length, 0), a0 = new Float32Array(len0); let p = 0, peak = 0.01;
+  for (const o of outs) { a0.set(o, p); p += o.length; }
+  let a = a0;
+  if (pitch !== 1) {
+    a = new Float32Array(Math.floor(len0 / pitch));
+    for (let i = 0; i < a.length; i++) { const x = i * pitch, j = x | 0, f = x - j; a[i] = (a0[j] || 0) * (1 - f) + (a0[j + 1] || 0) * f; }
+  }
+  if (opts.eq) a = applyEq(a, opts.eq);
+  if (opts.fx) a = applyFx(a, opts.fx);
+  const len = a.length;
+  for (let i = 0; i < len; i++) { const v = Math.abs(a[i]); if (v > peak) peak = v; }
+  // одинаковая громкость для всех голосов: по средней громкости (−20 дБ), но без перегрузки пиков
+  let e = 0; for (let i = 0; i < len; i++) e += a[i] * a[i];
+  const rms = Math.sqrt(e / Math.max(1, len)) || 0.01;
+  const k = Math.min(0.95 / peak, 0.1 / rms); for (let i = 0; i < len; i++) a[i] *= k;
+  return a;
+}
+
+function toI16(f){ const o = new Int16Array(f.length); for (let i = 0; i < f.length; i++) { const v = Math.max(-1, Math.min(1, f[i])); o[i] = v < 0 ? v * 32768 : v * 32767; } return o; }
+
+async function exportMp3(m){
+  cancelled = false;
+  await loadVoice(m.voice, m.id);
+  const enc = new lamejs.Mp3Encoder(1, sr, m.kbps || 64), chunks = []; let samples = 0;
+  const ls = m.lengthScale, n = m.items.length;
+  for (let i = 0; i < n; i++) {
+    if (cancelled) { post({ type: 'cancelled', id: m.id }); return; }
+    const it = m.items[i];
+    const a = await synth(it.text, ls, m.pitch || 1, m.opts || {});
+    const pause = new Float32Array(Math.round(sr * (it.para ? 0.55 : 0.28) * ls));
+    for (const part of [a, pause]) {
+      const pcm = toI16(part);
+      for (let j = 0; j < pcm.length; j += 1152 * 20) { const c = enc.encodeBuffer(pcm.subarray(j, j + 1152 * 20)); if (c.length) chunks.push(c); }
+      samples += part.length;
+    }
+    post({ type: 'export-progress', id: m.id, done: i + 1, total: n, seconds: samples / sr });
+  }
+  const tail = enc.flush(); if (tail.length) chunks.push(tail);
+  post({ type: 'done', id: m.id, blob: new Blob(chunks, { type: 'audio/mpeg' }), seconds: samples / sr });
+}
+
+async function handle(m){
+  try {
+    if (m.type === 'init') {
+      BASE = m.base;
+      importScripts(m.ort, m.base + 'tts/phonemize.js', m.lame);
+      ort.env.wasm.numThreads = 1; ort.env.wasm.proxy = false; ort.env.wasm.wasmPaths = m.base + 'tts/';
+      post({ type: 'done', id: m.id });
+    } else if (m.type === 'load') { await loadVoice(m.voice, m.id); post({ type: 'done', id: m.id }); }
+    else if (m.type === 'synth') {
+      await loadVoice(m.voice, m.id);
+      const a = await synth(m.text, m.lengthScale, m.pitch || 1, m.opts || {});
+      post({ type: 'done', id: m.id, audio: a, sr }, [a.buffer]);
+    } else if (m.type === 'export') await exportMp3(m);
+    else if (m.type === 'encode') {
+      const enc = new lamejs.Mp3Encoder(1, m.sr, m.kbps || 96), chunks = []; let n = 0;
+      for (const part of m.parts) { const pcm = toI16(part); n += part.length;
+        for (let j = 0; j < pcm.length; j += 1152 * 20) { const c = enc.encodeBuffer(pcm.subarray(j, j + 1152 * 20)); if (c.length) chunks.push(c); } }
+      const tail = enc.flush(); if (tail.length) chunks.push(tail);
+      post({ type: 'done', id: m.id, blob: new Blob(chunks, { type: 'audio/mpeg' }), seconds: n / m.sr });
+    }
+  } catch (e) { post({ type: 'error', id: m.id, message: String((e && e.message) || e) }); }
+}
+self.onmessage = e => {
+  const m = e.data;
+  if (m.type === 'cancel') { cancelled = true; return; }
+  queue = queue.then(() => handle(m));
+};
+</script>
+
+<script src="lib/tesseract.min.js"></script>
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const synth = window.speechSynthesis;
+const BASE = new URL('.', location.href).href;
+const ORT_URL = __LIB + 'ort.wasm.min.js';
+const LAME_URL = __LIB + 'lame.min.js';
+const NEURAL = [
+  // базовые голоса: настройки подобраны по оценке естественности речи (UTMOS, 1–5):
+  // Ирина ≈3,8 · Руслан ≈3,2 · Денис ≈3,2 · Дмитрий ≈3,0; порядок в списке — от самого естественного
+  { id: 'irina',  name: 'Ирина',   note: 'женский · ★ самый естественный', opts: { ns: 0.5, nw: 1.0 }, score: 3.8 },
+  { id: 'ruslan', name: 'Руслан',  note: 'мужской', opts: { ns: 0.33, nw: 0.8 }, score: 3.18 },
+  { id: 'denis',  name: 'Денис',   note: 'мужской', opts: { ns: 0.5 }, score: 3.18 },
+  { id: 'dmitri', name: 'Дмитрий', note: 'мужской', opts: { ns: 0.5 }, score: 2.98 },
+  // подобран по голосу из видео (IVONA Maxim) перебором и сравнением фраз с оригиналом:
+  // модель Руслана, тон ×0,88, темп ×1,15, ровнее интонация, эквалайзер по спектру оригинала
+  { id: 'ruslan-low', score: 3.06, model: 'ruslan', pitch: 0.88, tempo: 1.15, name: 'Руслан низкий', note: 'похож на IVONA Maxim',
+    opts: { ns: 0.45, nw: 0.8, eq: [[100, 6.6], [200, 7.9], [400, 4.8], [800, -1.6], [1600, 5.5], [3200, 4.0], [5000, 1.2]] } },
+  // «Игровой рассказчик»: настроен на слух по описанию стиля (уверенный, чёткий, бодрый мужской голос средних лет):
+  // модель Дениса, темп чуть быстрее, живее интонация и ритм, больше ясности на 2–4 кГц, убран гул ниже 100 Гц
+  { id: 'gamer', score: 2.99, model: 'denis', pitch: 1.0, tempo: 0.92, name: 'Игровой рассказчик', note: 'уверенный и энергичный',
+    opts: { ns: 0.8, nw: 0.9, eq: [[70, -8], [120, -2], [300, 0], [1000, 0], [2500, 3], [4000, 3.5], [6000, 1.5], [8000, 0]] } },
+  // «Шеф»: подобран по образцу голоса «Шеф» (Александр Джуз, создан в Fish Audio по описанию, не клон):
+  // модель Руслана, тон ×0,93, быстрый темп, живая интонация, эквалайзер по спектру образца
+  { id: 'chef', score: 2.87, model: 'ruslan', pitch: 0.93, tempo: 0.85, name: 'Шеф', note: 'темпераментный, как «Шеф» из Fish Audio',
+    opts: { ns: 0.85, nw: 0.9, eq: [[100, 5.8], [200, 3.9], [400, -2.4], [800, 0.6], [1600, -1.9], [3200, -3.0], [5000, 3.0]] } },
+  // необычные голоса: те же модели + высота/темп + звуковые эффекты
+  { id: 'fx-robot', fun: true, model: 'dmitri', pitch: 0.95, tempo: 1.05, name: 'Робот', note: 'металлический',
+    opts: { ns: 0.3, nw: 0.4, fx: [{ type: 'ring', hz: 55, mix: 0.75 }, { type: 'comb', ms: 9, fb: 0.35 }] } },
+  { id: 'fx-giant', fun: true, model: 'ruslan', pitch: 0.68, tempo: 1.2, name: 'Великан', note: 'очень низкий',
+    opts: { eq: [[80, 6], [200, 4], [1000, 0], [3000, -3], [6000, -6]] } },
+  { id: 'fx-chipmunk', fun: true, model: 'irina', pitch: 1.55, tempo: 0.85, name: 'Бурундук', note: 'высокий и быстрый' },
+  { id: 'fx-alien', fun: true, model: 'denis', pitch: 1.25, tempo: 1.0, name: 'Инопланетянин', note: 'с переливами',
+    opts: { fx: [{ type: 'ring', hz: 28, mix: 0.35 }, { type: 'flanger', hz: 0.35, ms: 3 }] } },
+  { id: 'fx-radio', fun: true, model: 'ruslan', pitch: 1.0, tempo: 0.95, name: 'Рация', note: 'как по радио',
+    opts: { fx: [{ type: 'eq', points: [[150, -30], [350, 0], [2800, 2], [3600, -30]] }, { type: 'drive', gain: 2.2 }, { type: 'noise', level: 0.04 }] } },
+  { id: 'fx-cave', fun: true, model: 'irina', pitch: 1.0, tempo: 1.1, name: 'Эхо в пещере', note: 'гулкое',
+    opts: { fx: [{ type: 'echo', taps: [[90, 0.45], [190, 0.3], [310, 0.22], [460, 0.14], [650, 0.08]] }] } },
+  { id: 'fx-old', fun: true, model: 'denis', pitch: 0.9, tempo: 1.3, name: 'Старичок', note: 'с дрожью в голосе',
+    opts: { ns: 0.8, fx: [{ type: 'vibrato', hz: 5.5, ms: 0.9 }, { type: 'tremolo', hz: 5.5, depth: 0.25 }] } }
+];
+const store = {
+  get(k){ try { return localStorage.getItem('vsluh.'+k); } catch(e){ return null; } },
+  set(k,v){ try { localStorage.setItem('vsluh.'+k, v); } catch(e){} }
+};
+
+const SAMPLE = `Каштанка бегала взад и вперёд и не находила хозяина. Молодая рыжая собака, помесь таксы с дворняжкой, очень похожая мордой на лисицу, бегала взад и вперёд по тротуару и беспокойно оглядывалась по сторонам.
+
+Изредка она останавливалась и, плача, приподнимая то одну озябшую лапу, то другую, старалась дать себе отчёт: как это могло случиться, что она заблудилась?
+
+Сокращения читаются полностью: в 1892 г. автор прошёл 12 км за 3 ч, т. е. очень быстро.
+
+Нажмите на любое слово, чтобы начать чтение с него. Загрузите фото страницы, и здесь появится распознанный текст.`;
+
+/* ---------- text model ---------- */
+let text = '', sentences = [], words = [], isSample = true;
+let playing = false, gen = 0, pos = { s: 0, w: 0 }, curWordEl = null, curSentEl = null, keepAlive = null, wakeLock = null;
+
+function cleanOcr(raw){
+  return raw
+    .replace(/\r/g,'')
+    .replace(/[ \t]+\n/g,'\n')
+    .replace(/([А-Яа-яЁёA-Za-z])[-‐­]\n(?=[а-яёa-z])/g,'$1')   // перенос слова
+    .replace(/\n{2,}/g,'\u0000')
+    .replace(/\n/g,' ')
+    .replace(/\u0000/g,'\n\n')
+    .replace(/[ \t]{2,}/g,' ')
+    .replace(/[|]/g,'')
+    .trim();
+}
+
+function splitSentences(par){
+  // конец предложения — знак .!?… (и закрывающие кавычки), после которого пробел или конец абзаца
+  const out = [], re = /[.!?…]+["»”)]*(?=\s|$)/g;
+  let start = 0, m;
+  while ((m = re.exec(par))) {
+    const end = m.index + m[0].length;
+    out.push(par.slice(start, end)); start = end;
+  }
+  if (par.slice(start).trim()) out.push(par.slice(start));
+  const merged = [];
+  const ABBR_END = /(?:^|[\s(«])(?:т|г|гг|в|вв|см|стр|им|ул|д|др|пр|рис|табл|т\.е|т\.д|т\.п|т\.к|т\.н|мин|сек|ч|руб|коп|тыс|млн|млрд|кв|корп|обл|пер|пл|наб|просп|проф|акад|доц|св|напр|ок|ср|разд|гл|п|ст|с|изд|ред|зам|зав|тел|англ|лат|нем|фр|греч|рус|букв|н\.э|долл|шт|чел|сут|[А-ЯЁ])\.\s*$/;
+  const BEFORE_NAME = /(?:^|[\s(«])(?:г|ул|им|пр|пер|пл|наб|обл|проф|акад|доц|св|с|[А-ЯЁ])\.\s*$/;
+  for (const piece of out) {
+    const prev = merged[merged.length - 1];
+    if (prev && ((ABBR_END.test(prev) && /^\s*[а-яё0-9(«",;:—–-]/.test(piece)) || (BEFORE_NAME.test(prev) && /^\s*[А-ЯЁ]/.test(piece)))) merged[merged.length - 1] = prev + piece;
+    else if (piece.trim()) merged.push(piece);
+  }
+  return merged;
+}
+
+/* ---------- как читать текст вслух: римские цифры, формулы, знаки ---------- */
+const sayOpts = { symbols: false, roman: true, abbr: true };
+const ROMAN_OK = /^M{0,3}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/;
+function romanValue(tok){
+  // кириллические двойники латинских букв (Х, С, М, І), которые часто даёт распознавание
+  if (/[1l|]/.test(tok) && !/[XVХ]/.test(tok)) return 0;           // «1», «11» — обычные числа
+  const t = tok.replace(/Х/g, 'X').replace(/С/g, 'C').replace(/М/g, 'M').replace(/[І1l|]/g, 'I');
+  if (!/^[IVXLCDM]+$/.test(t) || !ROMAN_OK.test(t)) return 0;
+  if (!/[IVX]/.test(t) && t.length < 3) return 0;               // CD, MC, DC — скорее аббревиатуры
+  if (tok.length === 1 && !/[IVX]/.test(tok)) return 0;         // одиночные С, М, Х по-русски — буквы
+  const v = { I: 1, V: 5, X: 10, L: 50, C: 100, D: 500, M: 1000 };
+  let n = 0;
+  for (let i = 0; i < t.length; i++) { const a = v[t[i]], b = v[t[i + 1]] || 0; n += a < b ? -a : a; }
+  return n;
+}
+const ORD = { 1:['перв','ый'],2:['втор','ой'],3:['трет','ий'],4:['четвёрт','ый'],5:['пят','ый'],6:['шест','ой'],7:['седьм','ой'],8:['восьм','ой'],9:['девят','ый'],
+  10:['десят','ый'],11:['одиннадцат','ый'],12:['двенадцат','ый'],13:['тринадцат','ый'],14:['четырнадцат','ый'],15:['пятнадцат','ый'],16:['шестнадцат','ый'],
+  17:['семнадцат','ый'],18:['восемнадцат','ый'],19:['девятнадцат','ый'],20:['двадцат','ый'],30:['тридцат','ый'],40:['сороков','ой'],50:['пятидесят','ый'],
+  60:['шестидесят','ый'],70:['семидесят','ый'],80:['восьмидесят','ый'],90:['девяност','ый'],100:['сот','ый'] };
+const TENS = { 20:'двадцать', 30:'тридцать', 40:'сорок', 50:'пятьдесят', 60:'шестьдесят', 70:'семьдесят', 80:'восемьдесят', 90:'девяносто' };
+const HUND = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+const HUND_ORD = ['', 'сот', 'двухсот', 'трёхсот', 'четырёхсот', 'пятисот', 'шестисот', 'семисот', 'восьмисот', 'девятисот'];
+const UNITS = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять', 'десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+function cardinal999(n){ const h = Math.floor(n / 100), r = n % 100, parts = [HUND[h]];
+  if (r < 20) parts.push(UNITS[r]); else parts.push(TENS[r - r % 10], UNITS[r % 10]);
+  return parts.filter(Boolean).join(' '); }
+// порядковое числительное для года: 1990 → тысяча девятьсот девяностый, 2024 → две тысячи двадцать четвёртый
+function ordinalYear(n, form){
+  if (n < 1 || n > 2999) return String(n);
+  const th = Math.floor(n / 1000), rest = n % 1000, end = ORD_END[form] || 'ый';
+  const thW = th === 1 ? 'тысяча' : th === 2 ? 'две тысячи' : '';
+  if (rest === 0) return (th === 1 ? 'тысячн' : 'двухтысячн') + end;
+  if (rest % 100 === 0) return [thW, HUND_ORD[rest / 100] + end].filter(Boolean).join(' ');
+  const r = rest % 100;
+  return [thW, HUND[Math.floor(rest / 100)], ordinal(r, form)].filter(Boolean).join(' ');
+}
+// формы: m — им. муж., mg — род., md — дат., mi — твор., mp — предл.; f — им. жен., fg/fd/fp/fi — ой, fa — вин. жен.
+const ORD_END = { m: null, mg: 'ого', md: 'ому', mi: 'ым', mp: 'ом', f: 'ая', fg: 'ой', fd: 'ой', fp: 'ой', fi: 'ой', fa: 'ую' };
+const THIRD = { m: 'третий', mg: 'третьего', md: 'третьему', mi: 'третьим', mp: 'третьем', f: 'третья', fg: 'третьей', fd: 'третьей', fp: 'третьей', fi: 'третьей', fa: 'третью' };
+function ordinal(n, form){
+  if (n > 100 || n < 1) return String(n);
+  let pre = '';
+  if (!ORD[n]) { pre = TENS[n - n % 10] + ' '; n = n % 10; }
+  const [stem, type] = ORD[n];
+  if (type === 'ий') return pre + (THIRD[form] || THIRD.m);
+  return pre + stem + (ORD_END[form] || type);
+}
+const MALE_GEN = /^(Петра|Николая|Александра|Ивана|Павла|Василия|Фёдора|Федора|Карла|Людовика|Генриха|Георга|Льва|Бориса|Лжедмитрия|Дмитрия|Михаила|Алексея|Владимира|Ярослава|Андрея|Юрия|Константина|Иоанна)$/;
+// падеж «века» по соседним словам: в XIX веке, к XX веку, в конце XIX — начале XX в.
+const CENT_GEN = /^(начала|конца|середины|половины|начале|конце|середине|половине|до|с|со|от|после|около|из|для|рубеже|границе|течение|продолжение|рамках)$/;
+function centuryForm(prevWord){
+  const p = (prevWord || '').toLowerCase().replace(/[,;:]+$/, '');
+  if (/^(в|во)$/.test(p)) return ['mp', 'веке'];
+  if (CENT_GEN.test(p)) return ['mg', 'века'];
+  if (/^(к|ко)$/.test(p)) return ['md', 'веку'];
+  return ['m', 'век'];
+}
+const FEM_NOUN = /^(глава|часть|книга|серия|статья|ступень|степень|категория|группа|стадия|фаза|лига|палата|дума|конференция|симфония|соната|олимпиада|сессия|таблица|задача|лекция|тема|картина|сцена|песнь|повесть)$/i;
+const MASC_NOUN = /^(том|раздел|параграф|класс|съезд|созыв|сезон|выпуск|пункт|этап|уровень|курс|квартал|тур|акт|кубок|чемпионат|фестиваль|конгресс|собор|легион|отдел|модуль|урок|вариант|полк|блок|разряд|рисунок|пример|сборник|форум|конкурс)$/i;
+const FEM_NAME = /^(Екатерин|Елизавет|Анн|Мари|Софь|Софи|Ольг|Ирин|Елен|Натали|Наталь|Изабелл|Виктори|Маргарит|Людмил|Христин|Клеопатр|Нефертит)/;
+const MASC_NAME = /^(Петр|Пётр|Павл|Никола|Александр|Иван|Иоанн|Людовик|Генрих|Карл|Георг|Фридрих|Вильгельм|Эдуард|Ричард|Филипп|Франциск|Дмитри|Лжедмитри|Васили|Фёдор|Федор|Борис|Михаил|Алексе|Льв|Лев|Бенедикт|Григори|Густав|Яков|Владислав|Сигизмунд|Рамзес|Ярослав|Владимир|Юри|Константин|Иосиф|Максимилиан|Леопольд|Франц|Мехмед|Сулейман|Пи[йяюем]?$)/;
+// падеж имени правителя по окончанию: Петра I → первого, при Петре I → первом, с Александром III → третьим
+function nameCase(nm){
+  if (FEM_NAME.test(nm)) {
+    if (/[ая]$/.test(nm)) return 'f';
+    if (/(ой|ей)$/.test(nm)) return 'fi';
+    if (/[ую]$/.test(nm)) return 'fa';
+    return 'fg';
+  }
+  if (/(ом|ем|ём)$/.test(nm)) return 'mi';
+  if (/[ую]$/.test(nm)) return 'md';
+  if (/е$/.test(nm)) return 'mp';
+  if (/[ая]$/.test(nm)) return MASC_NAME.test(nm) || MALE_GEN.test(nm) ? 'mg' : 'f';
+  return 'm';
+}
+function romanSpoken(n, prev, next, prev2){
+  const nx = (next || '').toLowerCase().replace(/[.,;:!?»)]+$/, '');
+  const pv = (prev || '').replace(/[,;:]+$/, '');
+  if (/^век$/.test(nx)) return ordinal(n, 'm');
+  if (/^века$/.test(nx)) return ordinal(n, 'mg');
+  if (/^веке$/.test(nx)) return ordinal(n, 'mp');
+  if (/^веку$/.test(nx)) return ordinal(n, 'md');
+  if (/^веком$/.test(nx)) return ordinal(n, 'mi');
+  if (/^(вв|веков|векам|веках|векa)$/.test(nx)) return ordinal(n, 'mg');
+  if (/^в$/.test(nx) && /\.[,;:!?]?$/.test(next || '')) return ordinal(n, centuryForm(pv)[0]);
+  if (/^(начал|конц|конец|середин|половин|рубеж)/i.test(pv) && n <= 21) return ordinal(n, 'mg');   // в конце XIX — …, начало XX
+  if (n <= 30 && FEM_NOUN.test(pv)) return ordinal(n, 'f');                        // глава I → глава первая
+  if (n <= 30 && MASC_NOUN.test(pv)) return ordinal(n, 'm');                       // том III → том третий
+  if (n <= 30 && /^[А-ЯЁ][а-яё]{2,}$/.test(pv)) return ordinal(n, nameCase(pv));  // Пётр I, при Петре I, Екатерины II
+  return String(n);
+}
+const MATH = { '+': 'плюс', '=': 'равно', '×': 'умножить на', '÷': 'разделить на', '±': 'плюс-минус', '∓': 'минус-плюс', '≈': 'примерно равно',
+  '≠': 'не равно', '≤': 'меньше или равно', '≥': 'больше или равно', '<': 'меньше', '>': 'больше', '√': 'корень из', '∞': 'бесконечность',
+  'π': 'пи', '²': 'в квадрате', '³': 'в кубе', '^': 'в степени', '−': 'минус', '°': 'градусов', '∑': 'сумма', '∫': 'интеграл', '∆': 'дельта', 'Δ': 'дельта', '∠': 'угол', '⊥': 'перпендикулярно', '∥': 'параллельно' };
+const SYM = { ':': 'двоеточие', ';': 'точка с запятой', '!': 'восклицательный знак', '?': 'вопросительный знак', '+': 'плюс', '(': 'открывающая скобка',
+  ')': 'закрывающая скобка', '[': 'открывающая квадратная скобка', ']': 'закрывающая квадратная скобка', '@': 'собака', '#': 'решётка', '_': 'нижнее подчёркивание',
+  '/': 'косая черта', '*': 'звёздочка', '"': 'кавычки', '«': 'кавычки', '»': 'кавычки', '„': 'кавычки', '“': 'кавычки', '”': 'кавычки', "'": 'апостроф', '’': 'апостроф',
+  '%': 'процент', '&': 'амперсанд', '№': 'номер', '\\': 'обратная косая черта', '|': 'вертикальная черта', '~': 'тильда', '$': 'доллар', '€': 'евро' };
+const isOperand = t => /[0-9a-zA-Zа-яА-ЯёЁ)²³π]$/.test(t || '');
+const isOperandStart = t => /^[0-9a-zA-Zа-яА-ЯёЁ(√π−-]/.test(t || '');
+// одно «слово» текста → то, что произносится
+function spokenWord(tok, prev, next, prev2){
+  let t = tok;
+  // «в.» / «вв.» после римской цифры — «век(е)» / «веков»
+  const prevRoman = sayOpts.roman && romanValue((prev || '').replace(/^.*[–—-]/, '').replace(/[.,;:]+$/, ''));
+  if (prevRoman && /^вв\.?[,;:]?$/.test(t)) return 'веков' + t.replace(/^вв\.?/, '');
+  if (prevRoman && /^в\.[,;:]?$/.test(t)) return centuryForm(prev2)[1] + t.slice(2);
+  if (sayOpts.roman) {
+    const englishI = t === 'I' && /^[A-Za-z]/.test(next || '');            // «I love you»
+    if (!englishI) t = t.replace(/(^|[^A-Za-zА-Яа-яЁё0-9])([IVXLCDMХСМІ1l|]+)(?=$|[^A-Za-zА-Яа-яЁё0-9])/g, (m, a, r) => {
+      const n = romanValue(r); return n ? a + romanSpoken(n, prev, next, prev2) : m;
+    });
+  }
+  // отдельно стоящие знаки
+  if (/^[-–—]$/.test(t)) return isOperand(prev) && /^[0-9(√a-zA-Z]/.test(next || '') && /\d|[a-z]$/i.test(prev) ? 'минус' : (sayOpts.symbols ? 'тире' : t);
+  if (/^[*xх×]$/.test(t) && /\d$/.test(prev || '') && /^\d/.test(next || '')) return 'умножить на';
+  if (/^[/:÷]$/.test(t) && /\d$/.test(prev || '') && /^\d/.test(next || '')) return 'разделить на';
+  // знаки внутри слова
+  let out = '';
+  const chars = [...t];
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i], a = chars[i - 1] || '', b = chars[i + 1] || '';
+    const dA = /\d/.test(a), dB = /\d/.test(b), lA = /[A-Za-zА-Яа-яЁё]/.test(a), lB = /[A-Za-zА-Яа-яЁё]/.test(b);
+    let w = null;
+    if (MATH[c] && c !== '°' && c !== '<' && c !== '>') w = MATH[c];
+    else if ((c === '<' || c === '>') && (sayOpts.symbols || isOperand(a || prev) || dB)) w = MATH[c];
+    else if (c === '°' && (dA || sayOpts.symbols)) w = 'градусов';
+    else if ((c === 'x' || c === 'х' || c === '*') && dA && dB) w = 'умножить на';
+    else if ((c === '/' || c === '÷') && dA && dB) w = 'разделить на';
+    else if (c === '-' && i === 0 && dB) w = 'минус';
+    else if (c === '-' && dA && /[а-яё]/.test(b)) w = null;          // 20-м, 5-й
+    else if (c === '%' && dA) w = null;
+    else if (c === '-' && sayOpts.symbols) w = lA && lB ? 'дефис' : (dA && dB ? 'минус' : 'тире');
+    else if ((c === '–' || c === '—') && sayOpts.symbols) w = 'тире';
+    else if (sayOpts.symbols && SYM[c]) w = SYM[c];
+    if (w) out += ' ' + w + ' ';
+    else out += c;
+  }
+  return out.replace(/\s+/g, ' ').replace(/\s+([,.;:!?…])/g, '$1').trim();
+}
+// текст предложения для озвучки начиная со слова wi + смещения слов в нём (для подсветки)
+function spokenFrom(s, wi){
+  let text = '', offs = [];
+  for (let j = wi; j < s.words.length; j++) {
+    offs.push(text.length);
+    const sp = s.words[j].sp;
+    text += (sp && text ? ' ' : '') + sp;
+  }
+  return { text, offs };
+}
+let abbrFound = new Map();
+function computeSpoken(){
+  abbrFound = new Map();
+  for (const s of sentences) {
+    const toks = s.words.map(w => w.el.textContent);
+    const ab = sayOpts.abbr ? abbrPass(toks, abbrFound) : [];
+    s.words.forEach((w, j) => {
+      w.ab = ab[j] != null;
+      w.sp = w.ab ? ab[j] : spokenWord(toks[j], toks[j - 1], toks[j + 1], toks[j - 2]);
+      if (w.ab && ab[j]) { w.el.title = ab[j]; w.el.classList.add('abbr'); } else { w.el.removeAttribute('title'); w.el.classList.remove('abbr'); }
+    });
+  }
+  const n = [...abbrFound.values()].filter(f => f.used).length;
+  $('abbrCount').textContent = n || ''; $('abbrCount').hidden = !n;
+}
+
+// Проверка орфографии по словарю Hunspell (ru_RU): только суффиксные правила, без раскрытия словаря в память
+function makeSpeller(affText, dicText){
+  const norm = w => w.toLowerCase().replace(/ё/g, 'е');
+  const rulesByAdd = new Map();
+  let maxAdd = 0;
+  const lines = affText.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const p = lines[i].trim().split(/\s+/);
+    if (p[0] !== 'SFX' || p.length < 5) continue;
+    const [, flag, strip, add0, cond] = p;
+    const add = add0 === '0' ? '' : norm(add0.split('/')[0]);
+    const st = strip === '0' ? '' : norm(strip);
+    const re = cond === '.' ? null : new RegExp(norm(cond) + '$');
+    if (!rulesByAdd.has(add)) rulesByAdd.set(add, []);
+    rulesByAdd.get(add).push({ flag, strip: st, re });
+    if (add.length > maxAdd) maxAdd = add.length;
+  }
+  const stems = new Map();
+  const dl = dicText.split('\n');
+  for (let i = 1; i < dl.length; i++) {
+    const line = dl[i].trim(); if (!line) continue;
+    const k = line.indexOf('/');
+    const w = norm(k < 0 ? line : line.slice(0, k)), f = k < 0 ? '' : line.slice(k + 1);
+    stems.set(w, (stems.get(w) || '') + f);
+  }
+  function known(word){
+    const w = norm(word);
+    if (stems.has(w)) return true;
+    for (let n = 1; n <= Math.min(maxAdd, w.length - 1); n++) {
+      const rules = rulesByAdd.get(w.slice(-n)); if (!rules) continue;
+      const base = w.slice(0, -n);
+      for (const r of rules) {
+        const stem = base + r.strip, f = stems.get(stem);
+        if (f && f.includes(r.flag) && (!r.re || r.re.test(stem))) return true;
+      }
+    }
+    return false;
+  }
+  const ABC = 'абвгдежзийклмнопрстуфхцчшщъыьэюя';
+  // типичные ошибки распознавания: похожие буквы и их пары
+  const OCR = [['и','н'],['н','и'],['п','л'],['л','п'],['ш','щ'],['щ','ш'],['ь','ъ'],['ъ','ь'],['ы','ь'],['е','с'],['с','е'],['о','0'],['з','3'],['б','6'],['и','й'],['й','и'],['т','г'],['г','т'],['в','в'],['ц','щ'],['rn','т'],['ю','ю'],['к','х'],['х','к'],['р','о'],['а','о'],['о','а']];
+  function suggest(word, max = 4){
+    const w = norm(word), out = [], seen = new Set([w]);
+    const push = c => { if (!seen.has(c)) { seen.add(c); if (c.length > 1 && known(c)) out.push(c); } };
+    for (const [a, b] of OCR) { let i = w.indexOf(a); while (i >= 0) { push(w.slice(0, i) + b + w.slice(i + a.length)); i = w.indexOf(a, i + 1); } }
+    for (let i = 0; i < w.length; i++) for (const c of ABC) push(w.slice(0, i) + c + w.slice(i + 1));    // замена
+    for (let i = 0; i < w.length - 1; i++) push(w.slice(0, i) + w[i+1] + w[i] + w.slice(i + 2));        // перестановка
+    for (let i = 0; i < w.length; i++) push(w.slice(0, i) + w.slice(i + 1));                              // лишняя буква
+    for (let i = 0; i <= w.length; i++) for (const c of ABC) push(w.slice(0, i) + c + w.slice(i));       // пропуск
+    for (let i = 1; i < w.length; i++) { const a = w.slice(0, i), b = w.slice(i); if (a.length > 1 && b.length > 1 && known(a) && known(b)) out.push(a + ' ' + b); } // слипшиеся слова
+    return out.slice(0, max);
+  }
+  return { known, suggest, size: stems.size };
+}
+/* ---------- сокращения ---------- */
+// Основа словаря — русский реестр библиотеки abbr2words (Apache-2.0, github.com/buchwandler/abbr2words):
+// общие сокращения и единицы измерения с условиями применения. Дополнено: деньги, числа, адреса, годы и века,
+// формы для согласования с числом (1 килограмм · 2 килограмма · 5 килограммов), чтение аббревиатур по буквам.
+// Условия: num — перед сокращением число; year — год; nnum — после сокращения число; cap — после слово с заглавной; nonum — перед ним не число.
+const A2W = 'abbr2words', ADD = 'дополнение';
+const ABBR_LIB = [
+  ['т. е.', 'то есть', '', A2W], ['и т. д.', 'и так далее', '', A2W], ['т. д.', 'так далее', '', ADD], ['т. п.', 'тому подобное', '', ADD], ['и т. п.', 'и тому подобное', '', A2W], ['ж. д.', 'железная дорога', '', A2W],
+  ['и др.', 'и другие', '', A2W], ['и пр.', 'и прочие', '', A2W], ['напр.', 'например', '', A2W], ['проф.', 'профессор', '', A2W], ['доц.', 'доцент', '', A2W],
+  ['акад.', 'академик', '', A2W], ['д-р', 'доктор', '', A2W], ['№', 'номер', 'nnum', A2W], ['г-н', 'господин', 'cap', A2W], ['г-жа', 'госпожа', 'cap', A2W],
+  ['тел.', 'телефон', '', A2W], ['рис.', 'рисунок', 'nnum', A2W], ['табл.', 'таблица', 'nnum', A2W], ['разд.', 'раздел', 'nnum', A2W], ['стр.', 'страница', 'nnum', A2W],
+  ['см.', 'смотри', 'nonum', A2W], ['ср.', 'сравни', 'nonum', A2W], ['им.', 'имени', 'cap', A2W], ['обл.', 'область', 'cap', A2W],
+  // единицы (abbr2words: секунда … километр в час; кириллические обозначения и формы — дополнение)
+  ['с', 'секунда|секунды|секунд', 'numend', A2W], ['сек', 'секунда|секунды|секунд', 'num', A2W], ['сек.', 'секунда|секунды|секунд', 'num', A2W],
+  ['мин', 'минута|минуты|минут', 'num', A2W], ['мин.', 'минута|минуты|минут', 'num', A2W], ['ч', 'час|часа|часов', 'num', A2W], ['ч.', 'час|часа|часов', 'num', A2W],
+  ['сут.', 'сутки|суток|суток', 'num', A2W], ['мм', 'миллиметр|миллиметра|миллиметров', 'num', A2W], ['см', 'сантиметр|сантиметра|сантиметров', 'num', A2W],
+  ['см.', 'сантиметр|сантиметра|сантиметров', 'num', A2W], ['дм', 'дециметр|дециметра|дециметров', 'num', ADD], ['м', 'метр|метра|метров', 'num', A2W],
+  ['км', 'километр|километра|километров', 'num', A2W], ['мл', 'миллилитр|миллилитра|миллилитров', 'num', A2W], ['л', 'литр|литра|литров', 'num', A2W],
+  ['мкг', 'микрограмм|микрограмма|микрограммов', 'num', A2W], ['мг', 'миллиграмм|миллиграмма|миллиграммов', 'num', A2W], ['г', 'грамм|грамма|граммов', 'num', A2W],
+  ['кг', 'килограмм|килограмма|килограммов', 'num', A2W], ['ц', 'центнер|центнера|центнеров', 'num', ADD], ['т', 'тонна|тонны|тонн', 'num', A2W],
+  ['°C', 'градус Цельсия|градуса Цельсия|градусов Цельсия', 'num', A2W], ['°С', 'градус Цельсия|градуса Цельсия|градусов Цельсия', 'num', A2W],
+  ['°F', 'градус Фаренгейта|градуса Фаренгейта|градусов Фаренгейта', 'num', A2W], ['К', 'кельвин|кельвина|кельвинов', 'num', A2W],
+  ['м/с', 'метр в секунду|метра в секунду|метров в секунду', 'num', A2W], ['км/ч', 'километр в час|километра в час|километров в час', 'num', A2W],
+  ['мм²', 'квадратный миллиметр|квадратных миллиметра|квадратных миллиметров', 'num', A2W], ['см²', 'квадратный сантиметр|квадратных сантиметра|квадратных сантиметров', 'num', A2W],
+  ['м²', 'квадратный метр|квадратных метра|квадратных метров', 'num', A2W], ['км²', 'квадратный километр|квадратных километра|квадратных километров', 'num', A2W],
+  ['кв. м', 'квадратный метр|квадратных метра|квадратных метров', 'num', ADD], ['кв. км', 'квадратный километр|квадратных километра|квадратных километров', 'num', ADD],
+  ['м³', 'кубический метр|кубических метра|кубических метров', 'num', ADD], ['куб. м', 'кубический метр|кубических метра|кубических метров', 'num', ADD],
+  ['га', 'гектар|гектара|гектаров', 'num', ADD], ['Вт', 'ватт|ватта|ватт', 'num', ADD], ['кВт', 'киловатт|киловатта|киловатт', 'num', ADD],
+  ['кВт·ч', 'киловатт-час|киловатт-часа|киловатт-часов', 'num', ADD], ['В', 'вольт|вольта|вольт', 'num', ADD], ['А', 'ампер|ампера|ампер', 'num', ADD],
+  ['Гц', 'герц|герца|герц', 'num', ADD], ['кГц', 'килогерц|килогерца|килогерц', 'num', ADD], ['МГц', 'мегагерц|мегагерца|мегагерц', 'num', ADD],
+  ['ГГц', 'гигагерц|гигагерца|гигагерц', 'num', ADD], ['КБ', 'килобайт|килобайта|килобайт', 'num', ADD], ['МБ', 'мегабайт|мегабайта|мегабайт', 'num', ADD],
+  ['ГБ', 'гигабайт|гигабайта|гигабайт', 'num', ADD], ['Мб', 'мегабайт|мегабайта|мегабайт', 'num', ADD], ['Гб', 'гигабайт|гигабайта|гигабайт', 'num', ADD],
+  ['мм рт. ст.', 'миллиметр ртутного столба|миллиметра ртутного столба|миллиметров ртутного столба', 'num', ADD],
+  // деньги и числа
+  ['руб.', 'рубль|рубля|рублей', 'num', ADD], ['р.', 'рубль|рубля|рублей', 'num', ADD], ['коп.', 'копейка|копейки|копеек', 'num', ADD],
+  ['долл.', 'доллар|доллара|долларов', 'num', ADD], ['тыс.', 'тысяча|тысячи|тысяч', 'num', ADD], ['млн', 'миллион|миллиона|миллионов', 'num', ADD],
+  ['млн.', 'миллион|миллиона|миллионов', 'num', ADD], ['млрд', 'миллиард|миллиарда|миллиардов', 'num', ADD], ['млрд.', 'миллиард|миллиарда|миллиардов', 'num', ADD],
+  ['трлн', 'триллион|триллиона|триллионов', 'num', ADD], ['шт.', 'штука|штуки|штук', 'num', ADD], ['чел.', 'человек|человека|человек', 'num', ADD],
+  // годы и века
+  ['г.', 'год', 'year', ADD], ['гг.', 'годы', 'year', ADD], ['в.', '@век', 'num', ADD], ['вв.', 'веков', 'num', ADD], ['г.', 'город', 'cap', ADD],
+  ['г.', 'грамм|грамма|граммов', 'num', ADD], ['н. э.', 'нашей эры', '', ADD], ['до н. э.', 'до нашей эры', '', ADD],
+  // адреса и ссылки
+  ['ул.', 'улица', '', ADD], ['пр-т', 'проспект', '', ADD], ['просп.', 'проспект', '', ADD], ['пер.', 'переулок', 'cap', ADD], ['пл.', 'площадь', 'cap', ADD],
+  ['б-р', 'бульвар', '', ADD], ['наб.', 'набережная', 'cap', ADD], ['д.', 'дом', 'nnum', ADD], ['кв.', 'квартира', 'nnum', ADD], ['корп.', 'корпус', 'nnum', ADD],
+  ['р-н', 'район', '', ADD], ['с.', 'село', 'cap', ADD], ['с.', 'страница', 'nnum', ADD], ['п.', 'пункт', 'nnum', ADD], ['ст.', 'статья', 'nnum', ADD],
+  ['гл.', 'глава', '', ADD], ['ч.', 'часть', 'nnum', ADD], ['т.', 'том', 'nnum', ADD], ['изд.', 'издание', '', ADD], ['ред.', 'редакция', '', ADD],
+  // общие
+  ['т. к.', 'так как', '', ADD], ['т. н.', 'так называемый', '', ADD], ['т. о.', 'таким образом', '', ADD], ['в т. ч.', 'в том числе', '', ADD],
+  ['т. ч.', 'том числе', '', ADD], ['ок.', 'около', '', ADD], ['прим.', 'примечание', '', ADD], ['см. также', 'смотри также', '', ADD],
+  ['англ.', 'английский', '', ADD], ['лат.', 'латинский', '', ADD], ['нем.', 'немецкий', '', ADD], ['фр.', 'французский', '', ADD], ['греч.', 'греческий', '', ADD],
+  ['рус.', 'русский', '', ADD], ['букв.', 'буквально', '', ADD], ['зам.', 'заместитель', '', ADD], ['зав.', 'заведующий', '', ADD], ['св.', 'святой', 'cap', ADD],
+  ['им.', 'имени', '', ADD], ['гос.', 'государственный', '', ADD], ['ин-т', 'институт', '', ADD], ['ун-т', 'университет', '', ADD],
+  // аббревиатуры, которые читаются по буквам
+  ['РФ', 'эр эф', '', ADD], ['США', 'сэ шэ а', '', ADD], ['СССР', 'эс эс эс эр', '', ADD], ['ООН', 'о о эн', '', ADD], ['МВД', 'эм вэ дэ', '', ADD],
+  ['ФСБ', 'эф эс бэ', '', ADD], ['ДТП', 'дэ тэ пэ', '', ADD], ['ЖКХ', 'жэ ка ха', '', ADD], ['ВВП', 'вэ вэ пэ', '', ADD], ['ЕГЭ', 'е гэ э', '', ADD],
+  ['ОГЭ', 'о гэ э', '', ADD], ['ПК', 'пэ ка', '', ADD], ['ИП', 'и пэ', '', ADD], ['ООО', 'о о о', '', ADD], ['ОАО', 'о а о', '', ADD], ['ЗАО', 'зэ а о', '', ADD],
+  ['МГУ', 'эм гэ у', '', ADD], ['СПб', 'Санкт-Петербург', '', ADD], ['ЧП', 'чэ пэ', '', ADD], ['ЦБ', 'цэ бэ', '', ADD], ['НДС', 'эн дэ эс', '', ADD],
+  ['АЭС', 'а э эс', '', ADD], ['ТВ', 'тэ вэ', '', ADD], ['ЕС', 'е эс', '', ADD], ['СНГ', 'эс эн гэ', '', ADD], ['КПД', 'ка пэ дэ', '', ADD],
+];
+// произношение букв для аббревиатур (по runorm, Apache-2.0)
+const LETTERS = { А:'а', Б:'бэ', В:'вэ', Г:'гэ', Д:'дэ', Е:'е', Ё:'ё', Ж:'жэ', З:'зэ', И:'и', Й:'и краткое', К:'ка', Л:'эл', М:'эм', Н:'эн', О:'о', П:'пэ', Р:'эр', С:'эс', Т:'тэ', У:'у', Ф:'эф', Х:'ха', Ц:'цэ', Ч:'чэ', Ш:'ша', Щ:'ща', Ъ:'твёрдый знак', Ы:'ы', Ь:'мягкий знак', Э:'э', Ю:'ю', Я:'я' };
+const akey = a => a.replace(/\s+/g, '');
+let abbrUser = { over: {}, off: {}, custom: [] };
+try { abbrUser = Object.assign(abbrUser, JSON.parse(localStorage.getItem('vsluh.abbr') || '{}')); } catch (e) {}
+function saveAbbr(){ try { localStorage.setItem('vsluh.abbr', JSON.stringify(abbrUser)); } catch (e) {} }
+let abbrIndex = null;
+function buildAbbrIndex(){
+  abbrIndex = new Map();
+  const add = (e) => { const k = akey(e.a); if (!abbrIndex.has(k)) abbrIndex.set(k, []); abbrIndex.get(k).push(e); };
+  abbrUser.custom.forEach((c, i) => add({ a: c.a, e: c.e, cond: c.num ? 'num' : '', src: 'моё', id: 'c' + i, custom: true }));
+  ABBR_LIB.forEach(([a, e, cond, src], i) => {
+    const id = 'l' + i;
+    add({ a, e: abbrUser.over[id] ?? e, def: e, cond, src, id, edited: id in abbrUser.over, off: !!abbrUser.off[id] });
+  });
+}
+const NUM_RE = /^[-−]?\d[\d\s]*([.,]\d+)?([–—-]\d+([.,]\d+)?)?$/;
+function formFor(expansion, prevTok){
+  const forms = expansion.split(/\s*\|\s*/);
+  if (forms.length < 3) return forms[0];
+  const m = (prevTok || '').match(/(\d+)([.,]\d+)?$/);
+  if (!m) return forms[0];
+  if (m[2]) return forms[1];
+  const n = parseInt(m[1], 10) % 100;
+  if (n >= 11 && n <= 14) return forms[2];
+  return n % 10 === 1 ? forms[0] : (n % 10 >= 2 && n % 10 <= 4 ? forms[1] : forms[2]);
+}
+function condOk(cond, prev, next){
+  const p = (prev || '').replace(/[.,;:]+$/, ''), n = next || '';
+  switch (cond) {
+    case 'num': return NUM_RE.test(p);
+    case 'numend': return NUM_RE.test(p) && !/^[а-яё]/.test(n);
+    case 'year': return /^\d{3,4}([–—-]\d{2,4})?$/.test(p);
+    case 'nnum': return /^[№\d]/.test(n);
+    case 'cap': return /^[«"(]?[А-ЯЁA-Z]/.test(n);
+    case 'nonum': return !NUM_RE.test(p);
+    default: return true;
+  }
+}
+// проход по предложению: находит сокращения (в том числе из нескольких «слов»: т. е., и т. д.) и возвращает их произношение
+function abbrPass(toks, found){
+  if (!abbrIndex) buildAbbrIndex();
+  const out = new Array(toks.length).fill(null);
+  for (let i = 0; i < toks.length; i++) {
+    let done = false;
+    for (let len = Math.min(4, toks.length - i); len >= 1 && !done; len--) {
+      const parts = toks.slice(i, i + len);
+      const lead = (parts[0].match(/^[(«"„]+/) || [''])[0];
+      let trail = (parts[len - 1].match(/[,;:!?»"”)\]]+$/) || [''])[0];
+      let core = akey(parts.join(' ')).slice(lead.length, trail ? -trail.length : undefined);
+      if (!core) continue;
+      const tries = [[core, trail]];
+      if (core.endsWith('.') && core.length > 1) tries.push([core.slice(0, -1), '.' + trail]);   // «кг.» в конце предложения
+      for (const [c, tr] of tries) {
+        let list = abbrIndex.get(c), capIn = false;
+        if (!list && c[0] !== c[0].toLowerCase() && c.slice(1) === c.slice(1).toLowerCase()) { list = abbrIndex.get(c[0].toLowerCase() + c.slice(1)); capIn = !!list; }
+        if (!list) continue;
+        const prev = toks[i - 1], next = toks[i + len];
+        const ent = list.find(e => !e.off && condOk(e.cond, prev, next));
+        if (!ent) continue;
+        let say;
+        if (ent.cond === 'year' && /^год/.test(ent.e) && /^\d{3,4}$/.test((prev || '').replace(/[.,]+$/, ''))) {   // 1990 г. → тысяча девятьсот девяностый год
+          const n = parseInt(prev, 10), pv = (toks[i - 2] || '').toLowerCase(), inV = /^(в|во)$/.test(pv);
+          const gen = /^(с|до|от|после|около|начала|конца|середины)$/.test(pv);
+          out[i - 1] = ordinalYear(n, inV ? 'mp' : gen ? 'mg' : 'm');
+          say = ent.e === 'год' ? (inV ? 'году' : gen ? 'года' : 'год') : ent.e;
+        } else if (ent.e === '@век') {                           // 19 в. → девятнадцатый век
+          const n = parseInt((prev || '').replace(/\D+$/, ''), 10), [form, noun] = centuryForm(toks[i - 2]);
+          if (n > 0 && n <= 100) { out[i - 1] = ordinal(n, form); say = noun; } else say = 'век';
+        } else say = formFor(ent.e, prev);
+        if (capIn) say = say[0].toUpperCase() + say.slice(1);
+        out[i] = lead + say + tr;
+        for (let k = 1; k < len; k++) out[i + k] = '';
+        if (found) { const f = found.get(ent.id) || { ent, n: 0 }; f.used = true; f.n++; f.sample = parts.join(' '); found.set(ent.id, f); }
+        i += len - 1; done = true; break;
+      }
+    }
+  }
+  return out;
+}
+// похожие на сокращения слова, которых нет в словаре: «ст.» посреди предложения, АББРЕВИАТУРЫ
+function abbrCandidates(){
+  const seen = new Map();
+  for (const s of sentences) s.words.forEach((w, j) => {
+    const t = w.el.textContent.replace(/^[(«"„]+|[,;:!?»"”)\]]+$/g, ''), next = s.words[j + 1]?.el.textContent || '';
+    if (w.ab) return;                                   // уже расшифровано
+    let sug = null;
+    if (/^[а-яё]{1,5}\.$/.test(t) && /^[а-яё\d]/.test(next) && !(speller && speller.known(t.slice(0, -1)) && t.length > 3)) sug = '';
+    else if (/^[А-ЯЁ]{2,5}$/.test(t) && !(speller && speller.known(t))) sug = [...t].map(c => LETTERS[c] || c).join(' ');
+    if (sug !== null && !abbrIndex.has(akey(t)) && !seen.has(t)) seen.set(t, sug);
+  });
+  return [...seen].slice(0, 30);
+}
+
+/* ---------- орфография ---------- */
+let speller = null, spellLoading = null, typos = [];
+let spellIgnore = new Set(); try { spellIgnore = new Set(JSON.parse(localStorage.getItem('vsluh.ignore') || '[]')); } catch (e) {}
+function loadSpeller(){
+  if (speller) return Promise.resolve(speller);
+  spellLoading = spellLoading || Promise.all(['dict/ru.aff.txt', 'dict/ru.dic.txt'].map(f => fetch(f).then(r => { if (!r.ok) throw new Error('словарь не загрузился'); return r.text(); })))
+    .then(([a, d]) => (speller = makeSpeller(a, d)));
+  return spellLoading.catch(e => { spellLoading = null; throw e; });
+}
+const coreOf = t => t.replace(/^[^А-Яа-яЁёA-Za-z0-9]+|[^А-Яа-яЁёA-Za-z0-9]+$/g, '');
+function findTypos(){
+  const map = new Map();
+  words.forEach(w => w.el.classList.remove('typo'));
+  if (!speller || isSample) return (typos = []);
+  for (const s of sentences) s.words.forEach((w, j) => {
+    const core = coreOf(w.el.textContent);
+    if (core.length < 2 || !/^[А-Яа-яЁё]+(-[А-Яа-яЁё]+)*$/.test(core)) return;
+    if (/^[А-ЯЁ]{2,6}$/.test(core) || w.ab) return;                   // аббревиатуры и сокращения
+    if (spellIgnore.has(core.toLowerCase())) return;
+    if (j > 0 && /^[А-ЯЁ]/.test(core)) return;                          // имя или название посреди предложения
+    if (speller.known(core) || core.split('-').every(p => p.length < 2 || speller.known(p))) return;
+    w.el.classList.add('typo');
+    const k = core;
+    if (!map.has(k)) {
+      const ctx = s.words.slice(Math.max(0, j - 3), j + 4).map(x => x.el.textContent).join(' ');
+      let sug = speller.suggest(core, 4);
+      if (/^[А-ЯЁ]/.test(core)) sug = sug.map(x => x[0].toUpperCase() + x.slice(1));
+      map.set(k, { word: core, n: 0, ctx, sug });
+    }
+    map.get(k).n++;
+  });
+  typos = [...map.values()];
+  $('spellCount').textContent = typos.length ? typos.length : '';
+  $('spellCount').hidden = !typos.length;
+  return typos;
+}
+function rebuildKeepPos(t){
+  const gi = sentences.length ? sentences[pos.s].first + pos.w : 0;
+  pause(); build(t);
+  const w = words[Math.min(gi, words.length - 1)];
+  if (w) { pos = { s: w.s, w: gi - sentences[w.s].first }; updateProgress(); }
+  if (speller) findTypos();
+}
+function replaceWord(oldW, newW){
+  const esc = oldW.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp('(^|[^А-Яа-яЁёA-Za-z0-9-])' + esc + '(?=$|[^А-Яа-яЁёA-Za-z0-9-])', 'g');
+  rebuildKeepPos(text.replace(re, (m, a) => a + newW));
+}
+function renderSpell(){
+  const box = $('spellList'); box.textContent = '';
+  $('spellAll').hidden = !typos.some(t => t.sug.length && !/^[А-ЯЁ]/.test(t.word));
+  $('spellStatus').textContent = typos.length ? `Слов с возможными ошибками: ${typos.length}. Нажмите вариант, чтобы исправить во всём тексте.` : 'Ошибок не найдено.';
+  for (const t of typos) {
+    const row = document.createElement('div'); row.className = 'srow';
+    const head = document.createElement('div'); head.className = 'shead';
+    const b = document.createElement('b'); b.className = 'bad'; b.textContent = t.word; head.append(b);
+    if (t.n > 1) { const c = document.createElement('span'); c.className = 'note'; c.textContent = ` ×${t.n}`; head.append(c); }
+    const ctx = document.createElement('div'); ctx.className = 'note sctx'; ctx.textContent = '…' + t.ctx + '…';
+    const acts = document.createElement('div'); acts.className = 'sacts';
+    t.sug.forEach(sg => { const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'mini good'; btn.textContent = sg; btn.onclick = () => { replaceWord(t.word, sg); renderSpell(); }; acts.append(btn); });
+    const own = document.createElement('input'); own.className = 'mini-in'; own.placeholder = 'своё'; own.setAttribute('aria-label', 'Свой вариант для ' + t.word);
+    own.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); if (own.value.trim()) { replaceWord(t.word, own.value.trim()); renderSpell(); } } };
+    const ok = document.createElement('button'); ok.type = 'button'; ok.className = 'mini'; ok.textContent = '✓'; ok.title = 'Заменить на своё';
+    ok.onclick = () => { if (own.value.trim()) { replaceWord(t.word, own.value.trim()); renderSpell(); } };
+    const skip = document.createElement('button'); skip.type = 'button'; skip.className = 'mini'; skip.textContent = 'Верно, пропустить';
+    skip.onclick = () => { spellIgnore.add(t.word.toLowerCase()); try { localStorage.setItem('vsluh.ignore', JSON.stringify([...spellIgnore])); } catch (e) {} findTypos(); renderSpell(); };
+    acts.append(own, ok, skip);
+    row.append(head, ctx, acts); box.append(row);
+  }
+}
+async function openSpell(){
+  if (editing) $('edit').click();
+  try { $('spelldlg').showModal(); } catch (e) { $('spelldlg').setAttribute('open', ''); }
+  if (isSample) { $('spellStatus').textContent = 'Проверка работает для вашего текста: загрузите фото или вставьте текст.'; $('spellList').textContent = ''; $('spellAll').hidden = true; return; }
+  if (!speller) { $('spellStatus').textContent = 'Загружаю словарь (≈3 МБ, один раз)…'; $('spellList').textContent = ''; }
+  try { await loadSpeller(); findTypos(); renderSpell(); }
+  catch (e) { $('spellStatus').textContent = 'Не удалось загрузить словарь: ' + e.message + '. Проверьте интернет и попробуйте ещё раз.'; }
+}
+function build(t){
+  text = t;
+  sentences = []; words = [];
+  audioCache.clear();
+  const root = $('text');
+  root.textContent = '';
+  const pars = t.split(/\n\s*\n/).map(p => p.replace(/\s*\n\s*/g,' ').trim()).filter(Boolean);
+  if (!pars.length) {
+    root.innerHTML = '<p class="empty">Текста пока нет. Загрузите фото или нажмите «Править текст» и вставьте свой.</p>';
+  }
+  pars.forEach((par, pi) => {
+    const p = document.createElement('p');
+    splitSentences(par).forEach((stext, k) => {
+      const sIdx = sentences.length;
+      const sEl = document.createElement('span');
+      sEl.className = 's';
+      const s = { text: stext.trim(), el: sEl, first: words.length, words: [], para: false };
+      const trimmed = s.text;
+      const wre = /\S+/g; let m;
+      let last = 0;
+      while ((m = wre.exec(trimmed))) {
+        if (m.index > last) sEl.append(trimmed.slice(last, m.index));
+        const w = document.createElement('span');
+        w.className = 'w';
+        w.textContent = m[0];
+        w.dataset.i = words.length;
+        sEl.append(w);
+        const rec = { el: w, s: sIdx, off: m.index, len: m[0].length };
+        s.words.push(rec); words.push(rec);
+        last = m.index + m[0].length;
+      }
+      if (s.words.length) { sentences.push(s); p.append(sEl, ' '); }
+    });
+    if (sentences.length) sentences[sentences.length-1].para = true;
+    if (pi === 0 && isSample) {
+      const tag = document.createElement('span'); tag.className = 'sample'; tag.textContent = 'пример';
+      p.append(tag);
+    }
+    root.append(p);
+  });
+  computeSpoken();
+  if ($('spellCount')) { $('spellCount').hidden = true; typos = []; }
+  $('seek').max = Math.max(0, words.length - 1);
+  pos = { s: 0, w: 0 };
+  clearMarks();
+  updateProgress();
+}
+
+/* ---------- neural TTS worker client ---------- */
+const tts = {
+  w: null, seq: 0, pending: new Map(), ready: null, loaded: null, onExport: null,
+  start(){
+    if (this.ready) return this.ready;
+    const src = $('ttsWorker').textContent;
+    this.w = new Worker(URL.createObjectURL(new Blob([src], { type: 'application/javascript' })));
+    this.w.onmessage = e => this.msg(e.data);
+    this.w.onerror = e => { e.preventDefault?.(); this.failAll('Модуль озвучки не запустился: ' + (e.message || 'ошибка загрузки')); };
+    this.ready = this.raw('init', { base: BASE, ort: ORT_URL, lame: LAME_URL }).catch(err => { this.ready = null; this.w?.terminate(); this.w = null; throw err; });
+    return this.ready;
+  },
+  raw(type, payload, onProgress){
+    const id = ++this.seq;
+    return new Promise((res, rej) => { this.pending.set(id, { res, rej, onProgress }); this.w.postMessage({ type, id, ...payload }); });
+  },
+  async call(type, payload, onProgress){ await this.start(); return this.raw(type, payload, onProgress); },
+  msg(m){
+    const p = this.pending.get(m.id);
+    if (!p) return;
+    if (m.type === 'progress' || m.type === 'export-progress') { p.onProgress && p.onProgress(m); return; }
+    this.pending.delete(m.id);
+    if (m.type === 'error') p.rej(new Error(m.message)); else p.res(m);
+  },
+  failAll(msg){ for (const [, p] of this.pending) p.rej(new Error(msg)); this.pending.clear(); },
+  cancel(){ this.w && this.w.postMessage({ type: 'cancel' }); }
+};
+// голоса, собранные по каталогу Fish Audio (кнопка «Использовать»), хранятся на этом устройстве
+const FISH_BANDS = [100, 200, 400, 800, 1600, 3200, 5000];
+let fishVoices = []; try { fishVoices = JSON.parse(localStorage.getItem('vsluh.fishVoices') || '[]'); } catch (e) {}
+function fishEntry(v){
+  const [model, pitch, tempo, ns, nw, eq] = v.v;
+  return { id: 'fish-' + v.i, fish: true, fishId: v.i, model, pitch, tempo, name: v.t, note: 'похож на голос из Fish Audio',
+    opts: { ns, nw, eq: FISH_BANDS.map((f, k) => [f, eq[k]]) } };
+}
+fishVoices.forEach(v => NEURAL.push(fishEntry(v)));
+function saveFishVoices(){ try { localStorage.setItem('vsluh.fishVoices', JSON.stringify(fishVoices)); } catch (e) {} }
+const neuralName = id => (NEURAL.find(n => n.id === id) || {}).name || id;
+// оригинальные голоса Fish Audio по ключу пользователя — только в приложении Android (нужен интернет, озвучка платная)
+const FISH_APP = !!window.AndroidHttp;
+let fishReal = []; try { fishReal = JSON.parse(localStorage.getItem('vsluh.fishReal') || '[]'); } catch (e) {}
+const fishRealEntry = v => ({ id: 'fishreal-' + v.i, realFish: true, fishId: v.i, name: v.t + ' · оригинал', note: 'Fish Audio по ключу' });
+if (FISH_APP) fishReal.forEach(v => NEURAL.push(fishRealEntry(v)));
+const fishKey = () => { try { return localStorage.getItem('vsluh.fishKey') || ''; } catch (e) { return ''; } };
+const fishPending = new Map(); let fishReq = 0;
+window.__httpEvent = (id, ok, data) => { const p = fishPending.get(id); if (!p) return; fishPending.delete(id); ok ? p.res(data) : p.rej(new Error(data)); };
+async function fishRealSynth(entry, text, speed){
+  if (!fishKey()) throw new Error('введите ключ Fish Audio в каталоге голосов');
+  const b64 = await new Promise((res, rej) => { const id = 'f' + (++fishReq); fishPending.set(id, { res, rej });
+    window.AndroidHttp.fishTts(id, fishKey(), entry.fishId, text, String(Math.min(2, Math.max(0.5, speed)))); });
+  const bin = atob(b64), u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+  const ab = await actx.decodeAudioData(u8.buffer);
+  return { audio: ab.getChannelData(0).slice(), sr: ab.sampleRate };
+}
+const byScore = list => list.map((n, i) => [n, i]).sort((a, b) => ((b[0].score || 0) - (a[0].score || 0)) || a[1] - b[1]).map(x => x[0]);
+const neuralModel = id => { const n = NEURAL.find(x => x.id === id) || { id }; return { model: n.model || n.id, pitch: n.pitch || 1, tempo: n.tempo || 1, opts: n.opts || {} }; };
+
+/* ---------- voices ---------- */
+let voices = [], showAll = false, voiceSel = '', sysVoice = null;
+const isNeural = () => voiceSel.startsWith('n:');
+const neuralId = () => voiceSel.slice(2);
+
+// NextUp IVONA Maxim (и Tatyana) — голоса Windows (SAPI 5); браузер видит их, если они установлены в системе
+const isMaxim = v => /maxim|максим/i.test(v.name);
+const isIvonaRu = v => /maxim|максим|tatyana|татьяна/i.test(v.name) || (/ivona/i.test(v.name) && /^ru/i.test(v.lang));
+function voiceLabel(v){
+  if (isMaxim(v)) return 'Maxim · IVONA';
+  if (/tatyana|татьяна/i.test(v.name)) return 'Tatyana · IVONA';
+  const q = /natural/i.test(v.name) ? ' (Natural)' : /premium/i.test(v.name) ? ' (премиум)' : /enhanced|улучш/i.test(v.name) ? ' (улучшенный)' : '';
+  return v.name.replace(/^(Microsoft|Google)\s+/,'').replace(/\s*\(.*?\)\s*/g,' ').replace(/\s+Online\b/i, '').replace(/\s+-\s+Russian.*$/i, '').trim() + q;
+}
+// самые реалистичные голоса — нейросетевые голоса браузера и системы: Microsoft «Natural» (Edge),
+// Apple «улучшенный/премиум» (iPhone, Mac), онлайн-голоса Google (Chrome)
+const isRealistic = v => /natural|neural|enhanced|premium|улучш|высок.*кач|siri/i.test(v.name)
+  || (/google/i.test(v.name) && !v.localService) || (/microsoft/i.test(v.name) && /online/i.test(v.name));
+const realRank = v => /natural|neural/i.test(v.name) ? 3 : /premium|siri/i.test(v.name) ? 2.5 : /enhanced|улучш/i.test(v.name) ? 2 : 1;
+function loadVoices(){
+  voices = synth ? synth.getVoices() : [];
+  const sel = $('voice');
+  const saved = store.get('voice2');
+  const ru = voices.filter(v => /^ru/i.test(v.lang) || isIvonaRu(v)).sort((a, b) => isMaxim(b) - isMaxim(a) || isIvonaRu(b) - isIvonaRu(a));
+  const sys = showAll ? voices.slice().sort((a,b)=> (/^ru/i.test(b.lang)) - (/^ru/i.test(a.lang)) || a.lang.localeCompare(b.lang)) : ru;
+  sel.textContent = '';
+  const g1 = document.createElement('optgroup'); g1.label = 'Нейро-голоса · можно сохранить в MP3';
+  const g3 = document.createElement('optgroup'); g3.label = 'Необычные голоса';
+  const g4 = document.createElement('optgroup'); g4.label = 'Из Fish Audio · похожие';
+  const g5 = document.createElement('optgroup'); g5.label = 'Fish Audio · оригинал (по ключу)';
+  byScore(NEURAL).forEach(n => { const o = document.createElement('option'); o.value = 'n:' + n.id; o.textContent = n.fish || n.realFish ? n.name : `${n.name} · ${n.note}`; (n.realFish ? g5 : n.fish ? g4 : n.fun ? g3 : g1).append(o); });
+  const g0 = document.createElement('optgroup'); g0.label = 'Самые реалистичные · голоса устройства';
+  const g2 = document.createElement('optgroup'); g2.label = 'Голоса браузера · мгновенно';
+  const real = sys.filter(v => /^ru/i.test(v.lang) && isRealistic(v)).sort((a, b) => realRank(b) - realRank(a));
+  sys.forEach(v => {
+    const o = document.createElement('option');
+    o.value = 's:' + v.voiceURI;
+    const nm = voiceLabel(v);
+    o.textContent = `${nm}${v.localService ? '' : ' · онлайн'}${showAll ? ' · '+v.lang : ''}`;
+    (real.includes(v) ? g0 : g2).append(o);
+  });
+  [...g0.children].sort((a, b) => realRank(real.find(v => 's:' + v.voiceURI === b.value)) - realRank(real.find(v => 's:' + v.voiceURI === a.value))).forEach(o => g0.append(o));
+  if (g0.children.length) sel.append(g0);
+  if (g2.children.length) sel.append(g2);
+  sel.append(g1, g3); if (g4.children.length) sel.append(g4); if (g5.children.length) sel.append(g5);
+  const values = [...sel.options].map(o => o.value);
+  const maxim = voices.find(isMaxim);
+  const best = maxim || real[0];                    // иначе — самый естественный встроенный голос (Ирина)
+  let pick = [voiceSel, saved].find(v => v && values.includes(v)) || (best ? 's:' + best.voiceURI : 'n:irina');
+  if (maxim && store.get('maximSeen') !== '1') { pick = 's:' + maxim.voiceURI; store.set('maximSeen', '1'); store.set('voice2', pick); toast('Найден голос Maxim (IVONA) — он выбран для чтения.'); }
+  if (!maxim && real[0] && store.get('realSeen') !== '1' && !(saved && saved.startsWith('s:'))) {
+    pick = 's:' + real[0].voiceURI; store.set('realSeen', '1'); store.set('voice2', pick);
+    toast(`Найден реалистичный голос «${voiceLabel(real[0])}» — он выбран для чтения.`);
+  }
+  $('ivonaHelp').hidden = !!maxim;
+  $('realHelp').open = false; $('realFound').textContent = real.length ? `На этом устройстве найдено: ${real.map(voiceLabel).join(', ')}. Они вверху списка голосов.` : 'На этом устройстве таких голосов пока нет — их можно получить бесплатно:';
+  if (voiceSel && !values.includes(voiceSel) && voiceSel.startsWith('s:') && !voices.length) pick = voiceSel; // голоса ещё грузятся
+  applyVoice(pick);
+  $('allVoices').textContent = showAll ? 'только русские' : 'все языки';
+  $('allVoices').hidden = !voices.length;
+}
+function applyVoice(v){
+  voiceSel = v;
+  if ([...$('voice').options].some(o => o.value === v)) $('voice').value = v;
+  sysVoice = v.startsWith('s:') ? voices.find(x => x.voiceURI === v.slice(2)) || null : null;
+  $('voiceChipName').textContent = isNeural() ? neuralName(neuralId()) : (sysVoice ? voiceLabel(sysVoice).split(' ')[0] : 'Голос');
+  const hint = $('vhint');
+  const ne = NEURAL.find(n => n.id === neuralId());
+  if (isNeural() && ne && ne.realFish) { hint.hidden = false; hint.textContent = 'Оригинальный голос Fish Audio: нужен интернет и ваш ключ, озвучка платная (списывается с вашего баланса Fish Audio).'; }
+  else if (isNeural() && tts.loaded !== neuralModel(neuralId()).model) { hint.hidden = false; hint.textContent = 'Голос загрузится при первом запуске, около 32 МБ. Потом работает без интернета.'; }
+  else if (!isNeural()) { hint.hidden = false; hint.textContent = 'Голос браузера нельзя сохранить в MP3: для файла выберите нейро-голос.'; }
+  else hint.hidden = true;
+}
+if (synth) {
+  synth.addEventListener?.('voiceschanged', loadVoices);
+  setTimeout(loadVoices, 700);
+}
+loadVoices();
+$('voice').addEventListener('change', e => {
+  applyVoice(e.target.value);
+  store.set('voice2', e.target.value);
+  if (playing) restart();
+});
+$('allVoices').addEventListener('click', () => { showAll = !showAll; loadVoices(); });
+$('pickMaximLike').addEventListener('click', () => { applyVoice('n:ruslan-low'); store.set('voice2', 'n:ruslan-low'); if (playing) restart(); toast('Выбран голос «Руслан низкий».'); });
+$('test').addEventListener('click', async () => {
+  pause();
+  const phrase = 'Привет! Так звучит этот голос на выбранной скорости.';
+  if (isNeural()) {
+    unlockAudio();
+    const my = gen;
+    try { setBusy(true); const r = await neuralSynth(phrase); if (my === gen) playBuffer(r); }
+    catch (e) { toast('Не получилось: ' + e.message); }
+    finally { setBusy(false); }
+    return;
+  }
+  if (!synth) return;
+  const u = new SpeechSynthesisUtterance(phrase);
+  if (sysVoice) { u.voice = sysVoice; u.lang = sysVoice.lang; } else u.lang = 'ru-RU';
+  u.rate = rate;
+  synth.speak(u);
+});
+
+/* ---------- speed ---------- */
+const PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+let rate = parseFloat(store.get('rate')) || 1;
+rate = Math.min(3, Math.max(0.5, rate));
+document.querySelectorAll('[data-presets]').forEach(box => PRESETS.forEach(v => {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = fmtRate(v); b.dataset.v = v;
+  b.addEventListener('click', () => setRate(v));
+  box.append(b);
+}));
+function fmtRate(v){ return '×' + (Math.round(v*100)/100).toString().replace('.', ','); }
+function setRate(v, fromSlider){
+  rate = Math.round(Math.min(3, Math.max(0.5, v)) * 100) / 100;
+  if (!fromSlider) $('rate').value = rate;
+  $('rateOut').textContent = $('rateChip').textContent = $('mp3rate').textContent = fmtRate(rate);
+  document.querySelectorAll('[data-presets] button').forEach(b => b.setAttribute('aria-pressed', Math.abs(b.dataset.v - rate) < 0.001));
+  store.set('rate', rate);
+  updateProgress();
+  clearTimeout(setRate.t);
+  if (playing) setRate.t = setTimeout(restart, 350);
+}
+$('rate').addEventListener('input', e => setRate(parseFloat(e.target.value), true));
+setRate(rate);
+
+sayOpts.symbols = store.get('saySym') === '1';
+sayOpts.roman = store.get('sayRoman') !== '0';
+$('saySym').checked = sayOpts.symbols; $('sayRoman').checked = sayOpts.roman;
+function sayChanged(){
+  sayOpts.symbols = $('saySym').checked; sayOpts.roman = $('sayRoman').checked;
+  store.set('saySym', sayOpts.symbols ? '1' : '0'); store.set('sayRoman', sayOpts.roman ? '1' : '0');
+  computeSpoken(); audioCache.clear();
+  if (playing) restart();
+}
+$('saySym').addEventListener('change', sayChanged);
+$('sayRoman').addEventListener('change', sayChanged);
+
+
+sayOpts.abbr = store.get('sayAbbr') !== '0';
+$('sayAbbr').checked = sayOpts.abbr;
+function abbrChanged(){
+  buildAbbrIndex(); computeSpoken(); audioCache.clear(); renderAbbr();
+  if (playing) restart();
+}
+$('sayAbbr').addEventListener('change', e => { sayOpts.abbr = e.target.checked; store.set('sayAbbr', sayOpts.abbr ? '1' : '0'); abbrChanged(); });
+function abbrRow(ent, extra){
+  const row = document.createElement('div'); row.className = 'arow' + (ent.off ? ' off' : '');
+  const code = document.createElement('code'); code.textContent = ent.a;
+  const inp = document.createElement('input'); inp.value = ent.e.replace(/\s*\|\s*/g, ' | '); inp.setAttribute('aria-label', 'Расшифровка ' + ent.a);
+  if (ent.e === '@век') { inp.value = 'век (девятнадцатый век)'; inp.disabled = true; }
+  inp.addEventListener('change', () => {
+    const v = inp.value.trim().replace(/\s*\|\s*/g, '|');
+    if (ent.custom) { const c = abbrUser.custom[+ent.id.slice(1)]; if (v) c.e = v; }
+    else if (!v || v === ent.def) delete abbrUser.over[ent.id]; else abbrUser.over[ent.id] = v;
+    saveAbbr(); abbrChanged();
+  });
+  const meta = document.createElement('span'); meta.className = 'src';
+  const cond = { num: 'после числа', numend: 'после числа', year: 'после года', nnum: 'перед числом', cap: 'перед названием', nonum: 'не после числа' }[ent.cond] || '';
+  meta.textContent = [extra, ent.custom ? 'моё' : ent.src, cond].filter(Boolean).join(' · ');
+  row.append(code, inp);
+  const acts = document.createElement('span'); acts.className = 'aacts';
+  if (ent.edited) { const r = document.createElement('button'); r.type = 'button'; r.className = 'mini'; r.textContent = '↺'; r.title = 'Вернуть из словаря';
+    r.onclick = () => { delete abbrUser.over[ent.id]; saveAbbr(); abbrChanged(); }; acts.append(r); }
+  if (ent.custom) { const d = document.createElement('button'); d.type = 'button'; d.className = 'mini'; d.textContent = 'Удалить';
+    d.onclick = () => { abbrUser.custom.splice(+ent.id.slice(1), 1); saveAbbr(); abbrChanged(); }; acts.append(d); }
+  else { const t = document.createElement('label'); t.className = 'mini tgl'; const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !ent.off;
+    cb.onchange = () => { if (cb.checked) delete abbrUser.off[ent.id]; else abbrUser.off[ent.id] = true; saveAbbr(); abbrChanged(); };
+    t.append(cb, ' читать'); acts.append(t); }
+  acts.append(meta);
+  row.append(acts);
+  return row;
+}
+function renderAbbr(){
+  if (!$('abbrdlg').open) return;
+  if (!abbrIndex) buildAbbrIndex();
+  const here = $('abbrHere'); here.textContent = '';
+  const used = [...abbrFound.values()].filter(f => f.used);
+  if (!sayOpts.abbr) here.innerHTML = '<p class="note">Расшифровка выключена.</p>';
+  else if (!used.length) here.innerHTML = '<p class="note">В тексте нет сокращений из словаря.</p>';
+  used.forEach(f => here.append(abbrRow(f.ent, `в тексте ×${f.n}`)));
+  const cand = sayOpts.abbr ? abbrCandidates() : [];
+  $('abbrCandWrap').hidden = !cand.length; const cb = $('abbrCand'); cb.textContent = '';
+  cand.forEach(([a, sug]) => {
+    const row = document.createElement('div'); row.className = 'arow';
+    const code = document.createElement('code'); code.textContent = a;
+    const inp = document.createElement('input'); inp.value = sug; inp.placeholder = 'как читать?'; inp.setAttribute('aria-label', 'Расшифровка ' + a);
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'mini good'; add.textContent = 'Добавить';
+    add.onclick = () => { if (!inp.value.trim()) { inp.focus(); return; } abbrUser.custom.push({ a, e: inp.value.trim(), num: false }); saveAbbr(); abbrChanged(); };
+    const acts = document.createElement('span'); acts.className = 'aacts'; acts.append(add);
+    row.append(code, inp, acts); cb.append(row);
+  });
+  const mine = $('abbrMine'); mine.textContent = '';
+  const mineEnt = []; for (const list of abbrIndex.values()) list.forEach(e => e.custom && mineEnt.push(e));
+  $('myCount').textContent = mineEnt.length;
+  if (!mineEnt.length) mine.innerHTML = '<p class="note">Пока пусто.</p>';
+  mineEnt.forEach(e => mine.append(abbrRow(e)));
+  if ($('abbrAllBox').open) renderAbbrAll();
+}
+function renderAbbrAll(){
+  const q = $('abbrSearch').value.trim().toLowerCase(), box = $('abbrAll'); box.textContent = '';
+  const all = []; for (const list of abbrIndex.values()) list.forEach(e => !e.custom && all.push(e));
+  all.filter(e => !q || e.a.toLowerCase().includes(q) || e.e.toLowerCase().includes(q)).forEach(e => box.append(abbrRow(e)));
+}
+$('libCount').textContent = ABBR_LIB.length;
+$('abbrAllBox').addEventListener('toggle', () => { if ($('abbrAllBox').open) renderAbbrAll(); });
+$('abbrSearch').addEventListener('input', renderAbbrAll);
+$('abbrbtn').addEventListener('click', () => {
+  if (editing) $('edit').click();
+  try { $('abbrdlg').showModal(); } catch (e) { $('abbrdlg').setAttribute('open', ''); }
+  renderAbbr();
+});
+$('addAbbr').addEventListener('click', () => {
+  const a = $('newA').value.trim(), e = $('newE').value.trim();
+  if (!a || !e) { $('addErr').hidden = false; $('addErr').textContent = 'Заполните сокращение и расшифровку.'; return; }
+  $('addErr').hidden = true;
+  const i = abbrUser.custom.findIndex(c => akey(c.a) === akey(a));
+  if (i >= 0) abbrUser.custom[i] = { a, e, num: $('newNum').checked }; else abbrUser.custom.push({ a, e, num: $('newNum').checked });
+  saveAbbr(); $('newA').value = $('newE').value = ''; $('newNum').checked = false; abbrChanged(); toast(`Добавлено: ${a} → ${e.split('|')[0]}`);
+});
+$('spellbtn').addEventListener('click', openSpell);
+$('spellAll').addEventListener('click', () => {
+  const fix = typos.filter(t => t.sug.length && !/^[А-ЯЁ]/.test(t.word));   // слова с заглавной (часто имена) — только вручную
+  let t = text;
+  for (const x of fix) { const esc = x.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); t = t.replace(new RegExp('(^|[^А-Яа-яЁёA-Za-z0-9-])' + esc + '(?=$|[^А-Яа-яЁёA-Za-z0-9-])', 'g'), (m, a) => a + x.sug[0]); }
+  rebuildKeepPos(t); renderSpell(); toast(`Исправлено слов: ${fix.length}`);
+});
+$('autoSpell').checked = store.get('autoSpell') !== '0';
+$('autoSpell').addEventListener('change', e => store.set('autoSpell', e.target.checked ? '1' : '0'));
+
+/* ---------- playback: common ---------- */
+function clearMarks(){
+  curWordEl?.classList.remove('on'); curSentEl?.classList.remove('cur');
+  curWordEl = curSentEl = null;
+}
+function markSentence(si){
+  const s = sentences[si]; if (!s) return;
+  if (curSentEl !== s.el) { curSentEl?.classList.remove('cur'); s.el.classList.add('cur'); curSentEl = s.el; }
+}
+function markWord(gi){
+  const w = words[gi]; if (!w) return;
+  if (curWordEl !== w.el) {
+    curWordEl?.classList.remove('on'); w.el.classList.add('on'); curWordEl = w.el;
+    const r = w.el.getBoundingClientRect();
+    const bottomLimit = window.innerHeight - document.querySelector('.player').offsetHeight - 40;
+    if (r.top < 60 || r.bottom > bottomLimit) w.el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
+  pos = { s: w.s, w: gi - sentences[w.s].first };
+  $('seek').value = gi;
+  updateProgress();
+}
+function setBusy(b){ $('play').classList.toggle('busy', b); }
+function speakFrom(si, wi){ return isNeural() ? speakNeural(si, wi) : speakSystem(si, wi); }
+
+/* ---------- playback: browser voices ---------- */
+function speakSystem(si, wi){
+  if (!synth || !sentences.length) return;
+  const my = ++gen;
+  synth.cancel();
+  if (si >= sentences.length) { finish(); return; }
+  const s = sentences[si];
+  wi = Math.max(0, Math.min(wi || 0, s.words.length - 1));
+  const sp = spokenFrom(s, wi);
+  pos = { s: si, w: wi };
+  markSentence(si); markWord(s.first + wi);
+  if (!sp.text.replace(/[\s.,…!?:;«»"'()\-–—]/g, '')) { setTimeout(() => { if (my === gen) speakSystem(si + 1, 0); }, 30); return; }
+
+  const u = new SpeechSynthesisUtterance(sp.text);
+  if (sysVoice) { u.voice = sysVoice; u.lang = sysVoice.lang; } else u.lang = 'ru-RU';
+  u.rate = rate;
+  let gotBoundary = false;
+  u.onboundary = e => {
+    if (my !== gen || (e.name && e.name !== 'word')) return;
+    gotBoundary = true;
+    let k = wi;
+    for (let j = 0; j < sp.offs.length; j++) { if (sp.offs[j] <= e.charIndex) k = wi + j; else break; }
+    markWord(s.first + k);
+  };
+  u.onend = () => {
+    if (my !== gen) return;
+    if (!gotBoundary) markWord(s.first + s.words.length - 1);
+    speakSystem(si + 1, 0);
+  };
+  u.onerror = e => {
+    if (my !== gen || e.error === 'interrupted' || e.error === 'canceled') return;
+    toast('Не удалось озвучить фрагмент: ' + e.error + '. Попробуйте другой голос.');
+    pause();
+  };
+  setTimeout(() => { if (my === gen) synth.speak(u); }, 30);
+}
+
+/* ---------- playback: neural voices ---------- */
+let actx = null, source = null, rafId = 0, gapTimer = 0;
+const audioCache = new Map();
+function unlockAudio(){
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';   // iOS: играть и при беззвучном режиме
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; actx = new AC(); }
+    if (actx.state !== 'running') actx.resume();
+    const b = actx.createBuffer(1, 1, 22050), s = actx.createBufferSource(); s.buffer = b; s.connect(actx.destination); s.start(0);
+  } catch (e) {}
+}
+function voiceProgress(m){
+  const pct = Math.round(m.loaded / m.total * 100);
+  $('now').textContent = `Загружаю голос ${neuralName(neuralId())}… ${pct}%`;
+}
+function neuralSynth(t){
+  const v = neuralId();
+  const ent = NEURAL.find(n => n.id === v);
+  if (ent && ent.realFish) return fishRealSynth(ent, t, rate);
+  const { model, pitch, tempo, opts } = neuralModel(v);
+  return tts.call('synth', { voice: model, pitch, opts, text: t, lengthScale: tempo / rate }, voiceProgress).then(r => { tts.loaded = model; applyVoice(voiceSel); return r; });
+}
+function getChunk(si, wi){
+  const key = `${voiceSel}|${rate}|${sayOpts.symbols}|${sayOpts.roman}|${si}|${wi}`;
+  if (!audioCache.has(key)) {
+    const s = sentences[si];
+    const p = neuralSynth(spokenFrom(s, wi).text);
+    p.catch(() => audioCache.delete(key));
+    audioCache.set(key, p);
+    if (audioCache.size > 40) audioCache.delete(audioCache.keys().next().value);
+  }
+  return audioCache.get(key);
+}
+function stopSource(){
+  cancelAnimationFrame(rafId); clearTimeout(gapTimer);
+  if (source) { source.onended = null; try { source.stop(); } catch (e) {} source = null; }
+}
+function playBuffer(r, onEnd){
+  stopSource();
+  const buf = actx.createBuffer(1, Math.max(1, r.audio.length), r.sr);
+  buf.getChannelData(0).set(r.audio);
+  source = actx.createBufferSource(); source.buffer = buf; source.connect(actx.destination);
+  const t0 = actx.currentTime + 0.03;
+  source.onended = () => { source = null; onEnd && onEnd(); };
+  source.start(t0);
+  return { t0, dur: buf.duration };
+}
+async function speakNeural(si, wi){
+  if (!sentences.length) return;
+  const my = ++gen;
+  stopSource();
+  if (si >= sentences.length) { finish(); return; }
+  const s = sentences[si];
+  wi = Math.max(0, Math.min(wi || 0, s.words.length - 1));
+  pos = { s: si, w: wi };
+  markSentence(si); markWord(s.first + wi);
+  let r;
+  const slow = setTimeout(() => { if (my === gen) setBusy(true); }, 150);
+  try { r = await getChunk(si, wi); }
+  catch (e) { clearTimeout(slow); if (my !== gen) return; setBusy(false); toast('Не получилось озвучить: ' + e.message); pause(); return; }
+  clearTimeout(slow);
+  if (my !== gen) return;
+  setBusy(false);
+  updateProgress();
+  if (si + 1 < sentences.length) getChunk(si + 1, 0).catch(() => {});
+  // подсветка слов: время слова пропорционально его позиции в тексте
+  const sp = spokenFrom(s, wi), span = Math.max(1, sp.text.length);
+  const starts = sp.offs.map(o => o / span);
+  const { t0, dur } = playBuffer(r, () => {
+    if (my !== gen) return;
+    cancelAnimationFrame(rafId);
+    gapTimer = setTimeout(() => { if (my === gen) speakNeural(si + 1, 0); }, (s.para ? 350 : 120) / rate);
+  });
+  const tick = () => {
+    if (my !== gen) return;
+    const t = (actx.currentTime - t0) / dur;
+    let k = 0; for (let j = 0; j < starts.length; j++) { if (starts[j] <= t * 1.04) k = j; else break; }
+    if (t >= 0) markWord(s.first + wi + k);
+    rafId = requestAnimationFrame(tick);
+  };
+  rafId = requestAnimationFrame(tick);
+}
+
+/* ---------- transport ---------- */
+function play(){
+  if (!sentences.length) { toast('Сначала добавьте текст.'); return; }
+  if (exporting) { toast('Сейчас создаётся MP3. Дождитесь окончания или остановите его.'); return; }
+  if (isNeural()) unlockAudio();
+  else if (!synth) { toast('Этот браузер не умеет читать голосами системы. Выберите нейро-голос.'); return; }
+  playing = true; setPlayIcon();
+  speakFrom(pos.s, pos.w);
+  clearInterval(keepAlive);
+  // Chrome обрывает длинную речь через ~15 с, если её не «пошевелить»
+  if (!isNeural()) keepAlive = setInterval(() => { if (playing && synth.speaking && !synth.paused) { synth.pause(); synth.resume(); } }, 10000);
+  navigator.wakeLock?.request('screen').then(l => wakeLock = l).catch(()=>{});
+  setMediaSession();
+}
+function pause(){
+  playing = false; gen++; synth && synth.cancel(); stopSource(); setBusy(false); setPlayIcon();
+  clearInterval(keepAlive);
+  wakeLock?.release?.().catch(()=>{}); wakeLock = null;
+  if (navigator.mediaSession) navigator.mediaSession.playbackState = 'paused';
+}
+function finish(){
+  pause(); pos = { s: 0, w: 0 };
+  $('now').textContent = 'Прочитано до конца';
+}
+function restart(){ if (playing) speakFrom(pos.s, pos.w); }
+function jumpTo(gi, autoplay){
+  const w = words[gi]; if (!w) return;
+  pos = { s: w.s, w: gi - sentences[w.s].first };
+  markSentence(w.s); markWord(gi);
+  if (playing) speakFrom(pos.s, pos.w); else if (autoplay) play();
+}
+function setPlayIcon(){
+  $('icPlay').toggleAttribute('hidden', playing); $('icPause').toggleAttribute('hidden', !playing);   // у SVG нет свойства .hidden
+  $('play').classList.toggle('on', playing); $('play').setAttribute('aria-pressed', playing);
+  $('play').setAttribute('aria-label', playing ? 'Пауза' : 'Слушать');
+  $('play').title = playing ? 'Пауза (пробел)' : 'Слушать (пробел)';
+}
+function updateProgress(){
+  const gi = sentences.length ? sentences[pos.s].first + pos.w : 0;
+  const remain = Math.max(0, words.length - gi);
+  const min = remain / (140 * rate);                // ~140 слов/мин при ×1
+  $('left').textContent = words.length ? (min < 1 ? `осталось < 1 мин` : `осталось ≈ ${Math.round(min)} мин`) : '';
+  if (sentences.length) $('now').textContent = `Предложение ${pos.s + 1} из ${sentences.length}`;
+  $('stats').textContent = words.length ? `${words.length} слов · ${sentences.length} предл. · ≈ ${Math.max(1, Math.round(words.length / 140 / rate))} мин на ${fmtRate(rate)}` : '';
+}
+function prevSentence(){ const si = pos.w > 0 && playing ? pos.s : Math.max(0, pos.s - 1); jumpTo(sentences[si]?.first ?? 0); }
+function nextSentence(){ if (pos.s + 1 < sentences.length) jumpTo(sentences[pos.s + 1].first); }
+function setMediaSession(){
+  const ms = navigator.mediaSession; if (!ms) return;
+  try {
+    ms.metadata = new MediaMetadata({ title: (sentences[0]?.text || 'Вслух').slice(0, 60), artist: 'Вслух' });
+    ms.playbackState = 'playing';
+    ms.setActionHandler('play', play); ms.setActionHandler('pause', pause);
+    ms.setActionHandler('previoustrack', prevSentence); ms.setActionHandler('nexttrack', nextSentence);
+  } catch (e) {}
+}
+
+$('play').addEventListener('click', () => playing ? pause() : play());
+$('back').addEventListener('click', prevSentence);
+$('fwd').addEventListener('click', nextSentence);
+$('seek').addEventListener('input', e => jumpTo(parseInt(e.target.value, 10)));
+$('text').addEventListener('click', e => {
+  const w = e.target.closest('.w'); if (!w) return;
+  jumpTo(parseInt(w.dataset.i, 10), true);
+});
+document.addEventListener('keydown', e => {
+  if (e.target.closest('textarea, input[type=text], select, dialog')) return;
+  if (e.code === 'Space' && !e.target.closest('button, input')) { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.key === 'ArrowRight' && !e.target.closest('input')) nextSentence();
+  else if (e.key === 'ArrowLeft' && !e.target.closest('input')) prevSentence();
+});
+
+/* ---------- mobile settings sheet ---------- */
+function openTune(open){
+  if (open) $('moreSet').open = true;
+  $('tune').classList.toggle('open', open);
+  $('scrim').hidden = !open;
+  document.body.classList.toggle('tune-open', open);
+}
+$('rateChip').addEventListener('click', () => openTune(true));
+$('voiceChip').addEventListener('click', () => openTune(true));
+$('tuneClose').addEventListener('click', () => openTune(false));
+$('scrim').addEventListener('click', () => openTune(false));
+matchMedia('(max-width:640px)').addEventListener?.('change', e => { if (!e.matches) openTune(false); });
+
+/* ---------- editing ---------- */
+let editing = false;
+$('edit').addEventListener('click', () => {
+  editing = !editing;
+  if (editing) {
+    pause();
+    $('editor').value = isSample ? '' : text;
+    $('editor').placeholder = 'Вставьте или напечатайте текст…';
+    $('text').hidden = true; $('editor').hidden = false; $('editor').focus();
+    $('edit').textContent = 'Готово';
+  } else {
+    const v = $('editor').value.trim();
+    if (v) { isSample = false; build(v); if (speller) findTypos(); }
+    $('text').hidden = false; $('editor').hidden = true;
+    $('edit').textContent = 'Править текст';
+  }
+});
+$('withEng').checked = store.get('ext') !== '0';
+$('withEng').addEventListener('change', e => store.set('ext', e.target.checked ? '1' : '0'));
+let big = store.get('big') === '1';
+function applyBig(){ $('text').classList.toggle('big', big); $('bigger').textContent = big ? 'Мельче' : 'Крупнее'; }
+$('bigger').addEventListener('click', () => { big = !big; store.set('big', big ? '1' : '0'); applyBig(); });
+applyBig();
+
+/* ---------- MP3 export ---------- */
+let exporting = false, mp3Blob = null, mp3Url = null, mp3Job = 0;
+const dlg = $('mp3dlg');
+function buildMp3Voices(){
+  const cur = $('mp3voice').value; $('mp3voice').textContent = '';
+  const mg1 = document.createElement('optgroup'), mg3 = document.createElement('optgroup'), mg4 = document.createElement('optgroup'), mg5 = document.createElement('optgroup');
+  mg1.label = 'Нейро-голоса'; mg3.label = 'Необычные голоса'; mg4.label = 'Из Fish Audio · похожие'; mg5.label = 'Fish Audio · оригинал (по ключу)';
+  byScore(NEURAL).forEach(n => { const o = document.createElement('option'); o.value = n.id; o.textContent = n.fish || n.realFish ? n.name : `${n.name} · ${n.note}`; (n.realFish ? mg5 : n.fish ? mg4 : n.fun ? mg3 : mg1).append(o); });
+  $('mp3voice').append(mg1, mg3); if (mg4.children.length) $('mp3voice').append(mg4); if (mg5.children.length) $('mp3voice').append(mg5);
+  if (cur && NEURAL.some(n => n.id === cur)) $('mp3voice').value = cur;
+}
+buildMp3Voices();
+$('mp3voice').value = store.get('mp3voice') || 'irina';
+$('mp3voice').addEventListener('change', e => store.set('mp3voice', e.target.value));
+
+function mp3View(state){
+  $('mp3go').hidden = state !== 'idle';
+  $('mp3stop').hidden = state !== 'run';
+  $('mp3save').hidden = $('mp3again').hidden = state !== 'done';
+  $('mp3prog').hidden = state !== 'run';
+  $('mp3done').hidden = state !== 'done';
+  dlg.querySelectorAll('select, input').forEach(el => el.disabled = state === 'run');
+  if (state !== 'error') $('mp3err').hidden = true;
+}
+$('mp3btn').addEventListener('click', () => {
+  if (!sentences.length) { toast('Сначала добавьте текст.'); return; }
+  if (editing) $('edit').click();
+  if (isNeural()) $('mp3voice').value = neuralId();
+  $('mp3fromLbl').textContent = pos.s > 0 ? `С предложения ${pos.s + 1}` : 'С текущего предложения';
+  $('mp3say').textContent = 'Знаки: ' + (sayOpts.symbols ? 'проговариваются' : 'не проговариваются') + ' · римские цифры: ' + (sayOpts.roman ? 'числами' : 'как написано') + '. Меняется в настройках плеера.';
+  if (!exporting && !mp3Blob) mp3View('idle');
+  try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
+});
+dlg.addEventListener('cancel', e => { if (exporting) e.preventDefault(); });
+$('mp3go').addEventListener('click', startExport);
+$('mp3again').addEventListener('click', () => { mp3Blob = null; mp3View('idle'); });
+$('mp3stop').addEventListener('click', () => { tts.cancel(); $('mp3status').textContent = 'Останавливаю…'; });
+
+async function startExport(){
+  pause();
+  const from = dlg.querySelector('input[name=mp3range]:checked').value === 'from' ? pos.s : 0;
+  const items = sentences.slice(from).map(s => ({ text: spokenFrom(s, 0).text, para: s.para })).filter(it => it.text.trim());
+  if (!items.length) return;
+  const voice = $('mp3voice').value, job = ++mp3Job;
+  exporting = true; mp3View('run');
+  $('mp3bar').style.width = '0%'; $('mp3pct').textContent = ''; $('mp3status').textContent = 'Готовлю модуль озвучки…';
+  const t0 = performance.now();
+  try {
+    const nm = neuralModel(voice);
+    const ent = NEURAL.find(n => n.id === voice);
+    if (ent && ent.realFish) {
+      const parts = []; let sr0 = 0, secs = 0;
+      for (let i = 0; i < items.length; i++) {
+        if (job !== mp3Job || !exporting) return;
+        const r = await fishRealSynth(ent, items[i].text, rate); sr0 = r.sr;
+        parts.push(r.audio, new Float32Array(Math.round(r.sr * (items[i].para ? 0.55 : 0.28)))); secs += r.audio.length / r.sr;
+        $('mp3bar').style.width = ((i + 1) / items.length * 100).toFixed(1) + '%';
+        $('mp3status').textContent = `Озвучено ${i + 1} из ${items.length} предл. · ${fmtTime(secs)} аудио`;
+      }
+      const enc = await tts.call('encode', { parts, sr: sr0, kbps: 96 });
+      mp3Blob = enc.blob; if (mp3Url) URL.revokeObjectURL(mp3Url); mp3Url = URL.createObjectURL(mp3Blob); $('mp3audio').src = mp3Url;
+      $('mp3info').textContent = `${fmtTime(enc.seconds)} · ${(mp3Blob.size / 1048576).toFixed(1).replace('.', ',')} МБ · ${ent.name}. Файл сохранится в «Загрузки».`;
+      mp3View('done'); return;
+    }
+    const r = await tts.call('export', { voice: nm.model, pitch: nm.pitch, opts: nm.opts, items, lengthScale: nm.tempo / rate, kbps: 64 }, m => {
+      if (job !== mp3Job) return;
+      if (m.type === 'progress') {
+        const pct = Math.round(m.loaded / m.total * 100);
+        $('mp3status').textContent = `Загружаю голос ${neuralName(voice)}: ${(m.loaded/1048576).toFixed(0)} из ${(m.total/1048576).toFixed(0)} МБ`;
+        $('mp3bar').style.width = pct * 0.2 + '%'; $('mp3pct').textContent = '';
+      } else {
+        tts.loaded = nm.model;
+        const frac = m.done / m.total;
+        const el = (performance.now() - t0) / 1000;
+        const eta = m.done > 2 ? Math.round(el / m.done * (m.total - m.done)) : null;
+        $('mp3bar').style.width = (20 + frac * 80).toFixed(1) + '%';
+        $('mp3status').textContent = `Озвучено ${m.done} из ${m.total} предл. · ${fmtTime(m.seconds)} аудио`;
+        $('mp3pct').textContent = eta != null ? `ещё ≈ ${fmtTime(eta)}` : '';
+      }
+    });
+    if (job !== mp3Job) return;
+    if (r.type === 'cancelled') { mp3View('idle'); toast('Создание MP3 остановлено.'); return; }
+    mp3Blob = r.blob;
+    if (mp3Url) URL.revokeObjectURL(mp3Url);
+    mp3Url = URL.createObjectURL(mp3Blob);
+    $('mp3audio').src = mp3Url;
+    $('mp3info').textContent = `${fmtTime(r.seconds)} · ${(mp3Blob.size / 1048576).toFixed(1).replace('.', ',')} МБ · ${neuralName(voice)}, ${fmtRate(rate)}. ` + (window.AndroidFiles ? 'Файл сохранится в «Загрузки».' : window.claude?.use ? 'Файл сохранится в ZIP-архиве с MP3 внутри: так требует окно просмотра.' : /iP(hone|ad|od)|Macintosh.*Mobile/.test(navigator.userAgent) || window.webkit?.messageHandlers?.iosFiles ? 'Откроется меню «Поделиться»: выберите «Сохранить в Файлы».' : 'Файл сохранится как MP3.');
+    mp3View('done');
+    applyVoice(voiceSel);
+  } catch (e) {
+    if (job !== mp3Job) return;
+    mp3View('idle');
+    $('mp3err').hidden = false; $('mp3err').textContent = 'Не получилось создать MP3: ' + e.message + '. Попробуйте ещё раз.';
+  } finally {
+    if (job === mp3Job) exporting = false;
+  }
+}
+function fmtTime(sec){
+  sec = Math.round(sec);
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60), s = sec % 60;
+  return h ? `${h} ч ${m} мин` : m ? `${m} мин ${String(s).padStart(2,'0')} с` : `${s} с`;
+}
+function fileBase(){
+  const w = (sentences[0]?.text || 'Вслух').replace(/[\\/:*?"<>|«»„“”.,!?;…]/g, '').split(/\s+/).slice(0, 5).join(' ');
+  return (w || 'Вслух').slice(0, 60);
+}
+
+// ZIP без сжатия (MP3 и так сжат)
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u){ let c = 0xFFFFFFFF; for (let i = 0; i < u.length; i++) c = CRC[(c ^ u[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip(name, data){
+  const nm = new TextEncoder().encode(name), crc = crc32(data), d = new Date();
+  const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  const date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  const lh = new DataView(new ArrayBuffer(30));
+  [[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[8,0,2],[10,time,2],[12,date,2],[14,crc,4],[18,data.length,4],[22,data.length,4],[26,nm.length,2],[28,0,2]]
+    .forEach(([o,v,s]) => s === 4 ? lh.setUint32(o, v, true) : lh.setUint16(o, v, true));
+  const ch = new DataView(new ArrayBuffer(46));
+  [[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[10,0,2],[12,time,2],[14,date,2],[16,crc,4],[20,data.length,4],[24,data.length,4],[28,nm.length,2],[30,0,2],[32,0,2],[34,0,2],[36,0,2],[38,0,4],[42,0,4]]
+    .forEach(([o,v,s]) => s === 4 ? ch.setUint32(o, v, true) : ch.setUint16(o, v, true));
+  const cdOff = 30 + nm.length + data.length, cdLen = 46 + nm.length;
+  const end = new DataView(new ArrayBuffer(22));
+  [[0,0x06054b50,4],[4,0,2],[6,0,2],[8,1,2],[10,1,2],[12,cdLen,4],[16,cdOff,4],[20,0,2]]
+    .forEach(([o,v,s]) => s === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true));
+  return new Blob([lh, nm, data, ch, nm, end], { type: 'application/zip' });
+}
+$('mp3save').addEventListener('click', async () => {
+  if (!mp3Blob) return;
+  const btn = $('mp3save');
+  if (window.AndroidFiles) {                        // приложение Android: сразу MP3 в «Загрузки»
+    btn.disabled = true;
+    try {
+      const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(mp3Blob); });
+      const out = JSON.parse(window.AndroidFiles.save(fileBase() + '.mp3', 'audio/mpeg', b64));
+      if (!out.ok) throw new Error(out.error);
+      toast('MP3 сохранён: ' + out.path);
+    } catch (e) { $('mp3err').hidden = false; $('mp3err').textContent = 'Не удалось сохранить файл: ' + (e && e.message || e) + '.'; }
+    finally { btn.disabled = false; }
+    return;
+  }
+  if (window.webkit?.messageHandlers?.iosFiles || !window.claude?.use) {   // приложение iOS или своя страница (на экране «Домой»)
+    const name = fileBase() + '.mp3';
+    try {
+      if (window.webkit?.messageHandlers?.iosFiles) {
+        btn.disabled = true;
+        const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1]); r.onerror = rej; r.readAsDataURL(mp3Blob); });
+        window.webkit.messageHandlers.iosFiles.postMessage({ name, b64 });
+        return;
+      }
+      const file = new File([mp3Blob], name, { type: 'audio/mpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(mp3Blob); a.download = name;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      toast('MP3 сохранён.');
+    } catch (e) { if (e && e.name !== 'AbortError') { $('mp3err').hidden = false; $('mp3err').textContent = 'Не удалось сохранить файл: ' + (e.message || e) + '.'; } }
+    finally { btn.disabled = false; }
+    return;
+  }
+  const downloads = await window.claude.use('downloads').catch(() => null);
+  if (!downloads) {
+    $('mp3err').hidden = false;
+    $('mp3err').textContent = 'В этом окне сохранение файлов недоступно. Послушать запись можно в плеере выше.';
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const base = fileBase();
+    const zip = makeZip(base + '.mp3', new Uint8Array(await mp3Blob.arrayBuffer()));
+    await downloads.save({ filename: base + '.zip', data: zip });
+    toast('Файл сохранён. Внутри архива лежит MP3.');
+  } catch (e) {
+    const code = e && e.code;
+    if (code === 'declined') {}
+    else if (code === 'rate_limited') toast('Окно сохранения уже открыто.');
+    else { $('mp3err').hidden = false; $('mp3err').textContent = 'Не удалось сохранить файл' + (e && e.message ? ': ' + e.message : '') + '.'; }
+  } finally { btn.disabled = false; }
+});
+
+/* ---------- OCR ---------- */
+let worker = null, workerLangs = '', queue = Promise.resolve();
+// Словари (gzip .traineddata) лежат рядом со страницей как lang/<code>.wasm,
+// поэтому запрос воркера к <code>.traineddata.gz перенаправляется на этот файл.
+const langPath = new URL('lang', location.href).href;
+const workerUrl = URL.createObjectURL(new Blob([
+  "const f = self.fetch.bind(self);" +
+  "self.fetch = (u, o) => f(String(u).replace(/\\.traineddata\\.gz$/, '.wasm'), o);" +
+  "importScripts('" + __LIB + "tesseract-worker.min.js');"
+], { type: 'application/javascript' }));
+
+async function getWorker(langs){
+  if (worker && workerLangs === langs) return worker;
+  if (worker) { await worker.terminate(); worker = null; }
+  worker = await Tesseract.createWorker(langs, 1, {
+    workerPath: workerUrl,
+    workerBlobURL: false,
+    corePath: __LIB + 'tesseract-core',
+    langPath,
+    logger: m => ocrLog && ocrLog(m)
+  });
+  await worker.setParameters({ preserve_interword_spaces: '1', user_defined_dpi: '300' });
+  workerLangs = langs;
+  return worker;
+}
+
+/* Подготовка фото: поворот и выравнивание строк, адаптивная бинаризация (убирает тени и неровный свет). */
+function loadImage(file){
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file), img = new Image();
+    img.onload = () => res({ img, url });
+    img.onerror = () => rej(new Error('не удалось открыть изображение. Если это HEIC, сохраните фото как JPG'));
+    img.src = url;
+  });
+}
+// исходник → серый canvas (с учётом области), с масштабом под распознавание
+function grayCanvas(img, crop, maxSide){
+  const sw = img.naturalWidth, sh = img.naturalHeight;
+  const c0 = crop || { x: 0, y: 0, w: 1, h: 1 };
+  const sx = c0.x * sw, sy = c0.y * sh, cw = c0.w * sw, ch = c0.h * sh;
+  let k = Math.min(1, maxSide / Math.max(cw, ch));
+  if (Math.max(cw, ch) * k < 1400) k = Math.min(2.5, 1400 / Math.max(cw, ch));   // мелкие снимки увеличиваем
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(cw * k)); c.height = Math.max(1, Math.round(ch * k));
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(img, sx, sy, cw, ch, 0, 0, c.width, c.height);
+  return c;
+}
+function grayData(c){
+  const d = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
+  const n = c.width * c.height, gray = new Uint8Array(n);
+  for (let i = 0, j = 0; i < n; i++, j += 4) gray[i] = (d[j] * 77 + d[j+1] * 151 + d[j+2] * 28) >> 8;
+  return gray;
+}
+// Брэдли–Рот: пиксель тёмный, если он заметно темнее среднего по окрестности
+function binarize(gray, w, h, T = 0.16){
+  const I = new Uint32Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += gray[y*w + x]; I[(y+1)*(w+1) + x + 1] = I[y*(w+1) + x + 1] + row; } }
+  const r = Math.max(8, Math.round(Math.max(w, h) / 50)), out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+      const sum = I[y1*(w+1) + x1] - I[y0*(w+1) + x1] - I[y1*(w+1) + x0] + I[y0*(w+1) + x0];
+      out[y*w + x] = gray[y*w + x] * (x1 - x0) * (y1 - y0) <= sum * (1 - T) ? 0 : 255;
+    }
+  }
+  return out;
+}
+// угол, при котором строки текста горизонтальны: ищем самую «полосатую» проекцию
+function findAngle(c, bases){
+  const k = Math.min(1, 800 / Math.max(c.width, c.height));
+  const s = document.createElement('canvas'); s.width = Math.round(c.width * k); s.height = Math.round(c.height * k);
+  s.getContext('2d', { willReadFrequently: true }).drawImage(c, 0, 0, s.width, s.height);
+  const w = s.width, h = s.height, bin = binarize(grayData(s), w, h, 0.2);
+  const px = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!bin[y*w + x]) px.push(x - w/2, y - h/2);
+  const step = Math.max(1, Math.floor(px.length / 2 / 60000)) * 2, R = Math.ceil(Math.hypot(w, h) / 2) + 2;
+  const hist = new Float64Array(2 * R + 1);
+  const score = deg => {
+    const t = deg * Math.PI / 180, cs = Math.cos(t), sn = Math.sin(t);
+    hist.fill(0); let n = 0;
+    for (let i = 0; i < px.length; i += step) { hist[Math.round(px[i+1] * cs - px[i] * sn) + R]++; n++; }
+    let q = 0; for (let i = 0; i < hist.length; i++) q += hist[i] * hist[i];
+    return n ? q / n : 0;
+  };
+  let best = { a: bases[0], s: -1 };
+  for (const b of bases) for (let d = -15; d <= 15; d += 1) { const v = score(b + d); if (v > best.s) best = { a: b + d, s: v }; }
+  for (let d = -0.75; d <= 0.75; d += 0.25) { const v = score(best.a + d); if (v > best.s) best = { a: best.a + d, s: v }; }
+  return best.a;
+}
+// повернуть на угол (строки → горизонталь) и бинаризовать
+function boxBlur(src, w, h, r){
+  const I = new Float64Array((w + 1) * (h + 1));
+  for (let y = 0; y < h; y++) { let row = 0; for (let x = 0; x < w; x++) { row += src[y*w + x]; I[(y+1)*(w+1) + x + 1] = I[y*(w+1) + x + 1] + row; } }
+  const out = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+      out[y*w + x] = (I[y1*(w+1) + x1] - I[y0*(w+1) + x1] - I[y1*(w+1) + x0] + I[y0*(w+1) + x0]) / ((x1 - x0) * (y1 - y0));
+    }
+  }
+  return out;
+}
+// выравниваем освещение: делим на «фон» (тени и блики уходят), растягиваем контраст
+function flatten(gray, w, h){
+  const R = Math.max(12, Math.round(Math.max(w, h) / 30));
+  const bg = boxBlur(gray, w, h, R), f = new Float32Array(w * h);
+  for (let i = 0; i < f.length; i++) f[i] = Math.min(1.15, gray[i] / Math.max(8, bg[i] * 1.08));
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < f.length; i += 3) hist[Math.min(255, Math.round(f[i] / 1.15 * 255))]++;
+  let n = 0, tot = Math.ceil(f.length / 3), lo = 0, hi = 255;
+  for (let v = 0; v < 256; v++) { n += hist[v]; if (n > tot * 0.01) { lo = v; break; } }
+  n = 0; for (let v = 255; v >= 0; v--) { n += hist[v]; if (n > tot * 0.02) { hi = v; break; } }
+  const L = lo / 255 * 1.15, H = Math.max(L + 0.05, hi / 255 * 1.15), out = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < f.length; i++) out[i] = (f[i] - L) / (H - L) * 255;
+  return out;
+}
+// резкость: самые крутые перепады яркости относительно общего контраста (у размытого фото переходы плавные)
+function sharpness(raw, w, h){
+  const b = boxBlur(raw, w, h, 1), gh = new Uint32Array(256), vh = new Uint32Array(256);
+  let n = 0;
+  for (let y = 0; y < h - 1; y += 2) for (let x = 0; x < w - 1; x += 2) {
+    const i = y*w + x, g = Math.max(Math.abs(b[i+1] - b[i]), Math.abs(b[i+w] - b[i]));
+    gh[Math.min(255, g | 0)]++; vh[raw[i]]++; n++;
+  }
+  const pct = (hist, q) => { let c = 0; for (let v = 0; v < 256; v++) { c += hist[v]; if (c >= n * q) return v; } return 255; };
+  return pct(gh, 0.995) / (pct(vh, 0.95) - pct(vh, 0.05) + 1);
+}
+// нерезкая маска: усиливает контуры букв
+function unsharp(g, w, h, r, amount){
+  const b = boxBlur(g, w, h, r), out = new Uint8ClampedArray(w * h);
+  for (let i = 0; i < out.length; i++) out[i] = g[i] + amount * (g[i] - b[i]);
+  return out;
+}
+// иллюстрации и фото на странице: много полутонов или сплошной тёмной заливки → закрашиваем белым
+function maskPictures(raw, g, w, h){
+  const cs = Math.max(16, Math.round(Math.max(w, h) / 40)), gw = Math.ceil(w / cs), gh = Math.ceil(h / cs);
+  const flag = new Uint8Array(gw * gh), p90 = new Float32Array(gw * gh);
+  const cellVals = (cx, cy) => { const v = []; for (let y = cy * cs; y < Math.min(h, (cy + 1) * cs); y += 2) for (let x = cx * cs; x < Math.min(w, (cx + 1) * cs); x += 2) v.push(raw[y*w + x]); return v; };
+  for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) { const v = cellVals(cx, cy).sort((a, b) => a - b); p90[cy*gw + cx] = v[Math.floor(v.length * 0.9)] || 0; }
+  for (let cy = 0; cy < gh; cy++) for (let cx = 0; cx < gw; cx++) {
+    // уровень бумаги рядом: самый светлый из соседних участков
+    let paper = 0;
+    for (let yy = Math.max(0, cy - 2); yy <= Math.min(gh - 1, cy + 2); yy++) for (let xx = Math.max(0, cx - 2); xx <= Math.min(gw - 1, cx + 2); xx++) paper = Math.max(paper, p90[yy*gw + xx]);
+    // в тексте, даже размытом, между буквами и строками много чистой бумаги; на фото и иллюстрациях её почти нет
+    const v = cellVals(cx, cy); let bright = 0, dark = 0;
+    for (const x of v) { if (x >= paper * 0.88) bright++; else if (x < paper * 0.55) dark++; }
+    const b = bright / v.length, d = dark / v.length;
+    flag[cy*gw + cx] = (b < 0.35 && d + b < 0.8) || d > 0.6 ? 1 : 0;
+  }
+  const seen = new Uint8Array(gw * gh), mask = new Uint8Array(gw * gh);
+  let masked = 0;
+  for (let i = 0; i < flag.length; i++) {
+    if (!flag[i] || seen[i]) continue;
+    const comp = [i]; seen[i] = 1;
+    let minx = gw, maxx = 0, miny = gh, maxy = 0;
+    for (let k = 0; k < comp.length; k++) {
+      const c = comp[k], x = c % gw, y = (c - x) / gw;
+      minx = Math.min(minx, x); maxx = Math.max(maxx, x); miny = Math.min(miny, y); maxy = Math.max(maxy, y);
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy, j = ny*gw + nx;
+        if (nx >= 0 && ny >= 0 && nx < gw && ny < gh && flag[j] && !seen[j]) { seen[j] = 1; comp.push(j); }
+      }
+    }
+    const bw = maxx - minx + 1, bh = maxy - miny + 1;
+    if (comp.length >= 12 && bw >= 3 && bh >= 3) {
+      // закрашиваем только сами клетки картинки, а не весь прямоугольник
+      // сужаем на клетку: краевые клетки часто задевают соседние строки текста
+      const inC = new Set(comp);
+      for (const c of comp) { const x = c % gw;
+        if (inC.has(c - gw) && inC.has(c + gw) && (x === 0 || inC.has(c - 1)) && (x === gw - 1 || inC.has(c + 1))) mask[c] = 1; }
+      masked += comp.length;
+    }
+  }
+  if (masked) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (mask[((y / cs) | 0) * gw + ((x / cs) | 0)]) g[y*w + x] = 255;
+  return masked;
+}
+// повернуть на угол (строки → горизонталь), выровнять свет, повысить резкость, убрать картинки, бинаризовать
+function renderForOcr(c, deg, opt){
+  const t = -deg * Math.PI / 180, cs = Math.abs(Math.cos(t)), sn = Math.abs(Math.sin(t));
+  const k = opt.scale || 1;
+  const W = Math.round((c.width * cs + c.height * sn) * k), H = Math.round((c.width * sn + c.height * cs) * k);
+  const o = document.createElement('canvas'); o.width = W; o.height = H;
+  const g = o.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  g.imageSmoothingQuality = 'high';
+  g.translate(W / 2, H / 2); g.rotate(t); g.scale(k, k); g.drawImage(c, -c.width / 2, -c.height / 2);
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  const raw = grayData(o);
+  let gray = opt.flat === false ? raw : flatten(raw, W, H);
+  const pics = opt.mask === false ? 0 : maskPictures(raw, gray, W, H);
+  if (opt.amount) gray = unsharp(gray, W, H, opt.radius || 1, opt.amount);
+  const out = opt.bin === false ? gray : binarize(gray, W, H, opt.T || 0.16);
+  const id = g.getImageData(0, 0, W, H), d = id.data;
+  for (let i = 0, j = 0; i < out.length; i++, j += 4) d[j] = d[j+1] = d[j+2] = out[i], d[j+3] = 255;
+  g.putImageData(id, 0, 0);
+  o.pics = pics;
+  return o;
+}
+// из результата Tesseract берём только уверенно распознанные слова и строки
+// смешанные буквы: «Mосква» → «Москва», «ХIХ» → «XIX»
+const LAT2CYR = { a:'а', c:'с', e:'е', o:'о', p:'р', x:'х', y:'у', A:'А', B:'В', C:'С', E:'Е', H:'Н', K:'К', M:'М', O:'О', P:'Р', T:'Т', X:'Х' };
+function fixScript(t){
+  const core = t.replace(/^[^A-Za-zА-Яа-яЁё0-9]+|[^A-Za-zА-Яа-яЁё0-9]+$/g, '');
+  if (/^[IVXLCDMХСМІ1l|]+$/.test(core) && /[IVXLCDMХ]/.test(core) && !/^\d+$/.test(core) && romanValue(core)) return t.replace(core, core.replace(/Х/g, 'X').replace(/С/g, 'C').replace(/М/g, 'M').replace(/[І1l|]/g, 'I'));
+  const cyr = (t.match(/[А-Яа-яЁё]/g) || []).length, lat = (t.match(/[A-Za-z]/g) || []).length;
+  if (cyr && lat && cyr >= lat) return t.replace(/[acepxyABCEHKMOPTX]/g, ch => LAT2CYR[ch]);
+  return t;
+}
+function mathFix(text){
+  return text
+    .replace(/(\d)\s*[хx]\s*(?=\d)/g, '$1 × ')
+    .replace(/<=|=</g, '≤').replace(/>=|=>/g, '≥').replace(/!=|=\/=/g, '≠').replace(/\+\/-|\+-(?=\s|\d)/g, '±');
+}
+function assemble(data, ext){
+  const paras = data.paragraphs && data.paragraphs.length ? data.paragraphs : null;
+  if (!paras) return { text: cleanOcr(data.text || ''), conf: data.confidence || 0, read: Math.round(data.confidence || 0) };
+  const allowLatin = ext;
+  let confSum = 0, chars = 0;
+  const outParas = [];
+  for (const p of paras) {
+    const lines = [];
+    for (const l of p.lines || []) {
+      let ws = (l.words || []).filter(w => (w.text || '').trim()).map(w => ({ text: fixScript(w.text), confidence: w.confidence }));
+      const isRoman = t => romanValue(t.replace(/[.,;:!?)(«»"—–-]+/g, '')) > 0 && /[IVXLCDM]/.test(t);
+      const isMath = t => /\d/.test(t) || /^[-+=<>×÷*/^()−±≈≤≥≠%°:]+$/.test(t) || (/^[a-zA-Z]{1,2}[²³]?$/.test(t));
+      // по краям строки часто остаются «крошки» от края страницы, пальцев и тени: срезаем неуверенные
+      if (ext) {
+        // «Петра |», «Екатерина П» — так распознаётся римская I / II / III после имени
+        for (let j = 1; j < ws.length; j++) {
+          if (!/^[А-ЯЁ][а-яё]{2,}$/.test(ws[j-1].text)) continue;
+          const m = ws[j].text.match(/^(\||l|1|І|I|П|Il|ll|\|\||11|Ш|III)([.,;:!?)]*)$/);
+          if (m) { ws[j].text = ({ '|':'I', l:'I', '1':'I', 'І':'I', I:'I', 'П':'II', Il:'II', ll:'II', '||':'II', '11':'II', 'Ш':'III', III:'III' })[m[1]] + m[2]; ws[j].confidence = Math.max(ws[j].confidence, 80); }
+        }
+        for (const w of ws) { if (w.text === 'Ь') w.text = 'b'; w.text = w.text.replace(/^(\d+)х$/, '$1x'); }
+      }
+      const mathCtx = ext && ws.some(w => /[\d=+]/.test(w.text) && w.confidence >= 80);
+      const junk = w => {
+        if (/^[«(„"]?[А-Яа-яЁё]{3,}[-.,:;!?…»)"]*$/.test(w.text)) return w.confidence < 50;
+        if (/^\d$/.test(w.text)) return w.confidence < 88;           // одиночная цифра с края — часто соринка
+        if (ext && (isRoman(w.text) || isMath(w.text))) return w.confidence < (mathCtx ? 35 : 60);
+        return w.confidence < 75 || (w.text.length === 1 && !/^[аивкосуяАИВКОСУЯ—–]$/.test(w.text) && w.confidence < 92);
+      };
+      while (ws.length && junk(ws[0])) ws.shift();
+      while (ws.length && junk(ws[ws.length - 1])) ws.pop();
+      if (!ws.length) continue;
+      const good = ws.filter(w => {
+        const t = w.text;
+        const cyr = /[А-Яа-яЁё]/.test(t), lat = /[A-Za-z]/.test(t), dig = /\d/.test(t);
+        if (isRoman(t)) return w.confidence >= 50;
+        if (cyr) return w.confidence >= 35 && !(lat && !ext);
+        if (lat) return ext && w.confidence >= 60;
+        if (dig) return w.confidence >= (mathCtx ? 30 : 50);
+        if (ext && isMath(t)) return w.confidence >= (mathCtx ? 30 : 55);
+        return w.confidence >= 60 && t.length <= 3;       // тире, кавычки
+      });
+      const lineConf = good.reduce((a, w) => a + w.confidence * w.text.length, 0) / Math.max(1, good.reduce((a, w) => a + w.text.length, 0));
+      if (good.length < ws.length * 0.6 || lineConf < 60) continue;
+      const cyrChars = good.reduce((a, w) => a + (w.text.match(/[А-Яа-яЁё]/g) || []).length, 0);
+      const mathLine = ext && good.some(w => /[\d=+<>×÷^≤≥≠]/.test(w.text) || isRoman(w.text));
+      if (cyrChars < 3 && !mathLine && !(ext && good.length >= 2 && lineConf >= 75)) continue;
+      for (const w of good) { confSum += w.confidence * w.text.length; chars += w.text.length; }
+      lines.push(good.map(w => w.text).join(' '));
+    }
+    if (!lines.length) continue;
+    const last = outParas[outParas.length - 1];
+    // абзац, оборванный посреди предложения, склеиваем со следующим
+    if (last && !/[.!?…:»"”)]\s*$/.test(last) && /^[а-яёa-z(«"—–-]/.test(lines[0])) outParas[outParas.length - 1] = last + '\n' + lines.join('\n');
+    else outParas.push(lines.join('\n'));
+  }
+  const out = cleanOcr(outParas.join('\n\n'));
+  return { text: ext ? mathFix(out) : out, conf: chars ? confSum / chars : 0, read: Math.round(data.confidence || 0) };
+}
+
+let ocrLog = null;
+async function ocrShot(shot){
+  const { img } = shot;
+  const allowLatin = $('withEng').checked;
+  const langs = allowLatin ? 'rus+eng' : 'rus';
+  shot.ui.status('Выравниваю фото…'); shot.ui.progress(0.02);
+  await new Promise(r => setTimeout(r, 30));
+  const base = grayCanvas(img, shot.crop, 2600);
+  const bases = shot.rot == null ? [0, 90] : [shot.rot];
+  let angle = findAngle(base, bases);
+  shot.ui.status('Загрузка словарей…');
+  const w = await getWorker(langs);
+  const R = Math.max(1, Math.round(3 * Math.max(base.width, base.height) / 2600));
+  const NORMAL = { flat: false }, SHARPEN = { bin: false, amount: 3, radius: R };   // подобрано на тестовых снимках
+  const run = async (deg, label, strong) => {
+    const canvas = renderForOcr(base, deg, strong ? SHARPEN : NORMAL);
+    ocrLog = m => { if (m.status === 'recognizing text') { shot.ui.status(`${label}… ${Math.round(m.progress*100)}%`); shot.ui.progress(m.progress); } };
+    const { data } = await w.recognize(canvas);
+    return { ...assemble(data, allowLatin), deg, pics: canvas.pics, strong };
+  };
+  const better = (a, b) => (b.text && (b.read > a.read + 2 || (!a.text) || (b.read >= a.read - 1 && b.text.length > a.text.length * 1.15))) ? b : a;
+  let res = await run(angle, 'Распознаю', false);
+  // чёткость и контраст повышаем, только если читаемость ниже 50%
+  if (res.read < 50) res = better(res, await run(angle, 'Читаемость ниже 50%, повышаю чёткость', true));
+  if (res.conf < 70 && shot.rot == null) {            // возможно, фото вверх ногами
+    res = better(res, await run(angle + 180, 'Проверяю переворот', res.strong));
+  }
+  ocrLog = null;
+  shot.lastDeg = res.deg;
+  return res;
+}
+
+function addShot(file){
+  const li = document.createElement('li'); li.className = 'shot';
+  li.innerHTML = '<img alt=""><div style="min-width:0"><div class="nm"></div><div class="st">В очереди</div><div class="bar"><i></i></div>' +
+    '<div class="shotbtns" hidden><button type="button" class="mini" data-act="crop">Выделить текст</button><button type="button" class="mini" data-act="rot">Повернуть ↻</button></div></div>';
+  li.querySelector('.nm').textContent = file.name || 'Вставленное фото';
+  $('shots').prepend(li);
+  return {
+    li, img: li.querySelector('img'),
+    status(t, cls){ const s = li.querySelector('.st'); s.textContent = t; s.className = 'st' + (cls ? ' ' + cls : ''); },
+    progress(p){ let bar = li.querySelector('.bar'); if (!bar) { bar = document.createElement('div'); bar.className = 'bar'; bar.innerHTML = '<i></i>'; li.querySelector('.st').after(bar); } bar.querySelector('i').style.width = Math.round(p*100) + '%'; },
+    done(){ li.querySelector('.bar')?.remove(); li.querySelector('.shotbtns').hidden = false; },
+    busy(){ li.querySelector('.shotbtns').hidden = true; }
+  };
+}
+
+function runShot(shot){
+  shot.ui.busy(); shot.ui.status('В очереди', '');
+  queue = queue.then(async () => {
+    try {
+      if (!shot.img) { const { img, url } = await loadImage(shot.file); shot.img = img; shot.ui.img.src = url; }
+      const { text: t, conf, read, strong } = await ocrShot(shot);
+      shot.ui.done();
+      shot.batch.results[shot.idx] = t;
+      if (!t) { shot.ui.status('Текст не найден. Выделите область с текстом или поверните фото.', 'err'); }
+      else shot.ui.status(`Готово · ${t.split(/\s+/).length} слов · читаемость ${read}%` + (strong ? ' · повышена чёткость' : '') + (read < 50 ? '. Текст плохо читается: выделите область или переснимите ближе и при хорошем свете' : ''), read < 50 ? '' : 'ok');
+      pause();
+      if (shot.batch.results.some(Boolean)) {
+        isSample = false; build([shot.batch.baseText, ...shot.batch.results].filter(Boolean).join('\n\n'));
+        if ($('autoSpell').checked) loadSpeller().then(() => { const n = findTypos().length; if (n) toast(`Проверка орфографии: слов с возможными ошибками — ${n}. Они подчёркнуты, исправить можно в «Орфографии».`); }).catch(() => {});
+      }
+    } catch (err) {
+      shot.ui.done();
+      shot.ui.status('Ошибка: ' + (err && err.message || err), 'err');
+    }
+  });
+}
+
+function handleFiles(files){
+  const imgs = [...files].filter(f => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name || ''));
+  if (!imgs.length) { toast('Нужен файл изображения: JPG, PNG или WEBP.'); return; }
+  const batch = { baseText: ($('append').checked && !isSample) ? text : '', results: new Array(imgs.length) };
+  imgs.forEach((file, idx) => {
+    const shot = { file, idx, batch, img: null, crop: null, rot: null, ui: addShot(file) };
+    shot.ui.li.querySelector('.shotbtns').addEventListener('click', e => {
+      const act = e.target.closest('button')?.dataset.act; if (!act || !shot.img) return;
+      if (act === 'rot') { shot.rot = (Math.round(((shot.lastDeg ?? 0)) / 90) * 90 + 90) % 360; runShot(shot); }
+      else openCrop(shot);
+    });
+    runShot(shot);
+  });
+}
+
+/* ---------- выделение области ---------- */
+let cropShot = null, cropRect = null;
+function openCrop(shot){
+  cropShot = shot; cropRect = shot.crop ? { ...shot.crop } : null;
+  const cv = $('cropcv'), img = shot.img;
+  const maxW = Math.min(window.innerWidth - 48, 900), maxH = window.innerHeight * 0.6;
+  const k = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+  cv.width = Math.round(img.naturalWidth * k); cv.height = Math.round(img.naturalHeight * k);
+  drawCrop();
+  try { $('cropdlg').showModal(); } catch (e) { $('cropdlg').setAttribute('open', ''); }
+}
+function drawCrop(){
+  const cv = $('cropcv'), g = cv.getContext('2d');
+  g.drawImage(cropShot.img, 0, 0, cv.width, cv.height);
+  $('cropgo').disabled = !cropRect;
+  if (!cropRect) return;
+  const r = { x: cropRect.x * cv.width, y: cropRect.y * cv.height, w: cropRect.w * cv.width, h: cropRect.h * cv.height };
+  g.fillStyle = 'rgba(0,0,0,.5)';
+  g.fillRect(0, 0, cv.width, r.y); g.fillRect(0, r.y + r.h, cv.width, cv.height - r.y - r.h);
+  g.fillRect(0, r.y, r.x, r.h); g.fillRect(r.x + r.w, r.y, cv.width - r.x - r.w, r.h);
+  g.strokeStyle = '#FFE14D'; g.lineWidth = 3; g.strokeRect(r.x, r.y, r.w, r.h);
+}
+(() => {
+  const cv = $('cropcv'); let start = null;
+  const pt = e => { const b = cv.getBoundingClientRect(); return { x: Math.min(1, Math.max(0, (e.clientX - b.left) / b.width)), y: Math.min(1, Math.max(0, (e.clientY - b.top) / b.height)) }; };
+  cv.addEventListener('pointerdown', e => { e.preventDefault(); cv.setPointerCapture(e.pointerId); start = pt(e); cropRect = null; drawCrop(); });
+  cv.addEventListener('pointermove', e => { if (!start) return; const p = pt(e);
+    cropRect = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) }; drawCrop(); });
+  const end = () => { start = null; if (cropRect && (cropRect.w < 0.03 || cropRect.h < 0.03)) cropRect = null; drawCrop(); };
+  cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+  $('cropgo').addEventListener('click', () => { cropShot.crop = cropRect; $('cropdlg').close(); runShot(cropShot); });
+  $('cropall').addEventListener('click', () => { cropShot.crop = null; $('cropdlg').close(); runShot(cropShot); });
+})();
+
+['file', 'gal', 'cam'].forEach(id => $(id).addEventListener('change', e => { handleFiles(e.target.files); e.target.value = ''; }));
+const drop = $('drop');
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, () => drop.classList.add('over')));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, () => drop.classList.remove('over')));
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer?.files?.length) handleFiles(e.dataTransfer.files); });
+$('pastebox').addEventListener('input', e => { e.target.textContent = ''; });
+document.addEventListener('paste', e => {
+  if (editing) return;
+  const files = [...(e.clipboardData?.items || [])].filter(i => i.kind === 'file').map(i => i.getAsFile()).filter(Boolean);
+  if (files.length) { e.preventDefault(); handleFiles(files); }
+});
+
+
+/* ---------- каталог Fish Audio ---------- */
+const FISH_TAGS = { male: 'мужской', female: 'женский', young: 'молодой', 'middle-aged': 'средних лет', old: 'пожилой', calm: 'спокойный', deep: 'низкий',
+  low: 'низкий', high: 'высокий', narration: 'дикторский', storytelling: 'для историй', narrative: 'повествование', 'character-voice': 'персонаж', character: 'персонаж',
+  energetic: 'энергичный', warm: 'тёплый', serious: 'серьёзный', soft: 'мягкий', gentle: 'нежный', raspy: 'хриплый', husky: 'сиплый', dark: 'мрачный',
+  playful: 'игривый', cheerful: 'весёлый', dramatic: 'драматичный', authoritative: 'властный', professional: 'профессиональный', educational: 'обучающий',
+  friendly: 'дружелюбный', confident: 'уверенный', expressive: 'выразительный', clear: 'чёткий', smooth: 'плавный', crisp: 'звонкий', bright: 'яркий',
+  mysterious: 'загадочный', angry: 'злой', anime: 'аниме', gaming: 'игры', announcer: 'объявления', advertisement: 'реклама', cinematic: 'кино',
+  breathy: 'с придыханием', resonant: 'звучный', dry: 'сухой', commanding: 'командный', impatient: 'нетерпеливый', sarcastic: 'саркастичный', gravelly: 'с хрипотцой', natural: 'естественный', whisper: 'шёпот', whispery: 'шепчущий', menacing: 'угрожающий', gruff: 'грубоватый', 'light baritone': 'лёгкий баритон', baritone: 'баритон', tenor: 'тенор', bass: 'бас', nasal: 'носовой', 'slightly nasal': 'чуть носовой', robotic: 'роботизированный', childlike: 'детский', cute: 'милый', sweet: 'сладкий', sultry: 'чувственный', seductive: 'соблазнительный', polite: 'вежливый', composed: 'сдержанный', direct: 'прямой', witty: 'остроумный', mature: 'зрелый', 'neutral russian': 'без акцента', 'normal pace': 'обычный темп', deliberate: 'неторопливый', 'fast-paced': 'быстрый', 'low-pitched': 'низкий', 'high-pitched': 'высокий', 'medium-pitched': 'средний', medium: 'средний', 'neutral-tone': 'нейтральный', neutral: 'нейтральный', podcast: 'подкаст', 'audio-book': 'аудиокнига', coach: 'наставник', 'thick french': 'французский акцент', 'strong french': 'французский акцент', 'clear french accent': 'французский акцент', intimate: 'интимный', slow: 'медленный', fast: 'быстрый', relaxed: 'расслабленный', conversational: 'разговорный',
+  animated: 'живой', dynamic: 'динамичный', 'social-media': 'соцсети', entertainment: 'развлечения', measured: 'размеренный', enthusiastic: 'восторженный', host: 'ведущий' };
+let fishData = null, fishShown = 60;
+const fishTagRu = t => FISH_TAGS[t] || t;
+async function openFish(){
+  try { $('fishdlg').showModal(); } catch (e) { $('fishdlg').setAttribute('open', ''); }
+  if (!fishData) {
+    $('fishCount').textContent = 'Загружаю каталог…';
+    try {
+      const d = await (await fetch('fish/voices.json')).json();
+      fishData = d.voices; $('fishDate').textContent = d.date;
+      const counts = {}; fishData.forEach(v => v.g.forEach(t => { if (FISH_TAGS[t] && t !== 'male' && t !== 'female') counts[t] = (counts[t] || 0) + 1; }));
+      Object.entries(counts).sort((a, b) => b[1] - a[1]).forEach(([t, n]) => { const o = document.createElement('option'); o.value = t; o.textContent = `${fishTagRu(t)} (${n})`; $('fishTag').append(o); });
+    } catch (e) { $('fishCount').textContent = 'Не удалось загрузить каталог. Попробуйте ещё раз.'; return; }
+  }
+  fishShown = 60; renderFish();
+}
+function renderFish(){
+  if (!fishData) return;
+  const q = $('fishQ').value.trim().toLowerCase(), g = document.querySelector('input[name=fishG]:checked').value, tag = $('fishTag').value;
+  const words = q.split(/\s+/).filter(Boolean);
+  const list = fishData.filter(v => {
+    if (g && !v.g.includes(g)) return false;
+    if (tag && !v.g.includes(tag)) return false;
+    if (!words.length) return true;
+    const hay = (v.t + ' ' + v.d + ' ' + v.a + ' ' + v.g.map(t => t + ' ' + fishTagRu(t)).join(' ')).toLowerCase();
+    return words.every(w => hay.includes(w));
+  });
+  $('fishCount').textContent = `Найдено голосов: ${list.length} из ${fishData.length}`;
+  const box = $('fishList'); box.textContent = '';
+  const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' млн' : n >= 1e3 ? Math.round(n / 1e3) + ' тыс.' : String(n);
+  list.slice(0, fishShown).forEach(v => {
+    const c = document.createElement('div'); c.className = 'fcard';
+    const top = document.createElement('div'); top.className = 'ft';
+    const b = document.createElement('b'); b.textContent = v.t;
+    const m = document.createElement('span'); m.className = 'fm'; m.textContent = `♥ ${fmt(v.l)} · озвучек ${fmt(v.u)}`;
+    top.append(b, m);
+    const d = document.createElement('div'); d.className = 'fd'; d.textContent = v.d || 'Без описания';
+    const tg = document.createElement('div'); tg.className = 'ftags';
+    v.g.slice(0, 6).forEach(t => { const sp = document.createElement('span'); sp.textContent = fishTagRu(t); tg.append(sp); });
+    const a = document.createElement('a'); a.href = 'https://fish.audio/ru/m/' + v.i + '/'; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Слушать на fish.audio ↗';
+    const acts = document.createElement('div'); acts.className = 'facts';
+    const added = fishVoices.some(x => x.i === v.i);
+    if (FISH_APP && fishKey()) {
+      const orig = document.createElement('button'); orig.type = 'button'; orig.className = 'btn fuse';
+      orig.textContent = fishReal.some(x => x.i === v.i) ? 'Оригинал ✓' : 'Оригинал (по ключу)'; orig.onclick = () => useFishReal(v);
+      acts.append(orig);
+    }
+    if (v.v) {
+      const use = document.createElement('button'); use.type = 'button'; use.className = 'btn primary fuse';
+      use.textContent = added ? 'Выбрать' : 'Использовать'; use.onclick = () => useFishVoice(v);
+      acts.append(use);
+      if (added) { const rm = document.createElement('button'); rm.type = 'button'; rm.className = 'btn fuse'; rm.textContent = 'Убрать из списка'; rm.onclick = () => removeFishVoice(v); acts.append(rm); }
+    }
+    acts.append(a);
+    c.append(top, d, tg, acts); box.append(c);
+  });
+  $('fishMore').hidden = list.length <= fishShown;
+}
+function useFishReal(v){
+  if (!fishReal.some(x => x.i === v.i)) { fishReal.push({ i: v.i, t: v.t }); NEURAL.push(fishRealEntry(v)); try { localStorage.setItem('vsluh.fishReal', JSON.stringify(fishReal)); } catch (e) {} }
+  const id = 'fishreal-' + v.i;
+  loadVoices(); buildMp3Voices(); applyVoice('n:' + id); store.set('voice2', 'n:' + id); $('mp3voice').value = id;
+  if (playing) restart();
+  renderFish(); toast(`Оригинальный голос «${v.t}» добавлен и выбран.`);
+}
+if (FISH_APP) {
+  $('fishKeyBox').hidden = false; $('fishKeyIn').value = fishKey();
+  $('fishKeyIn').addEventListener('change', e => { try { localStorage.setItem('vsluh.fishKey', e.target.value.trim()); } catch (err) {} renderFish(); });
+}
+function useFishVoice(v){
+  if (!fishVoices.some(x => x.i === v.i)) { fishVoices.push({ i: v.i, t: v.t, v: v.v }); NEURAL.push(fishEntry(v)); saveFishVoices(); }
+  const id = 'fish-' + v.i;
+  loadVoices(); buildMp3Voices();
+  applyVoice('n:' + id); store.set('voice2', 'n:' + id); $('mp3voice').value = id;
+  if (playing) restart();
+  renderFish();
+  toast(`Голос «${v.t}» добавлен и выбран. Он в списке голосов, в группе «Из Fish Audio».`);
+}
+function removeFishVoice(v){
+  const id = 'fish-' + v.i;
+  fishVoices = fishVoices.filter(x => x.i !== v.i); saveFishVoices();
+  const k = NEURAL.findIndex(n => n.id === id); if (k >= 0) NEURAL.splice(k, 1);
+  if (voiceSel === 'n:' + id) { applyVoice('n:irina'); store.set('voice2', 'n:irina'); }
+  loadVoices(); buildMp3Voices(); renderFish();
+}
+$('fishbtn').addEventListener('click', openFish);
+$('fishQ').addEventListener('input', () => { fishShown = 60; renderFish(); });
+$('fishTag').addEventListener('change', () => { fishShown = 60; renderFish(); });
+document.querySelectorAll('input[name=fishG]').forEach(r => r.addEventListener('change', () => { fishShown = 60; renderFish(); }));
+$('fishMore').addEventListener('click', () => { fishShown += 60; renderFish(); });
+
+/* ---------- misc ---------- */
+$('logout').addEventListener('click', () => { pause(); try { localStorage.removeItem('vsluh.auth'); sessionStorage.removeItem('vsluh.auth'); } catch (e) {} location.reload(); });
+function toast(msg){
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.hidden = true, 4500);
+}
+window.addEventListener('pagehide', () => { synth && synth.cancel(); stopSource(); });
+
+build(SAMPLE);
+})();
+</script>
+
+</html>
