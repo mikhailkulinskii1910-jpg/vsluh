@@ -105,9 +105,9 @@ header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;padding-block:2
 .sumout{white-space:pre-wrap;font-family:var(--read);font-size:17px;line-height:1.55;background:var(--surface-2);border-radius:var(--r);padding:14px 16px;max-height:48vh;overflow:auto;margin:0}
 #sumKeyBox{display:flex;flex-direction:column;gap:8px}
 .langsw{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--surface-2)}
-.seg button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:32px;font-size:14px;color:var(--muted)}
-.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.pill{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;background:var(--surface-2)}
+.pill button{border:0;background:none;border-radius:999px;padding:0 14px;min-height:32px;font-size:14px;color:var(--muted)}
+.pill button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
 
 .reader{padding:0;display:flex;flex-direction:column;min-width:0}
 .rhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 16px;border-bottom:1px solid var(--line)}
@@ -363,7 +363,7 @@ header{padding-block-start:34px}
   <div class="grid">
     <aside class="panel side">
       <div class="langsw"><p class="label" id="langLbl">Язык текста</p>
-        <div class="seg" role="group" aria-labelledby="langLbl"><button type="button" data-lang="ru">Русский</button><button type="button" data-lang="en">English</button></div></div>
+        <div class="pill" role="group" aria-labelledby="langLbl"><button type="button" data-lang="ru">Русский</button><button type="button" data-lang="en">English</button></div></div>
       <p class="label">Фото с текстом</p>
       <div class="drop" id="drop">
         <input type="file" id="file" class="fileover" accept="image/*" multiple aria-label="Выбрать фото">
@@ -390,6 +390,7 @@ header{padding-block-start:34px}
         <button class="chip acc" id="mp3btn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>MP3</button>
         <button class="chip acc" id="sumbtn" type="button">Кратко · ИИ</button>
         <button class="chip" id="fullBack" type="button" hidden>← Полный текст</button>
+        <button class="chip" id="fishchip" type="button">Голоса Fish Audio</button>
         <button class="chip" id="abbrbtn" type="button">Сокращения<span class="badge" id="abbrCount" hidden></span></button>
         <button class="chip" id="spellbtn" type="button">Орфография<span class="badge warn" id="spellCount" hidden></span></button>
         <button class="chip" id="bigger" type="button">Крупнее</button>
@@ -554,7 +555,7 @@ header{padding-block-start:34px}
       <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <p class="note">Только важное — имена, даты, определения, правила и формулы, — чтобы быстро повторить на слух.</p>
-    <div class="seg" role="group" aria-label="Как делать пересказ"><button type="button" data-sum="ai" id="sumAiBtn">С ИИ (Claude)</button><button type="button" data-sum="local">Без ИИ, на устройстве</button></div>
+    <div class="pill" role="group" aria-label="Как делать пересказ"><button type="button" data-sum="ai" id="sumAiBtn">С ИИ (Claude)</button><button type="button" data-sum="local">Без ИИ, на устройстве</button></div>
     <div id="sumKeyBox" hidden>
       <label class="fld"><span>Ключ Anthropic API</span>
         <input type="password" id="sumKey" placeholder="sk-ant-… — console.anthropic.com → API Keys" autocomplete="off"></label>
@@ -576,6 +577,7 @@ header{padding-block-start:34px}
       <button class="ib" value="close" aria-label="Закрыть"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
     <p class="note">Голоса из библиотеки fish.audio, созданные по описанию (без клонов реальных людей). «Использовать» — сразу собрать похожий голос из встроенных: высота, темп, интонация и тембр по замерам образца. Акцент и спецэффекты оригинала не повторяются.</p>
+    <p class="note" id="fishLangNote" hidden>Сейчас режим English. «Похожие» голоса собраны на русских моделях и читают русский текст: выбранный голос включится в режиме «Русский». Для английского текста подходят оригинальные голоса Fish Audio по ключу (в приложении) и английские голоса Amy, HFC и другие.</p>
     <div class="fishbar">
       <input type="search" id="fishQ" placeholder="Поиск: имя, описание, «низкий», «сказочник»…" aria-label="Поиск голоса">
       <div class="seg fishseg" role="group" aria-label="Пол">
@@ -1506,7 +1508,7 @@ const EN = () => LANG === 'en';
 const langRe = () => EN() ? /^en/i : /^ru/i;
 const vkey = () => EN() ? 'voice2en' : 'voice2';
 const defNeural = () => EN() ? 'n:amy' : 'n:irina';
-const neuralHere = n => (n.lang || 'ru') === LANG && !(n.hfOnly && !window.__LIB);
+const neuralHere = n => n.realFish || ((n.lang || 'ru') === LANG && !(n.hfOnly && !window.__LIB));   // оригиналы Fish Audio многоязычные
 const isNeural = () => voiceSel.startsWith('n:');
 const neuralId = () => voiceSel.slice(2);
 
@@ -2005,7 +2007,7 @@ function pickMp3Voice(){ const v = store.get(mp3key()); $('mp3voice').value = v 
 pickMp3Voice();
 function setLang(l, silent){
   LANG = l === 'en' ? 'en' : 'ru'; store.set('lang', LANG);
-  document.querySelectorAll('.seg [data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === LANG)));
+  document.querySelectorAll('.pill [data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === LANG)));
   $('abbrbtn').hidden = $('spellbtn').hidden = EN();
   document.querySelector('label:has(#withEng)')?.toggleAttribute('hidden', EN());
   if (silent) return;
@@ -2014,7 +2016,7 @@ function setLang(l, silent){
   if (isSample) build(EN() ? SAMPLE_EN : SAMPLE); else computeSpoken();
   toast(EN() ? 'English: распознавание и голоса для английского текста.' : 'Русский язык текста.');
 }
-document.querySelectorAll('.seg [data-lang]').forEach(b => b.addEventListener('click', () => { if (b.dataset.lang !== LANG) setLang(b.dataset.lang); }));
+document.querySelectorAll('.pill [data-lang]').forEach(b => b.addEventListener('click', () => { if (b.dataset.lang !== LANG) setLang(b.dataset.lang); }));
 setLang(LANG, true);
 $('mp3voice').addEventListener('change', e => store.set(mp3key(), e.target.value));
 
@@ -2903,9 +2905,26 @@ const FISH_TAGS = { male: 'мужской', female: 'женский', young: 'м
   mysterious: 'загадочный', angry: 'злой', anime: 'аниме', gaming: 'игры', announcer: 'объявления', advertisement: 'реклама', cinematic: 'кино',
   breathy: 'с придыханием', resonant: 'звучный', dry: 'сухой', commanding: 'командный', impatient: 'нетерпеливый', sarcastic: 'саркастичный', gravelly: 'с хрипотцой', natural: 'естественный', whisper: 'шёпот', whispery: 'шепчущий', menacing: 'угрожающий', gruff: 'грубоватый', 'light baritone': 'лёгкий баритон', baritone: 'баритон', tenor: 'тенор', bass: 'бас', nasal: 'носовой', 'slightly nasal': 'чуть носовой', robotic: 'роботизированный', childlike: 'детский', cute: 'милый', sweet: 'сладкий', sultry: 'чувственный', seductive: 'соблазнительный', polite: 'вежливый', composed: 'сдержанный', direct: 'прямой', witty: 'остроумный', mature: 'зрелый', 'neutral russian': 'без акцента', 'normal pace': 'обычный темп', deliberate: 'неторопливый', 'fast-paced': 'быстрый', 'low-pitched': 'низкий', 'high-pitched': 'высокий', 'medium-pitched': 'средний', medium: 'средний', 'neutral-tone': 'нейтральный', neutral: 'нейтральный', podcast: 'подкаст', 'audio-book': 'аудиокнига', coach: 'наставник', 'thick french': 'французский акцент', 'strong french': 'французский акцент', 'clear french accent': 'французский акцент', intimate: 'интимный', slow: 'медленный', fast: 'быстрый', relaxed: 'расслабленный', conversational: 'разговорный',
   animated: 'живой', dynamic: 'динамичный', 'social-media': 'соцсети', entertainment: 'развлечения', measured: 'размеренный', enthusiastic: 'восторженный', host: 'ведущий' };
+// русские слова поиска → английские слова из описаний и тегов
+const FISH_SYN = [
+  ['сказ', ['story', 'storytell', 'fairy', 'tale', 'narrat']], ['истори', ['story', 'storytell']], ['рассказ', ['narrat', 'story', 'storytell']],
+  ['диктор', ['narrat', 'announcer', 'broadcast']], ['чтец', ['narrat', 'audiobook', 'audio-book']], ['аудиокниг', ['audiobook', 'audio-book']],
+  ['низк', ['deep', 'low', 'bass']], ['глубок', ['deep']], ['бас', ['bass']], ['высок', ['high']], ['мужск', ['male', 'man']], ['мужчин', ['male', 'man']],
+  ['женск', ['female', 'woman']], ['женщин', ['female', 'woman']], ['девушк', ['female', 'girl']], ['парен', ['male', 'guy', 'boy']],
+  ['спокой', ['calm']], ['мягк', ['soft', 'gentle']], ['тёпл', ['warm']], ['тепл', ['warm']], ['энерги', ['energetic', 'energy']],
+  ['бодр', ['energetic', 'upbeat', 'cheerful']], ['весёл', ['cheerful', 'happy', 'playful']], ['весел', ['cheerful', 'happy', 'playful']],
+  ['груб', ['gruff', 'rough']], ['хрипл', ['raspy', 'gravel', 'husky']], ['шёпот', ['whisper']], ['шепот', ['whisper']],
+  ['стар', ['old', 'elderly']], ['пожил', ['old', 'elderly']], ['дед', ['old', 'grandfather', 'grandpa']], ['молод', ['young']],
+  ['детск', ['child', 'kid']], ['ребён', ['child', 'kid']], ['злод', ['villain', 'evil', 'menac']], ['зл', ['angry', 'evil']],
+  ['робот', ['robot']], ['аниме', ['anime']], ['игр', ['gaming', 'game']], ['новост', ['news']], ['реклам', ['advert', 'commercial']],
+  ['серьёз', ['serious']], ['серьез', ['serious']], ['уверен', ['confident']], ['драмат', ['dramatic']], ['таинств', ['mysterious']], ['загадоч', ['mysterious']],
+  ['учител', ['teacher', 'educational']], ['обуч', ['educational', 'tutorial']], ['лектор', ['lecture', 'educational']], ['ведущ', ['host']],
+  ['русск', ['russian']], ['британ', ['british']], ['америк', ['american']], ['кино', ['cinematic', 'movie', 'trailer']], ['трейлер', ['trailer']]
+];
 let fishData = null, fishShown = 60;
 const fishTagRu = t => FISH_TAGS[t] || t;
 async function openFish(){
+  $('fishLangNote').hidden = !EN();
   try { $('fishdlg').showModal(); } catch (e) { $('fishdlg').setAttribute('open', ''); }
   if (!fishData) {
     $('fishCount').textContent = 'Загружаю каталог…';
@@ -2921,13 +2940,18 @@ async function openFish(){
 function renderFish(){
   if (!fishData) return;
   const q = $('fishQ').value.trim().toLowerCase(), g = document.querySelector('input[name=fishG]:checked').value, tag = $('fishTag').value;
-  const words = q.split(/\s+/).filter(Boolean);
+  // каждое слово запроса: по основе (без окончания) и по английским синонимам — описания голосов в основном английские
+  const words = q.split(/\s+/).filter(Boolean).map(w => {
+    const stem = /^[а-яё]+$/.test(w) && w.length > 5 ? w.slice(0, w.length - 2) : w;
+    const syn = FISH_SYN.filter(([k]) => stem.startsWith(k) || k.startsWith(stem)).flatMap(([, s]) => s);
+    return [stem, ...syn];
+  });
   const list = fishData.filter(v => {
     if (g && !v.g.includes(g)) return false;
     if (tag && !v.g.includes(tag)) return false;
     if (!words.length) return true;
     const hay = (v.t + ' ' + v.d + ' ' + v.a + ' ' + v.g.map(t => t + ' ' + fishTagRu(t)).join(' ')).toLowerCase();
-    return words.every(w => hay.includes(w));
+    return words.every(alts => alts.some(a => hay.includes(a)));
   });
   $('fishCount').textContent = `Найдено голосов: ${list.length} из ${fishData.length}`;
   const box = $('fishList'); box.textContent = '';
@@ -2974,10 +2998,14 @@ if (FISH_APP) {
 function useFishVoice(v){
   if (!fishVoices.some(x => x.i === v.i)) { fishVoices.push({ i: v.i, t: v.t, v: v.v }); NEURAL.push(fishEntry(v)); saveFishVoices(); }
   const id = 'fish-' + v.i;
-  loadVoices(); buildMp3Voices();
+  loadVoices(); buildMp3Voices(); renderFish();
+  if (EN()) {            // похожие голоса читают только русский текст: запоминаем выбор для режима «Русский»
+    store.set('voice2', 'n:' + id); store.set('mp3voice', id);
+    toast(`Голос «${v.t}» добавлен и выбран для русского текста. Переключите язык на «Русский», чтобы слушать им.`);
+    return;
+  }
   applyVoice('n:' + id); store.set(vkey(), 'n:' + id); $('mp3voice').value = id;
   if (playing) restart();
-  renderFish();
   toast(`Голос «${v.t}» добавлен и выбран. Он в списке голосов, в группе «Из Fish Audio».`);
 }
 function removeFishVoice(v){
@@ -2988,6 +3016,7 @@ function removeFishVoice(v){
   loadVoices(); buildMp3Voices(); renderFish();
 }
 $('fishbtn').addEventListener('click', openFish);
+$('fishchip').addEventListener('click', openFish);
 $('fishQ').addEventListener('input', () => { fishShown = 60; renderFish(); });
 $('fishTag').addEventListener('change', () => { fishShown = 60; renderFish(); });
 document.querySelectorAll('input[name=fishG]').forEach(r => r.addEventListener('change', () => { fishShown = 60; renderFish(); }));
