@@ -1,0 +1,1 @@
+{"total":63531379,"sampleRate":22050,"inference":{"noise_scale":0.667,"length_scale":1,"noise_w":0.8},"espeak":"en","hf":"en/en_US/bryce/medium/en_US-bryce-medium.onnx"}

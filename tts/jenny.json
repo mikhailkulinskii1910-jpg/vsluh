@@ -1,0 +1,1 @@
+{"total":63201294,"sampleRate":22050,"inference":{"noise_scale":0.667,"length_scale":1,"noise_w":0.8},"espeak":"en-gb-x-rp","hf":"en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx"}
