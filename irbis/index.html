@@ -369,12 +369,9 @@ function showRemote() {
   status('> ready. ' + KEYS.length + ' keys loaded');
 }
 
-/* ---------- Заставка с крысой (один раз за сессию) ---------- */
+/* ---------- Заставка с крысой — при каждом открытии ---------- */
 (function () {
   const sp = $('splash');
-  let seen = false;
-  try { seen = sessionStorage.getItem('krisa-splash') === '1'; sessionStorage.setItem('krisa-splash', '1'); } catch {}
-  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { sp.remove(); showRemote(); return; }
   let finished = false;
   const finish = () => {
     if (finished) return; finished = true;
