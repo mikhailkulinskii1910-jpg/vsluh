@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity() {
 
-    private enum class Mode { AUTO, BUILTIN, USB, AUDIO2, AUDIO1 }
+    private enum class Mode { BUILTIN, AUTO, USB, AUDIO2, AUDIO1 }
 
     private val ui = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -43,7 +43,7 @@ class MainActivity : Activity() {
     @Volatile private var usbIr: UsbIr? = null
     private var usbIrDevice: String? = null
     private lateinit var audio: AudioManager
-    private var mode = Mode.AUTO
+    private var mode = Mode.BUILTIN
 
     private lateinit var modeLine: TextView
     private lateinit var status: TextView
@@ -77,7 +77,8 @@ class MainActivity : Activity() {
         usb = getSystemService(USB_SERVICE) as UsbManager
         builtin = BuiltinIr(this)
         audio = getSystemService(AUDIO_SERVICE) as AudioManager
-        mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString("mode", "AUTO")!!) }.getOrDefault(Mode.AUTO)
+        // По умолчанию — встроенный ИК-порт. Ключ новый, чтобы после обновления старый выбор «Авто» не мешал.
+        mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString(PREF_MODE, null)!!) }.getOrDefault(Mode.BUILTIN)
         setContentView(buildUi())
 
         val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
@@ -259,7 +260,7 @@ class MainActivity : Activity() {
         val modes = Mode.values()
         val labels = modes.map {
             when (it) {
-                Mode.AUTO -> "Авто"
+                Mode.AUTO -> "Авто (USB-C, если подключён)"
                 Mode.BUILTIN -> "Встроенный ИК-порт" + if (builtin.available) "" else " — нет"
                 Mode.USB -> "USB-C передатчик" + if (usbIr != null) " — подключён" else " — не найден"
                 Mode.AUDIO2 -> "Звуковой адаптер, 2 светодиода"
@@ -270,7 +271,7 @@ class MainActivity : Activity() {
             .setTitle("Чем передавать сигнал")
             .setSingleChoiceItems(labels, mode.ordinal) { d, which ->
                 mode = modes[which]
-                getPreferences(MODE_PRIVATE).edit().putString("mode", mode.name).apply()
+                getPreferences(MODE_PRIVATE).edit().putString(PREF_MODE, mode.name).apply()
                 renderMode()
                 if (mode == Mode.AUTO || mode == Mode.USB) findUsb(null)
                 d.dismiss()
@@ -319,7 +320,7 @@ class MainActivity : Activity() {
         if (tryable.isNotEmpty()) b.setNeutralButton("Попробовать USB") { _, _ ->
             val d = tryable.first()
             mode = Mode.USB
-            getPreferences(MODE_PRIVATE).edit().putString("mode", mode.name).apply()
+            getPreferences(MODE_PRIVATE).edit().putString(PREF_MODE, mode.name).apply()
             useUsb(d)
         }
         b.show()
@@ -363,6 +364,7 @@ class MainActivity : Activity() {
         else getParcelableExtra(UsbManager.EXTRA_DEVICE)
 
     companion object {
+        private const val PREF_MODE = "tx_mode"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
         private val BTN = Color.parseColor("#141D1F")
         private val POWER = Color.parseColor("#861414")
