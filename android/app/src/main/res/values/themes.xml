@@ -1,0 +1,9 @@
+<resources>
+    <color name="bg">#0E1416</color>
+    <style name="Theme.Irbis" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:colorAccent">#5FA8A0</item>
+    </style>
+</resources>
