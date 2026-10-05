@@ -24,7 +24,7 @@ class ScreenshotTest {
         val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
         val root = ctl.get().window.decorView
         var t = 0L
-        for (at in listOf(300L, 900L, 1150L, 1400L, 1900L, 2500L, 3200L, 4200L)) {
+        for (at in listOf(300L, 900L, 1150L, 1400L, 1900L, 2500L, 3200L, 4200L, 4700L)) {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(at - t)); t = at
             val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
             root.draw(Canvas(bmp))

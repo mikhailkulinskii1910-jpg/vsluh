@@ -14,6 +14,8 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.SystemClock
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import android.widget.TextView
@@ -189,15 +191,20 @@ class TypeLine(c: Context) : TextView(c) {
     private var target = ""
     private var pos = 0
     private var cursorOn = true
+    private val hidden = ForegroundColorSpan(Color.TRANSPARENT)
     private val tick = object : Runnable {
         override fun run() {
             if (pos < target.length) pos = min(target.length, pos + 2) else cursorOn = !cursorOn
-            text = target.substring(0, pos) + if (cursorOn || pos < target.length) "█" else " "
+            // Курсор «_» есть в тексте всегда, при мигании он только становится прозрачным:
+            // размеры строки не меняются, и экран под ней не дёргается.
+            val t = SpannableString(target.substring(0, pos) + "_")
+            if (!cursorOn && pos >= target.length) t.setSpan(hidden, t.length - 1, t.length, 0)
+            text = t
             postDelayed(this, if (pos < target.length) 16 else 480)
         }
     }
 
-    init { typeface = Term.ru; post(tick) }
+    init { typeface = Term.ru; isSingleLine = true; post(tick) }
 
     fun type(s: String) { target = s; pos = 0; cursorOn = true }
 }
