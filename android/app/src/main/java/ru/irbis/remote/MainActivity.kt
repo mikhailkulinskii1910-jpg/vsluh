@@ -7,11 +7,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.res.ColorStateList
 import android.graphics.Color
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.graphics.drawable.RippleDrawable
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.media.AudioManager
@@ -24,7 +21,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
-import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -46,7 +43,7 @@ class MainActivity : Activity() {
     private var mode = Mode.BUILTIN
 
     private lateinit var modeLine: TextView
-    private lateinit var status: TextView
+    private lateinit var status: TypeLine
     private val pressSeq = AtomicInteger(0)
     /** Номер нажатия, кнопка которого сейчас зажата; 0 — ничего не зажато. */
     @Volatile private var held = 0
@@ -79,7 +76,7 @@ class MainActivity : Activity() {
         audio = getSystemService(AUDIO_SERVICE) as AudioManager
         // По умолчанию — встроенный ИК-порт. Ключ новый, чтобы после обновления старый выбор «Авто» не мешал.
         mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString(PREF_MODE, null)!!) }.getOrDefault(Mode.BUILTIN)
-        setContentView(buildUi())
+        setContentView(buildUi(withSplash = savedInstanceState == null))
 
         val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
@@ -156,7 +153,7 @@ class MainActivity : Activity() {
         val repeat = Nec.withGap(Nec.REPEAT)
         val id = pressSeq.incrementAndGet()
         held = id
-        say("$label → 0x%08X".format(code))
+        say("> tx %-11s 0x%08X [sent]".format(label, code))
         io.execute {
             try {
                 var next = System.currentTimeMillis()
@@ -185,70 +182,111 @@ class MainActivity : Activity() {
 
     /* ---------- Интерфейс ---------- */
 
-    private fun buildUi(): View {
+    private val keyViews = ArrayList<KeyView>()
+
+    private fun buildUi(withSplash: Boolean): View {
+        Term.init(this)
+        val frame = FrameLayout(this)
+        frame.addView(TerminalBackground(this), FrameLayout.LayoutParams(-1, -1))
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(20), dp(16), dp(20))
+            setPadding(dp(16), dp(18), dp(16), dp(20))
         }
 
-        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP }
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        titles.addView(text("krisa", 30f, TITLE, bold = true))
-        titles.addView(text("#500202", 22f, TITLE, bold = true).apply { setPadding(0, dp(4), 0, 0) })
-        modeLine = text("", 14f, MUTED).apply { setPadding(0, dp(6), 0, 0) }
+        val title = TypeLine(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 54f)
+            typeface = Term.mono
+            setTextColor(Term.FG)
+            setShadowLayer(dp(10).toFloat(), 0f, 0f, Color.WHITE)
+            includeFontPadding = false
+        }
+        titles.addView(title)
+        titles.addView(text("#500202 :: IRBIS :: NEC 38kHz", 18f, Term.DIM))
+        modeLine = text("", 15f, Term.FG).apply { typeface = Term.ru; setPadding(0, dp(6), 0, 0) }
         titles.addView(modeLine)
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
-        val gear = Button(this).apply {
-            text = "⚙"
-            textSize = 22f
-            setTextColor(INK)
-            background = keyBg(BTN, dp(14).toFloat())
-            setPadding(0, 0, 0, 0)
-            minWidth = 0; minHeight = 0
+        val gear = TextView(this).apply {
+            text = "[tx]"
+            typeface = Term.mono
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextColor(Term.FG)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Term.LINE) }
             contentDescription = "Передатчик"
-            setOnClickListener { chooseMode() }
+            setOnClickListener { glitch(it); chooseMode() }
         }
-        header.addView(gear, LinearLayout.LayoutParams(dp(48), dp(48)))
+        header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
 
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
-        val gap = dp(6)
+        val gap = dp(5)
         // Все 12 кнопок на один экран, как в IrCode Finder.
-        val rowH = ((resources.configuration.screenHeightDp - 250) / 6 - 12).coerceIn(64, 110)
+        val rowH = ((resources.configuration.screenHeightDp - 250) / 6 - 10).coerceIn(64, 110)
         KEYS.forEachIndexed { i, (label, code) ->
-            val b = Button(this).apply {
-                text = label
-                isAllCaps = false
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-                typeface = Typeface.DEFAULT_BOLD
-                setTextColor(if (label == "POWER") Color.parseColor("#E4C9C9") else INK)
-                background = keyBg(if (label == "POWER") POWER else BTN, dp(22).toFloat())
-                stateListAnimator = null
-                setOnTouchListener { v, e -> onKeyTouch(v, e, label, code) }
-            }
+            val k = KeyView(this, label, i, code, inverted = label == "POWER")
+            k.setOnTouchListener { v, e -> onKeyTouch(v as KeyView, e, label, code) }
+            keyViews += k
             val lp = GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f)).apply {
                 width = 0; height = dp(rowH)
                 setMargins(gap, gap, gap, gap)
             }
-            grid.addView(b, lp)
+            grid.addView(k, lp)
         }
-        root.addView(grid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(16) })
+        root.addView(grid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
 
-        status = text("", 14f, MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(14), 0, 0) }
+        status = TypeLine(this).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Term.DIM)
+            setPadding(dp(6), dp(12), 0, 0)
+        }
         root.addView(status)
 
-        return ScrollView(this).apply { isFillViewport = true; addView(root) }
+        frame.addView(ScrollView(this).apply { isFillViewport = true; addView(root) }, FrameLayout.LayoutParams(-1, -1))
+
+        val showUi = {
+            title.type("krisa")
+            keyViews.forEachIndexed { i, k -> k.reveal(60L * i) }
+            (status as TypeLine).type("> ready. ${KEYS.size} keys loaded")
+        }
+        if (withSplash) {
+            val boot = listOf(
+                "krisa ir-remote v$versionName",
+                "loading nec table ........ [ok]",
+                "consumer_ir .............. [" + (if (builtin.available) "ok" else "--") + "]",
+                "usb ir ................... [" + (if (usb.deviceList.values.any { UsbIr.supports(it) }) "ok" else "--") + "]",
+                "decoding rat.png ......... [ok]",
+            )
+            lateinit var splash: SplashView
+            splash = SplashView(this, boot) { frame.removeView(splash); showUi() }
+            frame.addView(splash, FrameLayout.LayoutParams(-1, -1))
+        } else ui.post(showUi)
+        return frame
     }
 
-    private fun onKeyTouch(v: View, e: MotionEvent, label: String, code: Long): Boolean {
+    private val versionName get() = packageManager.getPackageInfo(packageName, 0).versionName
+
+    private fun glitch(v: View) {
+        v.animate().cancel()
+        v.translationX = dp(4).toFloat()
+        v.animate().translationX(-dp(3).toFloat()).setDuration(40).withEndAction {
+            v.animate().translationX(0f).setDuration(60).start()
+        }.start()
+    }
+
+    private fun onKeyTouch(v: KeyView, e: MotionEvent, label: String, code: Long): Boolean {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                v.isPressed = true
+                v.setDown(true)
+                v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(60).start()
                 v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 press(label, code)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                v.isPressed = false
+                v.setDown(false)
+                v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
                 held = 0
                 if (e.actionMasked == MotionEvent.ACTION_UP) v.performClick()
             }
@@ -332,28 +370,22 @@ class MainActivity : Activity() {
             tx != null -> tx.title + if (mode == Mode.AUTO) " · авто" else ""
             else -> noTxMessage()
         }
-        modeLine.setTextColor(if (tx != null) MUTED else ERR)
+        modeLine.text = "> " + modeLine.text
+        modeLine.setTextColor(if (tx != null) Term.FG else Term.DIM)
+        if (tx == null) glitch(modeLine)
     }
 
-    private val clearStatus = Runnable { status.text = "" }
     private fun say(msg: String, ok: Boolean = false, err: Boolean = false) {
-        status.text = msg
-        status.setTextColor(if (err) ERR else if (ok) OK else MUTED)
-        ui.removeCallbacks(clearStatus)
-        ui.postDelayed(clearStatus, 2500)
+        status.type(if (err) "!! $msg" else if (ok) "> $msg [ok]" else msg)
+        status.setTextColor(if (err || ok) Term.FG else Term.DIM)
+        if (err) glitch(status)
     }
 
-    private fun text(s: String, sp: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+    private fun text(s: String, sp: Float, color: Int) = TextView(this).apply {
         text = s
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
         setTextColor(color)
-        if (bold) typeface = Typeface.DEFAULT_BOLD
-    }
-
-    private fun keyBg(color: Int, radius: Float): RippleDrawable {
-        val shape = GradientDrawable().apply { setColor(color); cornerRadius = radius }
-        val mask = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = radius }
-        return RippleDrawable(ColorStateList.valueOf(Color.argb(40, 255, 255, 255)), shape, mask)
+        typeface = Term.mono
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
@@ -366,12 +398,5 @@ class MainActivity : Activity() {
     companion object {
         private const val PREF_MODE = "tx_mode"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
-        private val BTN = Color.parseColor("#141D1F")
-        private val POWER = Color.parseColor("#861414")
-        private val INK = Color.parseColor("#C9D3D4")
-        private val TITLE = Color.parseColor("#E6ECEC")
-        private val MUTED = Color.parseColor("#7F8D8F")
-        private val OK = Color.parseColor("#3FB37F")
-        private val ERR = Color.parseColor("#E5645B")
     }
 }

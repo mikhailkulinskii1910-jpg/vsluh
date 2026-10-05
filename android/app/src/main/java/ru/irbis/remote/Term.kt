@@ -1,0 +1,324 @@
+package ru.irbis.remote
+
+import android.animation.ValueAnimator
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.BlurMaskFilter
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.os.SystemClock
+import android.view.View
+import android.view.animation.DecelerateInterpolator
+import android.widget.TextView
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
+import kotlin.random.Random
+
+/** Палитра и шрифты в духе чёрно-белого терминала. */
+object Term {
+    const val BG = Color.BLACK
+    val FG = Color.parseColor("#EDEDED")
+    val DIM = Color.parseColor("#8A8A8A")
+    val LINE = Color.parseColor("#5C5C5C")
+    val FAINT = Color.parseColor("#151515")
+    const val NOISE = "#$%&@01<>/\\|=+*:;░▒▓"
+
+    lateinit var mono: Typeface
+    /** Для русского текста: в VT323 нет кириллицы. */
+    val ru: Typeface = Typeface.MONOSPACE
+    fun init(c: Context) { if (!::mono.isInitialized) mono = c.resources.getFont(R.font.vt323) }
+
+    /** Строки «лога» для фона: установка пакетов, скан портов и коды пульта. */
+    val LOG: List<String> by lazy {
+        val pk = listOf("libc6", "libperl5.30", "perl-base", "zlib1g", "libblkid1", "libuuid1", "fdisk", "util-linux",
+            "libgcc-s1", "libstdc++6", "dpkg", "tar", "gzip", "login", "bash", "binutils", "gcc-9", "cpp-9", "gpg", "openssl")
+        val out = ArrayList<String>()
+        pk.forEachIndexed { i, p ->
+            out += "Get:${i + 21} http://ftpmaster.internal/ubuntu focal-updates/main amd64 $p [${100 + i * 137 % 3900} kB]"
+        }
+        pk.forEach { p -> out += "Preparing to unpack .../$p.deb ..."; out += "Unpacking $p over (${Random(p.hashCode()).nextInt(1, 9)}.${p.length}) ..." }
+        out += listOf("Starting Nmap 7.60 ( https://nmap.org )", "PORT     STATE SERVICE  VERSION",
+            "25/tcp   open  smtp     Exim smtpd 4.84_2", "53/tcp   open  domain   ISC BIND", "80/tcp   open  http     Apache httpd 2.2.15",
+            "-=[ 22/tcp, ssh ]=- * OPEN *", "-=[ 631/tcp, ipp ]=- * OPEN *", "PROGRAM MANDELBROT_SET;", "uses vga,crt,mouse;",
+            "  Pmin:=-2.25;Qmin:=-1.5;", "  repeat k:=k+1; until (k>kmax);")
+        KEYS.forEach { (l, c) -> out += "irsend nec 0x%08X  # %s".format(c, l) }
+        out.shuffle(Random(7))
+        out
+    }
+
+    fun scramble(text: String, progress: Float, rnd: Random = Random): String {
+        val shown = (text.length * progress).toInt()
+        return buildString {
+            text.forEachIndexed { i, ch -> append(if (i < shown || ch == ' ') ch else NOISE[rnd.nextInt(NOISE.length)]) }
+        }
+    }
+}
+
+/** Фон: медленно ползущий вверх лог терминала + сканлайны. */
+class TerminalBackground(c: Context) : View(c) {
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Term.FAINT; typeface = Typeface.MONOSPACE; textSize = 11f * c.resources.displayMetrics.scaledDensity }
+    private val scan = Paint().apply { color = Color.argb(70, 0, 0, 0) }
+    private val lineH = p.textSize * 1.35f
+    private val start = SystemClock.uptimeMillis()
+
+    override fun onDraw(canvas: Canvas) {
+        val t = (SystemClock.uptimeMillis() - start) / 1000f
+        val off = (t * 14f * resources.displayMetrics.density) % (lineH * Term.LOG.size)
+        val first = (off / lineH).toInt()
+        var y = -(off % lineH) + lineH
+        var i = first
+        while (y < height + lineH) {
+            canvas.drawText(Term.LOG[i % Term.LOG.size], 8f, y, p)
+            y += lineH; i++
+        }
+        var s = 0f
+        val step = 3f * resources.displayMetrics.density
+        while (s < height) { canvas.drawRect(0f, s, width.toFloat(), s + step / 3, scan); s += step }
+        postInvalidateOnAnimation()
+    }
+}
+
+/** Кнопка пульта: рамка с «уголками», номер, байт команды, глитч и луч передачи при нажатии. */
+class KeyView(c: Context, val label: String, private val index: Int, code: Long, private val inverted: Boolean) : View(c) {
+    private val d = c.resources.displayMetrics.density
+    private val main = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Term.mono; textAlign = Paint.Align.CENTER }
+    private val small = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Term.mono; textSize = 13 * d }
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = d }
+    private val fill = Paint()
+    private val tag = "[%02d]".format(index + 1)
+    private val hex = "0x%02X".format((code ushr 8) and 0xFF)
+    private var shown = label
+    private var pressedAt = 0L
+    private var down = false
+    private val rnd = Random(index)
+
+    init {
+        isClickable = true
+        contentDescription = label
+        alpha = 0f
+    }
+
+    /** Появление: кнопка «расшифровывается» из шума. */
+    fun reveal(delay: Long) {
+        ValueAnimator.ofFloat(0f, 1f).apply {
+            startDelay = delay; duration = 520
+            addUpdateListener { a ->
+                val f = a.animatedValue as Float
+                alpha = min(1f, f * 3f)
+                translationX = if (f < 0.6f) (rnd.nextFloat() - 0.5f) * 10 * d * (1 - f) else 0f
+                shown = if (f < 1f) Term.scramble(label, f, rnd) else label
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    fun setDown(v: Boolean) {
+        down = v
+        if (v) pressedAt = SystemClock.uptimeMillis()
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        val now = SystemClock.uptimeMillis()
+        val since = now - pressedAt
+        val inv = inverted xor down
+        val fg = if (inv) Color.BLACK else Term.FG
+
+        // фон и рамка
+        fill.color = if (inv) Term.FG else Color.BLACK
+        canvas.drawRect(0f, 0f, w, h, fill)
+        stroke.color = if (down) Term.FG else Term.LINE
+        canvas.drawRect(d / 2, d / 2, w - d / 2, h - d / 2, stroke)
+        // HUD-уголки
+        stroke.color = fg; stroke.strokeWidth = 2 * d
+        val k = 10 * d
+        for ((x, y, sx, sy) in listOf(Quad(0f, 0f, 1, 1), Quad(w, 0f, -1, 1), Quad(0f, h, 1, -1), Quad(w, h, -1, -1))) {
+            canvas.drawLine(x, y + sy * d, x + sx * k, y + sy * d, stroke)
+            canvas.drawLine(x + sx * d, y, x + sx * d, y + sy * k, stroke)
+        }
+        stroke.strokeWidth = d
+
+        small.color = if (inv) Color.DKGRAY else Term.DIM
+        small.textAlign = Paint.Align.LEFT
+        canvas.drawText(tag, 8 * d, 16 * d, small)
+        small.textAlign = Paint.Align.RIGHT
+        canvas.drawText(hex, w - 8 * d, h - 8 * d, small)
+
+        main.color = fg
+        main.textSize = min(38 * d, w / max(6, shown.length) * 1.55f)
+        val ty = h / 2 - (main.descent() + main.ascent()) / 2
+        val glitch = since < 180
+        if (glitch) {
+            // глитч: текст режется на полосы со сдвигом
+            val bands = 4
+            for (b in 0 until bands) {
+                canvas.save()
+                canvas.clipRect(0f, h * b / bands, w, h * (b + 1) / bands)
+                canvas.drawText(shown, w / 2 + (rnd.nextFloat() - 0.5f) * 14 * d, ty, main)
+                canvas.restore()
+            }
+        } else canvas.drawText(shown, w / 2, ty, main)
+
+        // луч передачи сверху вниз
+        if (since < 420) {
+            val y = h * since / 420f
+            fill.color = if (inv) Color.argb(120, 0, 0, 0) else Color.argb(150, 255, 255, 255)
+            canvas.drawRect(0f, y, w, y + 2 * d, fill)
+            fill.color = if (inv) Color.argb(30, 0, 0, 0) else Color.argb(28, 255, 255, 255)
+            canvas.drawRect(0f, max(0f, y - 24 * d), w, y, fill)
+        }
+        if (since < 420) postInvalidateOnAnimation()
+    }
+
+    private data class Quad(val x: Float, val y: Float, val sx: Int, val sy: Int)
+}
+
+/** Строка состояния, которая «печатается» по буквам, с мигающим курсором. */
+class TypeLine(c: Context) : TextView(c) {
+    private var target = ""
+    private var pos = 0
+    private var cursorOn = true
+    private val tick = object : Runnable {
+        override fun run() {
+            if (pos < target.length) pos = min(target.length, pos + 2) else cursorOn = !cursorOn
+            text = target.substring(0, pos) + if (cursorOn || pos < target.length) "█" else " "
+            postDelayed(this, if (pos < target.length) 16 else 480)
+        }
+    }
+
+    init { typeface = Term.ru; post(tick) }
+
+    fun type(s: String) { target = s; pos = 0; cursorOn = true }
+}
+
+/**
+ * Заставка при запуске: загрузочный лог, падающая крыса с глитчем,
+ * «krisa» под ней, затем всё рассыпается полосами и открывает пульт.
+ */
+class SplashView(c: Context, private val bootLines: List<String>, private val onDone: () -> Unit) : View(c) {
+    private val d = c.resources.displayMetrics.density
+    private val rat: Bitmap = BitmapFactory.decodeResource(c.resources, R.drawable.rat)
+    private val glow: Bitmap = rat.extractAlpha()
+    private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Term.mono; textSize = 17 * d; color = Term.DIM }
+    private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Term.mono; textSize = 64 * d; color = Term.FG; textAlign = Paint.Align.CENTER
+        setShadowLayer(14 * d, 0f, 0f, Color.WHITE)
+    }
+    private val bmp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val glowP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        maskFilter = BlurMaskFilter(18 * d, BlurMaskFilter.Blur.NORMAL); colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+    }
+    private val line = Paint().apply { color = Color.WHITE }
+    private val start = SystemClock.uptimeMillis()
+    private val rnd = Random(1)
+    private var finished = false
+
+    init {
+        setLayerType(LAYER_TYPE_SOFTWARE, null)   // BlurMaskFilter
+        isClickable = true
+        setOnClickListener { finish() }           // тап — пропустить
+        setBackgroundColor(Color.BLACK)
+    }
+
+    private fun finish() {
+        if (finished) return
+        finished = true
+        animate().alpha(0f).setDuration(260).setInterpolator(DecelerateInterpolator()).withEndAction(onDone).start()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val t = (SystemClock.uptimeMillis() - start).toFloat()
+        val w = width.toFloat(); val h = height.toFloat()
+
+        // 1. загрузочный лог
+        var y = 40 * d
+        val chars = (t / 7).toInt()
+        var left = chars
+        for (l in bootLines) {
+            if (left <= 0) break
+            canvas.drawText(l.take(left), 16 * d, y, txt)
+            left -= l.length + 6
+            y += txt.textSize * 1.25f
+        }
+
+        // 2. крыса падает сверху, отскакивает и «лежит»
+        val rw = min(w * 0.72f, 420 * d)
+        val rh = rw * rat.height / rat.width
+        val cx = w / 2; val restY = h * 0.5f
+        val f = ((t - 650) / 900f).coerceIn(0f, 1f)
+        if (t > 650) {
+            val drop = bounce(f)
+            val ry = -rh + (restY + rh) * drop
+            val rot = (1 - f) * -38f + if (f > 0.55f) sin(f * 26) * 4 * (1 - f) else 0f
+            canvas.save()
+            canvas.translate(cx, ry)
+            canvas.rotate(rot)
+            val dst = RectF(-rw / 2, -rh / 2, rw / 2, rh / 2)
+            glowP.alpha = (90 * f).toInt()
+            canvas.drawBitmap(glow, null, dst, glowP)
+            val moving = f < 0.95f || (t in 1800f..1900f) || (t in 2050f..2110f)
+            if (moving) {
+                // глитч-полосы: битмап режется по горизонтали со сдвигами
+                val bands = 9
+                for (b in 0 until bands) {
+                    val sy0 = rat.height * b / bands; val sy1 = rat.height * (b + 1) / bands
+                    val dx = (rnd.nextFloat() - 0.5f) * 22 * d * (if (rnd.nextInt(3) == 0) 1f else 0.15f)
+                    val top = -rh / 2 + rh * b / bands; val bottom = -rh / 2 + rh * (b + 1) / bands
+                    canvas.drawBitmap(rat, Rect(0, sy0, rat.width, sy1), RectF(-rw / 2 + dx, top, rw / 2 + dx, bottom), bmp)
+                }
+            } else canvas.drawBitmap(rat, null, dst, bmp)
+            canvas.restore()
+
+            // удар об «пол» — горизонтальные полосы, как у солнца на референсе
+            if (f > 0.42f && f < 0.9f) {
+                val k = 1 - abs(f - 0.55f) / 0.35f
+                for (i in 0 until 7) {
+                    val ly = restY + rh * 0.33f + (i - 3) * 4 * d
+                    val half = (rw * 0.6f + rnd.nextFloat() * rw * 0.4f) * k
+                    line.alpha = (180 * k).toInt().coerceIn(0, 255)
+                    canvas.drawRect(cx - half, ly, cx + half, ly + d, line)
+                }
+            }
+        }
+
+        // 3. надпись
+        if (t > 1500) {
+            val p = ((t - 1500) / 450f).coerceIn(0f, 1f)
+            canvas.drawText(Term.scramble("krisa", p, rnd), cx, restY + rh * 0.5f + 80 * d, big)
+        }
+
+        // 4. уход: экран рассыпается полосами
+        if (t > 2350) {
+            val p = ((t - 2350) / 300f).coerceIn(0f, 1f)
+            for (i in 0 until 14) {
+                val by = rnd.nextFloat() * h
+                line.alpha = (220 * (1 - p)).toInt()
+                canvas.drawRect(0f, by, w * rnd.nextFloat(), by + rnd.nextFloat() * 6 * d, line)
+            }
+            if (p >= 1f) finish()
+        }
+        if (!finished) postInvalidateOnAnimation()
+    }
+
+    /** Падение с затухающим отскоком. */
+    private fun bounce(x: Float): Float {
+        val n = 7.5625f; val dd = 2.75f
+        return when {
+            x < 1 / dd -> n * x * x
+            x < 2 / dd -> { val t = x - 1.5f / dd; n * t * t + 0.75f }
+            x < 2.5 / dd -> { val t = x - 2.25f / dd; n * t * t + 0.9375f }
+            else -> { val t = x - 2.625f / dd; n * t * t + 0.984375f }
+        }
+    }
+}

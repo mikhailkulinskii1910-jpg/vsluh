@@ -13,70 +13,119 @@
 <meta name="apple-mobile-web-app-title" content="krisa">
 <title>krisa</title>
 <style>
+@font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:block}
 :root{
-  --bg:#0E1416; --btn:#141D1F; --btn-hi:#1E2A2D; --ink:#C9D3D4; --title:#E6ECEC;
-  --muted:#7F8D8F; --power:#861414; --power-hi:#A51C1C; --line:#243033; --ok:#3FB37F; --err:#E5645B;
-  --r:22px;
-  --ui:Roboto,"Segoe UI",system-ui,-apple-system,sans-serif;
+  --bg:#000; --fg:#EDEDED; --dim:#8A8A8A; --line:#5C5C5C; --faint:#151515;
+  --mono:VT323,ui-monospace,Menlo,Consolas,monospace;
+  --ru:ui-monospace,"Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--ui)}
-body{min-height:100dvh;padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 20px);
-  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.wrap{max-width:560px;margin:0 auto}
-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 2px 22px}
-h1{margin:0;font-size:30px;line-height:1.1;font-weight:700;color:var(--title);letter-spacing:.2px}
-.id{font-size:22px;font-weight:700;color:var(--title);margin-top:6px}
-.mode{margin-top:6px;font-size:13px;color:var(--muted)}
-.gear{flex:none;width:44px;height:44px;border-radius:14px;border:0;background:var(--btn);color:var(--ink);
-  display:grid;place-items:center;cursor:pointer}
-.gear:active{background:var(--btn-hi)}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.key{height:clamp(84px,12.5dvh,122px);border:0;border-radius:var(--r);background:var(--btn);color:var(--ink);
-  font:700 clamp(19px,5.4vw,26px)/1.1 var(--ui);letter-spacing:-.3px;cursor:pointer;padding:8px;
-  transition:background .08s,transform .08s;touch-action:manipulation}
-.key.on{background:var(--btn-hi);transform:scale(.97)}
-.key.power{background:var(--power);color:#E4C9C9}
-.key.power.on{background:var(--power-hi)}
-.key:focus-visible,.gear:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.status{min-height:20px;margin:16px 2px 0;font-size:13px;color:var(--muted);text-align:center}
-.status.err{color:var(--err)}
-.status.ok{color:var(--ok)}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--ru)}
+body{min-height:100dvh;padding:calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 20px);
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overflow-x:hidden}
+/* фон: бегущий лог + сканлайны */
+#log{position:fixed;inset:0;z-index:0;overflow:hidden;color:var(--faint);font:11px/1.35 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none}
+#log div{animation:crawl 90s linear infinite}
+@keyframes crawl{to{transform:translateY(-50%)}}
+body::after{content:"";position:fixed;inset:0;z-index:5;pointer-events:none;
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
+.wrap{position:relative;z-index:1;max-width:560px;margin:0 auto}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 2px 14px}
+h1{margin:0;font:400 64px/0.9 var(--mono);color:var(--fg);text-shadow:0 0 10px #fff,0 0 2px #fff}
+h1::after{content:"█";margin-left:4px;font-size:.7em;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.id{font:20px var(--mono);color:var(--dim);margin-top:6px}
+.mode{margin-top:6px;font-size:14px;color:var(--fg)}
+.mode.none{color:var(--dim)}
+.gear{flex:none;margin-top:10px;width:64px;height:44px;border:1px solid var(--line);background:#000;color:var(--fg);
+  font:22px var(--mono);cursor:pointer}
+.gear:active{background:var(--fg);color:#000}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.key{position:relative;height:clamp(76px,12dvh,118px);border:1px solid var(--line);background:#000;color:var(--fg);
+  font:clamp(26px,8vw,40px)/1 var(--mono);cursor:pointer;padding:8px;touch-action:manipulation;overflow:hidden;
+  transition:transform .08s;opacity:0}
+.key.shown{opacity:1}
+/* HUD-уголки */
+.key::before{content:"";position:absolute;inset:0;pointer-events:none;
+  --c:var(--fg);background:
+  linear-gradient(var(--c),var(--c)) top left/12px 2px,linear-gradient(var(--c),var(--c)) top left/2px 12px,
+  linear-gradient(var(--c),var(--c)) top right/12px 2px,linear-gradient(var(--c),var(--c)) top right/2px 12px,
+  linear-gradient(var(--c),var(--c)) bottom left/12px 2px,linear-gradient(var(--c),var(--c)) bottom left/2px 12px,
+  linear-gradient(var(--c),var(--c)) bottom right/12px 2px,linear-gradient(var(--c),var(--c)) bottom right/2px 12px;
+  background-repeat:no-repeat}
+.key .n,.key .h{position:absolute;font:14px var(--mono);color:var(--dim)}
+.key .n{top:6px;left:9px}.key .h{bottom:6px;right:9px}
+.key.inv,.key.on{background:var(--fg);color:#000;border-color:var(--fg)}
+.key.inv::before,.key.on::before{--c:#000}
+.key.inv .n,.key.inv .h,.key.on .n,.key.on .h{color:#444}
+.key.inv.on{background:#000;color:var(--fg)}
+.key.inv.on::before{--c:var(--fg)}
+.key.on{transform:scale(.97)}
+.key.glitch .t{animation:glitch .18s steps(2) 1}
+@keyframes glitch{0%{clip-path:inset(0 0 60% 0);transform:translateX(-6px)}50%{clip-path:inset(40% 0 0 0);transform:translateX(5px)}100%{clip-path:none;transform:none}}
+.key .beam{position:absolute;left:0;right:0;top:0;height:2px;background:currentColor;opacity:.6;box-shadow:0 -18px 22px rgba(255,255,255,.12);display:none}
+.key.tx .beam{display:block;animation:beam .42s linear 1 forwards}
+@keyframes beam{from{top:0}to{top:100%;opacity:0}}
+.key:focus-visible,.gear:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.status{min-height:20px;margin:14px 6px 0;font-size:14px;color:var(--dim);white-space:pre}
+.status::after{content:"█";animation:blink 1s steps(1) infinite}
+.status.err,.status.ok{color:var(--fg)}
+.shake{animation:shake .2s 1}
+@keyframes shake{25%{transform:translateX(4px)}50%{transform:translateX(-3px)}75%{transform:translateX(2px)}}
+/* заставка */
+#splash{position:fixed;inset:0;z-index:10;background:#000;overflow:hidden;cursor:pointer}
+#splash pre{margin:0;padding:24px 16px;font:17px/1.25 var(--mono);color:var(--dim);white-space:pre-wrap}
+#splash .rat{position:absolute;left:50%;top:50%;width:min(72vw,420px);transform:translate(-50%,-160vh) rotate(-38deg);
+  filter:drop-shadow(0 0 14px rgba(255,255,255,.55))}
+#splash.go .rat{animation:drop .9s cubic-bezier(.3,0,.6,1) forwards,rglitch .9s steps(6) 1}
+@keyframes drop{0%{transform:translate(-50%,-160vh) rotate(-38deg)}55%{transform:translate(-50%,-50%) rotate(-6deg)}
+  70%{transform:translate(-50%,-62%) rotate(3deg)}82%{transform:translate(-50%,-50%) rotate(-2deg)}
+  91%{transform:translate(-50%,-53%) rotate(1deg)}100%{transform:translate(-50%,-50%) rotate(0)}}
+@keyframes rglitch{0%,100%{clip-path:none}20%{clip-path:inset(10% 0 55% 0)}40%{clip-path:inset(50% 0 10% 0)}60%{clip-path:inset(0 0 30% 0)}80%{clip-path:inset(30% 0 0 0)}}
+#splash .lines{position:absolute;left:50%;top:calc(50% + min(21vw,123px));width:min(90vw,520px);height:30px;transform:translateX(-50%) scaleX(0);
+  background:repeating-linear-gradient(#fff 0 1px,transparent 1px 4px);opacity:0}
+#splash.go .lines{animation:hit .5s .45s ease-out forwards}
+@keyframes hit{0%{opacity:.9;transform:translateX(-50%) scaleX(.2)}40%{opacity:.8;transform:translateX(-50%) scaleX(1)}100%{opacity:0;transform:translateX(-50%) scaleX(1.1)}}
+#splash .name{position:absolute;left:0;right:0;top:calc(50% + min(28vw,160px));text-align:center;font:64px var(--mono);color:var(--fg);text-shadow:0 0 14px #fff}
+#splash.out{animation:out .32s steps(4) forwards}
+@keyframes out{0%{clip-path:inset(0)}50%{clip-path:inset(20% 0 35% 0);transform:translateX(8px)}100%{clip-path:inset(50% 0 50% 0);opacity:0}}
+@media (prefers-reduced-motion:reduce){#log div,.key.tx .beam{animation:none}}
 /* настройки */
 dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);border:1px solid var(--line);
-  border-radius:20px;background:#121A1C;color:var(--ink);padding:0}
-dialog::backdrop{background:rgba(0,0,0,.6)}
+  border-radius:0;background:#000;color:var(--fg);padding:0}
+dialog::backdrop{background:rgba(0,0,0,.75)}
 .sheet{padding:20px}
-.sheet h2{margin:0 0 14px;font-size:20px;color:var(--title)}
-.sheet h3{margin:20px 0 8px;font-size:15px;color:var(--title)}
-.opt{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:14px;background:var(--btn);margin-bottom:8px;cursor:pointer}
-.opt input{margin-top:3px;accent-color:#5FA8A0}
-.opt b{display:block;color:var(--title);font-size:15px}
-.opt span{display:block;font-size:13px;color:var(--muted);margin-top:3px;line-height:1.4}
-label.f{display:block;font-size:13px;color:var(--muted);margin:12px 0 6px}
-input[type=text]{width:100%;font:16px var(--ui);padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--title)}
-.note{font-size:13px;line-height:1.5;color:var(--muted)}
-.note code{color:var(--ink)}
-table{width:100%;border-collapse:collapse;font-size:13px}
-td{padding:7px 4px;border-top:1px solid var(--line);vertical-align:top}
-td:first-child{color:var(--title);font-weight:600;white-space:nowrap}
-td code{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--ink)}
+.sheet h2{margin:0 0 14px;font:30px var(--mono);color:var(--fg)}
+.sheet h3{margin:20px 0 8px;font:22px var(--mono);color:var(--fg)}
+.opt{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--line);margin-bottom:8px;cursor:pointer}
+.opt input{margin-top:3px;accent-color:#fff}
+.opt b{display:block;color:var(--fg);font-size:14px}
+.opt span{display:block;font-size:12px;color:var(--dim);margin-top:3px;line-height:1.45}
+label.f{display:block;font-size:12px;color:var(--dim);margin:12px 0 6px}
+input[type=text]{width:100%;font:16px var(--ru);padding:10px 12px;border:1px solid var(--line);background:#000;color:var(--fg);border-radius:0}
+.note{font-size:12px;line-height:1.5;color:var(--dim)}
+.note code{color:var(--fg)}
+.note a{color:var(--fg)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+td{padding:6px 4px;border-top:1px solid #2a2a2a;vertical-align:top}
+td:first-child{color:var(--fg);white-space:nowrap}
+td code{color:var(--fg)}
 .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
-.btn{border:0;border-radius:12px;padding:11px 16px;font:600 15px var(--ui);background:var(--btn-hi);color:var(--title);cursor:pointer}
-.btn.primary{background:#2C5F59}
+.btn{border:1px solid var(--fg);border-radius:0;padding:9px 16px;font:22px var(--mono);background:#000;color:var(--fg);cursor:pointer}
+.btn.primary{background:var(--fg);color:#000}
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true"><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="lines"></div><div class="name" id="splashName"></div></div>
+<div id="log" aria-hidden="true"><div id="logText"></div></div>
 <div class="wrap">
   <header>
     <div>
       <h1>krisa</h1>
-      <div class="id">#500202</div>
+      <div class="id">#500202 :: IRBIS :: NEC 38kHz</div>
       <div class="mode" id="modeLine"></div>
     </div>
-    <button class="gear" id="gear" aria-label="Настройки">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-    </button>
+    <button class="gear" id="gear" aria-label="Настройки">[tx]</button>
   </header>
   <main class="grid" id="grid"></main>
   <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -196,17 +245,32 @@ function save() { try { localStorage.setItem('irbis-remote', JSON.stringify(sett
 
 const $ = id => document.getElementById(id);
 function renderMode() {
-  $('modeLine').textContent = settings.mode === 'http'
+  $('modeLine').textContent = '> ' + (settings.mode === 'http'
     ? 'Wi-Fi: ' + (settings.host || 'адрес не задан')
-    : 'Излучатель в разъёме наушников';
+    : 'Излучатель в разъёме наушников');
 }
 
-let statusTimer;
+/* Строка состояния «печатается» по буквам, как в терминале. */
+let typeTimer;
 function status(text, cls) {
   const el = $('status');
-  el.textContent = text; el.className = 'status' + (cls ? ' ' + cls : '');
-  clearTimeout(statusTimer);
-  if (text) statusTimer = setTimeout(() => { el.textContent = ''; el.className = 'status'; }, 2500);
+  const full = cls === 'err' ? '!! ' + text : cls === 'ok' ? '> ' + text + ' [ok]' : text;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+  if (cls === 'err') { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+  clearInterval(typeTimer);
+  let i = 0;
+  typeTimer = setInterval(() => { i += 2; el.textContent = full.slice(0, i); if (i >= full.length) clearInterval(typeTimer); }, 16);
+}
+
+/* «Расшифровка» текста из шума. */
+const NOISE = '#$%&@01<>/\\|=+*:;░▒▓';
+function scramble(el, text, ms, done) {
+  const t0 = performance.now();
+  (function step(now) {
+    const f = Math.min(1, (now - t0) / ms), shown = Math.floor(text.length * f);
+    el.textContent = [...text].map((c, i) => i < shown || c === ' ' ? c : NOISE[Math.random() * NOISE.length | 0]).join('');
+    if (f < 1) requestAnimationFrame(step); else done && done();
+  })(t0);
 }
 
 /* ---------- Кнопки ---------- */
@@ -214,7 +278,7 @@ function transmit(label, hex, isRepeat) {
   const tx = settings.mode === 'http' ? httpTx : audioTx;
   try {
     const p = isRepeat ? tx.repeat(hex) : tx.send(hex);
-    if (!isRepeat) status(label + ' → 0x' + hex);
+    if (!isRepeat) status('> tx ' + label.padEnd(11) + ' 0x' + hex + ' [sent]');
     if (p && p.catch) p.catch(e => status(e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message, 'err'));
   } catch (e) { status(e.message, 'err'); }
 }
@@ -222,14 +286,20 @@ function transmit(label, hex, isRepeat) {
 const grid = $('grid');
 KEYS.forEach(([label, hex]) => {
   const b = document.createElement('button');
-  b.className = 'key' + (label === 'POWER' ? ' power' : '');
-  b.textContent = label;
+  b.className = 'key' + (label === 'POWER' ? ' inv' : '');
+  b.setAttribute('aria-label', label);
+  b.innerHTML = '<span class="n"></span><span class="t"></span><span class="h"></span><i class="beam"></i>';
+  b.querySelector('.n').textContent = '[' + String(grid.children.length + 1).padStart(2, '0') + ']';
+  b.querySelector('.h').textContent = '0x' + hex.slice(4, 6);
+  b.querySelector('.t').textContent = label;
   let hold = null;
   const stop = () => { b.classList.remove('on'); clearTimeout(hold); clearInterval(hold); hold = null; };
   b.addEventListener('pointerdown', e => {
     if (e.button > 0) return;
     b.setPointerCapture?.(e.pointerId);
     b.classList.add('on');
+    // глитч и луч передачи
+    b.classList.remove('glitch', 'tx'); void b.offsetWidth; b.classList.add('glitch', 'tx');
     navigator.vibrate?.(15);
     transmit(label, hex, false);
     if (REPEATABLE.has(label)) {
@@ -275,6 +345,51 @@ KEYS.forEach(([label, hex]) => {
 });
 
 renderMode();
+
+/* ---------- Фон: лог терминала ---------- */
+(function () {
+  const pk = ['libc6','libperl5.30','perl-base','zlib1g','libblkid1','libuuid1','fdisk','util-linux','libgcc-s1','libstdc++6','dpkg','tar','gzip','login','bash','binutils','gcc-9','cpp-9','gpg','openssl'];
+  const lines = [];
+  pk.forEach((p, i) => lines.push(`Get:${i + 21} http://ftpmaster.internal/ubuntu focal-updates/main amd64 ${p} [${100 + i * 137 % 3900} kB]`));
+  pk.forEach(p => lines.push(`Preparing to unpack .../${p}.deb ...`, `Unpacking ${p} ...`));
+  lines.push('Starting Nmap 7.60 ( https://nmap.org )', 'PORT     STATE SERVICE  VERSION', '25/tcp   open  smtp     Exim smtpd 4.84_2',
+    '-=[ 22/tcp, ssh ]=- * OPEN *', 'PROGRAM MANDELBROT_SET;', 'uses vga,crt,mouse;', '  Pmin:=-2.25;Qmin:=-1.5;');
+  KEYS.forEach(([l, h]) => lines.push(`irsend nec 0x${h}  # ${l}`));
+  lines.sort(() => Math.random() - .5);
+  const block = lines.join('\n');
+  $('logText').textContent = block + '\n' + block;   // два раза — бесшовная прокрутка
+})();
+
+/* ---------- Появление пульта ---------- */
+function showRemote() {
+  [...grid.children].forEach((b, i) => setTimeout(() => {
+    b.classList.add('shown');
+    scramble(b.querySelector('.t'), b.getAttribute('aria-label'), 480);
+  }, 60 * i));
+  status('> ready. ' + KEYS.length + ' keys loaded');
+}
+
+/* ---------- Заставка с крысой (один раз за сессию) ---------- */
+(function () {
+  const sp = $('splash');
+  let seen = false;
+  try { seen = sessionStorage.getItem('krisa-splash') === '1'; sessionStorage.setItem('krisa-splash', '1'); } catch {}
+  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { sp.remove(); showRemote(); return; }
+  let finished = false;
+  const finish = () => {
+    if (finished) return; finished = true;
+    sp.classList.add('out');
+    setTimeout(() => { sp.remove(); showRemote(); }, 320);
+  };
+  sp.addEventListener('click', finish);
+  const boot = ['krisa ir-remote', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  let i = 0;
+  const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
+  setTimeout(() => sp.classList.add('go'), 650);
+  setTimeout(() => scramble($('splashName'), 'krisa', 450), 1500);
+  setTimeout(finish, 2600);
+})();
+
 if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
