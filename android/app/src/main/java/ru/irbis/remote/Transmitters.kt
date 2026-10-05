@@ -2,6 +2,11 @@ package ru.irbis.remote
 
 import android.content.Context
 import android.hardware.ConsumerIrManager
+import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
+import android.media.AudioFormat
+import android.media.AudioManager
+import android.media.AudioTrack
 import android.hardware.usb.UsbConstants
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbDeviceConnection
@@ -85,6 +90,13 @@ class UsbIr(private val conn: UsbDeviceConnection, private val out: UsbEndpoint,
         private val IDS = setOf(0x045E to 0x8468, 0x10C4 to 0x8468)
         fun supports(d: UsbDevice) = (d.vendorId to d.productId) in IDS
 
+        /** Есть ли у устройства bulk/interrupt OUT — тогда его можно попробовать как ИК-передатчик. */
+        fun canTry(d: UsbDevice) = d.interfaceCount > 0 && (0 until d.getInterface(0).endpointCount).any {
+            val ep = d.getInterface(0).getEndpoint(it)
+            ep.direction == UsbConstants.USB_DIR_OUT &&
+                (ep.type == UsbConstants.USB_ENDPOINT_XFER_BULK || ep.type == UsbConstants.USB_ENDPOINT_XFER_INT)
+        }
+
         fun open(usb: UsbManager, d: UsbDevice): UsbIr? {
             val itf = d.getInterface(0)
             var out: UsbEndpoint? = null
@@ -98,6 +110,71 @@ class UsbIr(private val conn: UsbDeviceConnection, private val out: UsbEndpoint,
             val conn = usb.openDevice(d) ?: return null
             if (!conn.claimInterface(itf, true)) { conn.close(); return null }
             return UsbIr(conn, out, inp)
+        }
+    }
+}
+
+/**
+ * ИК-адаптер, который работает как звуковая карта: в разъём наушников или USB-C «звуковой» донгл.
+ * Как в IrCode Finder: 48 кГц, синус на половине несущей (19 кГц); при двух светодиодах
+ * правый канал в противофазе — встречно включённые светодиоды дают 38 кГц.
+ */
+class AudioIr(private val context: Context, private val twoLeds: Boolean) : IrTransmitter {
+    override val title = if (twoLeds) "Звуковой ИК-адаптер (2 светодиода)" else "Звуковой ИК-адаптер (1 светодиод)"
+    private val am = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
+    override fun transmit(pattern: IntArray) {
+        // Адаптеру нужна полная громкость, иначе светодиоды не загораются.
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (am.getStreamVolume(AudioManager.STREAM_MUSIC) < max) am.setStreamVolume(AudioManager.STREAM_MUSIC, max, 0)
+
+        val pcm = render(pattern)
+        val track = AudioTrack.Builder()
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setAudioFormat(AudioFormat.Builder().setSampleRate(RATE).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setChannelMask(if (twoLeds) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO).build())
+            .setTransferMode(AudioTrack.MODE_STATIC)
+            .setBufferSizeInBytes(pcm.size * 2)
+            .build()
+        try {
+            adapterOutput(am)?.let { track.setPreferredDevice(it) }
+            track.write(pcm, 0, pcm.size)
+            track.play()
+            Thread.sleep(pcm.size * 1000L / RATE / (if (twoLeds) 2 else 1) + 30)
+            track.stop()
+        } finally {
+            track.release()
+        }
+    }
+
+    private fun render(pattern: IntArray): ShortArray {
+        val ch = if (twoLeds) 2 else 1
+        val out = ArrayList<Short>(RATE / 5 * ch)
+        repeat(LEAD_IN * ch) { out += 0 }   // тишина в начале, чтобы звуковой тракт успел включиться
+        val step = 2 * Math.PI * (Nec.CARRIER / 2) / RATE
+        pattern.forEachIndexed { i, us ->
+            val n = us.toLong() * RATE / 1_000_000
+            if (i % 2 == 0) {
+                var ph = 0.0
+                repeat(n.toInt()) {
+                    out += (Math.sin(ph) * 32000).toInt().toShort()
+                    if (twoLeds) out += (Math.sin(ph + Math.PI) * 32000).toInt().toShort()
+                    ph += step
+                }
+            } else repeat((n * ch).toInt()) { out += 0 }
+        }
+        return out.toShortArray()
+    }
+
+    companion object {
+        const val RATE = 48000
+        private const val LEAD_IN = RATE / 50   // 20 мс
+
+        /** Подключённый USB-звуковой выход (USB-C донгл, который система видит как наушники). */
+        fun adapterOutput(am: AudioManager): AudioDeviceInfo? = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull {
+            it.type == AudioDeviceInfo.TYPE_USB_HEADSET || it.type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+                it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET
         }
     }
 }

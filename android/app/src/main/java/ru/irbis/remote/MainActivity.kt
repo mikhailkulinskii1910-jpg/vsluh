@@ -14,6 +14,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -33,13 +34,15 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class MainActivity : Activity() {
 
-    private enum class Mode(val label: String) { AUTO("Авто"), BUILTIN("Встроенный ИК-порт"), USB("USB-C передатчик") }
+    private enum class Mode { AUTO, BUILTIN, USB, AUDIO2, AUDIO1 }
 
     private val ui = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var usb: UsbManager
     private lateinit var builtin: BuiltinIr
     @Volatile private var usbIr: UsbIr? = null
+    private var usbIrDevice: String? = null
+    private lateinit var audio: AudioManager
     private var mode = Mode.AUTO
 
     private lateinit var modeLine: TextView
@@ -55,11 +58,15 @@ class MainActivity : Activity() {
                 ACTION_PERMISSION ->
                     if (i.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) connect(d)
                     else say("Нет доступа к USB-передатчику", err = true)
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> if (UsbIr.supports(d)) {
-                    usbIr?.let { ir -> io.execute { ir.close() } }
-                    usbIr = null
-                    say("USB-передатчик отключён")
-                    renderMode()
+                UsbManager.ACTION_USB_DEVICE_ATTACHED -> { findUsb(null); ui.postDelayed({ renderMode() }, 1000) }
+                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+                    if (d.deviceName == usbIrDevice) {
+                        usbIr?.let { ir -> io.execute { ir.close() } }
+                        usbIr = null
+                        usbIrDevice = null
+                        say("USB-передатчик отключён")
+                    }
+                    ui.postDelayed({ renderMode() }, 500)
                 }
             }
         }
@@ -69,10 +76,11 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         usb = getSystemService(USB_SERVICE) as UsbManager
         builtin = BuiltinIr(this)
+        audio = getSystemService(AUDIO_SERVICE) as AudioManager
         mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString("mode", "AUTO")!!) }.getOrDefault(Mode.AUTO)
         setContentView(buildUi())
 
-        val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
+        val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
 
         findUsb(intent)
@@ -93,11 +101,21 @@ class MainActivity : Activity() {
 
     /* ---------- USB ---------- */
 
+    override fun onResume() {
+        super.onResume()
+        renderMode()   // ИК-порт или адаптер могли появиться, пока приложение было свёрнуто
+    }
+
     private fun findUsb(intent: Intent?) {
         if (usbIr != null) return
         val d = intent?.takeIf { it.action == UsbManager.ACTION_USB_DEVICE_ATTACHED }?.usbDevice()?.takeIf { UsbIr.supports(it) }
             ?: usb.deviceList.values.firstOrNull { UsbIr.supports(it) }
             ?: return
+        useUsb(d)
+    }
+
+    /** Открыть USB-устройство как ИК-передатчик (при необходимости спросить доступ). */
+    private fun useUsb(d: UsbDevice) {
         if (usb.hasPermission(d)) connect(d)
         else {
             val flags = if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
@@ -109,7 +127,9 @@ class MainActivity : Activity() {
     private fun connect(d: UsbDevice) = io.execute {
         val ir = runCatching { UsbIr.open(usb, d) }.getOrNull()
         ui.post {
+            usbIr?.takeIf { it !== ir }?.let { old -> io.execute { old.close() } }
             usbIr = ir
+            usbIrDevice = if (ir != null) d.deviceName else null
             if (ir != null) say("USB-передатчик готов", ok = true) else say("Не удалось открыть USB-передатчик", err = true)
             renderMode()
         }
@@ -117,10 +137,16 @@ class MainActivity : Activity() {
 
     /* ---------- Передача ---------- */
 
+    private val audio2 by lazy { AudioIr(this, twoLeds = true) }
+    private val audio1 by lazy { AudioIr(this, twoLeds = false) }
+
     private fun current(): IrTransmitter? = when (mode) {
         Mode.USB -> usbIr
         Mode.BUILTIN -> builtin.takeIf { it.available }
-        Mode.AUTO -> usbIr ?: builtin.takeIf { it.available }
+        Mode.AUDIO2 -> audio2
+        Mode.AUDIO1 -> audio1
+        // Звуковой USB-C адаптер система видит как наушники — берём его, если ничего другого нет.
+        Mode.AUTO -> usbIr ?: builtin.takeIf { it.available } ?: audio2.takeIf { AudioIr.adapterOutput(audio) != null }
     }
 
     private fun press(label: String, code: Long) {
@@ -150,10 +176,10 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun noTxMessage() = when {
-        mode == Mode.USB -> "Подключите USB-C ИК-передатчик"
-        mode == Mode.BUILTIN -> "В телефоне нет ИК-порта"
-        else -> "Нет ИК-порта: подключите USB-C передатчик"
+    private fun noTxMessage() = when (mode) {
+        Mode.USB -> "USB-C передатчик не найден — ⚙ → Проверка"
+        Mode.BUILTIN -> "Встроенный ИК-порт не найден"
+        else -> "Передатчик не найден — нажмите ⚙ → Проверка"
     }
 
     /* ---------- Интерфейс ---------- */
@@ -166,7 +192,7 @@ class MainActivity : Activity() {
 
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        titles.addView(text("IRBIS", 30f, TITLE, bold = true))
+        titles.addView(text("krisa", 30f, TITLE, bold = true))
         titles.addView(text("#500202", 22f, TITLE, bold = true).apply { setPadding(0, dp(4), 0, 0) })
         modeLine = text("", 14f, MUTED).apply { setPadding(0, dp(6), 0, 0) }
         titles.addView(modeLine)
@@ -233,9 +259,11 @@ class MainActivity : Activity() {
         val modes = Mode.values()
         val labels = modes.map {
             when (it) {
-                Mode.AUTO -> "Авто (USB-C, если подключён)"
+                Mode.AUTO -> "Авто"
                 Mode.BUILTIN -> "Встроенный ИК-порт" + if (builtin.available) "" else " — нет"
                 Mode.USB -> "USB-C передатчик" + if (usbIr != null) " — подключён" else " — не найден"
+                Mode.AUDIO2 -> "Звуковой адаптер, 2 светодиода"
+                Mode.AUDIO1 -> "Звуковой адаптер, 1 светодиод"
             }
         }.toTypedArray()
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
@@ -244,10 +272,57 @@ class MainActivity : Activity() {
                 mode = modes[which]
                 getPreferences(MODE_PRIVATE).edit().putString("mode", mode.name).apply()
                 renderMode()
-                if (mode != Mode.BUILTIN) findUsb(null)
+                if (mode == Mode.AUTO || mode == Mode.USB) findUsb(null)
                 d.dismiss()
             }
+            .setNeutralButton("Проверка") { _, _ -> diagnostics() }
             .show()
+    }
+
+    /** Что телефон видит: встроенный ИК-порт, USB-устройства, звуковые выходы. */
+    private fun diagnostics() {
+        val sb = StringBuilder()
+        val ir = getSystemService(CONSUMER_IR_SERVICE) as android.hardware.ConsumerIrManager?
+        sb.append("Встроенный ИК-порт: ")
+        when {
+            ir == null -> sb.append("нет (сервис недоступен)")
+            !ir.hasIrEmitter() -> sb.append("нет")
+            else -> {
+                sb.append("есть")
+                runCatching { ir.carrierFrequencies }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { r ->
+                    sb.append(", частоты ").append(r.joinToString { "${it.minFrequency / 1000}–${it.maxFrequency / 1000} кГц" })
+                }
+            }
+        }
+        sb.append("\n\nUSB-устройства:")
+        val devices = usb.deviceList.values.toList()
+        if (devices.isEmpty()) sb.append("\n  ничего не подключено.\n  На Xiaomi/Redmi/POCO включите OTG: Настройки → Доп. настройки → OTG (само выключается через 10 мин).")
+        devices.forEach { d ->
+            sb.append("\n• ").append(d.productName ?: d.deviceName)
+            sb.append("\n  %04X:%04X".format(d.vendorId, d.productId))
+            sb.append(when {
+                UsbIr.supports(d) -> if (d.deviceName == usbIrDevice) " — ИК-передатчик, подключён" else " — ИК-передатчик"
+                (0 until d.interfaceCount).any { d.getInterface(it).interfaceClass == android.hardware.usb.UsbConstants.USB_CLASS_AUDIO } ->
+                    " — звуковое устройство (режим «Звуковой адаптер»)"
+                UsbIr.canTry(d) -> " — неизвестное, можно попробовать"
+                else -> ""
+            })
+        }
+        sb.append("\n\nЗвуковой выход для адаптера: ")
+        sb.append(AudioIr.adapterOutput(audio)?.let { (it.productName?.toString()?.ifBlank { null } ?: "наушники/USB") } ?: "нет")
+
+        val tryable = devices.filter { !UsbIr.supports(it) && UsbIr.canTry(it) }
+        val b = AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle("Проверка передатчиков")
+            .setMessage(sb.toString())
+            .setPositiveButton("OK", null)
+        if (tryable.isNotEmpty()) b.setNeutralButton("Попробовать USB") { _, _ ->
+            val d = tryable.first()
+            mode = Mode.USB
+            getPreferences(MODE_PRIVATE).edit().putString("mode", mode.name).apply()
+            useUsb(d)
+        }
+        b.show()
     }
 
     private fun renderMode() {
