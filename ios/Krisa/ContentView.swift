@@ -79,6 +79,7 @@ struct ContentView: View {
                     "audio out ................ [" + (AudioIr.adapterConnected ? "ok" : "--") + "]",
                     "decoding rat.png ......... [ok]",
                 ]) {
+                    guard splash else { return }   // заставку уже убрали (отладочный запуск)
                     withAnimation(.easeOut(duration: 0.26)) { splash = false }
                     ready = true
                     checkIrPort()
@@ -99,7 +100,10 @@ struct ContentView: View {
         }
         .onAppear {
             // Для скриншота в CI: KRISA_OPEN_HELP=1 сразу открывает «Как пользоваться».
-            if ProcessInfo.processInfo.environment["KRISA_OPEN_HELP"] != nil { splash = false; ready = true; help = true }
+            if ProcessInfo.processInfo.environment["KRISA_OPEN_HELP"] != nil {
+                splash = false; ready = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { help = true }
+            }
         }
     }
 }
