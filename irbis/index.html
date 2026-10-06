@@ -300,6 +300,7 @@ KEYS.forEach(([label, hex]) => {
     if (e.button > 0) return;
     b.setPointerCapture?.(e.pointerId);
     b.classList.add('on');
+    window.scareRats && scareRats(e.clientX, e.clientY);   // крысы убегают от пальца
     // глитч и луч передачи
     b.classList.remove('glitch', 'tx'); void b.offsetWidth; b.classList.add('glitch', 'tx');
     navigator.vibrate?.(15);
@@ -379,10 +380,22 @@ renderMode();
     return c;
   });
   const cv = $('rats'), ctx = cv.getContext('2d');
-  const rats = [[70, 1, 0], [110, -1, 300], [45, 1, 700], [90, -1, 1100], [130, 1, 1500]];   // скорость px/с, направление, сдвиг
   const px = 2.5, rw = 28 * px, rh = 11 * px;
-  const hash = i => { const v = Math.sin(i * 12.9898) * 43758.5453; return v - Math.floor(v); };
-  const t0 = performance.now();
+  // крыса: x, y, направление, скорость; panic — удирает от пальца; wait — сидит за краем экрана
+  const rats = [70, 110, 45, 90, 130].map(speed => ({ speed, x: 0, y: 0, dir: 1, stride: 0, panic: false, wait: 0, hop: 1 }));
+  const respawn = (r, anywhere) => {
+    r.dir = Math.random() < .5 ? 1 : -1;
+    r.x = anywhere ? Math.random() * innerWidth : r.dir > 0 ? -rw : innerWidth;
+    r.y = 60 + Math.random() * (innerHeight - 120);
+    r.panic = false; r.wait = 0;
+  };
+  rats.forEach(r => respawn(r, true));
+  /** Испуг: крысы подпрыгивают и удирают от точки нажатия за край экрана. */
+  window.scareRats = (px_, py_) => rats.forEach(r => {
+    if (r.wait > 0) return;
+    r.dir = r.x + rw / 2 < px_ ? -1 : 1; r.panic = true; r.hop = 0;
+  });
+  let last = 0;
   function draw(now) {
     const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
@@ -390,16 +403,17 @@ renderMode();
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = false;
     ctx.globalAlpha = 0.47;
-    const t = (now - t0) / 1000, track = W + rw * 2 + 160;   // путь забега + пауза за краем
-    rats.forEach(([sp, dir, off], n) => {
-      const dist = t * sp + off, lap = Math.floor(dist / track), pos = dist % track - rw;
-      if (pos > W + rw) return;
-      const x = dir > 0 ? pos : W - pos - rw;
-      const f = Math.floor(dist / 9) % 2;                     // лапы перебирают в такт пройденному пути
-      const y = 60 + hash(lap * 31 + n * 7) * (H - 120) - (f ? 1 : 0);
+    const dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
+    rats.forEach(r => {
+      if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) respawn(r, false); return; }
+      const v = r.speed * (r.panic ? 4.5 : 1);
+      r.x += r.dir * v * dt; r.stride += v * dt; r.hop = Math.min(1, r.hop + dt / 0.28);
+      if (r.x > W + rw || r.x < -2 * rw) { r.wait = r.panic ? 1.5 + Math.random() * 2.5 : 0.4 + Math.random() * 2; return; }
+      const f = Math.floor(r.stride / 9) % 2;                   // лапы в такт пройденному пути
+      const y = r.y - Math.sin(r.hop * Math.PI) * 10 - (f ? 1 : 0);   // прыжок от испуга
       ctx.save();
-      if (dir < 0) { ctx.translate(x + rw, 0); ctx.scale(-1, 1); ctx.drawImage(frames[f], 0, y, rw, rh); }
-      else ctx.drawImage(frames[f], x, y, rw, rh);
+      if (r.dir < 0) { ctx.translate(r.x + rw, 0); ctx.scale(-1, 1); ctx.drawImage(frames[f], 0, y, rw, rh); }
+      else ctx.drawImage(frames[f], r.x, y, rw, rh);
       ctx.restore();
     });
     requestAnimationFrame(draw);

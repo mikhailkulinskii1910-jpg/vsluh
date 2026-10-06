@@ -95,38 +95,89 @@ let RAT_SPRITE: [[String]] = [
      ".####.###############.......", ".........##.....##..........", "..........#.....#..........."],
 ]
 
+/// Симуляция крыс: обычно бегают по фону, при нажатии на кнопку удирают от пальца.
+final class RatSim {
+    static let shared = RatSim()
+    static let px: CGFloat = 2.5
+    static let w = CGFloat(RAT_SPRITE[0][0].count) * px
+    static let h = CGFloat(RAT_SPRITE[0].count) * px
+
+    struct Rat {
+        let speed: CGFloat
+        var x: CGFloat = 0, y: CGFloat = 0, dir: CGFloat = 1, stride: CGFloat = 0
+        var panic = false, wait: Double = 0, hop: CGFloat = 1
+    }
+    private(set) var rats = [70, 110, 45, 90, 130].map { Rat(speed: $0) }
+    private var size: CGSize = .zero
+    private var last: Double?
+    private let lock = NSLock()
+
+    /// Испуг: крысы подпрыгивают и удирают от точки нажатия за край экрана.
+    func scare(at p: CGPoint) {
+        lock.lock(); defer { lock.unlock() }
+        for i in rats.indices where rats[i].wait <= 0 {
+            rats[i].dir = rats[i].x + RatSim.w / 2 < p.x ? -1 : 1
+            rats[i].panic = true
+            rats[i].hop = 0
+        }
+    }
+
+    private func respawn(_ i: Int, anywhere: Bool) {
+        rats[i].dir = Bool.random() ? 1 : -1
+        rats[i].x = anywhere ? .random(in: 0...max(1, size.width)) : (rats[i].dir > 0 ? -RatSim.w : size.width)
+        rats[i].y = 60 + .random(in: 0...max(1, size.height - 120))
+        rats[i].panic = false
+        rats[i].wait = 0
+    }
+
+    /// Шаг симуляции до момента t; возвращает, что рисовать: позиция, направление, кадр.
+    func step(to t: Double, size: CGSize) -> [(CGPoint, CGFloat, Int)] {
+        lock.lock(); defer { lock.unlock() }
+        if last == nil || self.size != size { self.size = size; for i in rats.indices { respawn(i, anywhere: true) } }
+        let dt = CGFloat(min(t - (last ?? t), 0.05))
+        last = t
+        var out: [(CGPoint, CGFloat, Int)] = []
+        for i in rats.indices {
+            if rats[i].wait > 0 {
+                rats[i].wait -= Double(dt)
+                if rats[i].wait <= 0 { respawn(i, anywhere: false) }
+                continue
+            }
+            let v = rats[i].speed * (rats[i].panic ? 4.5 : 1)
+            rats[i].x += rats[i].dir * v * dt
+            rats[i].stride += v * dt
+            rats[i].hop = min(1, rats[i].hop + dt / 0.28)
+            if rats[i].x > size.width + RatSim.w || rats[i].x < -2 * RatSim.w {   // убежала — посидит и вернётся
+                rats[i].wait = rats[i].panic ? .random(in: 1.5...4) : .random(in: 0.4...2.4)
+                continue
+            }
+            let f = Int(rats[i].stride / 9) % 2                                     // лапы в такт пути
+            let y = rats[i].y - sin(rats[i].hop * .pi) * 10 - CGFloat(f)            // прыжок от испуга
+            out.append((CGPoint(x: rats[i].x, y: y), rats[i].dir, f))
+        }
+        return out
+    }
+}
+
 /// Маленькие ч/б крысы, бегающие по фону поверх лога.
 struct RunningRats: View {
     let t: Double
-    private static let px: CGFloat = 2.5
-    private static let w = CGFloat(RAT_SPRITE[0][0].count) * px
-    private static let h = CGFloat(RAT_SPRITE[0].count) * px
     /// Кадры спрайта как контуры из пикселей (собраны один раз).
     private static let frames: [Path] = RAT_SPRITE.map { rows in
         var p = Path()
         for (y, r) in rows.enumerated() {
             for (x, ch) in r.enumerated() where ch == "#" {
-                p.addRect(CGRect(x: CGFloat(x) * px, y: CGFloat(y) * px, width: px, height: px))
+                p.addRect(CGRect(x: CGFloat(x) * RatSim.px, y: CGFloat(y) * RatSim.px, width: RatSim.px, height: RatSim.px))
             }
         }
         return p
     }
-    /// Скорость (pt/с), направление, сдвиг. Ряд по высоте меняется на каждом забеге.
-    private static let rats: [(Double, CGFloat, Double)] = [(70, 1, 0), (110, -1, 300), (45, 1, 700), (90, -1, 1100), (130, 1, 1500)]
 
     var body: some View {
         Canvas { ctx, size in
-            let track = Double(size.width + RunningRats.w * 2 + 160)   // путь забега + пауза за краем
-            for (n, r) in RunningRats.rats.enumerated() {
-                let dist = t * r.0 + r.2
-                let lap = Int(dist / track)
-                let pos = CGFloat(dist.truncatingRemainder(dividingBy: track)) - RunningRats.w
-                if pos > size.width + RunningRats.w { continue }
-                let x = r.1 > 0 ? pos : size.width - pos - RunningRats.w
-                let f = Int(dist / 9) % 2                           // лапы в такт пройденному пути
-                let y = 60 + hashNoise(lap * 31 + n * 7) * (size.height - 120) - CGFloat(f)
-                var tr = CGAffineTransform(translationX: x, y: y)
-                if r.1 < 0 { tr = tr.translatedBy(x: RunningRats.w, y: 0).scaledBy(x: -1, y: 1) }
+            for (pos, dir, f) in RatSim.shared.step(to: t, size: size) {
+                var tr = CGAffineTransform(translationX: pos.x, y: pos.y)
+                if dir < 0 { tr = tr.translatedBy(x: RatSim.w, y: 0).scaledBy(x: -1, y: 1) }
                 ctx.fill(RunningRats.frames[f].applying(tr), with: .color(.white.opacity(0.47)))
             }
         }
@@ -234,8 +285,13 @@ struct KeyView: View {
         .scaleEffect(down ? 0.97 : 1)
         .opacity(visible ? 1 : 0)
         .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { _ in if !down { pressDown() } }
+        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .onChanged { v in
+                if !down {
+                    RatSim.shared.scare(at: v.startLocation)   // крысы убегают от пальца
+                    pressDown()
+                }
+            }
             .onEnded { _ in down = false; onUp() })
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isButton)

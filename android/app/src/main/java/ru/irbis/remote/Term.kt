@@ -115,9 +115,31 @@ class TerminalBackground(c: Context) : View(c) {
     private val ratH = Term.RAT[0].size * ratPx
     private val ratDst = RectF()
 
-    /** Крыса: скорость (dp/с), направление, сдвиг по времени. Ряд по высоте меняется на каждом забеге. */
-    private class Rat(val speed: Float, val dir: Int, val offset: Float)
-    private val rats = listOf(Rat(70f, 1, 0f), Rat(110f, -1, 300f), Rat(45f, 1, 700f), Rat(90f, -1, 1100f), Rat(130f, 1, 1500f))
+    /** Крыса: позиция и скорость в px, направление; panic — убегает от пальца; wait — сидит за краем экрана. */
+    private class Rat(val speed: Float) {
+        var x = 0f; var y = 0f; var dir = 1; var stride = 0f
+        var panic = false; var wait = 0f; var hop = 1f
+    }
+    private val rats = listOf(70f, 110f, 45f, 90f, 130f).map { Rat(it * d) }
+    private var lastT = -1f
+    private val rnd = Random(3)
+
+    /** Испуг: все крысы подпрыгивают и удирают от точки нажатия за край экрана. */
+    fun scare(px: Float, py: Float) {
+        rats.forEach { r ->
+            if (r.wait > 0) return@forEach
+            r.dir = if (r.x + ratW / 2 < px) -1 else 1
+            r.panic = true
+            r.hop = 0f
+        }
+    }
+
+    private fun respawn(r: Rat, anywhere: Boolean) {
+        r.dir = if (rnd.nextBoolean()) 1 else -1
+        r.x = if (anywhere) rnd.nextFloat() * width else if (r.dir > 0) -ratW else width.toFloat()
+        r.y = 60 * d + rnd.nextFloat() * (height - 120 * d)
+        r.panic = false; r.wait = 0f
+    }
 
     override fun onDraw(canvas: Canvas) {
         val t = (SystemClock.uptimeMillis() - start) / 1000f
@@ -138,26 +160,34 @@ class TerminalBackground(c: Context) : View(c) {
 
     private fun drawRats(canvas: Canvas, t: Float) {
         if (width == 0) return
-        val track = width + ratW * 2 + 160 * d          // путь забега + пауза за краем экрана
-        rats.forEachIndexed { n, r ->
-            val dist = t * r.speed * d + r.offset * d
-            val lap = (dist / track).toInt()
-            val pos = dist % track - ratW
-            if (pos > width + ratW) return@forEachIndexed   // пауза между забегами
-            val x = if (r.dir > 0) pos else width - pos - ratW
-            // на каждом забеге — новый ряд по высоте
-            val lane = hash(lap * 31 + n * 7)
-            val frame = ((dist / (9 * d)).toInt()) % 2   // шаг лап зависит от пройденного пути
-            val yy = 60 * d + lane * (height - 120 * d) - if (frame == 1) d else 0f
+        if (lastT < 0) rats.forEach { respawn(it, anywhere = true) }
+        val dt = if (lastT < 0) 0f else min(t - lastT, 0.05f)
+        lastT = t
+        rats.forEach { r ->
+            if (r.wait > 0) {
+                r.wait -= dt
+                if (r.wait <= 0) respawn(r, anywhere = false)
+                return@forEach
+            }
+            val v = r.speed * if (r.panic) 4.5f else 1f
+            r.x += r.dir * v * dt
+            r.stride += v * dt
+            r.hop = min(1f, r.hop + dt / 0.28f)
+            if (r.x > width + ratW || r.x < -2 * ratW) {   // убежала за край — посидит и вернётся
+                r.wait = if (r.panic) 1.5f + rnd.nextFloat() * 2.5f else 0.4f + rnd.nextFloat() * 2f
+                return@forEach
+            }
+            val frame = ((r.stride / (9 * d)).toInt()) % 2   // лапы перебирают в такт пройденному пути
+            val jump = sin(r.hop * Math.PI).toFloat() * 10 * d    // прыжок от испуга
+            val yy = r.y - jump - if (frame == 1) d else 0f
             canvas.save()
-            if (r.dir < 0) canvas.scale(-1f, 1f, x + ratW / 2, 0f)
-            ratDst.set(x, yy, x + ratW, yy + ratH)
+            if (r.dir < 0) canvas.scale(-1f, 1f, r.x + ratW / 2, 0f)
+            ratDst.set(r.x, yy, r.x + ratW, yy + ratH)
             canvas.drawBitmap(ratFrames[frame], null, ratDst, ratPaint)
             canvas.restore()
         }
     }
 
-    private fun hash(i: Int): Float { val v = sin(i * 12.9898) * 43758.5453; return (v - kotlin.math.floor(v)).toFloat() }
 }
 
 /** Кнопка пульта: рамка с «уголками», номер, байт команды, глитч и луч передачи при нажатии. */

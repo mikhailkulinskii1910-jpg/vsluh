@@ -183,11 +183,13 @@ class MainActivity : Activity() {
     /* ---------- Интерфейс ---------- */
 
     private val keyViews = ArrayList<KeyView>()
+    private lateinit var bg: TerminalBackground
 
     private fun buildUi(withSplash: Boolean): View {
         Term.init(this)
         val frame = FrameLayout(this)
-        frame.addView(TerminalBackground(this), FrameLayout.LayoutParams(-1, -1))
+        bg = TerminalBackground(this)
+        frame.addView(bg, FrameLayout.LayoutParams(-1, -1))
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -280,6 +282,9 @@ class MainActivity : Activity() {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 v.setDown(true)
+                // крысы убегают от пальца
+                val at = IntArray(2).also { bg.getLocationOnScreen(it) }
+                bg.scare(e.rawX - at[0], e.rawY - at[1])
                 v.animate().scaleX(0.97f).scaleY(0.97f).setDuration(60).start()
                 v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                 press(label, code)

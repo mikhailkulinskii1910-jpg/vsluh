@@ -3,6 +3,9 @@ package ru.irbis.remote
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Looper
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -30,5 +33,23 @@ class ScreenshotTest {
             root.draw(Canvas(bmp))
             File(out, "f%04d.png".format(at)).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
+        // нажатие на J OK: крысы должны подпрыгнуть и разбежаться от пальца
+        val key = findKey(root, "J OK")!!
+        val loc = IntArray(2).also { key.getLocationInWindow(it) }
+        val x = loc[0] + key.width / 2f; val y = loc[1] + key.height / 2f
+        root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, x, y, 0))
+        for (ms in listOf(16L, 120L, 400L)) {
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(ms))
+            val bmp = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+            root.draw(Canvas(bmp))
+            File(out, "scare%03d.png".format(ms)).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x, y, 0))
+    }
+
+    private fun findKey(v: View, label: String): KeyView? = when (v) {
+        is KeyView -> v.takeIf { it.label == label }
+        is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findKey(v.getChildAt(it), label) }
+        else -> null
     }
 }
