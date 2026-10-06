@@ -343,6 +343,15 @@ class MainActivity : Activity() {
         val web = android.webkit.WebView(this).apply {
             setBackgroundColor(Color.BLACK)
             settings.javaScriptEnabled = true
+            // Ссылки на сайты и файлы (apk/ipa) открываем в браузере телефона, разделы гида — здесь же.
+            webViewClient = object : android.webkit.WebViewClient() {
+                override fun shouldOverrideUrlLoading(v: android.webkit.WebView, r: android.webkit.WebResourceRequest): Boolean {
+                    val u = r.url
+                    if (u.scheme == "http" || u.scheme == "https") { openExternal(u); return true }
+                    return false
+                }
+            }
+            setDownloadListener { url, _, _, _, _ -> openExternal(android.net.Uri.parse(url)) }
             loadUrl("file:///android_asset/guide/index.html" + (section?.let { "#$it" } ?: ""))
         }
         d.setContentView(web)
@@ -350,6 +359,11 @@ class MainActivity : Activity() {
             if (code == android.view.KeyEvent.KEYCODE_BACK && ev.action == android.view.KeyEvent.ACTION_UP && web.canGoBack()) { web.goBack(); true } else false
         }
         d.show()
+    }
+
+    private fun openExternal(u: android.net.Uri) {
+        try { startActivity(Intent(Intent.ACTION_VIEW, u)) }
+        catch (e: android.content.ActivityNotFoundException) { say("Нет браузера, чтобы открыть ссылку", err = true) }
     }
 
     private fun chooseMode() {

@@ -206,8 +206,30 @@ struct HelpView: View {
 }
 
 struct HelpWeb: UIViewRepresentable {
+    /// Ссылки на сайты и файлы открываем в Safari, разделы гида (#якоря) — здесь же.
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            if let url = action.request.url, ["http", "https"].contains(url.scheme ?? "") {
+                UIApplication.shared.open(url)
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+        // ссылки с target="_blank" приходят сюда — тоже отдаём Safari
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
+                     for action: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            if let url = action.request.url { UIApplication.shared.open(url) }
+            return nil
+        }
+    }
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIView(context: Context) -> WKWebView {
         let web = WKWebView()
+        web.navigationDelegate = context.coordinator
+        web.uiDelegate = context.coordinator
         web.isOpaque = false
         web.backgroundColor = .black
         web.scrollView.backgroundColor = .black
