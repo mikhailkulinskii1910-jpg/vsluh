@@ -59,24 +59,27 @@ func hashNoise(_ i: Int) -> CGFloat {
 struct LogBackground: View {
     private let lineH: CGFloat = 15
     var body: some View {
-        TimelineView(.animation) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let block = lineH * CGFloat(Term.log.count)
-            let off = CGFloat(t * 14).truncatingRemainder(dividingBy: block)
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(0..<(Term.log.count * 2), id: \.self) { i in
-                    Text(Term.log[i % Term.log.count])
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(Term.faint)
-                        .lineLimit(1)
-                        .frame(height: lineH, alignment: .leading)
+        // GeometryReader берёт ровно размер экрана: длинный лог не раздувает разметку.
+        GeometryReader { g in
+            TimelineView(.animation) { ctx in
+                let t = ctx.date.timeIntervalSinceReferenceDate
+                let block = lineH * CGFloat(Term.log.count)
+                let off = CGFloat(t * 14).truncatingRemainder(dividingBy: block)
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(0..<(Term.log.count * 2), id: \.self) { i in
+                        Text(Term.log[i % Term.log.count])
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(Term.faint)
+                            .lineLimit(1)
+                            .fixedSize()
+                            .frame(height: lineH, alignment: .leading)
+                    }
                 }
+                .offset(x: 6, y: -off)
+                .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
             }
-            .fixedSize()
-            .offset(x: 6, y: -off)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
         }
-        .clipped()
         .allowsHitTesting(false)
     }
 }

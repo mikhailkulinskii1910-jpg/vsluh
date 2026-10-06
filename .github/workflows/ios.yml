@@ -39,7 +39,7 @@ jobs:
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/krisa.app
           xcrun simctl launch "$DEV" ru.irbis.krisa
-          for t in 1.2 1.0 3.0; do sleep $t; xcrun simctl io "$DEV" screenshot "out/shot-$(date +%s%N).png"; done
+          for t in 0.4 0.8 1.0 3.0; do sleep $t; xcrun simctl io "$DEV" screenshot "out/shot-$(date +%s%N).png"; done
           # уменьшенные кадры — в лог, чтобы их можно было посмотреть без скачивания артефактов
           for f in out/shot-*.png; do
             sips -Z 360 -s format jpeg -s formatOptions 55 "$f" --out "${f%.png}.jpg" >/dev/null
