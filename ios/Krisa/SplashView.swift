@@ -56,6 +56,16 @@ struct SplashView: View {
                             .position(x: w / 2, y: restY + rh * 0.5 + 70)
                     }
 
+                    // подпись в правом нижнем углу «расписывается» слева направо
+                    if t > 700 {
+                        let p = CGFloat(min((t - 700) / 650, 1))
+                        Image("sign").resizable().aspectRatio(contentMode: .fit)
+                            .frame(width: 110)
+                            .opacity(0.86)
+                            .mask(Rectangle().frame(width: 110 * p).frame(width: 110, alignment: .leading))
+                            .position(x: w - 18 - 55, y: h - 22 - 46)
+                    }
+
                     // 4. уход: экран рассыпается полосами
                     if t > 2350 {
                         let p = CGFloat(min((t - 2350) / 300, 1))

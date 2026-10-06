@@ -90,6 +90,10 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 #splash.go .lines{animation:hit .5s .45s ease-out forwards}
 @keyframes hit{0%{opacity:.9;transform:translateX(-50%) scaleX(.2)}40%{opacity:.8;transform:translateX(-50%) scaleX(1)}100%{opacity:0;transform:translateX(-50%) scaleX(1.1)}}
 #splash .name{position:absolute;left:0;right:0;top:calc(50% + min(28vw,160px));text-align:center;font:64px var(--mono);color:var(--fg);text-shadow:0 0 14px #fff}
+/* подпись в углу «расписывается» слева направо */
+#splash .sign{position:absolute;right:18px;bottom:calc(env(safe-area-inset-bottom) + 22px);width:110px;opacity:.86;clip-path:inset(0 100% 0 0)}
+#splash.go .sign{animation:sign .65s .05s ease-out forwards}
+@keyframes sign{to{clip-path:inset(0 0 0 0)}}
 #splash.out{animation:out .32s steps(4) forwards}
 @keyframes out{0%{clip-path:inset(0)}50%{clip-path:inset(20% 0 35% 0);transform:translateX(8px)}100%{clip-path:inset(50% 0 50% 0);opacity:0}}
 @media (prefers-reduced-motion:reduce){#log div,.key.tx .beam{animation:none}}
@@ -119,7 +123,7 @@ td code{color:var(--fg)}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="lines"></div><div class="name" id="splashName"></div></div>
+<div id="splash" aria-hidden="true"><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
 <div id="log" aria-hidden="true"><div id="logText"></div></div>
 <canvas id="rats" aria-hidden="true"></canvas>
 <div class="wrap">
@@ -383,8 +387,8 @@ renderMode();
   });
   const cv = $('rats'), ctx = cv.getContext('2d');
   const px = 2.5, rw = 28 * px, rh = 11 * px;
-  // крыса: x, y, направление, скорость; panic — удирает от пальца; wait — сидит за краем экрана
-  const rats = [70, 110, 45, 90, 130].map(speed => ({ speed, x: 0, y: 0, dir: 1, stride: 0, panic: false, wait: 0, hop: 1 }));
+  // крыса: x, y, направление, скорость, оттенок (белый с прозрачностью — от почти белого до тёмно-серого); panic — удирает от пальца; wait — сидит за краем экрана
+  const rats = [[70, .85], [110, .38], [45, .63], [90, .28], [130, .5]].map(([speed, shade]) => ({ speed, shade, x: 0, y: 0, dir: 1, stride: 0, panic: false, wait: 0, hop: 1 }));
   const respawn = (r, anywhere) => {
     r.dir = Math.random() < .5 ? 1 : -1;
     r.x = anywhere ? Math.random() * innerWidth : r.dir > 0 ? -rw : innerWidth;
@@ -404,13 +408,13 @@ renderMode();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = 0.47;
     const dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
     rats.forEach(r => {
       if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) respawn(r, false); return; }
       const v = r.speed * (r.panic ? 4.5 : 1);
       r.x += r.dir * v * dt; r.stride += v * dt; r.hop = Math.min(1, r.hop + dt / 0.28);
       if (r.x > W + rw || r.x < -2 * rw) { r.wait = r.panic ? 1.5 + Math.random() * 2.5 : 0.4 + Math.random() * 2; return; }
+      ctx.globalAlpha = r.shade;
       const f = Math.floor(r.stride / 9) % 2;                   // лапы в такт пройденному пути
       const y = r.y - Math.sin(r.hop * Math.PI) * 10 - (f ? 1 : 0);   // прыжок от испуга
       ctx.save();

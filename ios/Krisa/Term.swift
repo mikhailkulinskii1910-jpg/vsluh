@@ -104,10 +104,12 @@ final class RatSim {
 
     struct Rat {
         let speed: CGFloat
+        /// Оттенок: белый с прозрачностью — от почти белого до тёмно-серого.
+        let shade: Double
         var x: CGFloat = 0, y: CGFloat = 0, dir: CGFloat = 1, stride: CGFloat = 0
         var panic = false, wait: Double = 0, hop: CGFloat = 1
     }
-    private(set) var rats = [70, 110, 45, 90, 130].map { Rat(speed: $0) }
+    private(set) var rats = ([(70, 0.85), (110, 0.38), (45, 0.63), (90, 0.28), (130, 0.5)] as [(CGFloat, Double)]).map { Rat(speed: $0.0, shade: $0.1) }
     private var size: CGSize = .zero
     private var last: Double?
     private let lock = NSLock()
@@ -131,12 +133,12 @@ final class RatSim {
     }
 
     /// Шаг симуляции до момента t; возвращает, что рисовать: позиция, направление, кадр.
-    func step(to t: Double, size: CGSize) -> [(CGPoint, CGFloat, Int)] {
+    func step(to t: Double, size: CGSize) -> [(CGPoint, CGFloat, Int, Double)] {
         lock.lock(); defer { lock.unlock() }
         if last == nil || self.size != size { self.size = size; for i in rats.indices { respawn(i, anywhere: true) } }
         let dt = CGFloat(min(t - (last ?? t), 0.05))
         last = t
-        var out: [(CGPoint, CGFloat, Int)] = []
+        var out: [(CGPoint, CGFloat, Int, Double)] = []
         for i in rats.indices {
             if rats[i].wait > 0 {
                 rats[i].wait -= Double(dt)
@@ -153,7 +155,7 @@ final class RatSim {
             }
             let f = Int(rats[i].stride / 9) % 2                                     // лапы в такт пути
             let y = rats[i].y - sin(rats[i].hop * .pi) * 10 - CGFloat(f)            // прыжок от испуга
-            out.append((CGPoint(x: rats[i].x, y: y), rats[i].dir, f))
+            out.append((CGPoint(x: rats[i].x, y: y), rats[i].dir, f, rats[i].shade))
         }
         return out
     }
@@ -175,10 +177,10 @@ struct RunningRats: View {
 
     var body: some View {
         Canvas { ctx, size in
-            for (pos, dir, f) in RatSim.shared.step(to: t, size: size) {
+            for (pos, dir, f, shade) in RatSim.shared.step(to: t, size: size) {
                 var tr = CGAffineTransform(translationX: pos.x, y: pos.y)
                 if dir < 0 { tr = tr.translatedBy(x: RatSim.w, y: 0).scaledBy(x: -1, y: 1) }
-                ctx.fill(RunningRats.frames[f].applying(tr), with: .color(.white.opacity(0.47)))
+                ctx.fill(RunningRats.frames[f].applying(tr), with: .color(.white.opacity(shade)))
             }
         }
         .allowsHitTesting(false)

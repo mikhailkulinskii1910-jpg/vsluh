@@ -116,11 +116,12 @@ class TerminalBackground(c: Context) : View(c) {
     private val ratDst = RectF()
 
     /** Крыса: позиция и скорость в px, направление; panic — убегает от пальца; wait — сидит за краем экрана. */
-    private class Rat(val speed: Float) {
+    /** shade — яркость крысы: от почти белой до тёмно-серой (белый с прозрачностью на чёрном фоне). */
+    private class Rat(val speed: Float, val shade: Int) {
         var x = 0f; var y = 0f; var dir = 1; var stride = 0f
         var panic = false; var wait = 0f; var hop = 1f
     }
-    private val rats = listOf(70f, 110f, 45f, 90f, 130f).map { Rat(it * d) }
+    private val rats = listOf(70f to 215, 110f to 95, 45f to 160, 90f to 70, 130f to 130).map { (v, a) -> Rat(v * d, a) }
     private var lastT = -1f
     private val rnd = Random(3)
 
@@ -183,6 +184,7 @@ class TerminalBackground(c: Context) : View(c) {
             canvas.save()
             if (r.dir < 0) canvas.scale(-1f, 1f, r.x + ratW / 2, 0f)
             ratDst.set(r.x, yy, r.x + ratW, yy + ratH)
+            ratPaint.alpha = r.shade
             canvas.drawBitmap(ratFrames[frame], null, ratDst, ratPaint)
             canvas.restore()
         }
@@ -318,6 +320,8 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     private val d = c.resources.displayMetrics.density
     private val rat: Bitmap = BitmapFactory.decodeResource(c.resources, R.drawable.rat)
     private val glow: Bitmap = rat.extractAlpha()
+    private val sign: Bitmap = BitmapFactory.decodeResource(c.resources, R.drawable.sign)
+    private val signP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Term.mono; textSize = 17 * d; color = Term.DIM }
     private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Term.mono; textSize = 64 * d; color = Term.FG; textAlign = Paint.Align.CENTER
@@ -404,6 +408,18 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         if (t > 1500) {
             val p = ((t - 1500) / 450f).coerceIn(0f, 1f)
             canvas.drawText(Term.scramble("krisa", p, rnd), cx, restY + rh * 0.5f + 80 * d, big)
+        }
+
+        // подпись в правом нижнем углу «расписывается» слева направо
+        if (t > 700) {
+            val p = ((t - 700) / 650f).coerceIn(0f, 1f)
+            val sw = 110 * d; val sh = sw * sign.height / sign.width
+            val sx = w - sw - 18 * d; val sy = h - sh - 22 * d
+            canvas.save()
+            canvas.clipRect(sx, sy, sx + sw * p, sy + sh)
+            signP.alpha = 220
+            canvas.drawBitmap(sign, null, RectF(sx, sy, sx + sw, sy + sh), signP)
+            canvas.restore()
         }
 
         // 4. уход: экран рассыпается полосами
