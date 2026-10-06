@@ -1,0 +1,269 @@
+<meta charset="utf-8">
+<title>krisa гид</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="krisa гид">
+<style>
+/* Терминальная страница в одну колонку, как экран самого пульта: чёрный фон, пиксельные заголовки, моноширинный текст. */
+@font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:swap}
+:root{
+  --bg:#000; --panel:#0c0c0c; --fg:#e8e8e8; --dim:#8c8c8c; --line:#3a3a3a; --ok:#e8e8e8; --no:#ff6a5c;
+  --pix:VT323,"Courier New",monospace;
+  --mono:ui-monospace,"Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{margin:0;font:15px/1.6 var(--mono);padding-block:28px 48px;padding-inline:16px}
+.wrap{max-width:720px;margin:0 auto;display:grid;gap:34px}
+h1{margin:0;font:400 64px/0.9 var(--pix);text-shadow:0 0 10px rgba(255,255,255,.7)}
+h1::after{content:"_";animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){h1::after{animation:none}}
+.sub{color:var(--dim);margin:6px 0 0}
+h2{margin:0 0 12px;font:400 30px/1.1 var(--pix);text-wrap:balance}
+h2 .n{color:var(--dim)}
+h3{margin:18px 0 6px;font:400 22px/1.1 var(--pix)}
+p{margin:0 0 10px}
+section{min-width:0}
+.dim{color:var(--dim)}
+code,kbd{padding:0 5px;border:1px solid var(--line);white-space:nowrap}
+code{font:13px var(--mono)}
+kbd{font:20px var(--pix)}
+/* сравнение досок */
+.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.board{border:1px solid var(--line);background:var(--panel);display:grid}
+.board img{display:block;width:100%;height:auto;max-width:100%;background:#fff}
+.board .cap{padding:10px 12px;display:grid;gap:2px}
+.tag{font:400 24px/1 var(--pix);letter-spacing:.04em}
+.tag.ok{color:var(--ok)}
+.tag.no{color:var(--no)}
+.board.no img{filter:grayscale(1) contrast(1.05);opacity:.75}
+/* шаги */
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:grid;gap:12px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start}
+ol.steps li::before{content:"[" counter(s) "]";font:400 22px/1.4 var(--pix);color:var(--dim)}
+ul{margin:0;padding-left:20px;display:grid;gap:4px}
+/* схема */
+.scheme{border:1px solid var(--line);background:var(--panel);padding:12px;overflow-x:auto}
+.scheme svg{display:block;width:100%;max-width:100%;height:auto}
+/* кнопки */
+.keys{overflow-x:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%}
+td,th{padding:8px 10px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:400;color:var(--dim);border-top:0}
+td:first-child{font:400 22px/1.2 var(--pix);white-space:nowrap}
+.note{border-left:2px solid var(--fg);padding:6px 0 6px 12px;color:var(--fg)}
+.warn{border-left-color:var(--no)}
+a{color:var(--fg);text-decoration:underline;text-underline-offset:3px}
+a:hover{background:var(--fg);color:var(--bg)}
+a:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.dl a{text-decoration:none}
+.back{display:inline-block;margin-bottom:14px;font:22px var(--pix);text-decoration:none;border:1px solid var(--line);padding:2px 10px}
+/* навигация по разделам */
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+nav.toc a{font:20px/1 var(--pix);text-decoration:none;border:1px solid var(--line);padding:6px 9px}
+nav.toc a:hover,nav.toc a:focus-visible{background:var(--fg);color:var(--bg)}
+/* скачивание */
+.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.dl a{display:grid;gap:4px;padding:14px;border:1px solid var(--fg);text-decoration:none;background:var(--panel)}
+.dl a:hover,.dl a:focus-visible{background:var(--fg);color:var(--bg)}
+.dl a:hover .dim,.dl a:focus-visible .dim{color:var(--bg)}
+.dl b{font:400 30px/1 var(--pix)}
+/* скриншоты */
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:10px 0 12px}
+.shots figure{margin:0;border:1px solid var(--line);background:var(--panel)}
+.shots img{display:block;width:100%;height:auto;max-width:100%}
+.shots figcaption{padding:8px 10px;color:var(--dim)}
+section{scroll-margin-top:16px}
+</style>
+
+<div class="wrap">
+  <header>
+    <a class="back" id="back" href="../" hidden>[&lt;] к пульту</a>
+    <h1>krisa</h1>
+    <p class="sub">Гид по ИК-пульту для интерактивной доски IRBIS: скачать, установить, пользоваться</p>
+    <nav class="toc" aria-label="Разделы">
+      <a href="#download">скачать</a><a href="#android">android</a><a href="#iphone">iphone</a>
+      <a href="#board">доска</a><a href="#ports">ик-порты</a><a href="#distance">расстояние</a>
+      <a href="#start">запуск</a><a href="#keys">кнопки</a><a href="#trouble">не работает</a>
+    </nav>
+  </header>
+
+  <section id="download">
+    <h2><span class="n">&gt;</span> Скачать</h2>
+    <div class="dl">
+      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa.apk" target="_blank" rel="noopener"><b>[apk] Android</b><span class="dim">Скачать krisa для Android-телефонов, около 260 КБ. Установка — ниже.</span></a>
+      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa.ipa" target="_blank" rel="noopener"><b>[ipa] iPhone</b><span class="dim">Скачать krisa для iPhone, около 1 МБ. Ставится через компьютер.</span></a>
+      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть в браузере</b><span class="dim">Пульт без установки — на Android и на iPhone. Работает со звуковым ИК-адаптером.</span></a>
+    </div>
+    <p class="dim" style="margin-top:10px">Если файл не скачивается, откройте этот гид на сайте: <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/guide/" target="_blank" rel="noopener">mikhailkulinskii1910-jpg.github.io/vsluh/irbis/guide/</a></p>
+  </section>
+
+  <section id="android">
+    <h2><span class="n">&gt;</span> Установка на Android</h2>
+    <div class="dl" style="margin-bottom:14px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa.apk" target="_blank" rel="noopener"><b>[apk] Скачать krisa.apk</b><span class="dim">Файл для Android, около 260 КБ</span></a></div>
+    <ol class="steps">
+      <li><div>Скачайте <code>krisa.apk</code> кнопкой выше и откройте файл: из уведомления о загрузке или из папки «Загрузки».</div></li>
+      <li><div>Если телефон спросит разрешение на установку из этого источника, нажмите «Настройки» и включите «Разрешить установку из этого источника» для браузера или файлового менеджера. Затем вернитесь назад.</div></li>
+      <li><div>Появится плашка <b>«Google Play Защита: приложение заблокировано для защиты устройства»</b>. Нажмите <b>«Подробнее»</b>, затем <b>«Всё равно установить»</b>.</div></li>
+      <li><div>На Xiaomi, Redmi и POCO может появиться ещё и проверка безопасности MIUI/HyperOS. Нажмите «Продолжить установку» или «Всё равно установить».</div></li>
+    </ol>
+    <div class="shots">
+      <figure><img src="protect-1.jpg" alt="Плашка Google Play Защиты: приложение krisa заблокировано, под текстом кнопка «Подробнее»" width="480" height="679"><figcaption>[1] Нажмите «Подробнее»</figcaption></figure>
+      <figure><img src="protect-2.jpg" alt="Та же плашка раскрыта: внизу появилась ссылка «Все равно установить»" width="480" height="682"><figcaption>[2] Нажмите «Всё равно установить»</figcaption></figure>
+    </div>
+    <p><b>Почему так.</b> krisa поставляется файлом, а не через Google Play, и подписана не магазином. Play Защита этого разработчика никогда не видела, поэтому предупреждает. Само приложение не просит доступа к интернету, контактам или файлам: оно использует только ИК-порт, USB-передатчик и звук.</p>
+    <p class="note warn">Если кнопки «Всё равно установить» нет: откройте Google Play → значок профиля → «Play Защита» → шестерёнка → выключите «Проверять приложения с помощью Play Защиты». Установите krisa и сразу включите проверку обратно.</p>
+  </section>
+
+  <section id="iphone">
+    <h2><span class="n">&gt;</span> Установка на iPhone</h2>
+    <p>Встроенного ИК-порта у iPhone нет. Для управления доской нужен <b>звуковой ИК-адаптер</b>, который вставляется в разъём наушников (через переходник Lightning или USB-C на 3,5 мм) или сам подключается в USB-C.</p>
+    <h3>Проще всего: без установки</h3>
+    <p>Откройте веб-версию пульта в Safari, затем кнопка «Поделиться» → «На экран „Домой“». Пульт появится как приложение и будет работать со звуковым адаптером.</p>
+    <div class="dl" style="margin-bottom:6px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть веб-версию</b><span class="dim">Откроется в Safari, установка не нужна</span></a></div>
+    <h3>Приложение krisa.ipa</h3>
+    <p>Apple не разрешает ставить приложения файлом прямо на телефоне. Файл <code>krisa.ipa</code> подписывается вашим Apple ID на компьютере (Windows или Mac) с помощью бесплатной программы Sideloadly:</p>
+    <div class="dl" style="margin-bottom:14px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa.ipa" target="_blank" rel="noopener"><b>[ipa] Скачать krisa.ipa</b><span class="dim">Файл для iPhone, около 1 МБ — скачивайте на компьютер</span></a></div>
+    <ol class="steps">
+      <li><div>Скачайте <code>krisa.ipa</code> на компьютер — кнопка выше.</div></li>
+      <li><div>Установите Sideloadly с сайта <a href="https://sideloadly.io" target="_blank" rel="noopener">sideloadly.io</a>. На Windows нужны ещё iTunes и iCloud — версии с сайта Apple, не из Microsoft Store.</div></li>
+      <li><div>Подключите iPhone кабелем, разблокируйте его и нажмите «Доверять этому компьютеру».</div></li>
+      <li><div>Перетащите <code>krisa.ipa</code> в окно Sideloadly, введите свой Apple ID и нажмите «Start». Sideloadly спросит пароль Apple ID и установит krisa.</div></li>
+      <li><div>На iPhone: «Настройки» → «Основные» → «VPN и управление устройством» → ваш Apple ID → «Доверять».</div></li>
+      <li><div>На iOS 16 и новее: «Настройки» → «Конфиденциальность и безопасность» → «Режим разработчика» → включить. iPhone перезагрузится; после перезагрузки подтвердите включение.</div></li>
+    </ol>
+    <p class="note warn">С бесплатным Apple ID приложение работает 7 дней. Потом оно перестаёт открываться, и его нужно установить заново тем же способом, данные не пропадут. Так можно держать до 3 приложений одновременно. Вместо Sideloadly подойдёт AltStore (<a href="https://altstore.io" target="_blank" rel="noopener">altstore.io</a>): он сам продлевает подпись, когда компьютер и iPhone в одной Wi-Fi сети.</p>
+  </section>
+
+  <section id="board">
+    <h2><span class="n">&gt;</span> Для какой доски</h2>
+    <p>Приложение посылает ИК-коды пульта <b>IRBIS #500202</b> (протокол NEC, 38 кГц). Оно работает <b>только с досками IRBIS</b>. Доски других марок, например MocTec, понимают другие коды и на krisa не отреагируют.</p>
+    <div class="boards">
+      <figure class="board" style="margin:0">
+        <img src="board-irbis.jpg" alt="Интерактивная доска IRBIS: широкая чёрная рамка, внизу слева кнопки, на экране часы и круг из иконок приложений" width="800" height="548">
+        <figcaption class="cap"><span class="tag ok">[ok] IRBIS</span><span class="dim">Подходит. Внизу слева на рамке — ряд кнопок, на экране — часы и круг из иконок.</span></figcaption>
+      </figure>
+      <figure class="board no" style="margin:0">
+        <img src="board-moctex.jpg" alt="Интерактивная доска MocTec на стене: надпись MocTec по центру нижней рамки" width="800" height="561">
+        <figcaption class="cap"><span class="tag no">[x] MocTec</span><span class="dim">Не подходит. Название MocTec написано по центру нижней рамки.</span></figcaption>
+      </figure>
+    </div>
+    <p class="note" style="margin-top:14px">Как проверить: посмотрите на надпись на нижней рамке и на наклейку с моделью на задней стороне доски. Если там MocTec или другая марка, а не IRBIS, пульт работать не будет.</p>
+  </section>
+
+  <section id="need">
+    <h2><span class="n">&gt;</span> Что нужно</h2>
+    <ul>
+      <li><b>Android-телефон со встроенным ИК-портом</b>: многие Xiaomi, Redmi и POCO, некоторые Huawei и Honor. Это основной и самый простой вариант. Как установить — <a href="#android">раздел Android</a>.</li>
+      <li>Или <b>USB-C ИК-передатчик</b> (маленький «свисток» с прозрачным тёмным кончиком), если в телефоне ИК-порта нет.</li>
+      <li>Или <b>звуковой ИК-адаптер</b> в разъём наушников. Только этот вариант подходит для iPhone: своего ИК-порта у iPhone нет. Подробнее — <a href="#iphone">раздел iPhone</a>.</li>
+    </ul>
+  </section>
+
+  <section id="ports">
+    <h2><span class="n">&gt;</span> Где ИК-порты</h2>
+    <h3>На телефоне</h3>
+    <p>У Xiaomi, Redmi и POCO ИК-порт — маленькое тёмное глянцевое окошко <b>на верхнем торце</b> телефона, рядом с микрофоном. Держите телефон как обычный пульт: верхним торцом к доске, экраном к себе.</p>
+    <p>У USB-C передатчика сигнал выходит из <b>прозрачного тёмного кончика</b> — направляйте его на доску.</p>
+    <p class="note warn">Не закрывайте окошко пальцем или чехлом: толстый чехол с закрытым верхним торцом гасит сигнал.</p>
+    <h3>На доске</h3>
+    <p>ИК-приёмник у таких досок обычно в <b>нижней рамке, рядом с кнопками и индикатором питания</b> — у IRBIS это левая часть нижней рамки. Ищите небольшое тёмное окошко или светящийся индикатор. Если не нашли — целитесь в нижнюю левую часть рамки.</p>
+  </section>
+
+  <section id="distance">
+    <h2><span class="n">&gt;</span> Расстояние и препятствия</h2>
+    <div class="scheme" role="img" aria-label="Схема: телефон в 1–5 метрах от доски, луч направлен прямо на ИК-приёмник в нижней рамке, допустимое отклонение до 30 градусов">
+      <svg viewBox="0 0 400 190" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="12">
+        <!-- допустимый конус ±30° от телефона -->
+        <path d="M44 120 L352 50 L352 190 Z" fill="#e8e8e8" fill-opacity="0.07"/>
+        <!-- луч -->
+        <line x1="44" y1="120" x2="352" y2="120" stroke="#e8e8e8" stroke-width="2" stroke-dasharray="7 5"/>
+        <!-- доска с приёмником -->
+        <rect x="352" y="14" width="16" height="150" fill="#000" stroke="#e8e8e8" stroke-width="2"/>
+        <rect x="355" y="115" width="10" height="10" fill="#e8e8e8"/>
+        <text x="342" y="10" fill="#e8e8e8" text-anchor="end">доска</text>
+        <text x="342" y="146" fill="#e8e8e8" text-anchor="end">приёмник</text>
+        <!-- телефон -->
+        <rect x="12" y="106" width="28" height="28" fill="#000" stroke="#e8e8e8" stroke-width="2"/>
+        <rect x="38" y="115" width="6" height="10" fill="#e8e8e8"/>
+        <text x="8" y="152" fill="#e8e8e8">телефон</text>
+        <!-- шкала от доски (x=352): 1 м = 61,6 px, телефон стоит на 5 м -->
+        <line x1="44" y1="78" x2="352" y2="78" stroke="#3a3a3a"/>
+        <g fill="#8c8c8c" stroke="#8c8c8c" text-anchor="middle">
+          <line x1="44" y1="74" x2="44" y2="82"/><text x="44" y="70" stroke="none">5 м</text>
+          <line x1="106" y1="74" x2="106" y2="82"/><text x="106" y="70" stroke="none">4 м</text>
+          <line x1="167" y1="74" x2="167" y2="82"/><text x="167" y="70" stroke="none">3 м</text>
+          <line x1="229" y1="74" x2="229" y2="82"/><text x="229" y="70" stroke="none">2 м</text>
+          <line x1="290" y1="74" x2="290" y2="82"/><text x="290" y="70" stroke="none">1 м</text>
+        </g>
+        <text x="12" y="30" fill="#e8e8e8">лучше всего: 1–5 м,</text>
+        <text x="12" y="46" fill="#e8e8e8">прямо на приёмник</text>
+        <text x="190" y="182" fill="#8c8c8c" text-anchor="middle">отклонение до ~30°</text>
+      </svg>
+    </div>
+    <ul style="margin-top:12px">
+      <li><b>Расстояние:</b> лучше всего 1–5 метров. Встроенный ИК-порт телефона слабее заводского пульта, поэтому дальше 5–6 метров сигнал может не доходить. Звуковому адаптеру нужно подойти ближе, на 1–3 метра.</li>
+      <li><b>Направление:</b> целитесь прямо в ИК-приёмник. Сбоку под углом больше 30° доска может не принять сигнал.</li>
+      <li><b>Без препятствий:</b> между телефоном и доской не должно быть людей, рук, сумок, мебели и стекла. ИК-свет не проходит сквозь предметы и не огибает углы.</li>
+      <li><b>Яркий свет мешает:</b> прямое солнце или яркая лампа, бьющая в рамку доски, глушат приёмник. Подойдите ближе или закройте окно шторой.</li>
+    </ul>
+  </section>
+
+  <section id="start">
+    <h2><span class="n">&gt;</span> Первый запуск</h2>
+    <ol class="steps">
+      <li><div>Убедитесь, что перед вами доска <b>IRBIS</b>, а не MocTec или другая марка.</div></li>
+      <li><div>Откройте krisa. После заставки с крысой появятся 12 кнопок пульта, а приложение само проверит, есть ли в телефоне ИК-порт. Если порта нет, оно скажет об этом и предложит USB-C передатчик или звуковой адаптер.</div></li>
+      <li><div>Проверьте строку под заголовком. Там должно быть <code>&gt; Встроенный ИК-порт</code>. Если написано «не найден», нажмите <kbd>[tx]</kbd> и выберите USB-C передатчик или звуковой адаптер, а кнопка «Проверка» покажет, что видит телефон.</div></li>
+      <li><div>Встаньте в 1–5 метрах от доски и направьте верхний торец телефона на нижнюю левую часть рамки.</div></li>
+      <li><div>Нажмите <code>POWER</code>. Доска должна включиться или выключиться. Внизу экрана появится строка <code>&gt; tx POWER 0x807F18E7 [sent]</code>: команда отправлена.</div></li>
+    </ol>
+  </section>
+
+  <section id="keys">
+    <h2><span class="n">&gt;</span> Кнопки</h2>
+    <div class="keys">
+      <table>
+        <tr><th>Кнопка</th><th>Что делает</th></tr>
+        <tr><td>POWER</td><td>Включает и выключает доску.</td></tr>
+        <tr><td>VOL- / VOL+</td><td>Тише и громче. Удерживайте, чтобы менять громкость плавно.</td></tr>
+        <tr><td>MENU</td><td>Открывает меню настроек доски.</td></tr>
+        <tr><td>EMPY SCREEN</td><td>Гасит изображение, звук и доска остаются включены. Нажмите ещё раз, чтобы вернуть картинку. Название с опечаткой, как в базе кодов.</td></tr>
+        <tr><td>FREEZE</td><td>Останавливает картинку на экране (стоп-кадр).</td></tr>
+        <tr><td>INPUT</td><td>Выбор источника: встроенный Android, компьютер, HDMI.</td></tr>
+        <tr><td>J UP / J DOWN<br>J LEFT / J RIGHT</td><td>Стрелки для перемещения по меню. Удерживайте, чтобы листать.</td></tr>
+        <tr><td>J OK</td><td>Подтверждает выбор в меню.</td></tr>
+      </table>
+    </div>
+    <p class="dim" style="margin-top:10px">Названия кнопок и коды взяты из базы IrCode Finder для пульта IRBIS #500202. Точное поведение EMPY SCREEN и FREEZE зависит от прошивки доски.</p>
+  </section>
+
+  <section id="trouble">
+    <h2><span class="n">&gt;</span> Если доска не реагирует</h2>
+    <ul>
+      <li>Внизу экрана нет строки <code>[sent]</code> → команда не ушла. Нажмите <kbd>[tx]</kbd> → «Проверка» и выберите передатчик, который телефон видит.</li>
+      <li>Строка <code>[sent]</code> есть, но доска молчит → подойдите ближе, уберите всё между телефоном и доской, целитесь в нижнюю левую часть рамки. Подробнее — <a href="#distance">расстояние и препятствия</a>.</li>
+      <li>USB-C передатчик не находится → на Xiaomi включите OTG: «Настройки» → «Дополнительные настройки» → OTG. Он сам выключается через 10 минут.</li>
+      <li>Звуковой адаптер не работает → громкость телефона на максимум, в настройках <kbd>[tx]</kbd> попробуйте режим на 1 и на 2 светодиода.</li>
+      <li>Всё сделано, а реакции нет → скорее всего, это не IRBIS. Проверьте надпись на рамке и наклейку на задней стороне доски — <a href="#board">как отличить</a>.</li>
+    </ul>
+  </section>
+</div>
+<script>
+// Гид — отдельное веб-приложение (irbis/guide/). На сайте рядом лежат пульт и файлы приложений:
+// там показываем ссылку назад к пульту. Ссылки на файлы — полные, работают отовсюду.
+(function () {
+  const onSite = /\/irbis\/guide\/(index\.html)?$/.test(location.pathname) && /^https?:$/.test(location.protocol);
+  if (onSite) {
+    document.getElementById('back').hidden = false;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
+</script>

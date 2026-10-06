@@ -1,0 +1,42 @@
+name: Krisa
+options:
+  bundleIdPrefix: ru.irbis
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  Krisa:
+    type: application
+    platform: iOS
+    sources:
+      - path: Krisa
+      # гид «Как пользоваться» — общий с веб-версией, копируется папкой guide/
+      - path: ../irbis/guide
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.irbis.krisa
+        PRODUCT_NAME: krisa
+        MARKETING_VERSION: "1.10"
+        CURRENT_PROJECT_VERSION: "14"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "5.0"
+    info:
+      path: Krisa/Info.plist
+      properties:
+        CFBundleDisplayName: krisa
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIAppFonts: [VT323-Regular.ttf]
+        UILaunchScreen:
+          UIColorName: ""
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIUserInterfaceStyle: Dark
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSLocalNetworkUsageDescription: Отправка команд на Wi-Fi ИК-передатчик (Tasmota) в вашей сети.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
