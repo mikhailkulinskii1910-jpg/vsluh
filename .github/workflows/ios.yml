@@ -38,10 +38,15 @@ jobs:
           xcrun simctl boot "$DEV"
           xcrun simctl bootstatus "$DEV" -b
           xcrun simctl install "$DEV" simbuild/Build/Products/Debug-iphonesimulator/krisa.app
-          xcrun simctl launch "$DEV" ru.irbis.krisa
+          # кадры заставки: приложение останавливает её на заданном моменте (KRISA_SPLASH_AT)
+          for at in 400 1000 1400 2000 2500; do
+            SIMCTL_CHILD_KRISA_SPLASH_AT=$at xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+            sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-$at.png"
+          done
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           for t in 0.4 0.8 1.0 3.0; do sleep $t; xcrun simctl io "$DEV" screenshot "out/shot-$(date +%s%N).png"; done
           # уменьшенные кадры — в лог, чтобы их можно было посмотреть без скачивания артефактов
-          for f in out/shot-*.png; do
+          for f in out/shot-*.png out/splash-*.png; do
             sips -Z 360 -s format jpeg -s formatOptions 55 "$f" --out "${f%.png}.jpg" >/dev/null
             echo "=== SHOT $(basename "$f") ==="; base64 -i "${f%.png}.jpg" | tr -d '\n'; echo; echo "=== END ==="
           done
@@ -52,3 +57,4 @@ jobs:
           path: |
             ios/out/krisa.ipa
             ios/out/shot-*.png
+            ios/out/splash-*.png

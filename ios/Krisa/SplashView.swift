@@ -12,7 +12,7 @@ struct SplashView: View {
 
     var body: some View {
         TimelineView(.animation) { ctx in
-            let t = ctx.date.timeIntervalSince(start) * 1000
+            let t = SplashView.frozenAt ?? ctx.date.timeIntervalSince(start) * 1000
             GeometryReader { g in
                 let w = g.size.width, h = g.size.height
                 let rw = min(w * 0.72, 420), rh = rw * 358 / 605
@@ -73,9 +73,12 @@ struct SplashView: View {
         .onTapGesture { finish() }
         .onAppear {
             start = Date()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.65) { finish() }
+            if SplashView.frozenAt == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2.65) { finish() } }
         }
     }
+
+    /// Для скриншотов в CI: KRISA_SPLASH_AT=1900 останавливает заставку на этом моменте (мс).
+    static let frozenAt: Double? = ProcessInfo.processInfo.environment["KRISA_SPLASH_AT"].flatMap(Double.init)
 
     private func finish() {
         guard !finished else { return }
