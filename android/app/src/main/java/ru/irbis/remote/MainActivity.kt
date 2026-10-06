@@ -220,6 +220,17 @@ class MainActivity : Activity() {
             contentDescription = "Передатчик"
             setOnClickListener { glitch(it); chooseMode() }
         }
+        val help = TextView(this).apply {
+            text = "[?]"
+            typeface = Term.mono
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+            setTextColor(Term.FG)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Term.LINE) }
+            contentDescription = "Как пользоваться"
+            setOnClickListener { glitch(it); showHelp() }
+        }
+        header.addView(help, LinearLayout.LayoutParams(dp(52), dp(44)).apply { topMargin = dp(10); rightMargin = dp(8) })
         header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
 
@@ -297,6 +308,21 @@ class MainActivity : Activity() {
             }
         }
         return true
+    }
+
+    /** «Как пользоваться»: та же страница, что в веб-версии, из assets/help. */
+    private fun showHelp() {
+        val d = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
+        val web = android.webkit.WebView(this).apply {
+            setBackgroundColor(Color.BLACK)
+            settings.javaScriptEnabled = true
+            loadUrl("file:///android_asset/help/help.html")
+        }
+        d.setContentView(web)
+        d.setOnKeyListener { _, code, ev ->
+            if (code == android.view.KeyEvent.KEYCODE_BACK && ev.action == android.view.KeyEvent.ACTION_UP && web.canGoBack()) { web.goBack(); true } else false
+        }
+        d.show()
     }
 
     private fun chooseMode() {

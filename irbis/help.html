@@ -1,0 +1,184 @@
+<title>krisa: как пользоваться</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+/* Терминальная страница в одну колонку, как экран самого пульта: чёрный фон, пиксельные заголовки, моноширинный текст. */
+@font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:swap}
+:root{
+  --bg:#000; --panel:#0c0c0c; --fg:#e8e8e8; --dim:#8c8c8c; --line:#3a3a3a; --ok:#e8e8e8; --no:#ff6a5c;
+  --pix:VT323,"Courier New",monospace;
+  --mono:ui-monospace,"Cascadia Mono","Roboto Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg);color:var(--fg)}
+body{margin:0;font:15px/1.6 var(--mono);padding-block:28px 48px;padding-inline:16px}
+.wrap{max-width:720px;margin:0 auto;display:grid;gap:34px}
+h1{margin:0;font:400 64px/0.9 var(--pix);text-shadow:0 0 10px rgba(255,255,255,.7)}
+h1::after{content:"_";animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){h1::after{animation:none}}
+.sub{color:var(--dim);margin:6px 0 0}
+h2{margin:0 0 12px;font:400 30px/1.1 var(--pix);text-wrap:balance}
+h2 .n{color:var(--dim)}
+h3{margin:18px 0 6px;font:400 22px/1.1 var(--pix)}
+p{margin:0 0 10px}
+section{min-width:0}
+.dim{color:var(--dim)}
+code,kbd{padding:0 5px;border:1px solid var(--line);white-space:nowrap}
+code{font:13px var(--mono)}
+kbd{font:20px var(--pix)}
+/* сравнение досок */
+.boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.board{border:1px solid var(--line);background:var(--panel);display:grid}
+.board img{display:block;width:100%;height:auto;max-width:100%;background:#fff}
+.board .cap{padding:10px 12px;display:grid;gap:2px}
+.tag{font:400 24px/1 var(--pix);letter-spacing:.04em}
+.tag.ok{color:var(--ok)}
+.tag.no{color:var(--no)}
+.board.no img{filter:grayscale(1) contrast(1.05);opacity:.75}
+/* шаги */
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:grid;gap:12px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start}
+ol.steps li::before{content:"[" counter(s) "]";font:400 22px/1.4 var(--pix);color:var(--dim)}
+ul{margin:0;padding-left:20px;display:grid;gap:4px}
+/* схема */
+.scheme{border:1px solid var(--line);background:var(--panel);padding:12px;overflow-x:auto}
+.scheme svg{display:block;width:100%;max-width:100%;height:auto}
+/* кнопки */
+.keys{overflow-x:auto;border:1px solid var(--line)}
+table{border-collapse:collapse;width:100%}
+td,th{padding:8px 10px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-weight:400;color:var(--dim);border-top:0}
+td:first-child{font:400 22px/1.2 var(--pix);white-space:nowrap}
+.note{border-left:2px solid var(--fg);padding:6px 0 6px 12px;color:var(--fg)}
+.warn{border-left-color:var(--no)}
+a{color:var(--fg)}
+.back{display:inline-block;margin-bottom:14px;font:22px var(--pix);text-decoration:none;border:1px solid var(--line);padding:2px 10px}
+</style>
+
+<div class="wrap">
+  <header>
+    <a class="back" id="back" href="index.html" hidden>[&lt;] к пульту</a>
+    <h1>krisa</h1>
+    <p class="sub">Как пользоваться пультом для интерактивной доски IRBIS</p>
+  </header>
+
+  <section>
+    <h2><span class="n">&gt;</span> Для какой доски</h2>
+    <p>Приложение посылает ИК-коды пульта <b>IRBIS #500202</b> (протокол NEC, 38 кГц). Оно работает <b>только с досками IRBIS</b>. Доски других марок, например MocTec, понимают другие коды и на krisa не отреагируют.</p>
+    <div class="boards">
+      <figure class="board" style="margin:0">
+        <img src="board-irbis.jpg" alt="Интерактивная доска IRBIS: широкая чёрная рамка, внизу слева кнопки, на экране часы и круг из иконок приложений" width="800" height="548">
+        <figcaption class="cap"><span class="tag ok">[ok] IRBIS</span><span class="dim">Подходит. Внизу слева на рамке — ряд кнопок, на экране — часы и круг из иконок.</span></figcaption>
+      </figure>
+      <figure class="board no" style="margin:0">
+        <img src="board-moctex.jpg" alt="Интерактивная доска MocTec на стене: надпись MocTec по центру нижней рамки" width="800" height="561">
+        <figcaption class="cap"><span class="tag no">[x] MocTec</span><span class="dim">Не подходит. Название MocTec написано по центру нижней рамки.</span></figcaption>
+      </figure>
+    </div>
+    <p class="note" style="margin-top:14px">Как проверить: посмотрите на надпись на нижней рамке и на наклейку с моделью на задней стороне доски. Если там MocTec или другая марка, а не IRBIS, пульт работать не будет.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">&gt;</span> Что нужно</h2>
+    <ul>
+      <li><b>Android-телефон со встроенным ИК-портом</b>: многие Xiaomi, Redmi и POCO, некоторые Huawei и Honor. Это основной и самый простой вариант.</li>
+      <li>Или <b>USB-C ИК-передатчик</b> (маленький «свисток» с прозрачным тёмным кончиком), если в телефоне ИК-порта нет.</li>
+      <li>Или <b>звуковой ИК-адаптер</b> в разъём наушников. Только этот вариант подходит для iPhone: своего ИК-порта у iPhone нет.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">&gt;</span> Где ИК-порты</h2>
+    <h3>На телефоне</h3>
+    <p>У Xiaomi, Redmi и POCO ИК-порт — маленькое тёмное глянцевое окошко <b>на верхнем торце</b> телефона, рядом с микрофоном. Держите телефон как обычный пульт: верхним торцом к доске, экраном к себе.</p>
+    <p>У USB-C передатчика сигнал выходит из <b>прозрачного тёмного кончика</b> — направляйте его на доску.</p>
+    <p class="note warn">Не закрывайте окошко пальцем или чехлом: толстый чехол с закрытым верхним торцом гасит сигнал.</p>
+    <h3>На доске</h3>
+    <p>ИК-приёмник у таких досок обычно в <b>нижней рамке, рядом с кнопками и индикатором питания</b> — у IRBIS это левая часть нижней рамки. Ищите небольшое тёмное окошко или светящийся индикатор. Если не нашли — целитесь в нижнюю левую часть рамки.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">&gt;</span> Расстояние и препятствия</h2>
+    <div class="scheme" role="img" aria-label="Схема: телефон в 1–5 метрах от доски, луч направлен прямо на ИК-приёмник в нижней рамке, допустимое отклонение до 30 градусов">
+      <svg viewBox="0 0 400 190" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="12">
+        <!-- допустимый конус ±30° от телефона -->
+        <path d="M44 120 L352 50 L352 190 Z" fill="#e8e8e8" fill-opacity="0.07"/>
+        <!-- луч -->
+        <line x1="44" y1="120" x2="352" y2="120" stroke="#e8e8e8" stroke-width="2" stroke-dasharray="7 5"/>
+        <!-- доска с приёмником -->
+        <rect x="352" y="14" width="16" height="150" fill="#000" stroke="#e8e8e8" stroke-width="2"/>
+        <rect x="355" y="115" width="10" height="10" fill="#e8e8e8"/>
+        <text x="342" y="10" fill="#e8e8e8" text-anchor="end">доска</text>
+        <text x="342" y="146" fill="#e8e8e8" text-anchor="end">приёмник</text>
+        <!-- телефон -->
+        <rect x="12" y="106" width="28" height="28" fill="#000" stroke="#e8e8e8" stroke-width="2"/>
+        <rect x="38" y="115" width="6" height="10" fill="#e8e8e8"/>
+        <text x="8" y="152" fill="#e8e8e8">телефон</text>
+        <!-- шкала от доски (x=352): 1 м = 61,6 px, телефон стоит на 5 м -->
+        <line x1="44" y1="78" x2="352" y2="78" stroke="#3a3a3a"/>
+        <g fill="#8c8c8c" stroke="#8c8c8c" text-anchor="middle">
+          <line x1="44" y1="74" x2="44" y2="82"/><text x="44" y="70" stroke="none">5 м</text>
+          <line x1="106" y1="74" x2="106" y2="82"/><text x="106" y="70" stroke="none">4 м</text>
+          <line x1="167" y1="74" x2="167" y2="82"/><text x="167" y="70" stroke="none">3 м</text>
+          <line x1="229" y1="74" x2="229" y2="82"/><text x="229" y="70" stroke="none">2 м</text>
+          <line x1="290" y1="74" x2="290" y2="82"/><text x="290" y="70" stroke="none">1 м</text>
+        </g>
+        <text x="12" y="30" fill="#e8e8e8">лучше всего: 1–5 м,</text>
+        <text x="12" y="46" fill="#e8e8e8">прямо на приёмник</text>
+        <text x="190" y="182" fill="#8c8c8c" text-anchor="middle">отклонение до ~30°</text>
+      </svg>
+    </div>
+    <ul style="margin-top:12px">
+      <li><b>Расстояние:</b> лучше всего 1–5 метров. Встроенный ИК-порт телефона слабее заводского пульта, поэтому дальше 5–6 метров сигнал может не доходить. Звуковому адаптеру нужно подойти ближе, на 1–3 метра.</li>
+      <li><b>Направление:</b> целитесь прямо в ИК-приёмник. Сбоку под углом больше 30° доска может не принять сигнал.</li>
+      <li><b>Без препятствий:</b> между телефоном и доской не должно быть людей, рук, сумок, мебели и стекла. ИК-свет не проходит сквозь предметы и не огибает углы.</li>
+      <li><b>Яркий свет мешает:</b> прямое солнце или яркая лампа, бьющая в рамку доски, глушат приёмник. Подойдите ближе или закройте окно шторой.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">&gt;</span> Первый запуск</h2>
+    <ol class="steps">
+      <li><div>Убедитесь, что перед вами доска <b>IRBIS</b>, а не MocTec или другая марка.</div></li>
+      <li><div>Откройте krisa. После заставки с крысой появятся 12 кнопок пульта.</div></li>
+      <li><div>Проверьте строку под заголовком. Там должно быть <code>&gt; Встроенный ИК-порт</code>. Если написано «не найден», нажмите <kbd>[tx]</kbd> и выберите USB-C передатчик или звуковой адаптер, а кнопка «Проверка» покажет, что видит телефон.</div></li>
+      <li><div>Встаньте в 1–5 метрах от доски и направьте верхний торец телефона на нижнюю левую часть рамки.</div></li>
+      <li><div>Нажмите <code>POWER</code>. Доска должна включиться или выключиться. Внизу экрана появится строка <code>&gt; tx POWER 0x807F18E7 [sent]</code>: команда отправлена.</div></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2><span class="n">&gt;</span> Кнопки</h2>
+    <div class="keys">
+      <table>
+        <tr><th>Кнопка</th><th>Что делает</th></tr>
+        <tr><td>POWER</td><td>Включает и выключает доску.</td></tr>
+        <tr><td>VOL- / VOL+</td><td>Тише и громче. Удерживайте, чтобы менять громкость плавно.</td></tr>
+        <tr><td>MENU</td><td>Открывает меню настроек доски.</td></tr>
+        <tr><td>EMPY SCREEN</td><td>Гасит изображение, звук и доска остаются включены. Нажмите ещё раз, чтобы вернуть картинку. Название с опечаткой, как в базе кодов.</td></tr>
+        <tr><td>FREEZE</td><td>Останавливает картинку на экране (стоп-кадр).</td></tr>
+        <tr><td>INPUT</td><td>Выбор источника: встроенный Android, компьютер, HDMI.</td></tr>
+        <tr><td>J UP / J DOWN<br>J LEFT / J RIGHT</td><td>Стрелки для перемещения по меню. Удерживайте, чтобы листать.</td></tr>
+        <tr><td>J OK</td><td>Подтверждает выбор в меню.</td></tr>
+      </table>
+    </div>
+    <p class="dim" style="margin-top:10px">Названия кнопок и коды взяты из базы IrCode Finder для пульта IRBIS #500202. Точное поведение EMPY SCREEN и FREEZE зависит от прошивки доски.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">&gt;</span> Если доска не реагирует</h2>
+    <ul>
+      <li>Внизу экрана нет строки <code>[sent]</code> → команда не ушла. Нажмите <kbd>[tx]</kbd> → «Проверка» и выберите передатчик, который телефон видит.</li>
+      <li>Строка <code>[sent]</code> есть, но доска молчит → подойдите ближе, уберите всё между телефоном и доской, целитесь в нижнюю левую часть рамки.</li>
+      <li>USB-C передатчик не находится → на Xiaomi включите OTG: «Настройки» → «Дополнительные настройки» → OTG. Он сам выключается через 10 минут.</li>
+      <li>Звуковой адаптер не работает → громкость телефона на максимум, в настройках <kbd>[tx]</kbd> попробуйте режим на 1 и на 2 светодиода.</li>
+      <li>Всё сделано, а реакции нет → скорее всего, это не IRBIS. Проверьте надпись на рамке и наклейку на задней стороне доски.</li>
+    </ul>
+  </section>
+</div>
+<script>
+// Ссылка назад видна только на сайте, где пульт лежит рядом (в приложениях работает системная кнопка «назад»).
+if (/\/irbis\/help\.html$/.test(location.pathname)) document.getElementById('back').hidden = false;
+</script>

@@ -41,6 +41,8 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 .gear{flex:none;margin-top:10px;width:64px;height:44px;border:1px solid var(--line);background:#000;color:var(--fg);
   font:22px var(--mono);cursor:pointer}
 .gear:active{background:var(--fg);color:#000}
+.hbtns{display:flex;gap:8px;flex:none}
+.gear.help{width:52px;display:grid;place-items:center;text-decoration:none}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .key{position:relative;height:clamp(76px,12dvh,118px);border:1px solid var(--line);background:#000;color:var(--fg);
   font:clamp(26px,8vw,40px)/1 var(--mono);cursor:pointer;padding:8px;touch-action:manipulation;overflow:hidden;
@@ -127,7 +129,7 @@ td code{color:var(--fg)}
       <div class="id">#500202 :: IRBIS :: NEC 38kHz</div>
       <div class="mode" id="modeLine"></div>
     </div>
-    <button class="gear" id="gear" aria-label="Настройки">[tx]</button>
+    <div class="hbtns"><a class="gear help" href="help.html" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
   <main class="grid" id="grid"></main>
   <div class="status" id="status" role="status" aria-live="polite"></div>

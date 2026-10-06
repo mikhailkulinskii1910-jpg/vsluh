@@ -14,3 +14,7 @@
 ### iOS (`ios/`)
 
 SwiftUI-версия krisa. У iPhone нет ИК-порта, поэтому сигнал идёт через звуковой ИК-адаптер (разъём наушников / USB-C) или Wi-Fi модуль с Tasmota. Проект описан в `ios/project.yml` (XcodeGen); GitHub Actions (`.github/workflows/ios.yml`) собирает неподписанный `krisa.ipa` (копия: `irbis/krisa.ipa`) — его можно поставить через Sideloadly/AltStore со своим Apple ID, или собрать на Mac: `brew install xcodegen && cd ios && xcodegen && open Krisa.xcodeproj`.
+
+### Как пользоваться (`irbis/help.html`)
+
+Туториал: только для досок IRBIS (не MocTec), где ИК-порты у телефона и доски, расстояние 1–5 м и прямая видимость. Открывается кнопкой `[?]` в веб-версии, Android и iOS — это одна и та же страница (Android копирует её при сборке, iOS берёт как ресурс).

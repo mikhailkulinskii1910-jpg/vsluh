@@ -9,12 +9,21 @@ targets:
     platform: iOS
     sources:
       - path: Krisa
+      # «Как пользоваться» — общая страница с веб-версией
+      - path: ../irbis/help.html
+        buildPhase: resources
+      - path: ../irbis/board-irbis.jpg
+        buildPhase: resources
+      - path: ../irbis/board-moctex.jpg
+        buildPhase: resources
+      - path: ../irbis/vt323.ttf
+        buildPhase: resources
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ru.irbis.krisa
         PRODUCT_NAME: krisa
-        MARKETING_VERSION: "1.6"
-        CURRENT_PROJECT_VERSION: "10"
+        MARKETING_VERSION: "1.7"
+        CURRENT_PROJECT_VERSION: "11"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO

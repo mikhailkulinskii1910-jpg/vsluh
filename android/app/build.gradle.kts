@@ -11,8 +11,8 @@ android {
         applicationId = "ru.irbis.remote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.6"
+        versionCode = 10
+        versionName = "1.7"
     }
 
     buildTypes {
@@ -43,3 +43,11 @@ tasks.withType<Test>().configureEach {
         systemProperty("robolectric.offline", "true"); systemProperty("robolectric.dependency.dir", it)
     }
 }
+
+// Страница «Как пользоваться» — общая с веб-версией: при сборке копируется из irbis/ в assets/help.
+val syncHelp = tasks.register<Sync>("syncHelp") {
+    from("../../irbis") { include("help.html", "board-irbis.jpg", "board-moctex.jpg", "vt323.ttf") }
+    into(layout.buildDirectory.dir("helpAssets/help"))
+}
+android.sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("helpAssets"))
+tasks.named("preBuild") { dependsOn(syncHelp) }

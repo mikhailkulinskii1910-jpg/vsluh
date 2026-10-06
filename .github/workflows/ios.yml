@@ -43,6 +43,8 @@ jobs:
             SIMCTL_CHILD_KRISA_SPLASH_AT=$at xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
             sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-$at.png"
           done
+          SIMCTL_CHILD_KRISA_OPEN_HELP=1 xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 6; xcrun simctl io "$DEV" screenshot "out/splash-help.png"
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           for t in 0.4 0.8 1.0 3.0; do sleep $t; xcrun simctl io "$DEV" screenshot "out/shot-$(date +%s%N).png"; done
           # уменьшенные кадры — в лог, чтобы их можно было посмотреть без скачивания артефактов

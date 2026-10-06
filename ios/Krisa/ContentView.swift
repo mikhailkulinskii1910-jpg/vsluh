@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 @main
 struct KrisaApp: App {
@@ -12,6 +13,7 @@ struct ContentView: View {
     @State private var splash = true
     @State private var ready = false
     @State private var settings = false
+    @State private var help = false
 
     var body: some View {
         ZStack {
@@ -28,6 +30,13 @@ struct ContentView: View {
                             .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
                     }
                     Spacer()
+                    Button { help = true } label: {
+                        Text("[?]").font(Term.mono(24)).foregroundColor(Term.fg)
+                            .frame(width: 52, height: 44)
+                            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+                    }
+                    .padding(.top, 10)
+                    .accessibilityLabel("Как пользоваться")
                     Button { settings = true } label: {
                         Text("[tx]").font(Term.mono(24)).foregroundColor(Term.fg)
                             .frame(width: 64, height: 44)
@@ -79,6 +88,11 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden(splash)
         .sheet(isPresented: $settings) { SettingsView(model: model) }
+        .fullScreenCover(isPresented: $help) { HelpView() }
+        .onAppear {
+            // Для скриншота в CI: KRISA_OPEN_HELP=1 сразу открывает «Как пользоваться».
+            if ProcessInfo.processInfo.environment["KRISA_OPEN_HELP"] != nil { splash = false; ready = true; help = true }
+        }
     }
 }
 
@@ -148,4 +162,35 @@ struct SettingsView: View {
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
     }
+}
+
+/// «Как пользоваться»: та же страница, что в веб-версии (help.html из бандла).
+struct HelpView: View {
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button("[<] к пульту") { dismiss() }.font(Term.mono(24)).foregroundColor(Term.fg)
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.vertical, 8)
+            HelpWeb().ignoresSafeArea(edges: .bottom)
+        }
+        .background(Color.black.ignoresSafeArea())
+        .preferredColorScheme(.dark)
+    }
+}
+
+struct HelpWeb: UIViewRepresentable {
+    func makeUIView(context: Context) -> WKWebView {
+        let web = WKWebView()
+        web.isOpaque = false
+        web.backgroundColor = .black
+        web.scrollView.backgroundColor = .black
+        if let url = Bundle.main.url(forResource: "help", withExtension: "html") {
+            web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        }
+        return web
+    }
+    func updateUIView(_ web: WKWebView, context: Context) {}
 }
