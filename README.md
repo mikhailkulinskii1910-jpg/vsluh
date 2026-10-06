@@ -13,4 +13,4 @@
 
 ### iOS (`ios/`)
 
-SwiftUI-версия krisa. У iPhone нет ИК-порта, поэтому сигнал идёт через звуковой ИК-адаптер (разъём наушников / USB-C) или Wi-Fi модуль с Tasmota. Проект описан в `ios/project.yml` (XcodeGen); GitHub Actions (`.github/workflows/ios.yml`) собирает неподписанный `krisa.ipa` — его можно поставить через Sideloadly/AltStore со своим Apple ID, или собрать на Mac: `brew install xcodegen && cd ios && xcodegen && open Krisa.xcodeproj`.
+SwiftUI-версия krisa. У iPhone нет ИК-порта, поэтому сигнал идёт через звуковой ИК-адаптер (разъём наушников / USB-C) или Wi-Fi модуль с Tasmota. Проект описан в `ios/project.yml` (XcodeGen); GitHub Actions (`.github/workflows/ios.yml`) собирает неподписанный `krisa.ipa` (копия: `irbis/krisa.ipa`) — его можно поставить через Sideloadly/AltStore со своим Apple ID, или собрать на Mac: `brew install xcodegen && cd ios && xcodegen && open Krisa.xcodeproj`.
