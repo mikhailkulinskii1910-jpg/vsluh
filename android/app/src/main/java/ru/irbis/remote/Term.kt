@@ -57,6 +57,36 @@ object Term {
         out
     }
 
+    /** Пиксельная бегущая крыса, 2 кадра (лапы перебирают). «#» — пиксель. */
+    val RAT = listOf(
+        listOf(
+            "....................##......",
+            "...................####.....",
+            "............###########.....",
+            ".........###############....",
+            ".......################.#...",
+            "......#####################.",
+            "#.....##################....",
+            ".#...##################.....",
+            "..###.###############.......",
+            "........##.......##.........",
+            ".......##.........##........",
+        ),
+        listOf(
+            "....................##......",
+            "...................####.....",
+            "............###########.....",
+            ".........###############....",
+            ".......################.#...",
+            "......#####################.",
+            "......##################....",
+            "#....##################.....",
+            ".####.###############.......",
+            ".........##.....##..........",
+            "..........#.....#...........",
+        ),
+    )
+
     fun scramble(text: String, progress: Float, rnd: Random = Random): String {
         val shown = (text.length * progress).toInt()
         return buildString {
@@ -67,14 +97,31 @@ object Term {
 
 /** Фон: медленно ползущий вверх лог терминала + сканлайны. */
 class TerminalBackground(c: Context) : View(c) {
+    private val d = c.resources.displayMetrics.density
     private val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Term.FAINT; typeface = Typeface.MONOSPACE; textSize = 11f * c.resources.displayMetrics.scaledDensity }
     private val scan = Paint().apply { color = Color.argb(70, 0, 0, 0) }
     private val lineH = p.textSize * 1.35f
     private val start = SystemClock.uptimeMillis()
 
+    // Крысы: кадры спрайта как маленькие битмапы, рисуются увеличенными без сглаживания — пиксели остаются чёткими.
+    private val ratFrames = Term.RAT.map { rows ->
+        Bitmap.createBitmap(rows[0].length, rows.size, Bitmap.Config.ARGB_8888).apply {
+            rows.forEachIndexed { y, r -> r.forEachIndexed { x, ch -> if (ch == '#') setPixel(x, y, Color.WHITE) } }
+        }
+    }
+    private val ratPaint = Paint().apply { isFilterBitmap = false; alpha = 120 }
+    private val ratPx = 2.5f * d
+    private val ratW = Term.RAT[0][0].length * ratPx
+    private val ratH = Term.RAT[0].size * ratPx
+    private val ratDst = RectF()
+
+    /** Крыса: скорость (dp/с), направление, сдвиг по времени. Ряд по высоте меняется на каждом забеге. */
+    private class Rat(val speed: Float, val dir: Int, val offset: Float)
+    private val rats = listOf(Rat(70f, 1, 0f), Rat(110f, -1, 300f), Rat(45f, 1, 700f), Rat(90f, -1, 1100f), Rat(130f, 1, 1500f))
+
     override fun onDraw(canvas: Canvas) {
         val t = (SystemClock.uptimeMillis() - start) / 1000f
-        val off = (t * 14f * resources.displayMetrics.density) % (lineH * Term.LOG.size)
+        val off = (t * 14f * d) % (lineH * Term.LOG.size)
         val first = (off / lineH).toInt()
         var y = -(off % lineH) + lineH
         var i = first
@@ -82,11 +129,35 @@ class TerminalBackground(c: Context) : View(c) {
             canvas.drawText(Term.LOG[i % Term.LOG.size], 8f, y, p)
             y += lineH; i++
         }
+        drawRats(canvas, t)
         var s = 0f
-        val step = 3f * resources.displayMetrics.density
+        val step = 3f * d
         while (s < height) { canvas.drawRect(0f, s, width.toFloat(), s + step / 3, scan); s += step }
         postInvalidateOnAnimation()
     }
+
+    private fun drawRats(canvas: Canvas, t: Float) {
+        if (width == 0) return
+        val track = width + ratW * 2 + 160 * d          // путь забега + пауза за краем экрана
+        rats.forEachIndexed { n, r ->
+            val dist = t * r.speed * d + r.offset * d
+            val lap = (dist / track).toInt()
+            val pos = dist % track - ratW
+            if (pos > width + ratW) return@forEachIndexed   // пауза между забегами
+            val x = if (r.dir > 0) pos else width - pos - ratW
+            // на каждом забеге — новый ряд по высоте
+            val lane = hash(lap * 31 + n * 7)
+            val frame = ((dist / (9 * d)).toInt()) % 2   // шаг лап зависит от пройденного пути
+            val yy = 60 * d + lane * (height - 120 * d) - if (frame == 1) d else 0f
+            canvas.save()
+            if (r.dir < 0) canvas.scale(-1f, 1f, x + ratW / 2, 0f)
+            ratDst.set(x, yy, x + ratW, yy + ratH)
+            canvas.drawBitmap(ratFrames[frame], null, ratDst, ratPaint)
+            canvas.restore()
+        }
+    }
+
+    private fun hash(i: Int): Float { val v = sin(i * 12.9898) * 43758.5453; return (v - kotlin.math.floor(v)).toFloat() }
 }
 
 /** Кнопка пульта: рамка с «уголками», номер, байт команды, глитч и луч передачи при нажатии. */

@@ -77,8 +77,58 @@ struct LogBackground: View {
                 }
                 .offset(x: 6, y: -off)
                 .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
+                .overlay(RunningRats(t: t))
             }
             .clipped()
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Пиксельная бегущая крыса, 2 кадра (лапы перебирают). «#» — пиксель.
+let RAT_SPRITE: [[String]] = [
+    ["....................##......", "...................####.....", "............###########.....", ".........###############....",
+     ".......################.#...", "......#####################.", "#.....##################....", ".#...##################.....",
+     "..###.###############.......", "........##.......##.........", ".......##.........##........"],
+    ["....................##......", "...................####.....", "............###########.....", ".........###############....",
+     ".......################.#...", "......#####################.", "......##################....", "#....##################.....",
+     ".####.###############.......", ".........##.....##..........", "..........#.....#..........."],
+]
+
+/// Маленькие ч/б крысы, бегающие по фону поверх лога.
+struct RunningRats: View {
+    let t: Double
+    private static let px: CGFloat = 2.5
+    private static let w = CGFloat(RAT_SPRITE[0][0].count) * px
+    private static let h = CGFloat(RAT_SPRITE[0].count) * px
+    /// Кадры спрайта как контуры из пикселей (собраны один раз).
+    private static let frames: [Path] = RAT_SPRITE.map { rows in
+        var p = Path()
+        for (y, r) in rows.enumerated() {
+            for (x, ch) in r.enumerated() where ch == "#" {
+                p.addRect(CGRect(x: CGFloat(x) * px, y: CGFloat(y) * px, width: px, height: px))
+            }
+        }
+        return p
+    }
+    /// Скорость (pt/с), направление, сдвиг. Ряд по высоте меняется на каждом забеге.
+    private static let rats: [(Double, CGFloat, Double)] = [(70, 1, 0), (110, -1, 300), (45, 1, 700), (90, -1, 1100), (130, 1, 1500)]
+
+    var body: some View {
+        Canvas { ctx, size in
+            let track = Double(size.width + RunningRats.w * 2 + 160)   // путь забега + пауза за краем
+            for (n, r) in RunningRats.rats.enumerated() {
+                let dist = t * r.0 + r.2
+                let lap = Int(dist / track)
+                let pos = CGFloat(dist.truncatingRemainder(dividingBy: track)) - RunningRats.w
+                if pos > size.width + RunningRats.w { continue }
+                let x = r.1 > 0 ? pos : size.width - pos - RunningRats.w
+                let f = Int(dist / 9) % 2                           // лапы в такт пройденному пути
+                let y = 60 + hashNoise(lap * 31 + n * 7) * (size.height - 120) - CGFloat(f)
+                var tr = CGAffineTransform(translationX: x, y: y)
+                if r.1 < 0 { tr = tr.translatedBy(x: RunningRats.w, y: 0).scaledBy(x: -1, y: 1) }
+                ctx.fill(RunningRats.frames[f].applying(tr), with: .color(.white.opacity(0.47)))
+            }
         }
         .allowsHitTesting(false)
     }
