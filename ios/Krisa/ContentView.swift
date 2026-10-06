@@ -14,6 +14,7 @@ struct ContentView: View {
     @State private var ready = false
     @State private var settings = false
     @State private var help = false
+    @State private var noIr = false
 
     var body: some View {
         ZStack {
@@ -80,6 +81,7 @@ struct ContentView: View {
                 ]) {
                     withAnimation(.easeOut(duration: 0.26)) { splash = false }
                     ready = true
+                    checkIrPort()
                 }
                 .transition(.opacity)
                 .zIndex(10)
@@ -89,6 +91,12 @@ struct ContentView: View {
         .statusBarHidden(splash)
         .sheet(isPresented: $settings) { SettingsView(model: model) }
         .fullScreenCover(isPresented: $help) { HelpView() }
+        .alert("> ИК-порт не найден", isPresented: $noIr) {
+            Button("Как подключить") { help = true }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("У iPhone нет встроенного ИК-порта. Вставьте звуковой ИК-адаптер в разъём наушников (через переходник) или в USB-C, либо выберите Wi-Fi передатчик кнопкой [tx].")
+        }
         .onAppear {
             // Для скриншота в CI: KRISA_OPEN_HELP=1 сразу открывает «Как пользоваться».
             if ProcessInfo.processInfo.environment["KRISA_OPEN_HELP"] != nil { splash = false; ready = true; help = true }
@@ -164,7 +172,19 @@ struct SettingsView: View {
     }
 }
 
-/// «Как пользоваться»: та же страница, что в веб-версии (help.html из бандла).
+extension ContentView {
+    /// Проверка при запуске: у iPhone своего ИК-порта нет — нужен звуковой адаптер или Wi-Fi передатчик.
+    func checkIrPort() {
+        if model.mode == .http { return }
+        if AudioIr.adapterConnected { model.say("> ir: звуковой адаптер найден [ok]") }
+        else {
+            model.say("ИК-порт не найден: нужен звуковой адаптер", err: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { noIr = true }
+        }
+    }
+}
+
+/// «Как пользоваться»: тот же гид, что в веб-версии (папка guide/ в бандле).
 struct HelpView: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -187,7 +207,7 @@ struct HelpWeb: UIViewRepresentable {
         web.isOpaque = false
         web.backgroundColor = .black
         web.scrollView.backgroundColor = .black
-        if let url = Bundle.main.url(forResource: "help", withExtension: "html") {
+        if let url = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "guide") {
             web.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         }
         return web

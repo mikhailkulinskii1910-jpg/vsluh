@@ -207,7 +207,10 @@ class MainActivity : Activity() {
         }
         titles.addView(title)
         titles.addView(text("#500202 :: IRBIS :: NEC 38kHz", 18f, Term.DIM))
-        modeLine = text("", 15f, Term.FG).apply { typeface = Term.ru; setPadding(0, dp(6), 0, 0) }
+        modeLine = text("", 15f, Term.FG).apply {
+            typeface = Term.ru; setPadding(0, dp(6), 0, 0)
+            isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+        }
         titles.addView(modeLine)
         header.addView(titles, LinearLayout.LayoutParams(0, -2, 1f))
         val gear = TextView(this).apply {
@@ -259,10 +262,11 @@ class MainActivity : Activity() {
 
         frame.addView(ScrollView(this).apply { isFillViewport = true; addView(root) }, FrameLayout.LayoutParams(-1, -1))
 
-        val showUi = {
+        val showUi: () -> Unit = {
             title.type("krisa")
             keyViews.forEachIndexed { i, k -> k.reveal(60L * i) }
             (status as TypeLine).type("> ready. ${KEYS.size} keys loaded")
+            ui.postDelayed({ checkIrPort() }, 900)
         }
         if (withSplash) {
             val boot = listOf(
@@ -310,13 +314,36 @@ class MainActivity : Activity() {
         return true
     }
 
-    /** «Как пользоваться»: та же страница, что в веб-версии, из assets/help. */
-    private fun showHelp() {
+    /**
+     * Проверка при запуске: есть ли в телефоне встроенный ИК-порт.
+     * Нет порта и нет другого передатчика — объясняем, что делать, и ведём в гид или в «Проверку».
+     */
+    private fun checkIrPort() {
+        if (builtin.available) { say("ir port: найден", ok = true); return }
+        val other = usbIr ?: AudioIr.adapterOutput(audio)?.let { audio2 }
+        if (other != null) {
+            say("ИК-порта нет, есть ${other.title}")
+            return
+        }
+        say("ИК-порт не найден", err = true)
+        AlertDialog.Builder(this)
+            .setTitle("> ИК-порт не найден")
+            .setMessage("В этом телефоне нет встроенного ИК-порта, поэтому krisa не может управлять доской сама.\n\n" +
+                "Подключите USB-C ИК-передатчик (на Xiaomi включите OTG) или звуковой ИК-адаптер в разъём наушников, " +
+                "затем выберите его кнопкой [tx].")
+            .setPositiveButton("OK", null)
+            .setNeutralButton("Как подключить") { _, _ -> showHelp("need") }
+            .setNegativeButton("Проверка") { _, _ -> diagnostics() }
+            .show()
+    }
+
+    /** «Как пользоваться»: тот же гид, что в веб-версии, из assets/guide. */
+    private fun showHelp(section: String? = null) {
         val d = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
         val web = android.webkit.WebView(this).apply {
             setBackgroundColor(Color.BLACK)
             settings.javaScriptEnabled = true
-            loadUrl("file:///android_asset/help/help.html")
+            loadUrl("file:///android_asset/guide/index.html" + (section?.let { "#$it" } ?: ""))
         }
         d.setContentView(web)
         d.setOnKeyListener { _, code, ev ->

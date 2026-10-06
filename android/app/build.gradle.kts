@@ -11,8 +11,8 @@ android {
         applicationId = "ru.irbis.remote"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.7"
+        versionCode = 11
+        versionName = "1.8"
     }
 
     buildTypes {
@@ -44,10 +44,10 @@ tasks.withType<Test>().configureEach {
     }
 }
 
-// Страница «Как пользоваться» — общая с веб-версией: при сборке копируется из irbis/ в assets/help.
+// Гид «Как пользоваться» — общий с веб-версией: при сборке копируется из irbis/guide/ в assets/guide.
 val syncHelp = tasks.register<Sync>("syncHelp") {
-    from("../../irbis") { include("help.html", "board-irbis.jpg", "board-moctex.jpg", "vt323.ttf") }
-    into(layout.buildDirectory.dir("helpAssets/help"))
+    from("../../irbis/guide") { exclude("sw.js", "manifest.webmanifest", "icon-*.png") }
+    into(layout.buildDirectory.dir("helpAssets/guide"))
 }
 android.sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("helpAssets"))
 tasks.named("preBuild") { dependsOn(syncHelp) }

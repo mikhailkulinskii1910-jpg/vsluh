@@ -1,5 +1,12 @@
-<title>krisa: как пользоваться</title>
+<meta charset="utf-8">
+<title>krisa гид</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="krisa гид">
 <style>
 /* Терминальная страница в одну колонку, как экран самого пульта: чёрный фон, пиксельные заголовки, моноширинный текст. */
 @font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:swap}
@@ -55,16 +62,81 @@ td:first-child{font:400 22px/1.2 var(--pix);white-space:nowrap}
 .warn{border-left-color:var(--no)}
 a{color:var(--fg)}
 .back{display:inline-block;margin-bottom:14px;font:22px var(--pix);text-decoration:none;border:1px solid var(--line);padding:2px 10px}
+/* навигация по разделам */
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+nav.toc a{font:20px/1 var(--pix);text-decoration:none;border:1px solid var(--line);padding:6px 9px}
+nav.toc a:hover,nav.toc a:focus-visible{background:var(--fg);color:var(--bg)}
+/* скачивание */
+.dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.dl a{display:grid;gap:4px;padding:14px;border:1px solid var(--fg);text-decoration:none;background:var(--panel)}
+.dl a:hover,.dl a:focus-visible{background:var(--fg);color:var(--bg)}
+.dl a:hover .dim,.dl a:focus-visible .dim{color:var(--bg)}
+.dl b{font:400 30px/1 var(--pix)}
+/* скриншоты */
+.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:10px 0 12px}
+.shots figure{margin:0;border:1px solid var(--line);background:var(--panel)}
+.shots img{display:block;width:100%;height:auto;max-width:100%}
+.shots figcaption{padding:8px 10px;color:var(--dim)}
+section{scroll-margin-top:16px}
 </style>
 
 <div class="wrap">
   <header>
-    <a class="back" id="back" href="index.html" hidden>[&lt;] к пульту</a>
+    <a class="back" id="back" href="../" hidden>[&lt;] к пульту</a>
     <h1>krisa</h1>
-    <p class="sub">Как пользоваться пультом для интерактивной доски IRBIS</p>
+    <p class="sub">Гид по ИК-пульту для интерактивной доски IRBIS: скачать, установить, пользоваться</p>
+    <nav class="toc" aria-label="Разделы">
+      <a href="#download">скачать</a><a href="#android">android</a><a href="#iphone">iphone</a>
+      <a href="#board">доска</a><a href="#ports">ик-порты</a><a href="#distance">расстояние</a>
+      <a href="#start">запуск</a><a href="#keys">кнопки</a><a href="#trouble">не работает</a>
+    </nav>
   </header>
 
-  <section>
+  <section id="download">
+    <h2><span class="n">&gt;</span> Скачать</h2>
+    <div class="dl" id="dlLinks" hidden>
+      <a href="../irbis-remote.apk" download="krisa.apk"><b>[apk] Android</b><span class="dim">krisa для Android-телефонов, около 260 КБ. Установка — ниже.</span></a>
+      <a href="../krisa.ipa" download="krisa.ipa"><b>[ipa] iPhone</b><span class="dim">krisa для iPhone, около 1 МБ. Ставится через компьютер — ниже.</span></a>
+      <a href="../"><b>[web] Браузер</b><span class="dim">Пульт без установки, открывается прямо в браузере. Работает со звуковым ИК-адаптером.</span></a>
+    </div>
+    <p id="dlNote" class="note">Файлы приложений скачиваются со страницы гида на сайте krisa: откройте гид в браузере телефона, раздел «Скачать».</p>
+  </section>
+
+  <section id="android">
+    <h2><span class="n">&gt;</span> Установка на Android</h2>
+    <ol class="steps">
+      <li><div>Скачайте <code>krisa.apk</code> в разделе «Скачать» и откройте файл: из уведомления о загрузке или из папки «Загрузки».</div></li>
+      <li><div>Если телефон спросит разрешение на установку из этого источника, нажмите «Настройки» и включите «Разрешить установку из этого источника» для браузера или файлового менеджера. Затем вернитесь назад.</div></li>
+      <li><div>Появится плашка <b>«Google Play Защита: приложение заблокировано для защиты устройства»</b>. Нажмите <b>«Подробнее»</b>, затем <b>«Всё равно установить»</b>.</div></li>
+      <li><div>На Xiaomi, Redmi и POCO может появиться ещё и проверка безопасности MIUI/HyperOS. Нажмите «Продолжить установку» или «Всё равно установить».</div></li>
+    </ol>
+    <div class="shots">
+      <figure><img src="protect-1.jpg" alt="Плашка Google Play Защиты: приложение krisa заблокировано, под текстом кнопка «Подробнее»" width="480" height="679"><figcaption>[1] Нажмите «Подробнее»</figcaption></figure>
+      <figure><img src="protect-2.jpg" alt="Та же плашка раскрыта: внизу появилась ссылка «Все равно установить»" width="480" height="682"><figcaption>[2] Нажмите «Всё равно установить»</figcaption></figure>
+    </div>
+    <p><b>Почему так.</b> krisa поставляется файлом, а не через Google Play, и подписана не магазином. Play Защита этого разработчика никогда не видела, поэтому предупреждает. Само приложение не просит доступа к интернету, контактам или файлам: оно использует только ИК-порт, USB-передатчик и звук.</p>
+    <p class="note warn">Если кнопки «Всё равно установить» нет: откройте Google Play → значок профиля → «Play Защита» → шестерёнка → выключите «Проверять приложения с помощью Play Защиты». Установите krisa и сразу включите проверку обратно.</p>
+  </section>
+
+  <section id="iphone">
+    <h2><span class="n">&gt;</span> Установка на iPhone</h2>
+    <p>Встроенного ИК-порта у iPhone нет. Для управления доской нужен <b>звуковой ИК-адаптер</b>, который вставляется в разъём наушников (через переходник Lightning или USB-C на 3,5 мм) или сам подключается в USB-C.</p>
+    <h3>Проще всего: без установки</h3>
+    <p>Откройте веб-версию пульта в Safari → кнопка «Поделиться» → «На экран „Домой“». Пульт появится как приложение и будет работать со звуковым адаптером.</p>
+    <h3>Приложение krisa.ipa</h3>
+    <p>Apple не разрешает ставить приложения файлом прямо на телефоне. Файл <code>krisa.ipa</code> подписывается вашим Apple ID на компьютере (Windows или Mac) с помощью бесплатной программы Sideloadly:</p>
+    <ol class="steps">
+      <li><div>Скачайте <code>krisa.ipa</code> в разделе «Скачать» на компьютер.</div></li>
+      <li><div>Установите Sideloadly с сайта <code>sideloadly.io</code>. На Windows нужны ещё iTunes и iCloud — версии с сайта Apple, не из Microsoft Store.</div></li>
+      <li><div>Подключите iPhone кабелем, разблокируйте его и нажмите «Доверять этому компьютеру».</div></li>
+      <li><div>Перетащите <code>krisa.ipa</code> в окно Sideloadly, введите свой Apple ID и нажмите «Start». Sideloadly спросит пароль Apple ID и установит krisa.</div></li>
+      <li><div>На iPhone: «Настройки» → «Основные» → «VPN и управление устройством» → ваш Apple ID → «Доверять».</div></li>
+      <li><div>На iOS 16 и новее: «Настройки» → «Конфиденциальность и безопасность» → «Режим разработчика» → включить. iPhone перезагрузится; после перезагрузки подтвердите включение.</div></li>
+    </ol>
+    <p class="note warn">С бесплатным Apple ID приложение работает 7 дней. Потом оно перестаёт открываться, и его нужно установить заново тем же способом, данные не пропадут. Так можно держать до 3 приложений одновременно. Вместо Sideloadly подойдёт AltStore (<code>altstore.io</code>): он сам продлевает подпись, когда компьютер и iPhone в одной Wi-Fi сети.</p>
+  </section>
+
+  <section id="board">
     <h2><span class="n">&gt;</span> Для какой доски</h2>
     <p>Приложение посылает ИК-коды пульта <b>IRBIS #500202</b> (протокол NEC, 38 кГц). Оно работает <b>только с досками IRBIS</b>. Доски других марок, например MocTec, понимают другие коды и на krisa не отреагируют.</p>
     <div class="boards">
@@ -80,7 +152,7 @@ a{color:var(--fg)}
     <p class="note" style="margin-top:14px">Как проверить: посмотрите на надпись на нижней рамке и на наклейку с моделью на задней стороне доски. Если там MocTec или другая марка, а не IRBIS, пульт работать не будет.</p>
   </section>
 
-  <section>
+  <section id="need">
     <h2><span class="n">&gt;</span> Что нужно</h2>
     <ul>
       <li><b>Android-телефон со встроенным ИК-портом</b>: многие Xiaomi, Redmi и POCO, некоторые Huawei и Honor. Это основной и самый простой вариант.</li>
@@ -89,7 +161,7 @@ a{color:var(--fg)}
     </ul>
   </section>
 
-  <section>
+  <section id="ports">
     <h2><span class="n">&gt;</span> Где ИК-порты</h2>
     <h3>На телефоне</h3>
     <p>У Xiaomi, Redmi и POCO ИК-порт — маленькое тёмное глянцевое окошко <b>на верхнем торце</b> телефона, рядом с микрофоном. Держите телефон как обычный пульт: верхним торцом к доске, экраном к себе.</p>
@@ -99,7 +171,7 @@ a{color:var(--fg)}
     <p>ИК-приёмник у таких досок обычно в <b>нижней рамке, рядом с кнопками и индикатором питания</b> — у IRBIS это левая часть нижней рамки. Ищите небольшое тёмное окошко или светящийся индикатор. Если не нашли — целитесь в нижнюю левую часть рамки.</p>
   </section>
 
-  <section>
+  <section id="distance">
     <h2><span class="n">&gt;</span> Расстояние и препятствия</h2>
     <div class="scheme" role="img" aria-label="Схема: телефон в 1–5 метрах от доски, луч направлен прямо на ИК-приёмник в нижней рамке, допустимое отклонение до 30 градусов">
       <svg viewBox="0 0 400 190" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="12">
@@ -138,18 +210,18 @@ a{color:var(--fg)}
     </ul>
   </section>
 
-  <section>
+  <section id="start">
     <h2><span class="n">&gt;</span> Первый запуск</h2>
     <ol class="steps">
       <li><div>Убедитесь, что перед вами доска <b>IRBIS</b>, а не MocTec или другая марка.</div></li>
-      <li><div>Откройте krisa. После заставки с крысой появятся 12 кнопок пульта.</div></li>
+      <li><div>Откройте krisa. После заставки с крысой появятся 12 кнопок пульта, а приложение само проверит, есть ли в телефоне ИК-порт. Если порта нет, оно скажет об этом и предложит USB-C передатчик или звуковой адаптер.</div></li>
       <li><div>Проверьте строку под заголовком. Там должно быть <code>&gt; Встроенный ИК-порт</code>. Если написано «не найден», нажмите <kbd>[tx]</kbd> и выберите USB-C передатчик или звуковой адаптер, а кнопка «Проверка» покажет, что видит телефон.</div></li>
       <li><div>Встаньте в 1–5 метрах от доски и направьте верхний торец телефона на нижнюю левую часть рамки.</div></li>
       <li><div>Нажмите <code>POWER</code>. Доска должна включиться или выключиться. Внизу экрана появится строка <code>&gt; tx POWER 0x807F18E7 [sent]</code>: команда отправлена.</div></li>
     </ol>
   </section>
 
-  <section>
+  <section id="keys">
     <h2><span class="n">&gt;</span> Кнопки</h2>
     <div class="keys">
       <table>
@@ -167,7 +239,7 @@ a{color:var(--fg)}
     <p class="dim" style="margin-top:10px">Названия кнопок и коды взяты из базы IrCode Finder для пульта IRBIS #500202. Точное поведение EMPY SCREEN и FREEZE зависит от прошивки доски.</p>
   </section>
 
-  <section>
+  <section id="trouble">
     <h2><span class="n">&gt;</span> Если доска не реагирует</h2>
     <ul>
       <li>Внизу экрана нет строки <code>[sent]</code> → команда не ушла. Нажмите <kbd>[tx]</kbd> → «Проверка» и выберите передатчик, который телефон видит.</li>
@@ -179,6 +251,15 @@ a{color:var(--fg)}
   </section>
 </div>
 <script>
-// Ссылка назад видна только на сайте, где пульт лежит рядом (в приложениях работает системная кнопка «назад»).
-if (/\/irbis\/help\.html$/.test(location.pathname)) document.getElementById('back').hidden = false;
+// Гид — отдельное веб-приложение (irbis/guide/). На сайте рядом лежат пульт и файлы приложений:
+// там показываем ссылку назад и кнопки скачивания. Внутри приложений и в просмотрщиках их нет.
+(function () {
+  const onSite = /\/irbis\/guide\/(index\.html)?$/.test(location.pathname) && /^https?:$/.test(location.protocol);
+  if (onSite) {
+    document.getElementById('back').hidden = false;
+    document.getElementById('dlLinks').hidden = false;
+    document.getElementById('dlNote').hidden = true;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
 </script>
