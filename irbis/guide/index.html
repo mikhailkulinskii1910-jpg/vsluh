@@ -81,6 +81,12 @@ nav.toc a:hover,nav.toc a:focus-visible{background:var(--fg);color:var(--bg)}
 .shots img{display:block;width:100%;height:auto;max-width:100%}
 .shots figcaption{padding:8px 10px;color:var(--dim)}
 section{scroll-margin-top:16px}
+/* QR-коды: чёрные модули на белом — так их читает любая камера */
+.qrs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.qrs figure{margin:0;border:1px solid var(--line);background:var(--panel);padding:10px;display:grid;gap:8px;justify-items:center}
+.qrs img{display:block;width:100%;max-width:164px;height:auto;background:#fff;image-rendering:pixelated}
+.qrs figcaption{text-align:center}
+.qrs b{font:400 20px/1 var(--pix)}
 </style>
 
 <div class="wrap">
@@ -101,6 +107,14 @@ section{scroll-margin-top:16px}
       <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa.apk" target="_blank" rel="noopener"><b>[apk] Android</b><span class="dim">Скачать krisa для Android-телефонов, около 260 КБ. Установка — ниже.</span></a>
       <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa.ipa" target="_blank" rel="noopener"><b>[ipa] iPhone</b><span class="dim">Скачать krisa для iPhone, около 1 МБ. Ставится через компьютер.</span></a>
       <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть в браузере</b><span class="dim">Пульт без установки — на Android и на iPhone. Работает со звуковым ИК-адаптером.</span></a>
+    </div>
+    <h3>QR-коды</h3>
+    <p class="dim">Откройте гид на компьютере и наведите камеру телефона на нужный код — ссылка откроется на телефоне.</p>
+    <div class="qrs">
+      <figure><img src="qr-apk.svg" alt="QR-код: скачать krisa для Android" width="164" height="164"><figcaption><b>[apk]</b> Android</figcaption></figure>
+      <figure><img src="qr-ipa.svg" alt="QR-код: скачать krisa для iPhone" width="164" height="164"><figcaption><b>[ipa]</b> iPhone</figcaption></figure>
+      <figure><img src="qr-web.svg" alt="QR-код: открыть веб-версию пульта" width="164" height="164"><figcaption><b>[web]</b> Пульт в браузере</figcaption></figure>
+      <figure><img src="qr-guide.svg" alt="QR-код: открыть этот гид" width="164" height="164"><figcaption><b>[?]</b> Этот гид</figcaption></figure>
     </div>
     <p class="dim" style="margin-top:10px">Если файл не скачивается, откройте этот гид на сайте: <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/guide/" target="_blank" rel="noopener">mikhailkulinskii1910-jpg.github.io/vsluh/irbis/guide/</a></p>
   </section>
