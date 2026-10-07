@@ -206,7 +206,8 @@ class MainActivity : Activity() {
             includeFontPadding = false
         }
         titles.addView(title)
-        titles.addView(text("#500202 :: IRBIS :: NEC 38kHz", 18f, Term.DIM))
+        subtitle = text("#500202 :: IRBIS :: NEC 38kHz", 18f, Term.DIM)
+        titles.addView(subtitle)
         modeLine = text("", 15f, Term.FG).apply {
             typeface = Term.ru; setPadding(0, dp(6), 0, 0)
             isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
@@ -237,10 +238,18 @@ class MainActivity : Activity() {
         header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
 
+        // вкладки: IRBIS (пульт) и MocTec (подбор кода выключения)
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        tabIrbis = tabButton("IRBIS") { showTab(false) }
+        tabMoc = tabButton("MocTec") { showTab(true) }
+        tabs.addView(tabIrbis, LinearLayout.LayoutParams(0, dp(40), 1f).apply { rightMargin = dp(8) })
+        tabs.addView(tabMoc, LinearLayout.LayoutParams(0, dp(40), 1f))
+        root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
         val gap = dp(5)
         // Все 12 кнопок на один экран, как в IrCode Finder.
-        val rowH = ((resources.configuration.screenHeightDp - 250) / 6 - 10).coerceIn(64, 110)
+        val rowH = ((resources.configuration.screenHeightDp - 300) / 6 - 10).coerceIn(60, 110)
         KEYS.forEachIndexed { i, (label, code) ->
             val k = KeyView(this, label, i, code, inverted = label == "POWER")
             k.setOnTouchListener { v, e -> onKeyTouch(v as KeyView, e, label, code) }
@@ -252,6 +261,10 @@ class MainActivity : Activity() {
             grid.addView(k, lp)
         }
         root.addView(grid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        irbisGrid = grid
+        mocPanel = buildMocPanel()
+        root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        showTab(getPreferences(MODE_PRIVATE).getBoolean("tab_moc", false))
 
         status = TypeLine(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -284,6 +297,166 @@ class MainActivity : Activity() {
     }
 
     private val versionName get() = packageManager.getPackageInfo(packageName, 0).versionName
+
+    /* ---------- Вкладка MocTec: подбор кода выключения ---------- */
+
+    private lateinit var subtitle: TextView
+    private lateinit var tabIrbis: TextView
+    private lateinit var tabMoc: TextView
+    private lateinit var irbisGrid: View
+    private lateinit var mocPanel: View
+    private lateinit var mocCode: TextView
+    private lateinit var mocInfo: TextView
+    private lateinit var mocRecent: TextView
+    private lateinit var mocFound: TextView
+    private lateinit var mocPlay: TextView
+    @Volatile private var mocRun = false
+    @Volatile private var mocIdx = 0
+    private val mocSent = ArrayDeque<Int>()
+
+    /**
+     * Код MocTec из файла «Мостех» для пульта Delly Changer расшифрован не до конца:
+     * адрес NEC 04 FB известен, а команда — нет. Подбор шлёт все 256 команд по очереди.
+     */
+    private fun mocCodeOf(cmd: Int): Long =
+        (0x04FBL shl 16) or ((cmd and 0xFF).toLong() shl 8) or ((cmd.inv() and 0xFF).toLong())
+
+    private fun tabButton(label: String, onClick: () -> Unit) = TextView(this).apply {
+        text = label
+        typeface = Term.mono
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+        gravity = Gravity.CENTER
+        setOnClickListener { glitch(it); onClick() }
+    }
+
+    private fun styleTab(t: TextView, on: Boolean) {
+        t.setTextColor(if (on) Color.BLACK else Term.FG)
+        t.background = GradientDrawable().apply { setColor(if (on) Term.FG else Color.BLACK); setStroke(dp(1), if (on) Term.FG else Term.LINE) }
+    }
+
+    private fun showTab(moc: Boolean) {
+        if (!moc) mocRun = false
+        styleTab(tabIrbis, !moc); styleTab(tabMoc, moc)
+        irbisGrid.visibility = if (moc) View.GONE else View.VISIBLE
+        mocPanel.visibility = if (moc) View.VISIBLE else View.GONE
+        subtitle.text = if (moc) "MocTec :: подбор :: NEC 04 FB" else "#500202 :: IRBIS :: NEC 38kHz"
+        getPreferences(MODE_PRIVATE).edit().putBoolean("tab_moc", moc).apply()
+    }
+
+    private fun mocButton(label: String, onClick: (View) -> Unit) = TextView(this).apply {
+        text = label
+        typeface = Term.mono
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+        setTextColor(Term.FG)
+        gravity = Gravity.CENTER
+        background = GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Term.LINE) }
+        setOnClickListener { glitch(it); it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); onClick(it) }
+    }
+
+    private fun buildMocPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(text("Код выключения MocTec расшифрован не до конца: адрес NEC 04 FB известен, команда — нет. " +
+            "Подбор по очереди отправит все 256 команд (около 1,5 минуты).\n\n" +
+            "1. Встаньте в 1–3 м и направьте телефон на нижнюю рамку доски.\n" +
+            "2. Нажмите «старт». Как только доска погаснет — «пауза».\n" +
+            "3. Кнопкой «◀» отправляйте последние коды по одному, пока доска снова не отреагирует.\n" +
+            "4. Нажмите «сработало» и пришлите код разработчику.", 14f, Term.DIM).apply { typeface = Term.ru })
+        mocCode = text("", 52f, Term.FG).apply {
+            gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, Color.WHITE); setPadding(0, dp(14), 0, 0)
+        }
+        p.addView(mocCode, LinearLayout.LayoutParams(-1, -2))
+        mocInfo = text("", 18f, Term.DIM).apply { gravity = Gravity.CENTER }
+        p.addView(mocInfo, LinearLayout.LayoutParams(-1, -2))
+        mocRecent = text("", 16f, Term.DIM).apply { gravity = Gravity.CENTER; setPadding(0, dp(2), 0, dp(10)) }
+        p.addView(mocRecent, LinearLayout.LayoutParams(-1, -2))
+
+        fun row(vararg views: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            views.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(58), 1f).apply { if (i > 0) leftMargin = dp(8) }) }
+        }
+        mocPlay = mocButton("[▶ старт]") { if (mocRun) mocPause() else mocStart() }
+        p.addView(row(mocButton("[◀]") { mocStep(-1) }, mocPlay, mocButton("[▶|]") { mocStep(+1) }))
+        p.addView(row(mocButton("[⟳ ещё раз]") { mocStep(0) }, mocButton("[✓ сработало]") { mocMark() }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(mocButton("[с начала]") { mocPause(); mocIdx = 0; mocSent.clear(); mocRender() }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        mocFound = text("", 18f, Term.FG).apply { typeface = Term.ru; gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) }
+        p.addView(mocFound, LinearLayout.LayoutParams(-1, -2))
+        val prefs = getPreferences(MODE_PRIVATE)
+        mocIdx = prefs.getInt("moc_idx", 0)
+        prefs.getString("moc_found", null)?.let { mocFound.text = "> найден: $it" }
+        mocRender()
+        return p
+    }
+
+    private fun mocRender() {
+        val c = mocCodeOf(mocIdx)
+        mocCode.text = "%04X %04X".format(c ushr 16, c and 0xFFFF)
+        mocInfo.text = "команда 0x%02X  ·  %d / 256".format(mocIdx, mocIdx + 1)
+        mocRecent.text = if (mocSent.isEmpty()) "ещё ничего не отправлено"
+            else "последние: " + mocSent.joinToString("  ") { "%02X".format(it) }
+        getPreferences(MODE_PRIVATE).edit().putInt("moc_idx", mocIdx).apply()
+    }
+
+    private fun mocSend(idx: Int, tx: IrTransmitter) {
+        tx.transmit(Nec.withGap(Nec.frame(mocCodeOf(idx))))
+        ui.post {
+            mocSent.addLast(idx); while (mocSent.size > 4) mocSent.removeFirst()
+            mocRender()
+        }
+    }
+
+    private fun mocStart() {
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        if (mocIdx > 255) mocIdx = 0
+        mocRun = true
+        mocPlay.text = "[|| пауза]"
+        say("> подбор MocTec: старт с 0x%02X".format(mocIdx))
+        io.execute {
+            try {
+                while (mocRun && mocIdx <= 255) {
+                    val i = mocIdx
+                    mocSend(i, tx)
+                    Thread.sleep(350)                 // время доске отреагировать
+                    if (!mocRun) break
+                    if (i < 255) mocIdx = i + 1 else { mocRun = false }
+                }
+            } catch (e: Exception) {
+                ui.post { say(e.message ?: "Ошибка передачи", err = true) }
+            }
+            ui.post {
+                mocRun = false
+                mocPlay.text = "[▶ старт]"
+                if (mocIdx >= 255) say("> подбор закончен: все 256 команд отправлены")
+                mocRender()
+            }
+        }
+    }
+
+    private fun mocPause() {
+        mocRun = false
+        mocPlay.text = "[▶ старт]"
+        say("> пауза на команде 0x%02X".format(mocIdx))
+    }
+
+    /** Отправить соседний (−1 / +1) или текущий (0) код один раз. */
+    private fun mocStep(delta: Int) {
+        if (mocRun) mocPause()
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        mocIdx = (mocIdx + delta).coerceIn(0, 255)
+        mocRender()
+        val i = mocIdx
+        io.execute { try { mocSend(i, tx) } catch (e: Exception) { ui.post { say(e.message ?: "Ошибка передачи", err = true) } } }
+        say("> tx MocTec 0x%08X [sent]".format(mocCodeOf(i)))
+    }
+
+    private fun mocMark() {
+        if (mocRun) mocPause()
+        val code = "0x%08X".format(mocCodeOf(mocIdx))
+        getPreferences(MODE_PRIVATE).edit().putString("moc_found", code).apply()
+        mocFound.text = "> найден: $code"
+        say("код $code сохранён — пришлите его разработчику", ok = true)
+    }
 
     private fun glitch(v: View) {
         v.animate().cancel()

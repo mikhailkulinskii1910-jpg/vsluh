@@ -45,6 +45,20 @@ class ScreenshotTest {
             File(out, "scare%03d.png".format(ms)).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
         root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x, y, 0))
+
+        // вкладка MocTec: подбор кода выключения
+        findText(root, "MocTec")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+        Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+            root.draw(Canvas(bmp))
+            File(out, "moctec.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
+
+    private fun findText(v: View, t: String): android.widget.TextView? = when (v) {
+        is android.widget.TextView -> v.takeIf { it.text.toString() == t }
+        is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findText(v.getChildAt(it), t) }
+        else -> null
     }
 
     private fun findKey(v: View, label: String): KeyView? = when (v) {
