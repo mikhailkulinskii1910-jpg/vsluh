@@ -49,8 +49,90 @@ enum Prism {
                                                  Color(hex: irisHex[2], alpha: 0.16), Color(hex: irisHex[3], alpha: 0.13),
                                                  Color(hex: irisHex[4], alpha: 0.12), Color(hex: irisHex[5], alpha: 0.1), .clear])
 
-    /// Рисует сцену в координатах экрана (0..size).
-    static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double) {
+    private static func ui(_ hex: UInt32, _ a: CGFloat) -> UIColor {
+        UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: a)
+    }
+
+    /// Вращающаяся стеклянная призма: бруски-лучи вокруг тёмной сферы. Рисуется один раз, потом только вращается.
+    static let burstImage: UIImage = makeBurst(min(screen.width, screen.height) * 1.05)
+
+    /// Тот же детерминированный узор, что в Android и веб-версии.
+    private static func makeBurst(_ side: CGFloat) -> UIImage {
+        let fmt = UIGraphicsImageRendererFormat.default()
+        fmt.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: fmt).image { rc in
+            let x = rc.cgContext
+            let R = side / 2
+            var seed: UInt64 = 20251009
+            func rnd() -> CGFloat { seed = (seed &* 1103515245 &+ 12345) & 0x7fffffff; return CGFloat(seed) / 2147483648 }
+            let cs = CGColorSpaceCreateDeviceRGB()
+            func grad(_ cols: [UIColor], _ locs: [CGFloat]) -> CGGradient {
+                CGGradient(colorsSpace: cs, colors: cols.map { $0.cgColor } as CFArray, locations: locs)!
+            }
+            let lw = max(0.5, side / 650)
+            let n = 38
+            for i in 0..<n {
+                let ang = CGFloat(i) * 360 / CGFloat(n) + (rnd() - 0.5) * 6
+                let r0 = R * (0.16 + rnd() * 0.14)
+                let len = min(R * (0.30 + rnd() * 0.48), R * 0.97 - r0)
+                let bw = R * (0.055 + rnd() * 0.07)
+                let hollow = rnd() < 0.12
+                let twin = rnd() < 0.35
+                x.saveGState()
+                x.translateBy(x: R, y: R)
+                x.rotate(by: ang * .pi / 180)
+                for k in 0..<(twin ? 2 : 1) {
+                    let wk = k == 0 ? bw : bw * 0.6
+                    let y0 = k == 0 ? -wk / 2 : bw / 2 + wk * 0.15
+                    let y1 = y0 + wk
+                    let x0 = k == 0 ? r0 : r0 + len * 0.15
+                    let x1 = k == 0 ? r0 + len : r0 + len * 0.8
+                    let ins = wk * 0.22
+                    let rect = CGRect(x: x0, y: y0, width: x1 - x0, height: wk)
+                    let inner = rect.insetBy(dx: ins, dy: ins)
+                    if !hollow {
+                        // тело бруска: стекло светлее к граням
+                        x.saveGState(); x.clip(to: rect)
+                        x.drawLinearGradient(grad([ui(0xFFFFFF, 0.43), ui(0xFFFFFF, 0.1), ui(0xC8DCFF, 0.12), ui(0xFFFFFF, 0.37)], [0, 0.3, 0.7, 1]),
+                                             start: CGPoint(x: 0, y: y0), end: CGPoint(x: 0, y: y1), options: [])
+                        x.restoreGState()
+                        // тёмная середина — толщина стекла
+                        x.setFillColor(ui(0, 0.41).cgColor); x.fill(inner)
+                        // радужная грань: дисперсия вдоль бруска
+                        let g = grad((0..<6).map { ui(irisHex[(i + $0) % 6], 0.84) }, [0, 0.2, 0.4, 0.6, 0.8, 1])
+                        let face = (i + k) % 2 == 0 ? y0 + ins * 0.3 : y1 - ins * 1.6
+                        let fr = CGRect(x: x0 + ins * 0.5, y: face, width: x1 - x0 - ins, height: ins * 1.3)
+                        x.saveGState(); x.clip(to: fr)
+                        x.drawLinearGradient(g, start: CGPoint(x: x0, y: 0), end: CGPoint(x: x1, y: 0), options: [])
+                        x.restoreGState()
+                        let mid = CGRect(x: x0 + ins, y: (y0 + y1) / 2 - wk * 0.08, width: x1 - x0 - 2 * ins, height: wk * 0.16)
+                        x.saveGState(); x.setAlpha(0.35); x.clip(to: mid)
+                        x.drawLinearGradient(g, start: CGPoint(x: x0, y: 0), end: CGPoint(x: x1, y: 0), options: [])
+                        x.restoreGState()
+                    }
+                    // светлые рёбра и яркий торец
+                    x.setLineWidth(lw)
+                    x.setStrokeColor(ui(0xFFFFFF, hollow ? 0.67 : 0.9).cgColor); x.stroke(rect)
+                    x.setStrokeColor(ui(0xFFFFFF, 0.31).cgColor); x.stroke(inner)
+                    x.setFillColor(ui(0xFFFFFF, 0.92).cgColor); x.fill(CGRect(x: x1 - lw * 1.5, y: y0, width: lw * 1.5, height: wk))
+                }
+                x.restoreGState()
+            }
+            // тёмная сфера с голубым ободком и бликом
+            let sr = R * 0.15
+            let c = CGPoint(x: R, y: R)
+            x.drawRadialGradient(grad([ui(0, 1), ui(0, 1), ui(0x2C5BFF, 1), ui(0xFFFFFF, 1)], [0, 0.78, 0.93, 1]),
+                                 startCenter: c, startRadius: 0, endCenter: c, endRadius: sr, options: [])
+            let hc = CGPoint(x: R - sr * 0.35, y: R - sr * 0.4)
+            x.drawRadialGradient(grad([ui(0xFFFFFF, 0.67), ui(0xFFFFFF, 0)], [0, 1]),
+                                 startCenter: hc, startRadius: 0, endCenter: hc, endRadius: sr * 0.45, options: [])
+            x.setStrokeColor(ui(0x8FA8FF, 0.9).cgColor); x.setLineWidth(R * 0.012)
+            x.strokeEllipse(in: CGRect(x: R - sr * 0.97, y: R - sr * 0.97, width: sr * 1.94, height: sr * 1.94))
+        }
+    }
+
+    /// Рисует сцену в координатах экрана (0..size); burstAlpha — яркость призмы (под стеклом кнопок тусклее, чтобы читались надписи).
+    static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, burstAlpha: Double = 0.72) {
         let w = size.width, h = size.height
         let rect = Path(CGRect(origin: .zero, size: size))
         ctx.fill(rect, with: .color(Color(hex: 0x07060B)))
@@ -75,6 +157,13 @@ enum Prism {
         let p = CGFloat(t.truncatingRemainder(dividingBy: 9) / 9)
         let sx = -band * 1.2 + (w + band * 1.6) * p, sy = -band * 0.6 + h * 0.5 * p
         add.fill(rect, with: .linearGradient(sheen, startPoint: CGPoint(x: sx, y: sy), endPoint: CGPoint(x: sx + band, y: sy + band * 0.6)))
+        // вращающаяся стеклянная призма в центре
+        var b = ctx
+        b.opacity = burstAlpha
+        let side = burstImage.size.width
+        b.translateBy(x: w / 2, y: h * 0.48)
+        b.rotate(by: .degrees(t * 6))
+        b.draw(Image(uiImage: burstImage), in: CGRect(x: -side / 2, y: -side / 2, width: side, height: side))
         // затемнение к краям
         ctx.fill(rect, with: .radialGradient(Gradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black.opacity(0.82), location: 1)]),
                                              center: CGPoint(x: w / 2, y: h * 0.45), startRadius: 0, endRadius: max(w, h) * 0.78))
@@ -103,7 +192,7 @@ struct Lens: View {
                 c.translateBy(x: size.width / 2, y: size.height / 2)
                 c.scaleBy(x: zoom, y: zoom)
                 c.translateBy(x: -size.width / 2 - f.minX, y: -size.height / 2 - f.minY - 3)
-                Prism.draw(c, size: Prism.screen, t: t)
+                Prism.draw(c, size: Prism.screen, t: t, burstAlpha: 0.27)
             }
         }
     }
@@ -195,7 +284,7 @@ struct IrisText: View {
     var body: some View {
         TimelineView(.animation) { tl in
             let s = CGFloat((Prism.time(tl.date) / 6).truncatingRemainder(dividingBy: 1))
-            Text(text).font(font).foregroundColor(.clear).lineLimit(1)
+            Text(text).font(font).foregroundColor(.clear).lineLimit(1).fixedSize()
                 .overlay(ZStack {
                     LinearGradient(colors: Prism.iris + Prism.iris.reversed().dropFirst(),
                                    startPoint: UnitPoint(x: -s * 2, y: 0.5), endPoint: UnitPoint(x: 2 - s * 2, y: 0.5))

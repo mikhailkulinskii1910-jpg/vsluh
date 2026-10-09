@@ -291,12 +291,13 @@ object PrismScene {
             intArrayOf(Color.TRANSPARENT, a(Term.IRIS[0], 30), a(Term.IRIS[1], 46), a(Term.IRIS[2], 40), a(Term.IRIS[3], 34),
                 a(Term.IRIS[4], 30), a(Term.IRIS[5], 26), Color.TRANSPARENT),
             null, android.graphics.Shader.TileMode.CLAMP)
+        burst = makeBurst((min(w, h) * 1.05f).toInt().coerceAtMost(1400))
         vignette = android.graphics.RadialGradient(w / 2, h * 0.45f, max(w, h) * 0.78f,
             intArrayOf(Color.TRANSPARENT, Color.argb(210, 0, 0, 0)), floatArrayOf(0.35f, 1f), android.graphics.Shader.TileMode.CLAMP)
     }
 
-    /** Рисует сцену в координатах фона (0..w, 0..h). */
-    fun draw(canvas: Canvas, t: Float) {
+    /** Рисует сцену в координатах фона (0..w, 0..h); burstAlpha — яркость призмы (под стеклом кнопок — тусклее, чтобы читались надписи). */
+    fun draw(canvas: Canvas, t: Float, burstAlpha: Int = 185) {
         canvas.drawColor(Term.BG)
         if (w == 0f) return
         val r = max(w, h) * 0.42f
@@ -321,8 +322,88 @@ object PrismScene {
             m.setTranslate(-band * 1.2f + (w + band * 1.6f) * p, -band * 0.6f + (h * 0.5f) * p); sh.setLocalMatrix(m)
             add.shader = sh; canvas.drawRect(0f, 0f, w, h, add)
         }
+        // вращающаяся стеклянная призма в центре
+        burst?.let { b ->
+            val cx = w / 2; val cy = h * 0.48f; val half = b.width / 2f
+            burstP.alpha = burstAlpha
+            canvas.save(); canvas.rotate(t * 6f, cx, cy)
+            canvas.drawBitmap(b, null, RectF(cx - half, cy - half, cx + half, cy + half), burstP)
+            canvas.restore()
+        }
         vignette?.let { plain.shader = it; canvas.drawRect(0f, 0f, w, h, plain) }
         add.shader = null
+    }
+
+    private var burst: Bitmap? = null
+    private val burstP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 185 }
+
+    /**
+     * Стеклянная «призма»: стеклянные бруски, расходящиеся лучами от тёмной сферы.
+     * Рисуется один раз в битмап (детерминированный «случайный» узор), потом только вращается.
+     */
+    private fun makeBurst(size: Int): Bitmap {
+        val bm = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val cv = Canvas(bm)
+        val R = size / 2f
+        var seed = 20251009L
+        fun rnd(): Float { seed = (seed * 1103515245L + 12345L) and 0x7fffffffL; return seed / 2147483648f }
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        val st = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = max(1f, size / 650f) }
+        val cl = android.graphics.Shader.TileMode.CLAMP
+        val n = 38
+        for (i in 0 until n) {
+            val ang = i * 360f / n + (rnd() - 0.5f) * 6f
+            val r0 = R * (0.16f + rnd() * 0.14f)
+            val len = min(R * (0.30f + rnd() * 0.48f), R * 0.97f - r0)
+            val bw = R * (0.055f + rnd() * 0.07f)
+            val hollow = rnd() < 0.12f
+            val twin = rnd() < 0.35f
+            cv.save(); cv.translate(R, R); cv.rotate(ang)
+            for (k in 0 until if (twin) 2 else 1) {
+                val wk = if (k == 0) bw else bw * 0.6f
+                val y0 = if (k == 0) -wk / 2 else bw / 2 + wk * 0.15f
+                val x0 = if (k == 0) r0 else r0 + len * 0.15f
+                val x1 = if (k == 0) r0 + len else r0 + len * 0.8f
+                val y1 = y0 + wk
+                val ins = wk * 0.22f
+                if (!hollow) {
+                    // тело бруска: стекло светлее к граням
+                    p.shader = android.graphics.LinearGradient(0f, y0, 0f, y1,
+                        intArrayOf(Color.argb(110, 255, 255, 255), Color.argb(26, 255, 255, 255), Color.argb(30, 200, 220, 255), Color.argb(95, 255, 255, 255)),
+                        floatArrayOf(0f, 0.3f, 0.7f, 1f), cl)
+                    cv.drawRect(x0, y0, x1, y1, p)
+                    // тёмная середина — толщина стекла
+                    p.shader = null; p.color = Color.argb(105, 0, 0, 0)
+                    cv.drawRect(x0 + ins, y0 + ins, x1 - ins, y1 - ins, p)
+                    // радужная грань: дисперсия вдоль бруска
+                    val cols = IntArray(6) { j -> val c = Term.IRIS[(i + j) % 6]; Color.argb(215, Color.red(c), Color.green(c), Color.blue(c)) }
+                    p.shader = android.graphics.LinearGradient(x0, 0f, x1, 0f, cols, null, cl)
+                    val face = if ((i + k) % 2 == 0) y0 + ins * 0.3f else y1 - ins * 1.6f
+                    cv.drawRect(x0 + ins * 0.5f, face, x1 - ins * 0.5f, face + ins * 1.3f, p)
+                    // вторая, бледная радужная полоса внутри — свет, прошедший сквозь брусок
+                    p.alpha = 90
+                    cv.drawRect(x0 + ins, -wk * 0.08f + (y0 + y1) / 2, x1 - ins, wk * 0.08f + (y0 + y1) / 2, p)
+                    p.alpha = 255
+                    p.shader = null
+                }
+                // светлые рёбра
+                st.color = Color.argb(if (hollow) 170 else 230, 255, 255, 255); cv.drawRect(x0, y0, x1, y1, st)
+                st.color = Color.argb(80, 255, 255, 255); cv.drawRect(x0 + ins, y0 + ins, x1 - ins, y1 - ins, st)
+                // яркий торец
+                p.color = Color.argb(235, 255, 255, 255); cv.drawRect(x1 - st.strokeWidth * 1.5f, y0, x1, y1, p)
+            }
+            cv.restore()
+        }
+        // тёмная сфера в центре с голубым ободком и бликом
+        val sr = R * 0.15f
+        p.shader = android.graphics.RadialGradient(R, R, sr, intArrayOf(Color.BLACK, Color.BLACK, Color.parseColor("#2C5BFF"), Color.WHITE),
+            floatArrayOf(0f, 0.78f, 0.93f, 1f), cl)
+        cv.drawCircle(R, R, sr, p)
+        p.shader = android.graphics.RadialGradient(R - sr * 0.35f, R - sr * 0.4f, sr * 0.45f, Color.argb(170, 255, 255, 255), Color.TRANSPARENT, cl)
+        cv.drawCircle(R - sr * 0.35f, R - sr * 0.4f, sr * 0.45f, p)
+        st.shader = android.graphics.SweepGradient(R, R, intArrayOf(Term.IRIS[0], Term.IRIS[1], Color.WHITE, Term.IRIS[5], Term.IRIS[0]), null)
+        st.strokeWidth = R * 0.012f; cv.drawCircle(R, R, sr * 0.97f, st)
+        return bm
     }
 
     private val loc = IntArray(2)
@@ -330,13 +411,13 @@ object PrismScene {
      * Преломление: рисует сцену внутри view так, как она лежит за ним, но увеличенной
      * относительно центра (линза) и чуть сдвинутой вниз (толщина стекла).
      */
-    fun refract(canvas: Canvas, v: View, zoom: Float, t: Float) {
+    fun refract(canvas: Canvas, v: View, zoom: Float, t: Float, burstAlpha: Int = 70) {
         v.getLocationInWindow(loc)
         val vx = loc[0] - ox; val vy = loc[1] - oy
         canvas.save()
         canvas.scale(zoom, zoom, v.width / 2f, v.height / 2f)
         canvas.translate(-vx, -vy - 3 * v.resources.displayMetrics.density)
-        draw(canvas, t)
+        draw(canvas, t, burstAlpha)
         canvas.restore()
     }
 }
@@ -359,7 +440,7 @@ class GlassDrawable(c: Context, private val on: Boolean) : android.graphics.draw
         box.set(b.left + d / 2, b.top + d / 2, b.right - d / 2, b.bottom - d / 2)
         canvas.save()
         path.reset(); path.addRoundRect(box, r, r, android.graphics.Path.Direction.CW); canvas.clipPath(path)
-        PrismScene.refract(canvas, v, 1.25f, t)
+        PrismScene.refract(canvas, v, 1.25f, t, if (h > 90 * d) 32 else 70)   // под большими плашками с текстом призма почти гаснет
         if (on) {
             p.shader = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR).apply {
                 m.setTranslate((t * 0.2f % 2f) * w, 0f); setLocalMatrix(m)
@@ -767,7 +848,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         cv.drawBitmap(glow, 0f, 0f, pp)
         out.extractAlpha()
     }
-    /** Сцена в 1/4 разрешения: из неё и фон заставки (мягкий), и «линза» внутри крысы. */
+    /** Сцена в 1/2 разрешения: из неё и фон заставки (мягкий), и «линза» внутри крысы. */
     private var sceneBmp: Bitmap? = null
     private val sceneM = android.graphics.Matrix()
     private val glassP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -775,7 +856,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     private fun renderScene(canvas: Canvas) {
         val w = width; val h = height
         if (w == 0) return
-        val bm = sceneBmp ?: Bitmap.createBitmap(max(1, w / 4), max(1, h / 4), Bitmap.Config.ARGB_8888).also { sceneBmp = it }
+        val bm = sceneBmp ?: Bitmap.createBitmap(max(1, w / 2), max(1, h / 2), Bitmap.Config.ARGB_8888).also { sceneBmp = it }
         val cv = Canvas(bm); cv.scale(bm.width / w.toFloat(), bm.height / h.toFloat())
         PrismScene.draw(cv, PrismScene.time())
         canvas.drawBitmap(bm, null, RectF(0f, 0f, w.toFloat(), h.toFloat()), signP)
@@ -792,7 +873,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         val e = 1.8f * d
         fringe.color = Color.argb(235, 255, 255, 255); canvas.drawBitmap(tube, null, RectF(dst.left - e, dst.top - e, dst.right - e, dst.bottom - e), fringe)
         fringe.color = Color.argb(210, 80, 225, 255); canvas.drawBitmap(tube, null, RectF(dst.left + e, dst.top + e, dst.right + e, dst.bottom + e), fringe)
-        // линза: пиксель фона → экран (×4), увеличение ×1.35 вокруг крысы, затем в её повёрнутые координаты
+        // линза: пиксель фона → экран (×2), увеличение ×1.35 вокруг крысы, затем в её повёрнутые координаты
         sceneM.setScale(width / bm.width.toFloat(), height / bm.height.toFloat())
         sceneM.postScale(1.35f, 1.35f, cx, cy); sceneM.postTranslate(-cx, -cy); sceneM.postRotate(-rot)
         val lens = android.graphics.BitmapShader(bm, sh, sh).apply { setLocalMatrix(sceneM) }

@@ -385,15 +385,25 @@ class MainActivity : Activity() {
             "1. Встаньте в 1–3 м и направьте телефон на нижнюю рамку доски.\n" +
             "2. Нажмите «старт». Как только доска погаснет — «пауза».\n" +
             "3. Кнопкой «◀» отправляйте последние коды по одному, пока доска снова не отреагирует.\n" +
-            "4. Нажмите «сработало» и пришлите код разработчику.", 14f, Term.DIM).apply { typeface = Term.ru })
+            "4. Нажмите «сработало» и пришлите код разработчику.", 14f, Term.DIM).apply {
+            typeface = Term.ru
+            // в «Призме» текст лежит на стеклянной плашке — иначе теряется на фоне призмы
+            if (Term.prism) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(14), dp(12), dp(14), dp(12)) }
+        })
+        // код и счётчик — тоже на стекле в «Призме»
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            if (Term.prism) { background = Term.boxBg(this@MainActivity); setPadding(0, 0, 0, dp(4)) }
+        }
+        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { if (Term.prism) topMargin = dp(10) })
         mocCode = text("", if (Term.prism) 34f else 52f, Term.FG).apply {
             gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, Color.WHITE); setPadding(0, dp(14), 0, 0)
         }
-        p.addView(mocCode, LinearLayout.LayoutParams(-1, -2))
+        box.addView(mocCode, LinearLayout.LayoutParams(-1, -2))
         mocInfo = text("", 18f, Term.DIM).apply { gravity = Gravity.CENTER }
-        p.addView(mocInfo, LinearLayout.LayoutParams(-1, -2))
+        box.addView(mocInfo, LinearLayout.LayoutParams(-1, -2))
         mocRecent = text("", 16f, Term.DIM).apply { gravity = Gravity.CENTER; setPadding(0, dp(2), 0, dp(10)) }
-        p.addView(mocRecent, LinearLayout.LayoutParams(-1, -2))
+        box.addView(mocRecent, LinearLayout.LayoutParams(-1, -2))
 
         fun row(vararg views: View) = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
