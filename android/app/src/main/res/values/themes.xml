@@ -1,6 +1,7 @@
 <resources>
     <color name="bg">#000000</color>
     <color name="prism_bg">#07060B</color>
+    <color name="thermal_bg">#050308</color>
     <color name="icon_bg">#59646C</color>
     <style name="Theme.Irbis" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
@@ -38,5 +39,24 @@
         <item name="android:textColorSecondary">#A79FC6</item>
         <item name="android:fontFamily">@font/manrope</item>
         <item name="android:textSize">16sp</item>
+    </style>
+
+    <!-- Тема «Тепловизор»: чёрный кадр, палитра ironbow, жёлтые рамки обнаружения -->
+    <style name="Theme.Thermal" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/thermal_bg</item>
+        <item name="android:statusBarColor">@color/thermal_bg</item>
+        <item name="android:navigationBarColor">@color/thermal_bg</item>
+        <item name="android:colorAccent">#FFD43B</item>
+        <item name="android:fontFamily">@font/vt323</item>
+        <item name="android:alertDialogTheme">@style/Theme.Thermal.Dialog</item>
+    </style>
+    <style name="Theme.Thermal.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg_thermal</item>
+        <item name="android:colorBackground">#0A0508</item>
+        <item name="android:colorAccent">#FFD43B</item>
+        <item name="android:textColorPrimary">#FFF1DC</item>
+        <item name="android:textColorSecondary">#E0974A</item>
+        <item name="android:fontFamily">@font/vt323</item>
+        <item name="android:textSize">20sp</item>
     </style>
 </resources>

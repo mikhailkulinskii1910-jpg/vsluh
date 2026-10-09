@@ -21,6 +21,10 @@ struct ContentView: View {
         ZStack {
             Term.bg.ignoresSafeArea()
             if Term.prism { PrismBackground().ignoresSafeArea() }   // во второй теме крыс нет
+            else if Term.thermal {
+                ThermalBackground().ignoresSafeArea()
+                TimelineView(.animation) { tl in RunningRats(t: tl.date.timeIntervalSinceReferenceDate) }.ignoresSafeArea()
+            }
             else { LogBackground().ignoresSafeArea() }
 
             VStack(alignment: .leading, spacing: 0) {
@@ -28,6 +32,8 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         if Term.prism {
                             IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
+                        } else if Term.thermal {
+                            HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
                         } else {
                             TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
                                 .shadow(color: .white.opacity(0.9), radius: 8)
@@ -68,7 +74,7 @@ struct ContentView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
-            if !Term.prism { Scanlines().ignoresSafeArea() }
+            if !Term.prism && !Term.thermal { Scanlines().ignoresSafeArea() }
 
             if splash {
                 SplashView(boot: [
@@ -113,7 +119,15 @@ struct SettingsView: View {
     @State private var copied: String?
     @AppStorage("theme") private var theme = "terminal"
     private let themes = [("terminal", "Терминал", "Чёрно-белый, пиксельный шрифт, бегущий лог и крысы"),
-                          ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы")]
+                          ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы"),
+                          ("thermal", "Тепловизор", "Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка")]
+
+    /// Фон выбранной строки в текущей теме.
+    private var selectedFill: AnyView {
+        if Term.prism { return AnyView(Color(hex: 0x8B6CFF, alpha: 0.35)) }
+        if Term.thermal { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
+        return AnyView(Term.fg)
+    }
 
     var body: some View {
         ScrollView {
@@ -127,7 +141,7 @@ struct SettingsView: View {
                 ForEach(themes.indices, id: \.self) { i in
                     let th = themes[i]
                     Button {
-                        Term.prism = th.0 == "prism"
+                        Term.theme = th.0
                         theme = th.0
                     } label: {
                         HStack {
@@ -140,7 +154,7 @@ struct SettingsView: View {
                         }
                         .padding(10)
                         .foregroundColor(theme == th.0 && !Term.prism ? .black : Term.fg)
-                        .background(theme == th.0 ? (Term.prism ? Color(hex: 0x8B6CFF, alpha: 0.35) : Term.fg) : Term.bg)
+                        .background(theme == th.0 ? selectedFill : Term.bg)
                         .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
                     }
                 }
@@ -154,7 +168,7 @@ struct SettingsView: View {
                         }
                         .padding(10)
                         .foregroundColor(model.mode == m && !Term.prism ? .black : Term.fg)
-                        .background(model.mode == m ? (Term.prism ? Color(hex: 0x8B6CFF, alpha: 0.35) : Term.fg) : Term.bg)
+                        .background(model.mode == m ? selectedFill : Term.bg)
                         .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
                     }
                 }

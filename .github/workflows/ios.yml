@@ -54,6 +54,13 @@ jobs:
           sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-prism.png"
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-prism.png"
+          # тема «Тепловизор»
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme thermal
+          SIMCTL_CHILD_KRISA_SPLASH_AT=2000 xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-thermal.png"
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-thermal.png"
           # уменьшенные кадры — в лог, чтобы их можно было посмотреть без скачивания артефактов
           for f in out/shot-*.png out/splash-*.png; do
             sips -Z 360 -s format jpeg -s formatOptions 55 "$f" --out "${f%.png}.jpg" >/dev/null

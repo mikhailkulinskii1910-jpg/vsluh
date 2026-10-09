@@ -20,7 +20,7 @@ struct SplashView: View {
                 let f = CGFloat(min(max((t - 650) / 900, 0), 1))
                 let frame = Int(t / 16)
                 ZStack(alignment: .topLeading) {
-                    if Term.prism { PrismBackground() } else { Color.black }
+                    if Term.prism { PrismBackground() } else if Term.thermal { ThermalBackground() } else { Color.black }
                     // 1. загрузочный лог
                     Text(bootText(chars: Int(t / 7)))
                         .font(Term.prism ? Prism.body(14) : Term.mono(18)).foregroundColor(Term.dim)
@@ -35,6 +35,9 @@ struct SplashView: View {
                             if Term.prism {
                                 // крыса из жидкого стекла
                                 GlassRat(t: Prism.time(ctx.date), moving: moving)
+                            } else if Term.thermal {
+                                // крыса — тепловое пятно
+                                HeatRat()
                             } else {
                                 RatSlices(bands: moving ? 9 : 1, frame: frame, amp: moving ? 22 : 0)
                                     .shadow(color: .white.opacity(Double(0.55 * f)), radius: 14)
@@ -48,7 +51,7 @@ struct SplashView: View {
                         if f > 0.42 && f < 0.9 {
                             let k = 1 - abs(f - 0.55) / 0.35
                             ForEach(0..<7, id: \.self) { i in
-                                Rectangle().fill((Term.prism ? Prism.iris[i % 6] : Color.white).opacity(Double(0.7 * k)))
+                                Rectangle().fill((Term.prism ? Prism.iris[i % 6] : Term.thermal ? Heat.color(0.45 + Double(i) * 0.08) : Color.white).opacity(Double(0.7 * k)))
                                     .frame(width: (rw * 1.2 + hashNoise(frame * 7 + i) * rw * 0.8) * k, height: 1)
                                     .position(x: w / 2, y: restY + rh * 0.33 + CGFloat(i - 3) * 4)
                             }
@@ -61,12 +64,24 @@ struct SplashView: View {
                         if Term.prism {
                             IrisText(text: word, font: Prism.display(48))
                                 .position(x: w / 2, y: restY + rh * 0.5 + 70)
+                        } else if Term.thermal {
+                            HeatText(text: word, font: Term.mono(64))
+                                .position(x: w / 2, y: restY + rh * 0.5 + 70)
                         } else {
                             Text(word)
                                 .font(Term.mono(64)).foregroundColor(Term.fg)
                                 .shadow(color: .white, radius: 12)
                                 .position(x: w / 2, y: restY + rh * 0.5 + 70)
                         }
+                    }
+
+                    // тепловизор «захватил» крысу: рамка обнаружения с подписью (мигает при появлении)
+                    if Term.thermal && f > 0.62 && !(t < 1700 && Int(t / 70) % 2 == 0) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("RAT_01XX  37.2°C").font(Term.mono(18)).foregroundColor(Heat.yellow)
+                            Rectangle().strokeBorder(Heat.yellow, lineWidth: 1.5).frame(width: rw * 1.12, height: rh * 1.2)
+                        }
+                        .position(x: w / 2, y: restY - 2)
                     }
 
                     // подпись в правом нижнем углу «расписывается» слева направо
@@ -83,7 +98,7 @@ struct SplashView: View {
                     if t > 2350 {
                         let p = CGFloat(min((t - 2350) / 300, 1))
                         ForEach(0..<14, id: \.self) { i in
-                            Rectangle().fill((Term.prism ? Prism.iris[i % 6] : Color.white).opacity(Double(0.85 * (1 - p))))
+                            Rectangle().fill((Term.prism ? Prism.iris[i % 6] : Term.thermal ? Heat.color(0.4 + Double(i % 7) * 0.09) : Color.white).opacity(Double(0.85 * (1 - p))))
                                 .frame(width: w * hashNoise(frame * 13 + i), height: 1 + hashNoise(frame * 5 + i) * 6)
                                 .position(x: w * hashNoise(frame * 13 + i) / 2, y: h * hashNoise(frame * 31 + i))
                         }

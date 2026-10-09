@@ -22,4 +22,15 @@
         <item name="android:windowSplashScreenBackground">@color/prism_bg</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
     </style>
+
+    <style name="Theme.Thermal" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/thermal_bg</item>
+        <item name="android:statusBarColor">@color/thermal_bg</item>
+        <item name="android:navigationBarColor">@color/thermal_bg</item>
+        <item name="android:colorAccent">#FFD43B</item>
+        <item name="android:fontFamily">@font/vt323</item>
+        <item name="android:alertDialogTheme">@style/Theme.Thermal.Dialog</item>
+        <item name="android:windowSplashScreenBackground">@color/thermal_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
 </resources>
