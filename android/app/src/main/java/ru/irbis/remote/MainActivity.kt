@@ -428,7 +428,8 @@ class MainActivity : Activity() {
             views.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(58), 1f).apply { if (i > 0) leftMargin = dp(8) }) }
         }
         mocPlay = mocButton("[▶ старт]") { if (mocRun) mocPause() else mocStart() }
-        p.addView(row(mocButton("[◀]") { mocStep(-1) }, mocPlay, mocButton("[▶|]") { mocStep(+1) }))
+        p.addView(row(mocButton("[◀]") { mocStep(-1) }, mocPlay, mocButton("[▶|]") { mocStep(+1) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })   // отступ от блока с кодом
         p.addView(row(mocButton("[⟳ ещё раз]") { mocStep(0) }, mocButton("[✓ сработало]") { mocMark() }),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         p.addView(row(mocButton("[с начала]") { mocPause(); mocIdx = 0; mocSent.clear(); mocRender() }),

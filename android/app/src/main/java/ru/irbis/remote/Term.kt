@@ -460,7 +460,7 @@ object PrismScene {
         val vx = loc[0] - ox; val vy = loc[1] - oy
         canvas.save()
         canvas.scale(zoom, zoom, v.width / 2f, v.height / 2f)
-        canvas.translate(-vx, -vy - 3 * v.resources.displayMetrics.density)
+        canvas.translate(-vx, -vy - v.resources.displayMetrics.density)
         draw(canvas, t, burstAlpha)
         canvas.restore()
     }
@@ -484,7 +484,7 @@ class GlassDrawable(c: Context, private val on: Boolean) : android.graphics.draw
         box.set(b.left + d / 2, b.top + d / 2, b.right - d / 2, b.bottom - d / 2)
         canvas.save()
         path.reset(); path.addRoundRect(box, r, r, android.graphics.Path.Direction.CW); canvas.clipPath(path)
-        PrismScene.refract(canvas, v, 1.25f, t, if (h > 90 * d) 32 else 70)   // под большими плашками с текстом призма почти гаснет
+        PrismScene.refract(canvas, v, 1.03f, t, if (h > 90 * d) 32 else 70)   // под большими плашками с текстом призма почти гаснет
         if (on) {
             p.shader = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR).apply {
                 m.setTranslate((t * 0.2f % 2f) * w, 0f); setLocalMatrix(m)
@@ -569,7 +569,7 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         canvas.save()
         clip.reset(); clip.addRoundRect(box, r, r, android.graphics.Path.Direction.CW); canvas.clipPath(clip)
         // 1. преломлённый фон: линза увеличивает то, что под кнопкой; при нажатии — сильнее
-        PrismScene.refract(canvas, this, 1.18f + 0.22f * hot + if (down) 0.08f else 0f, t)
+        PrismScene.refract(canvas, this, 1.03f + 0.08f * hot + if (down) 0.03f else 0f, t)
         if (inverted) {
             // POWER — голограмма: перелив поверх стекла, медленно течёт
             glass.shader = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR).apply {
