@@ -1,5 +1,6 @@
 <resources>
     <color name="bg">#000000</color>
+    <color name="prism_bg">#07060B</color>
     <color name="icon_bg">#59646C</color>
     <style name="Theme.Irbis" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
@@ -18,5 +19,24 @@
         <item name="android:textColorSecondary">#9E9E9E</item>
         <item name="android:fontFamily">@font/vt323</item>
         <item name="android:textSize">20sp</item>
+    </style>
+
+    <!-- Тема «Призма»: чёрный фон, переливающееся стекло, радужные блики -->
+    <style name="Theme.Prism" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/prism_bg</item>
+        <item name="android:statusBarColor">@color/prism_bg</item>
+        <item name="android:navigationBarColor">@color/prism_bg</item>
+        <item name="android:colorAccent">#B49CFF</item>
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:alertDialogTheme">@style/Theme.Prism.Dialog</item>
+    </style>
+    <style name="Theme.Prism.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg_prism</item>
+        <item name="android:colorBackground">#120F1C</item>
+        <item name="android:colorAccent">#B49CFF</item>
+        <item name="android:textColorPrimary">#F4F1FF</item>
+        <item name="android:textColorSecondary">#A79FC6</item>
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:textSize">16sp</item>
     </style>
 </resources>

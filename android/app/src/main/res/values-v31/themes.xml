@@ -10,4 +10,16 @@
         <item name="android:windowSplashScreenBackground">@color/bg</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
     </style>
+
+    <!-- Тема «Призма»: чёрный фон, переливающееся стекло, радужные блики -->
+    <style name="Theme.Prism" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/prism_bg</item>
+        <item name="android:statusBarColor">@color/prism_bg</item>
+        <item name="android:navigationBarColor">@color/prism_bg</item>
+        <item name="android:colorAccent">#B49CFF</item>
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:alertDialogTheme">@style/Theme.Prism.Dialog</item>
+        <item name="android:windowSplashScreenBackground">@color/prism_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
 </resources>

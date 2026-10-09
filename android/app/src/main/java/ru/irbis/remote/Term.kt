@@ -25,19 +25,61 @@ import kotlin.math.min
 import kotlin.math.sin
 import kotlin.random.Random
 
-/** Палитра и шрифты в духе чёрно-белого терминала. */
+/**
+ * Палитра и шрифты. Две темы:
+ *  - «Терминал» — чёрно-белый терминал, пиксельный VT323;
+ *  - «Призма» — чёрный фон, переливающееся «плёночное» стекло, радужные блики как на CD и призмах.
+ */
 object Term {
-    const val BG = Color.BLACK
-    val FG = Color.parseColor("#EDEDED")
-    val DIM = Color.parseColor("#8A8A8A")
-    val LINE = Color.parseColor("#5C5C5C")
-    val FAINT = Color.parseColor("#151515")
+    var prism = false; private set
+    var BG = Color.BLACK; private set
+    var FG = Color.parseColor("#EDEDED"); private set
+    var DIM = Color.parseColor("#8A8A8A"); private set
+    var LINE = Color.parseColor("#5C5C5C"); private set
+    var FAINT = Color.parseColor("#151515"); private set
     const val NOISE = "#$%&@01<>/\\|=+*:;░▒▓"
 
+    /** Радужные цвета «Призмы»: фиолетовый → бирюзовый → мятный → жёлтый → коралловый → розовый. */
+    val IRIS = intArrayOf(
+        Color.parseColor("#8B6CFF"), Color.parseColor("#3FE0FF"), Color.parseColor("#62FFB8"),
+        Color.parseColor("#FFE66B"), Color.parseColor("#FF8A5C"), Color.parseColor("#FF5FD8"), Color.parseColor("#8B6CFF"))
+
+    /** Заголовки и кнопки. */
     lateinit var mono: Typeface
-    /** Для русского текста: в VT323 нет кириллицы. */
-    val ru: Typeface = Typeface.MONOSPACE
-    fun init(c: Context) { if (!::mono.isInitialized) mono = c.resources.getFont(R.font.vt323) }
+    /** Русский текст: в VT323 нет кириллицы, поэтому в «Терминале» — системный моноширинный. */
+    var ru: Typeface = Typeface.MONOSPACE; private set
+
+    fun init(c: Context, prismTheme: Boolean) {
+        prism = prismTheme
+        if (prism) {
+            BG = Color.parseColor("#07060B"); FG = Color.parseColor("#F4F1FF"); DIM = Color.parseColor("#A79FC6")
+            LINE = Color.parseColor("#4B4270"); FAINT = Color.parseColor("#1A1726")
+            mono = c.resources.getFont(R.font.unbounded); ru = c.resources.getFont(R.font.manrope)
+        } else {
+            BG = Color.BLACK; FG = Color.parseColor("#EDEDED"); DIM = Color.parseColor("#8A8A8A")
+            LINE = Color.parseColor("#5C5C5C"); FAINT = Color.parseColor("#151515")
+            mono = c.resources.getFont(R.font.vt323); ru = Typeface.MONOSPACE
+        }
+    }
+
+    /** Фон кнопок-рамок шапки, вкладок и панели MocTec в текущей теме. */
+    fun boxBg(c: Context, on: Boolean = false): android.graphics.drawable.Drawable {
+        val d = c.resources.displayMetrics.density
+        return android.graphics.drawable.GradientDrawable().apply {
+            if (prism) {
+                cornerRadius = 14 * d
+                if (on) { orientation = android.graphics.drawable.GradientDrawable.Orientation.TL_BR; colors = IRIS.copyOfRange(0, 6) }
+                else setColor(Color.argb(26, 255, 255, 255))
+                setStroke(d.toInt().coerceAtLeast(1), if (on) Color.TRANSPARENT else Color.argb(150, 160, 140, 255))
+            } else {
+                setColor(if (on) FG else Color.BLACK)
+                setStroke(d.toInt().coerceAtLeast(1), if (on) FG else LINE)
+            }
+        }
+    }
+
+    /** Цвет текста на «включённом» фоне boxBg. */
+    fun onBoxText() = if (prism) Color.parseColor("#120E1F") else Color.BLACK
 
     /** Строки «лога» для фона: установка пакетов, скан портов и коды пульта. */
     val LOG: List<String> by lazy {
@@ -142,8 +184,50 @@ class TerminalBackground(c: Context) : View(c) {
         r.panic = false; r.wait = 0f
     }
 
+    // «Призма»: большие мягкие пятна света, медленно плывущие и смешивающиеся (сложение цветов).
+    private val blobPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = android.graphics.PorterDuffXfermode(PorterDuff.Mode.ADD) }
+    private var blobs: List<android.graphics.RadialGradient> = emptyList()
+    private val blobMotion = listOf(floatArrayOf(.11f, .07f, 0f, 1.3f), floatArrayOf(.07f, .13f, 2f, .4f), floatArrayOf(.09f, .05f, 4f, 2.2f),
+        floatArrayOf(.05f, .1f, 1f, 3.1f), floatArrayOf(.13f, .09f, 3f, 5f))
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        val r = max(w, h) * 0.42f
+        blobs = Term.IRIS.take(5).map { c ->
+            android.graphics.RadialGradient(0f, 0f, r, intArrayOf(Color.argb(62, Color.red(c), Color.green(c), Color.blue(c)), Color.argb(16, Color.red(c), Color.green(c), Color.blue(c)), Color.TRANSPARENT),
+                floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        }
+    }
+
+    private fun drawPrism(canvas: Canvas, t: Float) {
+        canvas.drawColor(Term.BG)
+        val r = max(width, height) * 0.42f
+        blobs.forEachIndexed { i, sh ->
+            val m = blobMotion[i]
+            val cx = width * (0.5f + 0.42f * sin(t * m[0] * 6.28f + m[2]))
+            val cy = height * (0.5f + 0.45f * sin(t * m[1] * 6.28f + m[3]))
+            canvas.save(); canvas.translate(cx, cy)
+            blobPaint.shader = sh
+            canvas.drawCircle(0f, 0f, r, blobPaint)
+            canvas.restore()
+        }
+        // мягкое затемнение к краям, как свет на чёрном фоне у референсов
+        canvas.drawPaint(vignette)
+    }
+    private val vignette by lazy {
+        Paint().apply {
+            shader = android.graphics.RadialGradient(width / 2f, height / 2f, max(width, height) * 0.75f,
+                intArrayOf(Color.TRANSPARENT, Color.argb(215, 0, 0, 0)), floatArrayOf(0.35f, 1f), android.graphics.Shader.TileMode.CLAMP)
+        }
+    }
+
     override fun onDraw(canvas: Canvas) {
         val t = (SystemClock.uptimeMillis() - start) / 1000f
+        if (Term.prism) {
+            drawPrism(canvas, t)
+            drawRats(canvas, t)
+            postInvalidateOnAnimation()
+            return
+        }
         val off = (t * 14f * d) % (lineH * Term.LOG.size)
         val first = (off / lineH).toInt()
         var y = -(off % lineH) + lineH
@@ -184,7 +268,8 @@ class TerminalBackground(c: Context) : View(c) {
             canvas.save()
             if (r.dir < 0) canvas.scale(-1f, 1f, r.x + ratW / 2, 0f)
             ratDst.set(r.x, yy, r.x + ratW, yy + ratH)
-            ratPaint.alpha = r.shade
+            ratPaint.alpha = if (Term.prism) r.shade * 2 / 3 else r.shade
+            ratPaint.colorFilter = if (Term.prism) PorterDuffColorFilter(Term.IRIS[rats.indexOf(r) % 6], PorterDuff.Mode.SRC_IN) else null
             canvas.drawBitmap(ratFrames[frame], null, ratDst, ratPaint)
             canvas.restore()
         }
@@ -233,7 +318,58 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         invalidate()
     }
 
+    // «Призма»: стеклянная плашка с радужной каймой
+    private val glass = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val ghost = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val box = RectF()
+    private val sweepM = android.graphics.Matrix()
+
+    private fun drawPrism(canvas: Canvas, since: Long) {
+        val w = width.toFloat(); val h = height.toFloat(); val r = 20 * d
+        box.set(d, d, w - d, h - d)
+        val hot = (1f - since / 420f).coerceIn(0f, 1f)          // 1 сразу после нажатия → 0
+        if (inverted) {
+            // POWER — диск-голограмма: диагональный перелив, тёмный текст
+            glass.shader = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.CLAMP)
+            glass.alpha = if (down) 200 else 255
+            canvas.drawRoundRect(box, r, r, glass)
+        } else {
+            glass.shader = android.graphics.LinearGradient(0f, 0f, 0f, h,
+                intArrayOf(Color.argb(if (down) 70 else 38, 255, 255, 255), Color.argb(if (down) 34 else 12, 255, 255, 255)), null, android.graphics.Shader.TileMode.CLAMP)
+            glass.alpha = 255
+            canvas.drawRoundRect(box, r, r, glass)
+        }
+        // радужная кайма; после нажатия «прокручивается»
+        val sweep = android.graphics.SweepGradient(w / 2, h / 2, Term.IRIS, null)
+        sweepM.setRotate(index * 37f + hot * 220f, w / 2, h / 2); sweep.setLocalMatrix(sweepM)
+        rim.shader = sweep; rim.strokeWidth = (1.4f + 1.6f * hot) * d; rim.alpha = if (inverted) 120 else 190 + (65 * hot).toInt()
+        canvas.drawRoundRect(box, r, r, rim)
+        // блик сверху
+        glass.shader = android.graphics.LinearGradient(0f, 0f, 0f, h * 0.5f, Color.argb(46, 255, 255, 255), Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawRoundRect(RectF(box.left + 3 * d, box.top + 2 * d, box.right - 3 * d, box.top + h * 0.45f), r, r, glass)
+
+        val ink = if (inverted) Color.parseColor("#120E1F") else Term.FG
+        small.typeface = Term.ru; small.color = if (inverted) Color.argb(170, 18, 14, 31) else Term.DIM
+        small.textAlign = Paint.Align.LEFT; canvas.drawText("%02d".format(index + 1), 12 * d, 18 * d, small)
+        small.textAlign = Paint.Align.RIGHT; canvas.drawText(hex, w - 12 * d, h - 10 * d, small)
+
+        main.color = ink
+        main.textSize = min(24 * d, w / max(6, shown.length) * 1.02f)
+        val ty = h / 2 - (main.descent() + main.ascent()) / 2
+        if (hot > 0f && !inverted) {
+            // хроматическая аберрация: красный и бирюзовый «призраки» расходятся и сходятся
+            ghost.typeface = main.typeface; ghost.textSize = main.textSize
+            val dx = 4 * d * hot
+            ghost.color = Color.argb((200 * hot).toInt(), 255, 70, 140); canvas.drawText(shown, w / 2 - dx, ty, ghost)
+            ghost.color = Color.argb((200 * hot).toInt(), 60, 230, 255); canvas.drawText(shown, w / 2 + dx, ty, ghost)
+        }
+        canvas.drawText(shown, w / 2, ty, main)
+        if (since < 420) postInvalidateOnAnimation()
+    }
+
     override fun onDraw(canvas: Canvas) {
+        if (Term.prism) { drawPrism(canvas, SystemClock.uptimeMillis() - pressedAt); return }
         val w = width.toFloat(); val h = height.toFloat()
         val now = SystemClock.uptimeMillis()
         val since = now - pressedAt
@@ -332,6 +468,9 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         maskFilter = BlurMaskFilter(18 * d, BlurMaskFilter.Blur.NORMAL); colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
     }
     private val line = Paint().apply { color = Color.WHITE }
+    // «Призма»: крыса залита радужным переливом, по краям — красный и бирюзовый «призраки»
+    private val irisP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val fringe = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val start = SystemClock.uptimeMillis()
     private val rnd = Random(1)
     private var finished = false
@@ -340,7 +479,13 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         setLayerType(LAYER_TYPE_SOFTWARE, null)   // BlurMaskFilter
         isClickable = true
         setOnClickListener { finish() }           // тап — пропустить
-        setBackgroundColor(Color.BLACK)
+        setBackgroundColor(Term.BG)
+        if (Term.prism) {
+            txt.typeface = Term.ru; txt.textSize = 14 * d
+            big.typeface = Term.mono; big.textSize = 52 * d
+            big.setShadowLayer(18 * d, 0f, 0f, Color.parseColor("#8B6CFF"))
+            glowP.colorFilter = PorterDuffColorFilter(Color.parseColor("#8B6CFF"), PorterDuff.Mode.SRC_IN)
+        }
     }
 
     private fun finish() {
@@ -380,7 +525,14 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             glowP.alpha = (90 * f).toInt()
             canvas.drawBitmap(glow, null, dst, glowP)
             val moving = f < 0.95f || (t in 1800f..1900f) || (t in 2050f..2110f)
-            if (moving) {
+            if (Term.prism) {
+                // в полёте «призраки» расходятся сильнее, на месте — едва заметны
+                val dx = (if (moving) 9f else 2.5f) * d
+                fringe.color = Color.argb(170, 255, 60, 140); canvas.drawBitmap(glow, null, RectF(dst.left - dx, dst.top, dst.right - dx, dst.bottom), fringe)
+                fringe.color = Color.argb(170, 50, 225, 255); canvas.drawBitmap(glow, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
+                irisP.shader = android.graphics.LinearGradient(dst.left, dst.top, dst.right, dst.bottom, Term.IRIS, null, android.graphics.Shader.TileMode.CLAMP)
+                canvas.drawBitmap(glow, null, dst, irisP)
+            } else if (moving) {
                 // глитч-полосы: битмап режется по горизонтали со сдвигами
                 val bands = 9
                 for (b in 0 until bands) {
@@ -398,6 +550,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
                 for (i in 0 until 7) {
                     val ly = restY + rh * 0.33f + (i - 3) * 4 * d
                     val half = (rw * 0.6f + rnd.nextFloat() * rw * 0.4f) * k
+                    if (Term.prism) line.color = Term.IRIS[i % 6]
                     line.alpha = (180 * k).toInt().coerceIn(0, 255)
                     canvas.drawRect(cx - half, ly, cx + half, ly + d, line)
                 }
@@ -407,6 +560,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         // 3. надпись
         if (t > 1500) {
             val p = ((t - 1500) / 450f).coerceIn(0f, 1f)
+            if (Term.prism) big.shader = android.graphics.LinearGradient(cx - 130 * d, 0f, cx + 130 * d, 0f, Term.IRIS, null, android.graphics.Shader.TileMode.CLAMP)
             canvas.drawText(Term.scramble("krisa", p, rnd), cx, restY + rh * 0.5f + 80 * d, big)
         }
 
@@ -427,6 +581,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             val p = ((t - 2350) / 300f).coerceIn(0f, 1f)
             for (i in 0 until 14) {
                 val by = rnd.nextFloat() * h
+                if (Term.prism) line.color = Term.IRIS[i % 6]
                 line.alpha = (220 * (1 - p)).toInt()
                 canvas.drawRect(0f, by, w * rnd.nextFloat(), by + rnd.nextFloat() * 6 * d, line)
             }

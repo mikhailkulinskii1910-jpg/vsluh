@@ -69,7 +69,11 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Тема оформления: «Терминал» (по умолчанию) или «Призма». Меняется в [tx] → «Тема». */
+    private val prismTheme get() = getPreferences(MODE_PRIVATE).getString(PREF_THEME, "terminal") == "prism"
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        if (prismTheme) setTheme(R.style.Theme_Prism)
         super.onCreate(savedInstanceState)
         usb = getSystemService(USB_SERVICE) as UsbManager
         builtin = BuiltinIr(this)
@@ -186,7 +190,7 @@ class MainActivity : Activity() {
     private lateinit var bg: TerminalBackground
 
     private fun buildUi(withSplash: Boolean): View {
-        Term.init(this)
+        Term.init(this, prismTheme)
         val frame = FrameLayout(this)
         bg = TerminalBackground(this)
         frame.addView(bg, FrameLayout.LayoutParams(-1, -1))
@@ -202,11 +206,27 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 54f)
             typeface = Term.mono
             setTextColor(Term.FG)
-            setShadowLayer(dp(10).toFloat(), 0f, 0f, Color.WHITE)
+            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else Color.WHITE)
             includeFontPadding = false
         }
+        if (Term.prism) {
+            // заголовок залит радугой, перелив медленно «плывёт»
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
+            val shift = android.graphics.Matrix()
+            val flow = object : Runnable {
+                override fun run() {
+                    val w = title.width.toFloat().coerceAtLeast(1f)
+                    val sh = android.graphics.LinearGradient(0f, 0f, w, 0f, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR)
+                    shift.setTranslate((System.currentTimeMillis() % 6000L) / 6000f * w * 2, 0f); sh.setLocalMatrix(shift)
+                    title.paint.shader = sh; title.invalidate()
+                    title.postDelayed(this, 50)
+                }
+            }
+            title.post(flow)
+        }
         titles.addView(title)
-        subtitle = text("#500202 :: IRBIS :: NEC 38kHz", 18f, Term.DIM)
+        subtitle = text("#500202 :: IRBIS :: NEC 38kHz", if (Term.prism) 13f else 18f, Term.DIM)
+        if (Term.prism) subtitle.typeface = Term.ru
         titles.addView(subtitle)
         modeLine = text("", 15f, Term.FG).apply {
             typeface = Term.ru; setPadding(0, dp(6), 0, 0)
@@ -220,7 +240,7 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setTextColor(Term.FG)
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Term.LINE) }
+            background = Term.boxBg(this@MainActivity)
             contentDescription = "Передатчик"
             setOnClickListener { glitch(it); chooseMode() }
         }
@@ -230,7 +250,7 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setTextColor(Term.FG)
             gravity = Gravity.CENTER
-            background = GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Term.LINE) }
+            background = Term.boxBg(this@MainActivity)
             contentDescription = "Как пользоваться"
             setOnClickListener { glitch(it); showHelp() }
         }
@@ -330,8 +350,8 @@ class MainActivity : Activity() {
     }
 
     private fun styleTab(t: TextView, on: Boolean) {
-        t.setTextColor(if (on) Color.BLACK else Term.FG)
-        t.background = GradientDrawable().apply { setColor(if (on) Term.FG else Color.BLACK); setStroke(dp(1), if (on) Term.FG else Term.LINE) }
+        t.setTextColor(if (on) Term.onBoxText() else Term.FG)
+        t.background = Term.boxBg(this, on)
     }
 
     private fun showTab(moc: Boolean) {
@@ -343,13 +363,18 @@ class MainActivity : Activity() {
         getPreferences(MODE_PRIVATE).edit().putBoolean("tab_moc", moc).apply()
     }
 
+    /** В «Призме» кнопки без квадратных скобок терминала. */
+    private fun btnLabel(s: String) = if (Term.prism) s.removePrefix("[").removeSuffix("]") else s
+
     private fun mocButton(label: String, onClick: (View) -> Unit) = TextView(this).apply {
         text = label
         typeface = Term.mono
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 15f else 24f)
+        if (Term.prism) { typeface = Term.ru; text = label.removePrefix("[").removeSuffix("]") }
         setTextColor(Term.FG)
         gravity = Gravity.CENTER
-        background = GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Term.LINE) }
+        isSingleLine = true
+        background = Term.boxBg(this@MainActivity)
         setOnClickListener { glitch(it); it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY); onClick(it) }
     }
 
@@ -361,7 +386,7 @@ class MainActivity : Activity() {
             "2. Нажмите «старт». Как только доска погаснет — «пауза».\n" +
             "3. Кнопкой «◀» отправляйте последние коды по одному, пока доска снова не отреагирует.\n" +
             "4. Нажмите «сработало» и пришлите код разработчику.", 14f, Term.DIM).apply { typeface = Term.ru })
-        mocCode = text("", 52f, Term.FG).apply {
+        mocCode = text("", if (Term.prism) 34f else 52f, Term.FG).apply {
             gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, Color.WHITE); setPadding(0, dp(14), 0, 0)
         }
         p.addView(mocCode, LinearLayout.LayoutParams(-1, -2))
@@ -410,7 +435,7 @@ class MainActivity : Activity() {
         val tx = current() ?: return say(noTxMessage(), err = true)
         if (mocIdx > 255) mocIdx = 0
         mocRun = true
-        mocPlay.text = "[|| пауза]"
+        mocPlay.text = btnLabel("[|| пауза]")
         say("> подбор MocTec: старт с 0x%02X".format(mocIdx))
         io.execute {
             try {
@@ -426,7 +451,7 @@ class MainActivity : Activity() {
             }
             ui.post {
                 mocRun = false
-                mocPlay.text = "[▶ старт]"
+                mocPlay.text = btnLabel("[▶ старт]")
                 if (mocIdx >= 255) say("> подбор закончен: все 256 команд отправлены")
                 mocRender()
             }
@@ -435,7 +460,7 @@ class MainActivity : Activity() {
 
     private fun mocPause() {
         mocRun = false
-        mocPlay.text = "[▶ старт]"
+        mocPlay.text = btnLabel("[▶ старт]")
         say("> пауза на команде 0x%02X".format(mocIdx))
     }
 
@@ -539,6 +564,22 @@ class MainActivity : Activity() {
         catch (e: android.content.ActivityNotFoundException) { say("Нет браузера, чтобы открыть ссылку", err = true) }
     }
 
+    private fun chooseTheme() {
+        val ids = arrayOf("terminal", "prism")
+        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло")
+        val cur = if (prismTheme) 1 else 0
+        AlertDialog.Builder(this)
+            .setTitle("Тема оформления")
+            .setSingleChoiceItems(names, cur) { d, which ->
+                d.dismiss()
+                if (which != cur) {
+                    getPreferences(MODE_PRIVATE).edit().putString(PREF_THEME, ids[which]).commit()
+                    recreate()   // пересоздать экран в новой теме
+                }
+            }
+            .show()
+    }
+
     private fun chooseMode() {
         val modes = Mode.values()
         val labels = modes.map {
@@ -560,6 +601,7 @@ class MainActivity : Activity() {
                 d.dismiss()
             }
             .setNeutralButton("Проверка") { _, _ -> diagnostics() }
+            .setNegativeButton("Тема") { _, _ -> chooseTheme() }
             .show()
     }
 
@@ -642,6 +684,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val PREF_MODE = "tx_mode"
+        private const val PREF_THEME = "theme"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
     }
 }
