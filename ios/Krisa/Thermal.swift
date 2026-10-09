@@ -109,7 +109,7 @@ struct ThermalFrame: View {
         return Image(uiImage: Heat.grain).resizable(resizingMode: .tile)
             .frame(width: size.width + 128, height: size.height + 128)
             .offset(sh)
-            .opacity(0.5)
+            .opacity(0.35)
             .position(x: size.width / 2 + 64, y: size.height / 2 + 64)
     }
 }
