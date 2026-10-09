@@ -13,8 +13,8 @@
 <meta name="apple-mobile-web-app-title" content="krisa">
 <title>krisa</title>
 <script>
-// Тема применяется до первой отрисовки, чтобы не мигала старая. «terminal» (по умолчанию) или «prism».
-try { if (localStorage.getItem('krisa-theme') === 'prism') document.documentElement.dataset.theme = 'prism'; } catch {}
+// Тема применяется до первой отрисовки, чтобы не мигала старая. «terminal» (по умолчанию), «prism» или «thermal».
+try { const t = localStorage.getItem('krisa-theme'); if (t === 'prism' || t === 'thermal') document.documentElement.dataset.theme = t; } catch {}
 </script>
 <style>
 @font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:block}
@@ -246,10 +246,79 @@ html[data-theme=prism]{
 [data-theme=prism] .btn.primary{background:linear-gradient(135deg,var(--iris));color:var(--ink);border:0}
 [data-theme=prism] input[type=text]{border-radius:12px}
 @media (prefers-reduced-motion:reduce){[data-theme=prism] .sky *,[data-theme=prism] h1,[data-theme=prism] .key::before{animation:none}}
+
+/* ================= Тема «Тепловизор» =================
+   Кадр тепловизора: на чёрном вращается радужка, палитра ironbow (холод — фиолетовый, жар — жёлто-белый),
+   жёлтые рамки обнаружения как PERSON_01XX, HUD (уголки, шкала температур, REC, дата) и зерно матрицы. */
+html[data-theme=thermal]{
+  --bg:#000; --fg:#FFF1DC; --dim:#E0974A; --line:#FFD43B; --faint:#1A0E10; --yel:#FFD43B; --ink:#140700;
+  --heat:#0B0418,#2E0B5E,#6B1585,#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff;
+}
+.therm{display:none}
+[data-theme=thermal] .therm{display:block;position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#000}
+[data-theme=thermal] .therm .iris{position:absolute;left:50%;top:50%;width:min(118vmin,1000px);aspect-ratio:1;translate:-50% -50%;
+  background:url(iris.jpg) center/cover;-webkit-mask:radial-gradient(closest-side,#000 86%,transparent 99%);mask:radial-gradient(closest-side,#000 86%,transparent 99%);
+  animation:spin 80s linear infinite,breathe 8s ease-in-out infinite alternate}
+@keyframes breathe{to{scale:1.05}}
+[data-theme=thermal] .therm .grain{position:absolute;inset:-50%;opacity:.17;animation:grain .45s steps(3) infinite;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .9 0 0 0 0 .8 0 0 0 1.8 -.7'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+@keyframes grain{33%{transform:translate(-7%,4%)}66%{transform:translate(5%,-6%)}}
+[data-theme=thermal] .hud i{position:absolute;width:22px;height:22px;border:1.5px solid #FFD43B99}
+[data-theme=thermal] .hud i:nth-child(1){top:calc(env(safe-area-inset-top) + 8px);left:8px;border-right:0;border-bottom:0}
+[data-theme=thermal] .hud i:nth-child(2){top:calc(env(safe-area-inset-top) + 8px);right:8px;border-left:0;border-bottom:0}
+[data-theme=thermal] .hud i:nth-child(3){bottom:calc(env(safe-area-inset-bottom) + 8px);left:8px;border-right:0;border-top:0}
+[data-theme=thermal] .hud i:nth-child(4){bottom:calc(env(safe-area-inset-bottom) + 8px);right:8px;border-left:0;border-top:0}
+[data-theme=thermal] .hud s{position:absolute;right:4px;top:30%;height:40%;width:3px;background:linear-gradient(to top,var(--heat))}
+[data-theme=thermal] .hud s::after{content:"";position:absolute;right:3px;top:0;bottom:0;width:4px;
+  background:repeating-linear-gradient(#FFF1DC99 0 1px,transparent 1px 12.5%)}
+[data-theme=thermal] .hud u{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 3px);text-align:center;
+  font:15px var(--mono);color:#FF9632cc;text-decoration:none;letter-spacing:.06em}
+[data-theme=thermal] .hud em{position:absolute;right:20px;bottom:calc(env(safe-area-inset-bottom) + 28px);font:15px var(--mono);font-style:normal;color:#FFF1DCcc}
+[data-theme=thermal] .hud em::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#FF3228;margin-right:5px;animation:blink 1.6s steps(1) infinite}
+[data-theme=thermal] #log,[data-theme=thermal] body::after{display:none}
+[data-theme=thermal] h1{text-shadow:none;background:linear-gradient(90deg,#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff,#FFF27A,#FFC233,#FF7A1A,#E8382F,#B51F7A);
+  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 5s linear infinite;filter:drop-shadow(0 0 10px #FF4A12aa)}
+[data-theme=thermal] h1::after{color:#FFC233;-webkit-text-fill-color:#FFC233}
+[data-theme=thermal] .gear{border-color:var(--yel);background:rgba(0,0,0,.65)}
+[data-theme=thermal] .gear:active{background:linear-gradient(90deg,#E8382F,#FF7A1A,#FFC233);color:var(--ink)}
+/* кнопка — рамка обнаружения; при нажатии «нагревается» и потом плавно остывает */
+[data-theme=thermal] .key{background:rgba(0,0,0,.6);border:1.5px solid var(--yel);isolation:isolate;text-shadow:0 0 10px #FF4A12;transition:transform .08s,color .5s}
+[data-theme=thermal] .key::before,[data-theme=thermal] .key .beam{display:none}
+[data-theme=thermal] .key::after{content:"";position:absolute;inset:-25%;z-index:-1;pointer-events:none;opacity:0;transition:opacity .95s ease-out;
+  background:radial-gradient(closest-side,#fff,#FFF27A 22%,#FFC233 38%,#FF7A1A 52%,#E8382F 66%,#B51F7Acc 80%,transparent 100%)}
+[data-theme=thermal] .key.on::after{opacity:1;transition:none}
+[data-theme=thermal] .key.inv::after{opacity:.8;animation:warm 2.4s ease-in-out infinite alternate}
+[data-theme=thermal] .key.inv.on::after{opacity:1}
+@keyframes warm{to{opacity:.62}}
+[data-theme=thermal] .key.on,[data-theme=thermal] .key.inv{background:rgba(0,0,0,.6);color:var(--ink);text-shadow:none;border-color:#FFF27A}
+[data-theme=thermal] .key.inv.on{color:var(--ink)}
+[data-theme=thermal] .key .n{font-size:0;color:var(--yel)}
+[data-theme=thermal] .key .n::after{content:attr(data-k);font:13px var(--mono)}
+[data-theme=thermal] .key .h{font-size:13px}
+[data-theme=thermal] .key.on .n,[data-theme=thermal] .key.on .h,[data-theme=thermal] .key.inv .n,[data-theme=thermal] .key.inv .h{color:rgba(20,7,0,.8)}
+[data-theme=thermal] #splash{background:#000}
+[data-theme=thermal] #splash pre{position:relative}
+[data-theme=thermal] #splash img.rat{display:none}
+/* крыса на заставке — тепловое пятно в рамке обнаружения */
+[data-theme=thermal] #splash .ratw{display:block;aspect-ratio:605/358;filter:drop-shadow(0 0 16px #E8382F) drop-shadow(0 0 3px #FF7A1A)}
+[data-theme=thermal] #splash .ratp{position:absolute;inset:0;
+  background:radial-gradient(circle at 38% 58%,#fff 0,#FFF27A 14%,#FFC233 26%,#FF7A1A 40%,#E8382F 54%,#B51F7A 70%,#6B1585 85%,#2E0B5E 100%);
+  -webkit-mask:url(rat.png) center/contain no-repeat;mask:url(rat.png) center/contain no-repeat}
+[data-theme=thermal] #splash .ratw::after{content:"RAT_01XX  37.2°C";position:absolute;inset:-12% -6%;border:1.5px solid var(--yel);
+  font:16px/1 var(--mono);color:var(--yel);padding:4px 6px;opacity:0}
+[data-theme=thermal] #splash.go .ratw::after{animation:boxin .4s .95s steps(4) forwards}
+@keyframes boxin{0%{opacity:0}25%{opacity:1}50%{opacity:0}100%{opacity:1}}
+[data-theme=thermal] #splash .lines{background:repeating-linear-gradient(#FF7A1A 0 1px,transparent 1px 4px)}
+[data-theme=thermal] #splash .name{text-shadow:none;background:linear-gradient(90deg,#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff);
+  -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px #FF4A12)}
+[data-theme=thermal] dialog{border:1px solid var(--yel);background:#0A0508}
+[data-theme=thermal] .btn.primary{background:linear-gradient(90deg,#E8382F,#FF7A1A,#FFC233);color:var(--ink);border:0}
+@media (prefers-reduced-motion:reduce){[data-theme=thermal] .therm *{animation:none}}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="splash" aria-hidden="true"><div class="therm"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="therm" class="therm" aria-hidden="true"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div>
 <div id="aura" class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div>
 <div id="log" aria-hidden="true"><div id="logText"></div></div>
 <canvas id="rats" aria-hidden="true"></canvas>
@@ -273,6 +342,8 @@ html[data-theme=prism]{
       <div><b>Терминал</b><span>Чёрно-белый, пиксельный шрифт, бегущий лог.</span></div></label>
     <label class="opt"><input type="radio" name="theme" value="prism">
       <div><b>Призма</b><span>Переливающееся стекло, радужные блики, как на CD и призмах.</span></div></label>
+    <label class="opt"><input type="radio" name="theme" value="thermal">
+      <div><b>Тепловизор</b><span>Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка.</span></div></label>
 
     <h2 style="margin-top:22px">Как передавать сигнал</h2>
     <label class="opt"><input type="radio" name="mode" value="audio">
@@ -431,6 +502,7 @@ KEYS.forEach(([label, hex]) => {
   b.setAttribute('aria-label', label);
   b.innerHTML = '<span class="n"></span><span class="t"></span><span class="h"></span><i class="beam"></i>';
   b.querySelector('.n').textContent = '[' + String(grid.children.length + 1).padStart(2, '0') + ']';
+  b.querySelector('.n').dataset.k = 'KEY_' + String(grid.children.length + 1).padStart(2, '0') + 'XX';   // подпись рамки в «Тепловизоре»
   b.querySelector('.h').textContent = '0x' + hex.slice(4, 6);
   b.querySelector('.t').textContent = label;
   let hold = null;
@@ -475,7 +547,7 @@ $('gear').addEventListener('click', () => {
 dlg.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => { settings.mode = r.value; save(); syncHttpBox(); renderMode(); }));
 /* Тема оформления меняется сразу, без перезагрузки. */
 dlg.querySelectorAll('input[name=theme]').forEach(r => r.addEventListener('change', () => {
-  if (r.value === 'prism') document.documentElement.dataset.theme = 'prism'; else delete document.documentElement.dataset.theme;
+  if (r.value === 'terminal') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = r.value;
   try { localStorage.setItem('krisa-theme', r.value); } catch {}
   document.querySelector('meta[name=theme-color]').content = r.value === 'prism' ? '#07060B' : '#000000';
 }));
@@ -525,11 +597,22 @@ renderMode();
     rows.forEach((r, y) => [...r].forEach((ch, i) => { if (ch === '#') x.fillRect(i, y, 1, 1); }));
     return c;
   });
-  // «Призма»: те же кадры, перекрашенные в радужные цвета
+  // «Тепловизор»: палитра ironbow и кадры, перекрашенные в цвет «температуры»
+  const HEAT = [[11, 4, 24], [46, 11, 94], [107, 21, 133], [181, 31, 122], [232, 56, 47], [255, 122, 26], [255, 194, 51], [255, 242, 122], [255, 255, 255]];
+  const heat = f => {
+    const x = Math.max(0, Math.min(1, f)) * (HEAT.length - 1), i = Math.min(Math.floor(x), HEAT.length - 2), k = x - i;
+    return 'rgb(' + HEAT[i].map((v, j) => Math.round(v + (HEAT[i + 1][j] - v) * k)).join(',') + ')';
+  };
+  const tint = col => frames.map(fr => {
+    const c = document.createElement('canvas'); c.width = fr.width; c.height = fr.height;
+    const x = c.getContext('2d'); x.drawImage(fr, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = col; x.fillRect(0, 0, c.width, c.height);
+    return c;
+  });
   const cv = $('rats'), ctx = cv.getContext('2d');
   const px = 2.5, rw = 28 * px, rh = 11 * px;
   // крыса: x, y, направление, скорость, оттенок (белый с прозрачностью — от почти белого до тёмно-серого); panic — удирает от пальца; wait — сидит за краем экрана
   const rats = [[70, .85], [110, .38], [45, .63], [90, .28], [130, .5]].map(([speed, shade]) => ({ speed, shade, x: 0, y: 0, dir: 1, stride: 0, panic: false, wait: 0, hop: 1 }));
+  rats.forEach(r => { r.heat = 0.55 + r.shade * 0.4; r.hot = tint(heat(r.heat)); });
   const respawn = (r, anywhere) => {
     r.dir = Math.random() < .5 ? 1 : -1;
     r.x = anywhere ? Math.random() * innerWidth : r.dir > 0 ? -rw : innerWidth;
@@ -556,14 +639,24 @@ renderMode();
       const v = r.speed * (r.panic ? 4.5 : 1);
       r.x += r.dir * v * dt; r.stride += v * dt; r.hop = Math.min(1, r.hop + dt / 0.28);
       if (r.x > W + rw || r.x < -2 * rw) { r.wait = r.panic ? 1.5 + Math.random() * 2.5 : 0.4 + Math.random() * 2; return; }
-      ctx.globalAlpha = r.shade;
+      const thermal = document.documentElement.dataset.theme === 'thermal';
+      ctx.globalAlpha = thermal ? 1 : r.shade;
       const f = Math.floor(r.stride / 9) % 2;
-      const img = frames[f];                   // лапы в такт пройденному пути
+      const img = thermal ? r.hot[f] : frames[f];                   // лапы в такт пройденному пути
+      if (thermal) { ctx.shadowBlur = 9; ctx.shadowColor = '#E8382F'; }
       const y = r.y - Math.sin(r.hop * Math.PI) * 10 - (f ? 1 : 0);   // прыжок от испуга
       ctx.save();
       if (r.dir < 0) { ctx.translate(r.x + rw, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, y, rw, rh); }
       else ctx.drawImage(img, r.x, y, rw, rh);
       ctx.restore();
+      if (thermal) {
+        // тёплое пятно в рамке обнаружения, как PERSON_01XX
+        ctx.shadowBlur = 0; ctx.globalAlpha = .8;
+        ctx.strokeStyle = '#FFD43B'; ctx.lineWidth = 1; ctx.strokeRect(r.x - 4, y - 4, rw + 8, rh + 7);
+        ctx.fillStyle = '#FFD43B'; ctx.font = '12px VT323, monospace';
+        ctx.fillText('RAT_0' + (rats.indexOf(r) + 1) + 'XX ' + (22.4 + r.heat * 14.8).toFixed(1) + '°', r.x - 4, y - 6);
+        ctx.globalAlpha = 1;
+      }
     });
     requestAnimationFrame(draw);
   }
@@ -633,6 +726,11 @@ renderMode();
   const url = 'url(' + c.toDataURL() + ')';
   document.querySelectorAll('.sky .burst').forEach(b => b.style.backgroundImage = url);
 })();
+
+/* ---------- «Тепловизор»: дата в HUD ---------- */
+document.querySelectorAll('.therm .hud u').forEach(u => {
+  u.textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(',', '').toUpperCase() + '   ZOOM:OFF';
+});
 
 /* ---------- Появление пульта ---------- */
 function showRemote() {

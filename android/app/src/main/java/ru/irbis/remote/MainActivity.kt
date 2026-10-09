@@ -69,11 +69,14 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Тема оформления: «Терминал» (по умолчанию) или «Призма». Меняется в [tx] → «Тема». */
-    private val prismTheme get() = getPreferences(MODE_PRIVATE).getString(PREF_THEME, "terminal") == "prism"
+    /** Тема оформления: «terminal» (по умолчанию), «prism» или «thermal». Меняется в [tx] → «Тема». */
+    private val themeId get() = getPreferences(MODE_PRIVATE).getString(PREF_THEME, "terminal") ?: "terminal"
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        if (prismTheme) setTheme(R.style.Theme_Prism)
+        when (themeId) {
+            "prism" -> setTheme(R.style.Theme_Prism)
+            "thermal" -> setTheme(R.style.Theme_Thermal)
+        }
         super.onCreate(savedInstanceState)
         usb = getSystemService(USB_SERVICE) as UsbManager
         builtin = BuiltinIr(this)
@@ -190,7 +193,7 @@ class MainActivity : Activity() {
     private lateinit var bg: TerminalBackground
 
     private fun buildUi(withSplash: Boolean): View {
-        Term.init(this, prismTheme)
+        Term.init(this, themeId)
         val frame = FrameLayout(this)
         bg = TerminalBackground(this)
         frame.addView(bg, FrameLayout.LayoutParams(-1, -1))
@@ -206,7 +209,7 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 54f)
             typeface = Term.mono
             setTextColor(Term.FG)
-            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else Color.WHITE)
+            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else if (Term.thermal) Heat.GLOW else Color.WHITE)
             includeFontPadding = false
         }
         if (Term.prism) {
@@ -218,6 +221,21 @@ class MainActivity : Activity() {
                     val w = title.width.toFloat().coerceAtLeast(1f)
                     val sh = android.graphics.LinearGradient(0f, 0f, w, 0f, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR)
                     shift.setTranslate((System.currentTimeMillis() % 6000L) / 6000f * w * 2, 0f); sh.setLocalMatrix(shift)
+                    title.paint.shader = sh; title.invalidate()
+                    title.postDelayed(this, 50)
+                }
+            }
+            title.post(flow)
+        }
+        if (Term.thermal) {
+            // заголовок «раскалён»: по нему медленно плывёт палитра ironbow
+            val shift = android.graphics.Matrix()
+            val hot = intArrayOf(Heat.color(0.5f), Heat.color(0.68f), Heat.color(0.85f), Heat.color(1f), Heat.color(0.85f), Heat.color(0.68f), Heat.color(0.5f))
+            val flow = object : Runnable {
+                override fun run() {
+                    val w = title.width.toFloat().coerceAtLeast(1f)
+                    val sh = android.graphics.LinearGradient(0f, 0f, w, 0f, hot, null, android.graphics.Shader.TileMode.MIRROR)
+                    shift.setTranslate((System.currentTimeMillis() % 5000L) / 5000f * w * 2, 0f); sh.setLocalMatrix(shift)
                     title.paint.shader = sh; title.invalidate()
                     title.postDelayed(this, 50)
                 }
@@ -388,14 +406,14 @@ class MainActivity : Activity() {
             "4. Нажмите «сработало» и пришлите код разработчику.", 14f, Term.DIM).apply {
             typeface = Term.ru
             // в «Призме» текст лежит на стеклянной плашке — иначе теряется на фоне призмы
-            if (Term.prism) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(14), dp(12), dp(14), dp(12)) }
+            if (Term.prism || Term.thermal) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(14), dp(12), dp(14), dp(12)) }
         })
         // код и счётчик — тоже на стекле в «Призме»
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            if (Term.prism) { background = Term.boxBg(this@MainActivity); setPadding(0, 0, 0, dp(4)) }
+            if (Term.prism || Term.thermal) { background = Term.boxBg(this@MainActivity); setPadding(0, 0, 0, dp(4)) }
         }
-        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { if (Term.prism) topMargin = dp(10) })
+        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { if (Term.prism || Term.thermal) topMargin = dp(10) })
         mocCode = text("", if (Term.prism) 34f else 52f, Term.FG).apply {
             gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, Color.WHITE); setPadding(0, dp(14), 0, 0)
         }
@@ -410,7 +428,8 @@ class MainActivity : Activity() {
             views.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(58), 1f).apply { if (i > 0) leftMargin = dp(8) }) }
         }
         mocPlay = mocButton("[▶ старт]") { if (mocRun) mocPause() else mocStart() }
-        p.addView(row(mocButton("[◀]") { mocStep(-1) }, mocPlay, mocButton("[▶|]") { mocStep(+1) }))
+        p.addView(row(mocButton("[◀]") { mocStep(-1) }, mocPlay, mocButton("[▶|]") { mocStep(+1) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })   // отступ от блока с кодом
         p.addView(row(mocButton("[⟳ ещё раз]") { mocStep(0) }, mocButton("[✓ сработало]") { mocMark() }),
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         p.addView(row(mocButton("[с начала]") { mocPause(); mocIdx = 0; mocSent.clear(); mocRender() }),
@@ -575,9 +594,9 @@ class MainActivity : Activity() {
     }
 
     private fun chooseTheme() {
-        val ids = arrayOf("terminal", "prism")
-        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло")
-        val cur = if (prismTheme) 1 else 0
+        val ids = arrayOf("terminal", "prism", "thermal")
+        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло", "Тепловизор — кадр тепловизора, ironbow")
+        val cur = ids.indexOf(themeId).coerceAtLeast(0)
         AlertDialog.Builder(this)
             .setTitle("Тема оформления")
             .setSingleChoiceItems(names, cur) { d, which ->

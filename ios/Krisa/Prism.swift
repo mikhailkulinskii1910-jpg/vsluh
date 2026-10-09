@@ -191,7 +191,7 @@ struct Lens: View {
                 var c = ctx
                 c.translateBy(x: size.width / 2, y: size.height / 2)
                 c.scaleBy(x: zoom, y: zoom)
-                c.translateBy(x: -size.width / 2 - f.minX, y: -size.height / 2 - f.minY - 3)
+                c.translateBy(x: -size.width / 2 - f.minX, y: -size.height / 2 - f.minY - 1)
                 Prism.draw(c, size: Prism.screen, t: t, burstAlpha: 0.27)
             }
         }
@@ -211,7 +211,7 @@ struct GlassBody: View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
         let flow = CGFloat((t * 0.09).truncatingRemainder(dividingBy: 1))
         ZStack {
-            Lens(t: t, zoom: CGFloat(1.18 + 0.22 * hot) + (pressed ? 0.08 : 0))
+            Lens(t: t, zoom: CGFloat(1.03 + 0.08 * hot) + (pressed ? 0.03 : 0))
             if on {
                 // включённая плашка — голограмма: перелив течёт по диагонали
                 LinearGradient(colors: Prism.iris + Prism.iris.reversed().dropFirst(),

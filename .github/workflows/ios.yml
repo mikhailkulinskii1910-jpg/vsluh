@@ -22,9 +22,11 @@ jobs:
 
       - name: Build unsigned IPA
         run: |
+          set -o pipefail   # ошибка компиляции не должна теряться в конвейере с xcbeautify
           xcodebuild -project Krisa.xcodeproj -scheme Krisa -configuration Release \
             -sdk iphoneos -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | xcbeautify || exit ${PIPESTATUS[0]}
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tee xb.log | xcbeautify \
+            || { echo "=== compiler errors ==="; grep -E "error:|warning: .*type-check" xb.log | head -30; exit 1; }
           mkdir -p out/Payload
           cp -R build/Build/Products/Release-iphoneos/krisa.app out/Payload/
           (cd out && zip -qr krisa.ipa Payload && rm -rf Payload)
@@ -32,6 +34,7 @@ jobs:
 
       - name: Simulator screenshots
         run: |
+          set -o pipefail
           xcodebuild -project Krisa.xcodeproj -scheme Krisa -configuration Debug \
             -sdk iphonesimulator -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build | xcbeautify || exit ${PIPESTATUS[0]}
           DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in d for x in d[r] if x['name'].startswith('iPhone')))")
@@ -54,6 +57,13 @@ jobs:
           sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-prism.png"
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-prism.png"
+          # тема «Тепловизор»
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme thermal
+          SIMCTL_CHILD_KRISA_SPLASH_AT=2000 xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-thermal.png"
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-thermal.png"
           # уменьшенные кадры — в лог, чтобы их можно было посмотреть без скачивания артефактов
           for f in out/shot-*.png out/splash-*.png; do
             sips -Z 360 -s format jpeg -s formatOptions 55 "$f" --out "${f%.png}.jpg" >/dev/null

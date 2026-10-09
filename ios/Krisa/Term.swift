@@ -1,14 +1,17 @@
 import SwiftUI
 
-/// Палитра и шрифты. Две темы: «Терминал» (чёрно-белый, VT323) и «Призма» (стекло и радужные переливы).
+/// Палитра и шрифты. Три темы: «Терминал» (чёрно-белый, VT323), «Призма» (стекло и радужные переливы)
+/// и «Тепловизор» (кадр тепловизора, палитра ironbow).
 enum Term {
-    /// Выбранная тема; меняется в настройках (ключ "theme": "terminal" / "prism").
-    static var prism = UserDefaults.standard.string(forKey: "theme") == "prism"
+    /// Выбранная тема; меняется в настройках (ключ "theme": "terminal" / "prism" / "thermal").
+    static var theme = UserDefaults.standard.string(forKey: "theme") ?? "terminal"
+    static var prism: Bool { theme == "prism" }
+    static var thermal: Bool { theme == "thermal" }
     static var bg: Color { prism ? Color(hex: 0x07060B) : .black }
-    static var fg: Color { prism ? Color(hex: 0xF4F1FF) : Color(white: 0.93) }
-    static var dim: Color { prism ? Color(hex: 0xA79FC6) : Color(white: 0.54) }
-    static var line: Color { prism ? Color(hex: 0x4B4270) : Color(white: 0.36) }
-    static var faint: Color { prism ? Color(hex: 0x1A1726) : Color(white: 0.085) }
+    static var fg: Color { prism ? Color(hex: 0xF4F1FF) : thermal ? Color(hex: 0xFFF1DC) : Color(white: 0.93) }
+    static var dim: Color { prism ? Color(hex: 0xA79FC6) : thermal ? Color(hex: 0xE0974A) : Color(white: 0.54) }
+    static var line: Color { prism ? Color(hex: 0x4B4270) : thermal ? Heat.yellow : Color(white: 0.36) }
+    static var faint: Color { prism ? Color(hex: 0x1A1726) : thermal ? Color(hex: 0x1A0E10) : Color(white: 0.085) }
     static let noise = Array("#$%&@01<>/\\|=+*:;░▒▓")
 
     /// Пиксельный VT323 (латиница); в «Призме» — Unbounded (он заметно крупнее, поэтому меньше кегль).
@@ -180,14 +183,38 @@ struct RunningRats: View {
     }
 
     var body: some View {
-        Canvas { ctx, size in
-            for (pos, dir, f, shade) in RatSim.shared.step(to: t, size: size) {
-                var tr = CGAffineTransform(translationX: pos.x, y: pos.y)
-                if dir < 0 { tr = tr.translatedBy(x: RatSim.w, y: 0).scaledBy(x: -1, y: 1) }
-                ctx.fill(RunningRats.frames[f].applying(tr), with: .color(.white.opacity(shade)))
+        Canvas { ctx, size in RunningRats.paint(ctx, size, t) }
+        .allowsHitTesting(false)
+    }
+}
+
+extension RunningRats {
+    static func paint(_ ctx: GraphicsContext, _ size: CGSize, _ t: Double) {
+        let rats = RatSim.shared.step(to: t, size: size)
+        for i in rats.indices {
+            let (pos, dir, f, shade) = rats[i]
+            var tr = CGAffineTransform(translationX: pos.x, y: pos.y)
+            if dir < 0 { tr = tr.translatedBy(x: RatSim.w, y: 0).scaledBy(x: -1, y: 1) }
+            let body: Path = frames[f].applying(tr)
+            if Term.thermal {
+                paintHot(ctx, body: body, pos: pos, index: i, shade: shade)
+            } else {
+                ctx.fill(body, with: .color(.white.opacity(shade)))
             }
         }
-        .allowsHitTesting(false)
+    }
+
+    /// Тепловизор: крыса — тёплое пятно с красным ореолом в жёлтой рамке обнаружения.
+    private static func paintHot(_ ctx: GraphicsContext, body: Path, pos: CGPoint, index: Int, shade: Double) {
+        let heat: Double = 0.55 + shade * 0.4
+        var c = ctx
+        c.addFilter(.shadow(color: Color(hex: 0xE8382F), radius: 5))
+        c.fill(body, with: .color(Heat.color(heat)))
+        let box = CGRect(x: pos.x - 4, y: pos.y - 4, width: RatSim.w + 8, height: RatSim.h + 7)
+        ctx.stroke(Path(box), with: .color(Heat.yellow.opacity(0.8)), lineWidth: 1)
+        let label: String = "RAT_0" + String(index + 1) + "XX " + Heat.temp(heat)
+        let text = Text(label).font(.custom("VT323-Regular", size: 13)).foregroundColor(Heat.yellow.opacity(0.85))
+        ctx.draw(text, at: CGPoint(x: box.minX, y: box.minY - 2), anchor: .bottomLeading)
     }
 }
 
@@ -264,7 +291,7 @@ struct KeyView: View {
     @State private var pressedAt = Date.distantPast
 
     var body: some View {
-        Group { if Term.prism { prismFace } else { terminalFace } }
+        Group { if Term.prism { prismFace } else if Term.thermal { thermalFace } else { terminalFace } }
         .scaleEffect(down ? 0.97 : 1)
         .opacity(visible ? 1 : 0)
         .contentShape(Rectangle())
@@ -306,6 +333,48 @@ struct KeyView: View {
                 }
             }
         }
+    }
+
+    /// «Тепловизор»: рамка обнаружения; при нажатии кнопка «нагревается» и потом плавно остывает.
+    private var thermalFace: some View {
+        TimelineView(.animation) { tl in
+            GeometryReader { g in
+                thermalContent(heat: thermalHeat(tl.date), size: g.size)
+            }
+        }
+    }
+
+    private func thermalHeat(_ now: Date) -> Double {
+        let cool = max(0, 1 - now.timeIntervalSince(pressedAt) / 0.95)
+        var heat = cool * cool * (3 - 2 * cool)                       // плавное остывание
+        if down { heat = max(heat, 0.92) }
+        if inverted { heat = max(heat, 0.66 + 0.06 * sin(Prism.time(now) * 2.5)) }   // POWER всегда тёплая и «дышит»
+        return heat
+    }
+
+    private func thermalContent(heat: Double, size: CGSize) -> some View {
+        let ink = heat > 0.5
+        let radius: CGFloat = max(size.width, size.height) * CGFloat(0.45 + 0.35 * heat)
+        let fontSize: CGFloat = min(38, size.width / CGFloat(max(6, label.count)) * 1.55)
+        let hex = String(format: "0x%02X  ", (code >> 8) & 0xFF) + Heat.temp(heat)
+        return ZStack {
+            Rectangle().fill(Color.black.opacity(0.6))
+            if heat > 0.02 {
+                RadialGradient(gradient: Heat.bloom(heat), center: .center, startRadius: 0, endRadius: radius)
+            }
+            Rectangle().strokeBorder(ink ? Heat.color(0.97) : Heat.yellow, lineWidth: 1.4)
+            Text(shown).font(Term.mono(fontSize)).lineLimit(1)
+                .foregroundColor(ink ? Heat.ink : Term.fg)
+                .shadow(color: ink ? .clear : Heat.glow, radius: 8)
+            VStack {
+                HStack { Text(String(format: "KEY_%02dXX", index + 1)).foregroundColor(ink ? Heat.ink : Heat.yellow); Spacer() }
+                Spacer()
+                HStack { Spacer(); Text(hex).foregroundColor(ink ? Heat.ink.opacity(0.8) : Term.dim) }
+            }
+            .font(Term.mono(14))
+            .padding(.horizontal, 7).padding(.vertical, 4)
+        }
+        .clipped()
     }
 
     private var terminalFace: some View {

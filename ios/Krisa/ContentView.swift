@@ -20,18 +20,12 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Term.bg.ignoresSafeArea()
-            if Term.prism { PrismBackground().ignoresSafeArea() }   // во второй теме крыс нет
-            else { LogBackground().ignoresSafeArea() }
+            themeBackground().ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        if Term.prism {
-                            IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
-                        } else {
-                            TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
-                                .shadow(color: .white.opacity(0.9), radius: 8)
-                        }
+                        titleView()
                         Text("#500202 :: IRBIS :: NEC 38kHz").font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
                         Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
                             .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
@@ -68,7 +62,7 @@ struct ContentView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
-            if !Term.prism { Scanlines().ignoresSafeArea() }
+            if !Term.prism && !Term.thermal { Scanlines().ignoresSafeArea() }
 
             if splash {
                 SplashView(boot: [
@@ -113,7 +107,73 @@ struct SettingsView: View {
     @State private var copied: String?
     @AppStorage("theme") private var theme = "terminal"
     private let themes = [("terminal", "Терминал", "Чёрно-белый, пиксельный шрифт, бегущий лог и крысы"),
-                          ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы")]
+                          ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы"),
+                          ("thermal", "Тепловизор", "Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка")]
+
+    /// Фон строки выбора в текущей теме: выбранная подсвечена.
+    private func rowFill(_ on: Bool) -> AnyView {
+        if !on { return AnyView(Term.bg) }
+        if Term.prism { return AnyView(Color(hex: 0x8B6CFF, alpha: 0.35)) }
+        if Term.thermal { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
+        return AnyView(Term.fg)
+    }
+
+    /// Цвет текста строки выбора.
+    private func rowInk(_ on: Bool) -> Color {
+        on && !Term.prism ? Color.black : Term.fg
+    }
+
+    private func themeRow(_ i: Int) -> some View {
+        let th = themes[i]
+        let on: Bool = theme == th.0
+        return Button {
+            Term.theme = th.0
+            theme = th.0
+        } label: {
+            HStack {
+                Text(on ? "[x]" : "[ ]").font(Term.mono(22))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(th.1).font(Term.ru(15))
+                    Text(th.2).font(Term.ru(11)).opacity(0.75)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .foregroundColor(rowInk(on))
+            .background(rowFill(on))
+            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
+    private func modeRow(_ m: TxMode) -> some View {
+        let on: Bool = model.mode == m
+        return Button { model.mode = m } label: {
+            HStack {
+                Text(on ? "[x]" : "[ ]").font(Term.mono(22))
+                Text(m.label).font(Term.ru(14))
+                Spacer()
+            }
+            .padding(10)
+            .foregroundColor(rowInk(on))
+            .background(rowFill(on))
+            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
+    private var choices: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("> theme").font(Term.mono(26))
+            ForEach(themes.indices, id: \.self) { i in themeRow(i) }
+            Text("> tx_mode").font(Term.mono(26)).padding(.top, 10)
+            ForEach(TxMode.allCases) { m in modeRow(m) }
+            if model.mode == .http {
+                Text("Адрес модуля Tasmota").font(Term.ru(12)).foregroundColor(Term.dim)
+                TextField("192.168.1.50", text: $model.host)
+                    .font(Term.ru(16)).keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
+                    .padding(10).overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+            }
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -123,47 +183,7 @@ struct SettingsView: View {
                     Spacer()
                     Button("[ok]") { dismiss() }.font(Term.mono(26)).foregroundColor(Term.fg)
                 }
-                Text("> theme").font(Term.mono(26))
-                ForEach(themes.indices, id: \.self) { i in
-                    let th = themes[i]
-                    Button {
-                        Term.prism = th.0 == "prism"
-                        theme = th.0
-                    } label: {
-                        HStack {
-                            Text(theme == th.0 ? "[x]" : "[ ]").font(Term.mono(22))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(th.1).font(Term.ru(15))
-                                Text(th.2).font(Term.ru(11)).opacity(0.75)
-                            }
-                            Spacer()
-                        }
-                        .padding(10)
-                        .foregroundColor(theme == th.0 && !Term.prism ? .black : Term.fg)
-                        .background(theme == th.0 ? (Term.prism ? Color(hex: 0x8B6CFF, alpha: 0.35) : Term.fg) : Term.bg)
-                        .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                    }
-                }
-                Text("> tx_mode").font(Term.mono(26)).padding(.top, 10)
-                ForEach(TxMode.allCases) { m in
-                    Button { model.mode = m } label: {
-                        HStack {
-                            Text(model.mode == m ? "[x]" : "[ ]").font(Term.mono(22))
-                            Text(m.label).font(Term.ru(14))
-                            Spacer()
-                        }
-                        .padding(10)
-                        .foregroundColor(model.mode == m && !Term.prism ? .black : Term.fg)
-                        .background(model.mode == m ? (Term.prism ? Color(hex: 0x8B6CFF, alpha: 0.35) : Term.fg) : Term.bg)
-                        .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                    }
-                }
-                if model.mode == .http {
-                    Text("Адрес модуля Tasmota").font(Term.ru(12)).foregroundColor(Term.dim)
-                    TextField("192.168.1.50", text: $model.host)
-                        .font(Term.ru(16)).keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
-                        .padding(10).overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                }
+                choices
 
                 Text("> diag").font(Term.mono(26)).padding(.top, 10)
                 Group {
@@ -202,6 +222,32 @@ struct SettingsView: View {
 }
 
 extension ContentView {
+    /// Фон текущей темы. Во второй теме крыс нет, в «Тепловизоре» они — тёплые пятна в рамках.
+    @ViewBuilder func themeBackground() -> some View {
+        if Term.prism {
+            PrismBackground()
+        } else if Term.thermal {
+            ZStack {
+                ThermalBackground()
+                TimelineView(.animation) { tl in RunningRats(t: tl.date.timeIntervalSinceReferenceDate) }
+            }
+        } else {
+            LogBackground()
+        }
+    }
+
+    /// Заголовок «krisa» в текущей теме.
+    @ViewBuilder func titleView() -> some View {
+        if Term.prism {
+            IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
+        } else if Term.thermal {
+            HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
+        } else {
+            TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
+                .shadow(color: .white.opacity(0.9), radius: 8)
+        }
+    }
+
     /// Кнопка шапки: рамка в «Терминале», жидкое стекло в «Призме».
     @ViewBuilder func headerLabel(_ text: String, width: CGFloat) -> some View {
         if Term.prism {

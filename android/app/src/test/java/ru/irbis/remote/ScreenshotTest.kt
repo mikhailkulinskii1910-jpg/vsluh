@@ -57,10 +57,16 @@ class ScreenshotTest {
 
     /** Тема «Призма»: заставка, пульт, нажатие кнопки, вкладка MocTec. */
     @Test
-    fun shotsPrism() {
-        val out = File(System.getProperty("shots.dir") ?: "build/shots", "prism").apply { mkdirs() }
+    fun shotsPrism() = themed("prism")
+
+    /** Тема «Тепловизор»: те же кадры. */
+    @Test
+    fun shotsThermal() = themed("thermal")
+
+    private fun themed(theme: String) {
+        val out = File(System.getProperty("shots.dir") ?: "build/shots", theme).apply { mkdirs() }
         org.robolectric.RuntimeEnvironment.getApplication()
-            .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().putString("theme", "prism").commit()
+            .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().putString("theme", theme).commit()
         val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
         val root = ctl.get().window.decorView
         fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
