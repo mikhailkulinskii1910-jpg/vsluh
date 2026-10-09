@@ -84,6 +84,26 @@ class ScreenshotTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("moctec")
     }
 
+    /** Вкладка «Цвет» первой темы: зелёный «люминофор» — сама вкладка и пульт в этом цвете. */
+    @Test
+    fun shotsColor() {
+        val out = File(System.getProperty("shots.dir") ?: "build/shots", "color").apply { mkdirs() }
+        org.robolectric.RuntimeEnvironment.getApplication()
+            .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
+            .putString("theme", "terminal").putInt("term_color", android.graphics.Color.parseColor("#33FF66")).putString("tab", "color").commit()
+        val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val root = ctl.get().window.decorView
+        fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+            root.draw(Canvas(bmp)); File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1900)); shot("splash")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800))
+        findText(root, "IRBIS")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
+        findText(root, "Цвет")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+    }
+
     private fun findText(v: View, t: String): android.widget.TextView? = when (v) {
         is android.widget.TextView -> v.takeIf { it.text.toString() == t }
         is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findText(v.getChildAt(it), t) }

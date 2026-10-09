@@ -84,6 +84,11 @@ object ThermalScene {
         }
         hudText.typeface = c.resources.getFont(R.font.vt323)
         w = width.toFloat(); h = height.toFloat()
+        // градиенты зависят только от размера экрана — создаются здесь, а не каждый кадр
+        val s = min(w, h) * 1.18f
+        fade.shader = RadialGradient(w / 2, h * 0.5f, s * 0.72f, intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Term.BG),
+            floatArrayOf(0f, 0.63f, 0.7f), Shader.TileMode.CLAMP)
+        scale.shader = android.graphics.LinearGradient(0f, h * 0.7f, 0f, h * 0.3f, Heat.PAL, null, Shader.TileMode.CLAMP)
     }
 
     fun draw(canvas: Canvas, t: Float) {
@@ -97,8 +102,6 @@ object ThermalScene {
             canvas.drawBitmap(b, null, RectF(w / 2 - s / 2, h * 0.5f - s / 2, w / 2 + s / 2, h * 0.5f + s / 2), irisP)
             canvas.restore()
             // края картинки растворяются в чёрном — не видно квадрата при вращении
-            fade.shader = RadialGradient(w / 2, h * 0.5f, s * 0.72f, intArrayOf(Color.TRANSPARENT, Color.TRANSPARENT, Term.BG),
-                floatArrayOf(0f, 0.63f, 0.7f), Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, w, h, fade)
         }
         // зерно матрицы
@@ -118,7 +121,6 @@ object ThermalScene {
         }
         // шкала температур у правого края
         val bx = w - 7 * d; val top = h * 0.3f; val bot = h * 0.7f
-        scale.shader = android.graphics.LinearGradient(0f, bot, 0f, top, Heat.PAL, null, Shader.TileMode.CLAMP)
         canvas.drawRect(bx, top, bx + 3 * d, bot, scale)
         hud.strokeWidth = d; hud.color = Color.argb(140, 255, 241, 220)
         for (i in 0..8) { val y = top + (bot - top) * i / 8f; canvas.drawLine(bx - 3 * d, y, bx, y, hud) }
