@@ -183,27 +183,38 @@ struct RunningRats: View {
     }
 
     var body: some View {
-        Canvas { ctx, size in
-            for (i, r) in RatSim.shared.step(to: t, size: size).enumerated() {
-                let (pos, dir, f, shade) = r
-                var tr = CGAffineTransform(translationX: pos.x, y: pos.y)
-                if dir < 0 { tr = tr.translatedBy(x: RatSim.w, y: 0).scaledBy(x: -1, y: 1) }
-                if Term.thermal {
-                    // тепловизор: крыса — тёплое пятно с красным ореолом в жёлтой рамке обнаружения
-                    let heat = 0.55 + shade * 0.4
-                    var c = ctx
-                    c.addFilter(.shadow(color: Color(hex: 0xE8382F), radius: 5))
-                    c.fill(RunningRats.frames[f].applying(tr), with: .color(Heat.color(heat)))
-                    let box = CGRect(x: pos.x - 4, y: pos.y - 4, width: RatSim.w + 8, height: RatSim.h + 7)
-                    ctx.stroke(Path(box), with: .color(Heat.yellow.opacity(0.8)), lineWidth: 1)
-                    ctx.draw(Text("RAT_0\(i + 1)XX " + Heat.temp(heat)).font(.custom("VT323-Regular", size: 13)).foregroundColor(Heat.yellow.opacity(0.85)),
-                             at: CGPoint(x: box.minX, y: box.minY - 2), anchor: .bottomLeading)
-                } else {
-                    ctx.fill(RunningRats.frames[f].applying(tr), with: .color(.white.opacity(shade)))
-                }
+        Canvas { ctx, size in RunningRats.paint(ctx, size, t) }
+        .allowsHitTesting(false)
+    }
+}
+
+extension RunningRats {
+    static func paint(_ ctx: GraphicsContext, _ size: CGSize, _ t: Double) {
+        let rats = RatSim.shared.step(to: t, size: size)
+        for i in rats.indices {
+            let (pos, dir, f, shade) = rats[i]
+            var tr = CGAffineTransform(translationX: pos.x, y: pos.y)
+            if dir < 0 { tr = tr.translatedBy(x: RatSim.w, y: 0).scaledBy(x: -1, y: 1) }
+            let body: Path = frames[f].applying(tr)
+            if Term.thermal {
+                paintHot(ctx, body: body, pos: pos, index: i, shade: shade)
+            } else {
+                ctx.fill(body, with: .color(.white.opacity(shade)))
             }
         }
-        .allowsHitTesting(false)
+    }
+
+    /// Тепловизор: крыса — тёплое пятно с красным ореолом в жёлтой рамке обнаружения.
+    private static func paintHot(_ ctx: GraphicsContext, body: Path, pos: CGPoint, index: Int, shade: Double) {
+        let heat: Double = 0.55 + shade * 0.4
+        var c = ctx
+        c.addFilter(.shadow(color: Color(hex: 0xE8382F), radius: 5))
+        c.fill(body, with: .color(Heat.color(heat)))
+        let box = CGRect(x: pos.x - 4, y: pos.y - 4, width: RatSim.w + 8, height: RatSim.h + 7)
+        ctx.stroke(Path(box), with: .color(Heat.yellow.opacity(0.8)), lineWidth: 1)
+        let label: String = "RAT_0" + String(index + 1) + "XX " + Heat.temp(heat)
+        let text = Text(label).font(.custom("VT323-Regular", size: 13)).foregroundColor(Heat.yellow.opacity(0.85))
+        ctx.draw(text, at: CGPoint(x: box.minX, y: box.minY - 2), anchor: .bottomLeading)
     }
 }
 

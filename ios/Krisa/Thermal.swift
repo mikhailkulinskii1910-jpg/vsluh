@@ -60,25 +60,7 @@ struct ThermalBackground: View {
     var body: some View {
         GeometryReader { g in
             TimelineView(.animation) { tl in
-                let t = Prism.time(tl.date)
-                let s = min(g.size.width, g.size.height) * 1.18 * CGFloat(1 + 0.025 * sin(t * 0.8))
-                ZStack {
-                    Color.black
-                    // радужка вращается (оборот за ~80 с), края растворяются в чёрном
-                    Image("iris").resizable()
-                        .frame(width: s, height: s)
-                        .mask(RadialGradient(stops: [.init(color: .black, location: 0.86), .init(color: .clear, location: 0.99)],
-                                             center: .center, startRadius: 0, endRadius: s / 2))
-                        .rotationEffect(.degrees(t * 4.5))
-                        .position(x: g.size.width / 2, y: g.size.height / 2)
-                    // зерно: плитка каждый кадр сдвигается
-                    Image(uiImage: Heat.grain).resizable(resizingMode: .tile)
-                        .frame(width: g.size.width + 128, height: g.size.height + 128)
-                        .offset(x: -CGFloat(Int(t * 31) % 64), y: -CGFloat(Int(t * 47) % 64))
-                        .opacity(0.5)
-                        .position(x: g.size.width / 2 + 64, y: g.size.height / 2 + 64)
-                    ThermalHud(t: t)
-                }
+                ThermalFrame(t: Prism.time(tl.date), size: g.size)
             }
         }
         .clipped()
@@ -86,37 +68,108 @@ struct ThermalBackground: View {
     }
 }
 
+/// Один кадр фона. Значения считаются заранее с явными типами — так компилятор Swift проверяет их быстро.
+struct ThermalFrame: View {
+    let t: Double
+    let size: CGSize
+
+    private var side: CGFloat {
+        let base: CGFloat = min(size.width, size.height) * 1.18
+        let pulse: CGFloat = CGFloat(1.0 + 0.025 * sin(t * 0.8))
+        return base * pulse
+    }
+    private var grainShift: CGSize {
+        CGSize(width: -CGFloat(Int(t * 31) % 64), height: -CGFloat(Int(t * 47) % 64))
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black
+            irisLayer
+            grainLayer
+            ThermalHud(t: t, size: size)
+        }
+    }
+
+    // радужка вращается (оборот за ~80 с), края растворяются в чёрном
+    private var irisLayer: some View {
+        let s = side
+        let fade = RadialGradient(stops: [.init(color: .black, location: 0.86), .init(color: .clear, location: 0.99)],
+                                  center: .center, startRadius: 0, endRadius: s / 2)
+        return Image("iris").resizable()
+            .frame(width: s, height: s)
+            .mask(fade)
+            .rotationEffect(.degrees(t * 4.5))
+            .position(x: size.width / 2, y: size.height / 2)
+    }
+
+    // зерно матрицы: плитка каждый кадр сдвигается
+    private var grainLayer: some View {
+        let sh = grainShift
+        return Image(uiImage: Heat.grain).resizable(resizingMode: .tile)
+            .frame(width: size.width + 128, height: size.height + 128)
+            .offset(sh)
+            .opacity(0.5)
+            .position(x: size.width / 2 + 64, y: size.height / 2 + 64)
+    }
+}
+
 /// HUD тепловизора: уголки кадра, шкала температур у правого края, REC и дата внизу.
 struct ThermalHud: View {
     let t: Double
+    let size: CGSize
+
     var body: some View {
-        GeometryReader { g in
-            let w = g.size.width, h = g.size.height
-            ZStack {
-                Canvas { ctx, size in
-                    var p = Path()
-                    let k: CGFloat = 22, m: CGFloat = 8
-                    for (x, y, sx, sy) in [(m, m, 1.0, 1.0), (size.width - m, m, -1, 1), (m, size.height - m, 1, -1), (size.width - m, size.height - m, -1, -1)] as [(CGFloat, CGFloat, CGFloat, CGFloat)] {
-                        p.move(to: CGPoint(x: x + sx * k, y: y)); p.addLine(to: CGPoint(x: x, y: y)); p.addLine(to: CGPoint(x: x, y: y + sy * k))
-                    }
-                    ctx.stroke(p, with: .color(Heat.yellow.opacity(0.6)), lineWidth: 1.5)
-                    // шкала температур
-                    let top = size.height * 0.3, bot = size.height * 0.7, bx = size.width - 7
-                    ctx.fill(Path(CGRect(x: bx, y: top, width: 3, height: bot - top)),
-                             with: .linearGradient(Gradient(colors: Heat.pal.map { Color(hex: $0) }), startPoint: CGPoint(x: 0, y: bot), endPoint: CGPoint(x: 0, y: top)))
-                    var ticks = Path()
-                    for i in 0...8 { let y = top + (bot - top) * CGFloat(i) / 8; ticks.move(to: CGPoint(x: bx - 3, y: y)); ticks.addLine(to: CGPoint(x: bx, y: y)) }
-                    ctx.stroke(ticks, with: .color(Color(hex: 0xFFF1DC, alpha: 0.55)), lineWidth: 1)
-                }
-                Text(Heat.date + "   ZOOM:OFF").font(Term.mono(17)).foregroundColor(Color(hex: 0xFF9632, alpha: 0.8))
-                    .position(x: w / 2, y: h - 12)
-                HStack(spacing: 5) {
-                    Circle().fill(Color(hex: 0xFF3228)).frame(width: 7, height: 7).opacity(Int(t * 1.25) % 2 == 0 ? 1 : 0)
-                    Text("REC").font(Term.mono(17)).foregroundColor(Color(hex: 0xFFF1DC, alpha: 0.8))
-                }
-                .position(x: w - 46, y: h - 38)
-            }
+        ZStack {
+            Canvas { ctx, sz in ThermalHud.draw(ctx, sz) }
+            dateLabel.position(x: size.width / 2, y: size.height - 12)
+            recLabel.position(x: size.width - 46, y: size.height - 38)
         }
+    }
+
+    private var dateLabel: some View {
+        Text(Heat.date + "   ZOOM:OFF").font(Term.mono(17)).foregroundColor(Color(hex: 0xFF9632, alpha: 0.8))
+    }
+
+    private var recLabel: some View {
+        let on: Bool = Int(t * 1.25) % 2 == 0
+        return HStack(spacing: 5) {
+            Circle().fill(Color(hex: 0xFF3228)).frame(width: 7, height: 7).opacity(on ? 1 : 0)
+            Text("REC").font(Term.mono(17)).foregroundColor(Color(hex: 0xFFF1DC, alpha: 0.8))
+        }
+    }
+
+    private static func corner(_ p: inout Path, _ x: CGFloat, _ y: CGFloat, _ sx: CGFloat, _ sy: CGFloat) {
+        let k: CGFloat = 22
+        p.move(to: CGPoint(x: x + sx * k, y: y))
+        p.addLine(to: CGPoint(x: x, y: y))
+        p.addLine(to: CGPoint(x: x, y: y + sy * k))
+    }
+
+    static func draw(_ ctx: GraphicsContext, _ size: CGSize) {
+        let m: CGFloat = 8
+        let r: CGFloat = size.width - m
+        let b: CGFloat = size.height - m
+        var p = Path()
+        corner(&p, m, m, 1, 1)
+        corner(&p, r, m, -1, 1)
+        corner(&p, m, b, 1, -1)
+        corner(&p, r, b, -1, -1)
+        ctx.stroke(p, with: .color(Heat.yellow.opacity(0.6)), lineWidth: 1.5)
+        // шкала температур
+        let top: CGFloat = size.height * 0.3
+        let bot: CGFloat = size.height * 0.7
+        let bx: CGFloat = size.width - 7
+        let colors: [Color] = Heat.pal.map { Color(hex: $0) }
+        ctx.fill(Path(CGRect(x: bx, y: top, width: 3, height: bot - top)),
+                 with: .linearGradient(Gradient(colors: colors), startPoint: CGPoint(x: 0, y: bot), endPoint: CGPoint(x: 0, y: top)))
+        var ticks = Path()
+        for i in 0...8 {
+            let y: CGFloat = top + (bot - top) * CGFloat(i) / 8
+            ticks.move(to: CGPoint(x: bx - 3, y: y))
+            ticks.addLine(to: CGPoint(x: bx, y: y))
+        }
+        ctx.stroke(ticks, with: .color(Color(hex: 0xFFF1DC, alpha: 0.55)), lineWidth: 1)
     }
 }
 
@@ -127,12 +180,21 @@ struct HeatText: View {
     var body: some View {
         TimelineView(.animation) { tl in
             let s = CGFloat((Prism.time(tl.date) / 5).truncatingRemainder(dividingBy: 1))
-            Text(text).font(font).foregroundColor(.clear).lineLimit(1).fixedSize()
-                .overlay(LinearGradient(colors: Heat.hot + Heat.hot.dropFirst(),
-                                        startPoint: UnitPoint(x: -s * 2, y: 0.5), endPoint: UnitPoint(x: 2 - s * 2, y: 0.5))
-                    .mask(Text(text).font(font).lineLimit(1).fixedSize()))
-                .shadow(color: Heat.glow.opacity(0.75), radius: 10)
+            heatBody(shift: s)
         }
+    }
+}
+
+extension HeatText {
+    private static let colors: [Color] = Heat.hot + Array(Heat.hot.dropFirst())
+
+    func heatBody(shift s: CGFloat) -> some View {
+        let grad = LinearGradient(colors: HeatText.colors,
+                                  startPoint: UnitPoint(x: -s * 2, y: 0.5), endPoint: UnitPoint(x: 2 - s * 2, y: 0.5))
+        let shape = Text(text).font(font).lineLimit(1).fixedSize()
+        return Text(text).font(font).foregroundColor(.clear).lineLimit(1).fixedSize()
+            .overlay(grad.mask(shape))
+            .shadow(color: Heat.glow.opacity(0.75), radius: 10)
     }
 }
 

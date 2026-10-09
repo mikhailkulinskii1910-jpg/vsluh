@@ -25,7 +25,8 @@ jobs:
           set -o pipefail   # ошибка компиляции не должна теряться в конвейере с xcbeautify
           xcodebuild -project Krisa.xcodeproj -scheme Krisa -configuration Release \
             -sdk iphoneos -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | xcbeautify || exit ${PIPESTATUS[0]}
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build 2>&1 | tee xb.log | xcbeautify \
+            || { echo "=== compiler errors ==="; grep -E "error:|warning: .*type-check" xb.log | head -30; exit 1; }
           mkdir -p out/Payload
           cp -R build/Build/Products/Release-iphoneos/krisa.app out/Payload/
           (cd out && zip -qr krisa.ipa Payload && rm -rf Payload)
