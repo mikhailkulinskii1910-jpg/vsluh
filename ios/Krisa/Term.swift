@@ -327,32 +327,43 @@ struct KeyView: View {
     /// «Тепловизор»: рамка обнаружения; при нажатии кнопка «нагревается» и потом плавно остывает.
     private var thermalFace: some View {
         TimelineView(.animation) { tl in
-            let cool = max(0, 1 - tl.date.timeIntervalSince(pressedAt) / 0.95)
-            let breathe = 0.66 + 0.06 * sin(Prism.time(tl.date) * 2.5)
-            let heat = max(cool * cool * (3 - 2 * cool), down ? 0.92 : 0, inverted ? breathe : 0)
-            let ink = heat > 0.5
             GeometryReader { g in
-                ZStack {
-                    Rectangle().fill(Color.black.opacity(0.6))
-                    if heat > 0.02 {
-                        RadialGradient(gradient: Heat.bloom(heat), center: .center, startRadius: 0,
-                                       endRadius: max(g.size.width, g.size.height) * CGFloat(0.45 + 0.35 * heat))
-                    }
-                    Rectangle().strokeBorder(ink ? Heat.color(0.97) : Heat.yellow, lineWidth: 1.4)
-                    Text(shown).font(Term.mono(min(38, g.size.width / CGFloat(max(6, label.count)) * 1.55))).lineLimit(1)
-                        .foregroundColor(ink ? Heat.ink : Term.fg)
-                        .shadow(color: ink ? .clear : Heat.glow, radius: 8)
-                    VStack {
-                        HStack { Text(String(format: "KEY_%02dXX", index + 1)).foregroundColor(ink ? Heat.ink : Heat.yellow); Spacer() }
-                        Spacer()
-                        HStack { Spacer(); Text(String(format: "0x%02X  ", (code >> 8) & 0xFF) + Heat.temp(heat)).foregroundColor(ink ? Heat.ink.opacity(0.8) : Term.dim) }
-                    }
-                    .font(Term.mono(14))
-                    .padding(.horizontal, 7).padding(.vertical, 4)
-                }
-                .clipped()
+                thermalContent(heat: thermalHeat(tl.date), size: g.size)
             }
         }
+    }
+
+    private func thermalHeat(_ now: Date) -> Double {
+        let cool = max(0, 1 - now.timeIntervalSince(pressedAt) / 0.95)
+        var heat = cool * cool * (3 - 2 * cool)                       // плавное остывание
+        if down { heat = max(heat, 0.92) }
+        if inverted { heat = max(heat, 0.66 + 0.06 * sin(Prism.time(now) * 2.5)) }   // POWER всегда тёплая и «дышит»
+        return heat
+    }
+
+    private func thermalContent(heat: Double, size: CGSize) -> some View {
+        let ink = heat > 0.5
+        let radius: CGFloat = max(size.width, size.height) * CGFloat(0.45 + 0.35 * heat)
+        let fontSize: CGFloat = min(38, size.width / CGFloat(max(6, label.count)) * 1.55)
+        let hex = String(format: "0x%02X  ", (code >> 8) & 0xFF) + Heat.temp(heat)
+        return ZStack {
+            Rectangle().fill(Color.black.opacity(0.6))
+            if heat > 0.02 {
+                RadialGradient(gradient: Heat.bloom(heat), center: .center, startRadius: 0, endRadius: radius)
+            }
+            Rectangle().strokeBorder(ink ? Heat.color(0.97) : Heat.yellow, lineWidth: 1.4)
+            Text(shown).font(Term.mono(fontSize)).lineLimit(1)
+                .foregroundColor(ink ? Heat.ink : Term.fg)
+                .shadow(color: ink ? .clear : Heat.glow, radius: 8)
+            VStack {
+                HStack { Text(String(format: "KEY_%02dXX", index + 1)).foregroundColor(ink ? Heat.ink : Heat.yellow); Spacer() }
+                Spacer()
+                HStack { Spacer(); Text(hex).foregroundColor(ink ? Heat.ink.opacity(0.8) : Term.dim) }
+            }
+            .font(Term.mono(14))
+            .padding(.horizontal, 7).padding(.vertical, 4)
+        }
+        .clipped()
     }
 
     private var terminalFace: some View {

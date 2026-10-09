@@ -20,24 +20,12 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             Term.bg.ignoresSafeArea()
-            if Term.prism { PrismBackground().ignoresSafeArea() }   // во второй теме крыс нет
-            else if Term.thermal {
-                ThermalBackground().ignoresSafeArea()
-                TimelineView(.animation) { tl in RunningRats(t: tl.date.timeIntervalSinceReferenceDate) }.ignoresSafeArea()
-            }
-            else { LogBackground().ignoresSafeArea() }
+            themeBackground().ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        if Term.prism {
-                            IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
-                        } else if Term.thermal {
-                            HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
-                        } else {
-                            TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
-                                .shadow(color: .white.opacity(0.9), radius: 8)
-                        }
+                        titleView()
                         Text("#500202 :: IRBIS :: NEC 38kHz").font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
                         Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
                             .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
@@ -216,6 +204,32 @@ struct SettingsView: View {
 }
 
 extension ContentView {
+    /// Фон текущей темы. Во второй теме крыс нет, в «Тепловизоре» они — тёплые пятна в рамках.
+    @ViewBuilder func themeBackground() -> some View {
+        if Term.prism {
+            PrismBackground()
+        } else if Term.thermal {
+            ZStack {
+                ThermalBackground()
+                TimelineView(.animation) { tl in RunningRats(t: tl.date.timeIntervalSinceReferenceDate) }
+            }
+        } else {
+            LogBackground()
+        }
+    }
+
+    /// Заголовок «krisa» в текущей теме.
+    @ViewBuilder func titleView() -> some View {
+        if Term.prism {
+            IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
+        } else if Term.thermal {
+            HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
+        } else {
+            TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
+                .shadow(color: .white.opacity(0.9), radius: 8)
+        }
+    }
+
     /// Кнопка шапки: рамка в «Терминале», жидкое стекло в «Призме».
     @ViewBuilder func headerLabel(_ text: String, width: CGFloat) -> some View {
         if Term.prism {

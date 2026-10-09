@@ -12,98 +12,8 @@ struct SplashView: View {
 
     var body: some View {
         TimelineView(.animation) { ctx in
-            let t = SplashView.frozenAt ?? ctx.date.timeIntervalSince(start) * 1000
             GeometryReader { g in
-                let w = g.size.width, h = g.size.height
-                let rw = min(w * 0.72, 420), rh = rw * 358 / 605
-                let restY = h * 0.5
-                let f = CGFloat(min(max((t - 650) / 900, 0), 1))
-                let frame = Int(t / 16)
-                ZStack(alignment: .topLeading) {
-                    if Term.prism { PrismBackground() } else if Term.thermal { ThermalBackground() } else { Color.black }
-                    // 1. загрузочный лог
-                    Text(bootText(chars: Int(t / 7)))
-                        .font(Term.prism ? Prism.body(14) : Term.mono(18)).foregroundColor(Term.dim)
-                        .padding(.horizontal, 16).padding(.top, 24)
-
-                    // 2. крыса падает сверху, отскакивает и «лежит»
-                    if t > 650 {
-                        let y = -rh + (restY + rh) * CGFloat(bounce(Double(f)))
-                        let rot = Double((1 - f) * -38 + (f > 0.55 ? sin(f * 26) * 4 * (1 - f) : 0))
-                        let moving = f < 0.95 || (1800...1900).contains(t) || (2050...2110).contains(t)
-                        Group {
-                            if Term.prism {
-                                // крыса из жидкого стекла
-                                GlassRat(t: Prism.time(ctx.date), moving: moving)
-                            } else if Term.thermal {
-                                // крыса — тепловое пятно
-                                HeatRat()
-                            } else {
-                                RatSlices(bands: moving ? 9 : 1, frame: frame, amp: moving ? 22 : 0)
-                                    .shadow(color: .white.opacity(Double(0.55 * f)), radius: 14)
-                            }
-                        }
-                        .frame(width: rw, height: rh)
-                        .rotationEffect(.degrees(rot))
-                        .position(x: w / 2, y: y)
-
-                        // удар об «пол» — горизонтальные полосы, как у солнца на референсе
-                        if f > 0.42 && f < 0.9 {
-                            let k = 1 - abs(f - 0.55) / 0.35
-                            ForEach(0..<7, id: \.self) { i in
-                                Rectangle().fill((Term.prism ? Prism.iris[i % 6] : Term.thermal ? Heat.color(0.45 + Double(i) * 0.08) : Color.white).opacity(Double(0.7 * k)))
-                                    .frame(width: (rw * 1.2 + hashNoise(frame * 7 + i) * rw * 0.8) * k, height: 1)
-                                    .position(x: w / 2, y: restY + rh * 0.33 + CGFloat(i - 3) * 4)
-                            }
-                        }
-                    }
-
-                    // 3. надпись
-                    if t > 1500 {
-                        let word = Term.scramble("krisa", min((t - 1500) / 450, 1))
-                        if Term.prism {
-                            IrisText(text: word, font: Prism.display(48))
-                                .position(x: w / 2, y: restY + rh * 0.5 + 70)
-                        } else if Term.thermal {
-                            HeatText(text: word, font: Term.mono(64))
-                                .position(x: w / 2, y: restY + rh * 0.5 + 70)
-                        } else {
-                            Text(word)
-                                .font(Term.mono(64)).foregroundColor(Term.fg)
-                                .shadow(color: .white, radius: 12)
-                                .position(x: w / 2, y: restY + rh * 0.5 + 70)
-                        }
-                    }
-
-                    // тепловизор «захватил» крысу: рамка обнаружения с подписью (мигает при появлении)
-                    if Term.thermal && f > 0.62 && !(t < 1700 && Int(t / 70) % 2 == 0) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("RAT_01XX  37.2°C").font(Term.mono(18)).foregroundColor(Heat.yellow)
-                            Rectangle().strokeBorder(Heat.yellow, lineWidth: 1.5).frame(width: rw * 1.12, height: rh * 1.2)
-                        }
-                        .position(x: w / 2, y: restY - 2)
-                    }
-
-                    // подпись в правом нижнем углу «расписывается» слева направо
-                    if t > 700 {
-                        let p = CGFloat(min((t - 700) / 650, 1))
-                        Image("sign").resizable().aspectRatio(contentMode: .fit)
-                            .frame(width: 110)
-                            .opacity(0.86)
-                            .mask(Rectangle().frame(width: 110 * p).frame(width: 110, alignment: .leading))
-                            .position(x: w - 18 - 55, y: h - 22 - 46)
-                    }
-
-                    // 4. уход: экран рассыпается полосами
-                    if t > 2350 {
-                        let p = CGFloat(min((t - 2350) / 300, 1))
-                        ForEach(0..<14, id: \.self) { i in
-                            Rectangle().fill((Term.prism ? Prism.iris[i % 6] : Term.thermal ? Heat.color(0.4 + Double(i % 7) * 0.09) : Color.white).opacity(Double(0.85 * (1 - p))))
-                                .frame(width: w * hashNoise(frame * 13 + i), height: 1 + hashNoise(frame * 5 + i) * 6)
-                                .position(x: w * hashNoise(frame * 13 + i) / 2, y: h * hashNoise(frame * 31 + i))
-                        }
-                    }
-                }
+                scene(t: SplashView.frozenAt ?? ctx.date.timeIntervalSince(start) * 1000, date: ctx.date, size: g.size)
             }
         }
         .ignoresSafeArea()
@@ -113,6 +23,123 @@ struct SplashView: View {
             start = Date()
             if SplashView.frozenAt == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 2.65) { finish() } }
         }
+    }
+
+
+    // Сцена разбита на маленькие функции: одним большим body компилятор Swift не успевает проверить типы.
+
+    private func scene(t: Double, date: Date, size: CGSize) -> some View {
+        let w = size.width, h = size.height
+        let rw = min(w * 0.72, 420), rh = rw * 358 / 605
+        let f = CGFloat(min(max((t - 650) / 900, 0), 1))
+        return ZStack(alignment: .topLeading) {
+            backdrop()
+            // 1. загрузочный лог
+            Text(bootText(chars: Int(t / 7)))
+                .font(Term.prism ? Prism.body(14) : Term.mono(18)).foregroundColor(Term.dim)
+                .padding(.horizontal, 16).padding(.top, 24)
+            // 2. крыса падает сверху, отскакивает и «лежит»
+            if t > 650 { ratLayer(t: t, date: date, w: w, h: h, rw: rw, rh: rh, f: f) }
+            // 3. надпись
+            if t > 1500 { wordLayer(Term.scramble("krisa", min((t - 1500) / 450, 1))).position(x: w / 2, y: h * 0.5 + rh * 0.5 + 70) }
+            // тепловизор «захватил» крысу: рамка обнаружения с подписью (мигает при появлении)
+            if Term.thermal && f > 0.62 && !(t < 1700 && Int(t / 70) % 2 == 0) { detectionBox(rw: rw, rh: rh).position(x: w / 2, y: h * 0.5 - 2) }
+            // подпись в правом нижнем углу «расписывается» слева направо
+            if t > 700 { signature(p: CGFloat(min((t - 700) / 650, 1))).position(x: w - 18 - 55, y: h - 22 - 46) }
+            // 4. уход: экран рассыпается полосами
+            if t > 2350 { exitStripes(t: t, w: w, h: h) }
+        }
+    }
+
+    @ViewBuilder private func backdrop() -> some View {
+        if Term.prism { PrismBackground() } else if Term.thermal { ThermalBackground() } else { Color.black }
+    }
+
+    /// Цвет полос удара и ухода в текущей теме.
+    private func stripeColor(_ i: Int, _ heat: Double) -> Color {
+        if Term.prism { return Prism.iris[i % 6] }
+        if Term.thermal { return Heat.color(heat) }
+        return .white
+    }
+
+    @ViewBuilder private func ratBody(moving: Bool, frame: Int, f: CGFloat, date: Date) -> some View {
+        if Term.prism {
+            GlassRat(t: Prism.time(date), moving: moving)          // крыса из жидкого стекла
+        } else if Term.thermal {
+            HeatRat()                                               // крыса — тепловое пятно
+        } else {
+            RatSlices(bands: moving ? 9 : 1, frame: frame, amp: moving ? 22 : 0)
+                .shadow(color: .white.opacity(Double(0.55 * f)), radius: 14)
+        }
+    }
+
+    private func ratLayer(t: Double, date: Date, w: CGFloat, h: CGFloat, rw: CGFloat, rh: CGFloat, f: CGFloat) -> some View {
+        let restY = h * 0.5
+        let frame = Int(t / 16)
+        let y: CGFloat = -rh + (restY + rh) * CGFloat(bounce(Double(f)))
+        let wobble: CGFloat = f > 0.55 ? sin(f * 26) * 4 * (1 - f) : 0
+        let rot = Double((1 - f) * -38 + wobble)
+        let moving = f < 0.95 || (1800...1900).contains(t) || (2050...2110).contains(t)
+        let k: CGFloat = 1 - abs(f - 0.55) / 0.35
+        return ZStack {
+            ratBody(moving: moving, frame: frame, f: f, date: date)
+                .frame(width: rw, height: rh)
+                .rotationEffect(.degrees(rot))
+                .position(x: w / 2, y: y)
+            // удар об «пол» — горизонтальные полосы, как у солнца на референсе
+            if f > 0.42 && f < 0.9 {
+                ForEach(0..<7, id: \.self) { i in
+                    impactLine(i: i, frame: frame, rw: rw, k: k)
+                        .position(x: w / 2, y: restY + rh * 0.33 + CGFloat(i - 3) * 4)
+                }
+            }
+        }
+    }
+
+    private func impactLine(i: Int, frame: Int, rw: CGFloat, k: CGFloat) -> some View {
+        let width: CGFloat = (rw * 1.2 + hashNoise(frame * 7 + i) * rw * 0.8) * k
+        return Rectangle().fill(stripeColor(i, 0.45 + Double(i) * 0.08).opacity(Double(0.7 * k)))
+            .frame(width: width, height: 1)
+    }
+
+    @ViewBuilder private func wordLayer(_ word: String) -> some View {
+        if Term.prism {
+            IrisText(text: word, font: Prism.display(48))
+        } else if Term.thermal {
+            HeatText(text: word, font: Term.mono(64))
+        } else {
+            Text(word).font(Term.mono(64)).foregroundColor(Term.fg).shadow(color: .white, radius: 12)
+        }
+    }
+
+    private func detectionBox(rw: CGFloat, rh: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("RAT_01XX  37.2°C").font(Term.mono(18)).foregroundColor(Heat.yellow)
+            Rectangle().strokeBorder(Heat.yellow, lineWidth: 1.5).frame(width: rw * 1.12, height: rh * 1.2)
+        }
+    }
+
+    private func signature(p: CGFloat) -> some View {
+        Image("sign").resizable().aspectRatio(contentMode: .fit)
+            .frame(width: 110)
+            .opacity(0.86)
+            .mask(Rectangle().frame(width: 110 * p).frame(width: 110, alignment: .leading))
+    }
+
+    private func exitStripes(t: Double, w: CGFloat, h: CGFloat) -> some View {
+        let p = CGFloat(min((t - 2350) / 300, 1))
+        let frame = Int(t / 16)
+        return ForEach(0..<14, id: \.self) { i in
+            exitStripe(i: i, frame: frame, p: p, w: w, h: h)
+        }
+    }
+
+    private func exitStripe(i: Int, frame: Int, p: CGFloat, w: CGFloat, h: CGFloat) -> some View {
+        let sw: CGFloat = w * hashNoise(frame * 13 + i)
+        let sh: CGFloat = 1 + hashNoise(frame * 5 + i) * 6
+        return Rectangle().fill(stripeColor(i, 0.4 + Double(i % 7) * 0.09).opacity(Double(0.85 * (1 - p))))
+            .frame(width: sw, height: sh)
+            .position(x: sw / 2, y: h * hashNoise(frame * 31 + i))
     }
 
     /// Для скриншотов в CI: KRISA_SPLASH_AT=1900 останавливает заставку на этом моменте (мс).
