@@ -22,6 +22,7 @@ jobs:
 
       - name: Build unsigned IPA
         run: |
+          set -o pipefail   # ошибка компиляции не должна теряться в конвейере с xcbeautify
           xcodebuild -project Krisa.xcodeproj -scheme Krisa -configuration Release \
             -sdk iphoneos -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | xcbeautify || exit ${PIPESTATUS[0]}
@@ -32,6 +33,7 @@ jobs:
 
       - name: Simulator screenshots
         run: |
+          set -o pipefail
           xcodebuild -project Krisa.xcodeproj -scheme Krisa -configuration Debug \
             -sdk iphonesimulator -derivedDataPath simbuild CODE_SIGNING_ALLOWED=NO build | xcbeautify || exit ${PIPESTATUS[0]}
           DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print(next(x['udid'] for r in d for x in d[r] if x['name'].startswith('iPhone')))")
