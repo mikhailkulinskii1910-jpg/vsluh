@@ -110,11 +110,69 @@ struct SettingsView: View {
                           ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы"),
                           ("thermal", "Тепловизор", "Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка")]
 
-    /// Фон выбранной строки в текущей теме.
-    private var selectedFill: AnyView {
+    /// Фон строки выбора в текущей теме: выбранная подсвечена.
+    private func rowFill(_ on: Bool) -> AnyView {
+        if !on { return AnyView(Term.bg) }
         if Term.prism { return AnyView(Color(hex: 0x8B6CFF, alpha: 0.35)) }
         if Term.thermal { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
         return AnyView(Term.fg)
+    }
+
+    /// Цвет текста строки выбора.
+    private func rowInk(_ on: Bool) -> Color {
+        on && !Term.prism ? Color.black : Term.fg
+    }
+
+    private func themeRow(_ i: Int) -> some View {
+        let th = themes[i]
+        let on: Bool = theme == th.0
+        return Button {
+            Term.theme = th.0
+            theme = th.0
+        } label: {
+            HStack {
+                Text(on ? "[x]" : "[ ]").font(Term.mono(22))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(th.1).font(Term.ru(15))
+                    Text(th.2).font(Term.ru(11)).opacity(0.75)
+                }
+                Spacer()
+            }
+            .padding(10)
+            .foregroundColor(rowInk(on))
+            .background(rowFill(on))
+            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
+    private func modeRow(_ m: TxMode) -> some View {
+        let on: Bool = model.mode == m
+        return Button { model.mode = m } label: {
+            HStack {
+                Text(on ? "[x]" : "[ ]").font(Term.mono(22))
+                Text(m.label).font(Term.ru(14))
+                Spacer()
+            }
+            .padding(10)
+            .foregroundColor(rowInk(on))
+            .background(rowFill(on))
+            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
+    private var choices: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("> theme").font(Term.mono(26))
+            ForEach(themes.indices, id: \.self) { i in themeRow(i) }
+            Text("> tx_mode").font(Term.mono(26)).padding(.top, 10)
+            ForEach(TxMode.allCases) { m in modeRow(m) }
+            if model.mode == .http {
+                Text("Адрес модуля Tasmota").font(Term.ru(12)).foregroundColor(Term.dim)
+                TextField("192.168.1.50", text: $model.host)
+                    .font(Term.ru(16)).keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
+                    .padding(10).overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+            }
+        }
     }
 
     var body: some View {
@@ -125,47 +183,7 @@ struct SettingsView: View {
                     Spacer()
                     Button("[ok]") { dismiss() }.font(Term.mono(26)).foregroundColor(Term.fg)
                 }
-                Text("> theme").font(Term.mono(26))
-                ForEach(themes.indices, id: \.self) { i in
-                    let th = themes[i]
-                    Button {
-                        Term.theme = th.0
-                        theme = th.0
-                    } label: {
-                        HStack {
-                            Text(theme == th.0 ? "[x]" : "[ ]").font(Term.mono(22))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(th.1).font(Term.ru(15))
-                                Text(th.2).font(Term.ru(11)).opacity(0.75)
-                            }
-                            Spacer()
-                        }
-                        .padding(10)
-                        .foregroundColor(theme == th.0 && !Term.prism ? .black : Term.fg)
-                        .background(theme == th.0 ? selectedFill : Term.bg)
-                        .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                    }
-                }
-                Text("> tx_mode").font(Term.mono(26)).padding(.top, 10)
-                ForEach(TxMode.allCases) { m in
-                    Button { model.mode = m } label: {
-                        HStack {
-                            Text(model.mode == m ? "[x]" : "[ ]").font(Term.mono(22))
-                            Text(m.label).font(Term.ru(14))
-                            Spacer()
-                        }
-                        .padding(10)
-                        .foregroundColor(model.mode == m && !Term.prism ? .black : Term.fg)
-                        .background(model.mode == m ? selectedFill : Term.bg)
-                        .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                    }
-                }
-                if model.mode == .http {
-                    Text("Адрес модуля Tasmota").font(Term.ru(12)).foregroundColor(Term.dim)
-                    TextField("192.168.1.50", text: $model.host)
-                        .font(Term.ru(16)).keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
-                        .padding(10).overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                }
+                choices
 
                 Text("> diag").font(Term.mono(26)).padding(.top, 10)
                 Group {
