@@ -45,6 +45,43 @@ class ScreenshotTest {
             File(out, "scare%03d.png".format(ms)).outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
         root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x, y, 0))
+
+        // вкладка MocTec: подбор кода выключения
+        findText(root, "MocTec")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+        Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+            root.draw(Canvas(bmp))
+            File(out, "moctec.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
+
+    /** Тема «Призма»: заставка, пульт, нажатие кнопки, вкладка MocTec. */
+    @Test
+    fun shotsPrism() {
+        val out = File(System.getProperty("shots.dir") ?: "build/shots", "prism").apply { mkdirs() }
+        org.robolectric.RuntimeEnvironment.getApplication()
+            .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().putString("theme", "prism").commit()
+        val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val root = ctl.get().window.decorView
+        fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+            root.draw(Canvas(bmp)); File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        var t = 0L
+        for (at in listOf(1100L, 1900L, 4700L)) { shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(at - t)); t = at; shot("p%04d".format(at)) }
+        val key = findKey(root, "MENU")!!
+        val loc = IntArray(2).also { key.getLocationInWindow(it) }
+        val x = loc[0] + key.width / 2f; val y = loc[1] + key.height / 2f
+        root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, x, y, 0))
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(60)); shot("press")
+        root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x, y, 0))
+        findText(root, "MocTec")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("moctec")
+    }
+
+    private fun findText(v: View, t: String): android.widget.TextView? = when (v) {
+        is android.widget.TextView -> v.takeIf { it.text.toString() == t }
+        is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findText(v.getChildAt(it), t) }
+        else -> null
     }
 
     private fun findKey(v: View, label: String): KeyView? = when (v) {

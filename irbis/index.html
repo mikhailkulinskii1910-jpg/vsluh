@@ -12,8 +12,14 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="krisa">
 <title>krisa</title>
+<script>
+// Тема применяется до первой отрисовки, чтобы не мигала старая. «terminal» (по умолчанию) или «prism».
+try { if (localStorage.getItem('krisa-theme') === 'prism') document.documentElement.dataset.theme = 'prism'; } catch {}
+</script>
 <style>
 @font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:block}
+@font-face{font-family:Unbounded;src:url(unbounded.ttf) format("truetype");font-display:swap}
+@font-face{font-family:Manrope;src:url(manrope.ttf) format("truetype");font-display:swap}
 :root{
   --bg:#000; --fg:#EDEDED; --dim:#8A8A8A; --line:#5C5C5C; --faint:#151515;
   --mono:VT323,ui-monospace,Menlo,Consolas,monospace;
@@ -120,10 +126,127 @@ td code{color:var(--fg)}
 .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
 .btn{border:1px solid var(--fg);border-radius:0;padding:9px 16px;font:22px var(--mono);background:#000;color:var(--fg);cursor:pointer}
 .btn.primary{background:var(--fg);color:#000}
+
+/* ================= Тема «Призма» =================
+   Чёрный фон, переливающееся «плёночное» стекло, радужные блики как на CD и призмах,
+   хроматическая аберрация по краям. Включается в настройках: html[data-theme=prism]. */
+html[data-theme=prism]{
+  --bg:#07060B; --fg:#F4F1FF; --dim:#A79FC6; --line:#4B4270; --faint:#1A1726;
+  --mono:Unbounded,"Segoe UI",system-ui,sans-serif; --ru:Manrope,"Segoe UI",system-ui,sans-serif;
+  --iris:#8B6CFF,#3FE0FF,#62FFB8,#FFE66B,#FF8A5C,#FF5FD8,#8B6CFF;
+  --ink:#120E1F;
+}
+/* фон: плывущие пятна света, веер лучей призмы и радужный отблеск, пробегающий по диагонали */
+.sky{display:none}
+[data-theme=prism] .sky{display:block;position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:var(--bg)}
+[data-theme=prism] .sky i{position:absolute;width:85vmax;height:85vmax;border-radius:50%;mix-blend-mode:screen;opacity:.5;
+  animation:drift 38s ease-in-out infinite alternate}
+[data-theme=prism] .sky i:nth-child(1){background:radial-gradient(closest-side,#8B6CFF66,#8B6CFF1a 55%,transparent);left:-30vmax;top:-25vmax}
+[data-theme=prism] .sky i:nth-child(2){background:radial-gradient(closest-side,#3FE0FF55,#3FE0FF14 55%,transparent);right:-35vmax;top:5vmax;animation-duration:46s;animation-delay:-12s}
+[data-theme=prism] .sky i:nth-child(3){background:radial-gradient(closest-side,#FF5FD855,#FF5FD814 55%,transparent);left:-20vmax;bottom:-40vmax;animation-duration:52s;animation-delay:-20s}
+[data-theme=prism] .sky i:nth-child(4){background:radial-gradient(closest-side,#62FFB840,#62FFB810 55%,transparent);right:-30vmax;bottom:-30vmax;animation-duration:44s;animation-delay:-6s}
+[data-theme=prism] .sky .rays{position:absolute;left:50%;top:-10vh;width:220vmax;height:220vmax;margin:-110vmax 0 0 -110vmax;mix-blend-mode:screen;
+  background:repeating-conic-gradient(from 0deg,transparent 0 5deg,#8B6CFF38 6deg,#3FE0FF2c 7.5deg,transparent 9deg 14deg,#FF5FD82c 15deg,#FFE66B24 16.5deg,transparent 18deg 25.7deg);
+  -webkit-mask:radial-gradient(closest-side,#000 8%,transparent 62%);mask:radial-gradient(closest-side,#000 8%,transparent 62%);
+  animation:sway 26s ease-in-out infinite alternate}
+@keyframes sway{from{transform:rotate(-16deg)}to{transform:rotate(16deg)}}
+[data-theme=prism] .sky .sheen{position:absolute;inset:-60%;mix-blend-mode:screen;
+  background:linear-gradient(115deg,transparent 40%,#8B6CFF24 44%,#3FE0FF38 47%,#62FFB830 50%,#FFE66B28 53%,#FF5FD824 56%,transparent 60%);
+  animation:sheen 9s linear infinite}
+@keyframes sheen{from{transform:translate(-40%,-18%)}to{transform:translate(40%,18%)}}
+[data-theme=prism] .sky::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,transparent 35%,rgba(0,0,0,.85) 100%)}
+@keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(18vw,12vh) scale(1.15)}100%{transform:translate(-12vw,22vh) scale(.95)}}
+/* во второй теме крыс нет */
+[data-theme=prism] #rats{display:none}
+[data-theme=prism] #log,[data-theme=prism] body::after{display:none}
+[data-theme=prism] h1{font:600 46px/1 var(--mono);letter-spacing:-.5px;text-shadow:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0) 52%),linear-gradient(90deg,var(--iris));background-size:100% 100%,200% 100%;
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:.6px rgba(255,255,255,.35);
+  animation:flow 6s linear infinite;filter:drop-shadow(0 2px 2px rgba(20,10,50,.6)) drop-shadow(0 0 12px #8B6CFF88)}
+[data-theme=prism] h1::after{color:#FF5FD8;-webkit-text-fill-color:#FF5FD8}
+@keyframes flow{to{background-position:0 0,200% 0}}
+[data-theme=prism] .id{font:500 13px var(--ru);letter-spacing:.06em;margin-top:8px}
+[data-theme=prism] .gear{border-radius:16px;border:0;font:600 17px var(--mono);
+  background:radial-gradient(120% 80% at 25% 0%,rgba(255,255,255,.3),transparent 55%),linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.03) 60%,rgba(120,220,255,.12));
+  -webkit-backdrop-filter:blur(4px) saturate(180%) brightness(1.15);backdrop-filter:blur(4px) saturate(180%) brightness(1.15);
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.75),inset 0 -1px 0 rgba(170,150,255,.5),inset 0 -10px 18px -10px rgba(90,220,255,.4),0 8px 22px -8px rgba(0,0,0,.6)}
+[data-theme=prism] .gear:active{background:linear-gradient(135deg,var(--iris));color:var(--ink)}
+/* жидкое стекло: фон под кнопкой слегка размыт и ярче, по краю свет сверху и бирюзовый отсвет снизу, блик слева сверху */
+[data-theme=prism] .key{border:0;border-radius:22px;
+  background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 55%,rgba(120,220,255,.1));
+  -webkit-backdrop-filter:blur(4px) saturate(180%) brightness(1.15) contrast(1.05);backdrop-filter:blur(4px) saturate(180%) brightness(1.15) contrast(1.05);
+  font:600 clamp(15px,4.6vw,22px)/1.1 var(--mono);letter-spacing:-.3px;
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(170,150,255,.45),inset 0 14px 22px -14px rgba(255,255,255,.4),
+    inset 0 -16px 24px -16px rgba(90,220,255,.4),0 12px 30px -10px rgba(0,0,0,.65)}
+[data-theme=prism] .key::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(120% 75% at 22% 0%,rgba(255,255,255,.3),rgba(255,255,255,.05) 45%,transparent 62%)}
+[data-theme=prism] .key.on::after{background:radial-gradient(120% 75% at 22% 0%,rgba(255,255,255,.4),transparent 60%),
+  linear-gradient(115deg,transparent 25%,#8B6CFF55 40%,#3FE0FF66 50%,#FF5FD855 60%,transparent 75%) -100% 0/300% 100% no-repeat;
+  animation:keysheen .5s ease-out 1 forwards}
+@keyframes keysheen{to{background-position:0 0,100% 0}}
+/* стеклянный текст: светлый сверху, сиреневый снизу, с объёмной тенью */
+[data-theme=prism] .key .t{background:linear-gradient(180deg,#fff 15%,#E9E3FF 50%,#B9A9FF 90%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 1.5px 2px rgba(20,10,50,.7))}
+[data-theme=prism] .key.inv .t{background:none;color:var(--ink);filter:none}
+/* радужная кайма вместо HUD-уголков: conic-градиент, вырезанный маской в рамку, медленно вращается */
+@property --a{syntax:"<angle>";inherits:false;initial-value:0deg}
+[data-theme=prism] .key::before{inset:2px;border-radius:20px;padding:1.2px;
+  background:conic-gradient(from var(--a),var(--iris));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:.55;
+  animation:rim 14s linear infinite}
+@keyframes rim{to{--a:360deg}}
+[data-theme=prism] .key:nth-child(odd)::before{animation-delay:-5s}
+[data-theme=prism] .key:nth-child(3n)::before{animation-delay:-9s}
+[data-theme=prism] .key .n,[data-theme=prism] .key .h{font:500 12px var(--ru);color:var(--dim);top:9px;left:13px}
+[data-theme=prism] .key .h{top:auto;left:auto;bottom:8px;right:13px}
+[data-theme=prism] .key.inv{background:linear-gradient(135deg,var(--iris)) 0 0/200% 200%;color:var(--ink);animation:holo 8s ease-in-out infinite alternate;
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.85),inset 0 -12px 20px -12px rgba(18,14,31,.35),0 0 28px #8B6CFF55,0 12px 30px -10px rgba(0,0,0,.65)}
+@keyframes holo{to{background-position:100% 100%}}
+[data-theme=prism] .key.inv::before{opacity:.35}
+[data-theme=prism] .key.inv .n,[data-theme=prism] .key.inv .h{color:rgba(18,14,31,.65)}
+[data-theme=prism] .key.on{background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,.08) 60%,rgba(120,220,255,.18));color:var(--fg);border:0;
+  -webkit-backdrop-filter:blur(2px) saturate(220%) brightness(1.35);backdrop-filter:blur(2px) saturate(220%) brightness(1.35)}
+[data-theme=prism] .key.on::before{opacity:1;padding:2.5px;animation-duration:1.2s}
+[data-theme=prism] .key.inv.on{background:linear-gradient(135deg,var(--iris)) 0 0/200% 200%;color:var(--ink);filter:brightness(.9)}
+[data-theme=prism] .key.on .n,[data-theme=prism] .key.on .h{color:var(--dim)}
+/* хроматическая аберрация при нажатии вместо глитча */
+[data-theme=prism] .key.glitch .t{animation:ab .42s ease-out 1}
+@keyframes ab{0%{text-shadow:-4px 0 rgba(255,70,140,.85),4px 0 rgba(60,230,255,.85)}100%{text-shadow:0 0 transparent,0 0 transparent}}
+[data-theme=prism] .key .beam{height:3px;background:linear-gradient(90deg,var(--iris));box-shadow:0 0 18px #8B6CFFaa;opacity:.9}
+[data-theme=prism] .status{font:500 14px var(--ru)}
+[data-theme=prism] .mode{font:500 14px var(--ru)}
+[data-theme=prism] #splash{background:var(--bg)}
+[data-theme=prism] #splash pre{position:relative}
+[data-theme=prism] #splash pre{font:500 13px/1.5 var(--ru)}
+[data-theme=prism] #splash img.rat{display:none}
+.ratw{display:none}
+/* крыса из жидкого стекла: перелив + блик внутри силуэта, светлый край сверху-слева и бирюзовый снизу-справа */
+[data-theme=prism] #splash .ratw{display:block;aspect-ratio:605/358;
+  filter:drop-shadow(-1.5px -1.5px 0 rgba(255,255,255,.9)) drop-shadow(1.5px 1.5px 0 rgba(80,225,255,.85)) drop-shadow(0 0 22px #8B6CFF88)}
+[data-theme=prism] #splash .ratp{position:absolute;inset:0;
+  background:radial-gradient(70% 60% at 30% 20%,rgba(255,255,255,.7),rgba(255,255,255,.12) 50%,transparent 70%),
+    linear-gradient(180deg,transparent 55%,rgba(90,230,255,.35)),
+    repeating-conic-gradient(from 0deg at 50% -20%,transparent 0 6deg,#ffffff22 8deg,transparent 10deg 16deg),
+    linear-gradient(135deg,#8B6CFFbb,#3FE0FFaa,#62FFB8aa,#FFE66Baa,#FF8A5Caa,#FF5FD8bb,#8B6CFFbb) 0 0/220% 220%,#0E0B1A;
+  -webkit-mask:url(rat.png) center/contain no-repeat;mask:url(rat.png) center/contain no-repeat;animation:holo 3s ease-in-out infinite alternate}
+[data-theme=prism] #splash .lines{background:repeating-linear-gradient(90deg,var(--iris));-webkit-mask:repeating-linear-gradient(#000 0 1px,transparent 1px 4px);mask:repeating-linear-gradient(#000 0 1px,transparent 1px 4px)}
+[data-theme=prism] #splash .name{font:600 48px var(--mono);text-shadow:none;
+  background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,.1) 55%,transparent),linear-gradient(90deg,var(--iris));
+  -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.45);
+  filter:drop-shadow(0 3px 2px rgba(20,10,50,.6)) drop-shadow(0 0 16px #8B6CFF)}
+[data-theme=prism] dialog{border-radius:24px;border:1px solid #5A4E8C;background:linear-gradient(160deg,#1A1528,#0D0B16)}
+[data-theme=prism] .sheet h2,[data-theme=prism] .sheet h3{font-family:var(--mono);font-weight:600;font-size:20px}
+[data-theme=prism] .opt{border-radius:16px;border-color:#4B4270;background:rgba(255,255,255,.04)}
+[data-theme=prism] .opt input{accent-color:#B49CFF}
+[data-theme=prism] .btn{border-radius:14px;font:600 15px var(--mono)}
+[data-theme=prism] .btn.primary{background:linear-gradient(135deg,var(--iris));color:var(--ink);border:0}
+[data-theme=prism] input[type=text]{border-radius:12px}
+@media (prefers-reduced-motion:reduce){[data-theme=prism] .sky *,[data-theme=prism] h1,[data-theme=prism] .key::before{animation:none}}
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="splash" aria-hidden="true"><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="aura" class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b></div>
 <div id="log" aria-hidden="true"><div id="logText"></div></div>
 <canvas id="rats" aria-hidden="true"></canvas>
 <div class="wrap">
@@ -141,7 +264,13 @@ td code{color:var(--fg)}
 
 <dialog id="dlg">
   <form method="dialog" class="sheet">
-    <h2>Как передавать сигнал</h2>
+    <h2>Тема оформления</h2>
+    <label class="opt"><input type="radio" name="theme" value="terminal">
+      <div><b>Терминал</b><span>Чёрно-белый, пиксельный шрифт, бегущий лог.</span></div></label>
+    <label class="opt"><input type="radio" name="theme" value="prism">
+      <div><b>Призма</b><span>Переливающееся стекло, радужные блики, как на CD и призмах.</span></div></label>
+
+    <h2 style="margin-top:22px">Как передавать сигнал</h2>
     <label class="opt"><input type="radio" name="mode" value="audio">
       <div><b>ИК-излучатель в разъём наушников</b>
       <span>Два ИК-светодиода, включённые встречно-параллельно в левый и правый каналы. Громкость телефона — на максимум. Работает в любом браузере.</span></div></label>
@@ -334,11 +463,18 @@ function syncHttpBox() {
 }
 $('gear').addEventListener('click', () => {
   dlg.querySelectorAll('input[name=mode]').forEach(r => { r.checked = r.value === settings.mode; });
+  dlg.querySelectorAll('input[name=theme]').forEach(r => { r.checked = r.value === (document.documentElement.dataset.theme || 'terminal'); });
   $('host').value = settings.host;
   syncHttpBox();
   dlg.showModal();
 });
 dlg.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change', () => { settings.mode = r.value; save(); syncHttpBox(); renderMode(); }));
+/* Тема оформления меняется сразу, без перезагрузки. */
+dlg.querySelectorAll('input[name=theme]').forEach(r => r.addEventListener('change', () => {
+  if (r.value === 'prism') document.documentElement.dataset.theme = 'prism'; else delete document.documentElement.dataset.theme;
+  try { localStorage.setItem('krisa-theme', r.value); } catch {}
+  document.querySelector('meta[name=theme-color]').content = r.value === 'prism' ? '#07060B' : '#000000';
+}));
 $('host').addEventListener('input', e => { settings.host = e.target.value; save(); renderMode(); });
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
@@ -385,6 +521,7 @@ renderMode();
     rows.forEach((r, y) => [...r].forEach((ch, i) => { if (ch === '#') x.fillRect(i, y, 1, 1); }));
     return c;
   });
+  // «Призма»: те же кадры, перекрашенные в радужные цвета
   const cv = $('rats'), ctx = cv.getContext('2d');
   const px = 2.5, rw = 28 * px, rh = 11 * px;
   // крыса: x, y, направление, скорость, оттенок (белый с прозрачностью — от почти белого до тёмно-серого); panic — удирает от пальца; wait — сидит за краем экрана
@@ -409,17 +546,19 @@ renderMode();
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = false;
     const dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
+    if (document.documentElement.dataset.theme === 'prism') { requestAnimationFrame(draw); return; }   // во второй теме крыс нет
     rats.forEach(r => {
       if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) respawn(r, false); return; }
       const v = r.speed * (r.panic ? 4.5 : 1);
       r.x += r.dir * v * dt; r.stride += v * dt; r.hop = Math.min(1, r.hop + dt / 0.28);
       if (r.x > W + rw || r.x < -2 * rw) { r.wait = r.panic ? 1.5 + Math.random() * 2.5 : 0.4 + Math.random() * 2; return; }
       ctx.globalAlpha = r.shade;
-      const f = Math.floor(r.stride / 9) % 2;                   // лапы в такт пройденному пути
+      const f = Math.floor(r.stride / 9) % 2;
+      const img = frames[f];                   // лапы в такт пройденному пути
       const y = r.y - Math.sin(r.hop * Math.PI) * 10 - (f ? 1 : 0);   // прыжок от испуга
       ctx.save();
-      if (r.dir < 0) { ctx.translate(r.x + rw, 0); ctx.scale(-1, 1); ctx.drawImage(frames[f], 0, y, rw, rh); }
-      else ctx.drawImage(frames[f], r.x, y, rw, rh);
+      if (r.dir < 0) { ctx.translate(r.x + rw, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, y, rw, rh); }
+      else ctx.drawImage(img, r.x, y, rw, rh);
       ctx.restore();
     });
     requestAnimationFrame(draw);

@@ -15,34 +15,32 @@ struct ContentView: View {
     @State private var settings = false
     @State private var help = false
     @State private var noIr = false
+    @AppStorage("theme") private var theme = "terminal"
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-            LogBackground().ignoresSafeArea()
+            Term.bg.ignoresSafeArea()
+            if Term.prism { PrismBackground().ignoresSafeArea() }   // во второй теме крыс нет
+            else { LogBackground().ignoresSafeArea() }
 
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
-                        TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
-                            .shadow(color: .white.opacity(0.9), radius: 8)
-                        Text("#500202 :: IRBIS :: NEC 38kHz").font(Term.mono(20)).foregroundColor(Term.dim)
+                        if Term.prism {
+                            IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
+                        } else {
+                            TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
+                                .shadow(color: .white.opacity(0.9), radius: 8)
+                        }
+                        Text("#500202 :: IRBIS :: NEC 38kHz").font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
                         Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
                             .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
                     }
                     Spacer()
-                    Button { help = true } label: {
-                        Text("[?]").font(Term.mono(24)).foregroundColor(Term.fg)
-                            .frame(width: 52, height: 44)
-                            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                    }
+                    Button { help = true } label: { headerLabel(Term.prism ? "?" : "[?]", width: 52) }
                     .padding(.top, 10)
                     .accessibilityLabel("Как пользоваться")
-                    Button { settings = true } label: {
-                        Text("[tx]").font(Term.mono(24)).foregroundColor(Term.fg)
-                            .frame(width: 64, height: 44)
-                            .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-                    }
+                    Button { settings = true } label: { headerLabel(Term.prism ? "tx" : "[tx]", width: 64) }
                     .padding(.top, 10)
                     .accessibilityLabel("Передатчик")
                 }
@@ -70,7 +68,7 @@ struct ContentView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
 
-            Scanlines().ignoresSafeArea()
+            if !Term.prism { Scanlines().ignoresSafeArea() }
 
             if splash {
                 SplashView(boot: [
@@ -88,6 +86,7 @@ struct ContentView: View {
                 .zIndex(10)
             }
         }
+        .id(theme)   // смена темы — перестроить экран с новой палитрой
         .preferredColorScheme(.dark)
         .statusBarHidden(splash)
         .sheet(isPresented: $settings) { SettingsView(model: model) }
@@ -112,15 +111,40 @@ struct SettingsView: View {
     @ObservedObject var model: RemoteModel
     @Environment(\.dismiss) private var dismiss
     @State private var copied: String?
+    @AppStorage("theme") private var theme = "terminal"
+    private let themes = [("terminal", "Терминал", "Чёрно-белый, пиксельный шрифт, бегущий лог и крысы"),
+                          ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы")]
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("> tx_mode").font(Term.mono(30))
+                    Text("> settings").font(Term.mono(30))
                     Spacer()
                     Button("[ok]") { dismiss() }.font(Term.mono(26)).foregroundColor(Term.fg)
                 }
+                Text("> theme").font(Term.mono(26))
+                ForEach(themes.indices, id: \.self) { i in
+                    let th = themes[i]
+                    Button {
+                        Term.prism = th.0 == "prism"
+                        theme = th.0
+                    } label: {
+                        HStack {
+                            Text(theme == th.0 ? "[x]" : "[ ]").font(Term.mono(22))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(th.1).font(Term.ru(15))
+                                Text(th.2).font(Term.ru(11)).opacity(0.75)
+                            }
+                            Spacer()
+                        }
+                        .padding(10)
+                        .foregroundColor(theme == th.0 && !Term.prism ? .black : Term.fg)
+                        .background(theme == th.0 ? (Term.prism ? Color(hex: 0x8B6CFF, alpha: 0.35) : Term.fg) : Term.bg)
+                        .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+                    }
+                }
+                Text("> tx_mode").font(Term.mono(26)).padding(.top, 10)
                 ForEach(TxMode.allCases) { m in
                     Button { model.mode = m } label: {
                         HStack {
@@ -129,8 +153,8 @@ struct SettingsView: View {
                             Spacer()
                         }
                         .padding(10)
-                        .foregroundColor(model.mode == m ? .black : Term.fg)
-                        .background(model.mode == m ? Term.fg : Color.black)
+                        .foregroundColor(model.mode == m && !Term.prism ? .black : Term.fg)
+                        .background(model.mode == m ? (Term.prism ? Color(hex: 0x8B6CFF, alpha: 0.35) : Term.fg) : Term.bg)
                         .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
                     }
                 }
@@ -171,12 +195,26 @@ struct SettingsView: View {
             .foregroundColor(Term.fg)
             .padding(20)
         }
-        .background(Color.black.ignoresSafeArea())
+        .background(Term.bg.ignoresSafeArea())
+        .id(theme)
         .preferredColorScheme(.dark)
     }
 }
 
 extension ContentView {
+    /// Кнопка шапки: рамка в «Терминале», жидкое стекло в «Призме».
+    @ViewBuilder func headerLabel(_ text: String, width: CGFloat) -> some View {
+        if Term.prism {
+            Text(text).font(Prism.display(17)).foregroundColor(Term.fg)
+                .frame(width: width, height: 44)
+                .background(GlassBox(radius: 16, seed: Double(width)))
+        } else {
+            Text(text).font(Term.mono(24)).foregroundColor(Term.fg)
+                .frame(width: width, height: 44)
+                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
     /// Проверка при запуске: у iPhone своего ИК-порта нет — нужен звуковой адаптер или Wi-Fi передатчик.
     func checkIrPort() {
         if model.mode == .http { return }
