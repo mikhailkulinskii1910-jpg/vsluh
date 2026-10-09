@@ -154,6 +154,10 @@ html[data-theme=prism]{
   background:linear-gradient(115deg,transparent 40%,#8B6CFF24 44%,#3FE0FF38 47%,#62FFB830 50%,#FFE66B28 53%,#FF5FD824 56%,transparent 60%);
   animation:sheen 9s linear infinite}
 @keyframes sheen{from{transform:translate(-40%,-18%)}to{transform:translate(40%,18%)}}
+/* вращающаяся стеклянная призма: бруски-лучи вокруг тёмной сферы (картинку рисует скрипт ниже) */
+[data-theme=prism] .sky .burst{position:absolute;left:50%;top:48%;width:min(105vmin,900px);aspect-ratio:1;margin:calc(min(105vmin,900px) / -2) 0 0 calc(min(105vmin,900px) / -2);
+  background:center/contain no-repeat;opacity:.75;animation:spin 60s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 [data-theme=prism] .sky::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,transparent 35%,rgba(0,0,0,.85) 100%)}
 @keyframes drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(18vw,12vh) scale(1.15)}100%{transform:translate(-12vw,22vh) scale(.95)}}
 /* во второй теме крыс нет */
@@ -245,8 +249,8 @@ html[data-theme=prism]{
 </style>
 </head>
 <body>
-<div id="splash" aria-hidden="true"><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
-<div id="aura" class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b></div>
+<div id="splash" aria-hidden="true"><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="aura" class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div>
 <div id="log" aria-hidden="true"><div id="logText"></div></div>
 <canvas id="rats" aria-hidden="true"></canvas>
 <div class="wrap">
@@ -564,6 +568,70 @@ renderMode();
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
+})();
+
+/* ---------- «Призма»: стеклянные бруски-лучи вокруг тёмной сферы ----------
+   Рисуется один раз (детерминированный «случайный» узор, как в Android), дальше вращается через CSS. */
+(function () {
+  const IRIS = ['#8B6CFF', '#3FE0FF', '#62FFB8', '#FFE66B', '#FF8A5C', '#FF5FD8'];
+  const size = Math.min(1400, Math.round(Math.min(innerWidth, innerHeight) * 1.05 * (devicePixelRatio || 1)));
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const x = c.getContext('2d'), R = size / 2;
+  let seed = 20251009n;
+  const rnd = () => { seed = (seed * 1103515245n + 12345n) & 0x7fffffffn; return Number(seed) / 2147483648; };
+  const lw = Math.max(1, size / 650);
+  const n = 38;
+  for (let i = 0; i < n; i++) {
+    const ang = i * 360 / n + (rnd() - 0.5) * 6;
+    const r0 = R * (0.16 + rnd() * 0.14);
+    const len = Math.min(R * (0.30 + rnd() * 0.48), R * 0.97 - r0);
+    const bw = R * (0.055 + rnd() * 0.07);
+    const hollow = rnd() < 0.12, twin = rnd() < 0.35;
+    x.save(); x.translate(R, R); x.rotate(ang * Math.PI / 180);
+    for (let k = 0; k < (twin ? 2 : 1); k++) {
+      const wk = k ? bw * 0.6 : bw;
+      const y0 = k ? bw / 2 + wk * 0.15 : -wk / 2, y1 = y0 + wk;
+      const x0 = k ? r0 + len * 0.15 : r0, x1 = k ? r0 + len * 0.8 : r0 + len;
+      const ins = wk * 0.22;
+      if (!hollow) {
+        let g = x.createLinearGradient(0, y0, 0, y1);
+        g.addColorStop(0, 'rgba(255,255,255,.43)'); g.addColorStop(.3, 'rgba(255,255,255,.1)');
+        g.addColorStop(.7, 'rgba(200,220,255,.12)'); g.addColorStop(1, 'rgba(255,255,255,.37)');
+        x.fillStyle = g; x.fillRect(x0, y0, x1 - x0, wk);
+        x.fillStyle = 'rgba(0,0,0,.41)'; x.fillRect(x0 + ins, y0 + ins, x1 - x0 - 2 * ins, wk - 2 * ins);
+        g = x.createLinearGradient(x0, 0, x1, 0);
+        for (let j = 0; j < 6; j++) g.addColorStop(j / 5, IRIS[(i + j) % 6] + 'D7');
+        x.fillStyle = g;
+        const face = (i + k) % 2 === 0 ? y0 + ins * 0.3 : y1 - ins * 1.6;
+        x.fillRect(x0 + ins * 0.5, face, x1 - x0 - ins, ins * 1.3);
+        x.globalAlpha = 90 / 255;
+        x.fillRect(x0 + ins, (y0 + y1) / 2 - wk * 0.08, x1 - x0 - 2 * ins, wk * 0.16);
+        x.globalAlpha = 1;
+      }
+      x.lineWidth = lw;
+      x.strokeStyle = hollow ? 'rgba(255,255,255,.67)' : 'rgba(255,255,255,.9)'; x.strokeRect(x0, y0, x1 - x0, wk);
+      x.strokeStyle = 'rgba(255,255,255,.31)'; x.strokeRect(x0 + ins, y0 + ins, x1 - x0 - 2 * ins, wk - 2 * ins);
+      x.fillStyle = 'rgba(255,255,255,.92)'; x.fillRect(x1 - lw * 1.5, y0, lw * 1.5, wk);
+    }
+    x.restore();
+  }
+  // тёмная сфера с голубым ободком и бликом
+  const sr = R * 0.15;
+  let g = x.createRadialGradient(R, R, 0, R, R, sr);
+  g.addColorStop(0, '#000'); g.addColorStop(.78, '#000'); g.addColorStop(.93, '#2C5BFF'); g.addColorStop(1, '#fff');
+  x.fillStyle = g; x.beginPath(); x.arc(R, R, sr, 0, 7); x.fill();
+  const hx = R - sr * 0.35, hy = R - sr * 0.4;
+  g = x.createRadialGradient(hx, hy, 0, hx, hy, sr * 0.45);
+  g.addColorStop(0, 'rgba(255,255,255,.67)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.beginPath(); x.arc(hx, hy, sr * 0.45, 0, 7); x.fill();
+  if (x.createConicGradient) {
+    g = x.createConicGradient(0, R, R);
+    ['#8B6CFF', '#3FE0FF', '#FFFFFF', '#FF5FD8', '#8B6CFF'].forEach((col, j) => g.addColorStop(j / 4, col));
+    x.strokeStyle = g;
+  } else x.strokeStyle = '#8B6CFF';
+  x.lineWidth = R * 0.012; x.beginPath(); x.arc(R, R, sr * 0.97, 0, 7); x.stroke();
+  const url = 'url(' + c.toDataURL() + ')';
+  document.querySelectorAll('.sky .burst').forEach(b => b.style.backgroundImage = url);
 })();
 
 /* ---------- Появление пульта ---------- */
