@@ -1,16 +1,20 @@
 import SwiftUI
 
-/// Палитра и шрифты в духе чёрно-белого терминала.
+/// Палитра и шрифты. Две темы: «Терминал» (чёрно-белый, VT323) и «Призма» (стекло и радужные переливы).
 enum Term {
-    static let fg = Color(white: 0.93)
-    static let dim = Color(white: 0.54)
-    static let line = Color(white: 0.36)
-    static let faint = Color(white: 0.085)
+    /// Выбранная тема; меняется в настройках (ключ "theme": "terminal" / "prism").
+    static var prism = UserDefaults.standard.string(forKey: "theme") == "prism"
+    static var bg: Color { prism ? Color(hex: 0x07060B) : .black }
+    static var fg: Color { prism ? Color(hex: 0xF4F1FF) : Color(white: 0.93) }
+    static var dim: Color { prism ? Color(hex: 0xA79FC6) : Color(white: 0.54) }
+    static var line: Color { prism ? Color(hex: 0x4B4270) : Color(white: 0.36) }
+    static var faint: Color { prism ? Color(hex: 0x1A1726) : Color(white: 0.085) }
     static let noise = Array("#$%&@01<>/\\|=+*:;░▒▓")
 
-    /// Пиксельный VT323 (латиница). Для русского — системный моноширинный: в VT323 нет кириллицы.
-    static func mono(_ size: CGFloat) -> Font { .custom("VT323-Regular", size: size) }
-    static func ru(_ size: CGFloat) -> Font { .system(size: size, design: .monospaced) }
+    /// Пиксельный VT323 (латиница); в «Призме» — Unbounded (он заметно крупнее, поэтому меньше кегль).
+    static func mono(_ size: CGFloat) -> Font { prism ? Prism.display(size * 0.62) : .custom("VT323-Regular", size: size) }
+    /// Русский текст: в VT323 нет кириллицы — системный моноширинный; в «Призме» — Manrope.
+    static func ru(_ size: CGFloat) -> Font { prism ? Prism.body(size) : .system(size: size, design: .monospaced) }
 
     static func scramble(_ text: String, _ progress: Double) -> String {
         let shown = Int(Double(text.count) * progress)
@@ -257,11 +261,57 @@ struct KeyView: View {
     @State private var jitter: [CGFloat] = [0, 0, 0, 0]
     @State private var beam: CGFloat = 0
     @State private var beamOn = false
+    @State private var pressedAt = Date.distantPast
 
     var body: some View {
+        Group { if Term.prism { prismFace } else { terminalFace } }
+        .scaleEffect(down ? 0.97 : 1)
+        .opacity(visible ? 1 : 0)
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+            .onChanged { v in
+                if !down {
+                    RatSim.shared.scare(at: v.startLocation)   // крысы убегают от пальца
+                    pressDown()
+                }
+            }
+            .onEnded { _ in down = false; onUp() })
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
+        .onAppear { reveal() }
+    }
+
+    /// «Призма»: жидкое стекло, стеклянный текст, после нажатия — перелив и расслоение текста на красный и бирюзовый.
+    private var prismFace: some View {
+        TimelineView(.animation) { tl in
+            let hot = max(0, 1 - tl.date.timeIntervalSince(pressedAt) / 0.52)
+            let t = Prism.time(tl.date)
+            GeometryReader { g in
+                let f = Prism.display(min(24, g.size.width / CGFloat(max(6, label.count)) * 1.02))
+                ZStack {
+                    GlassBody(radius: 22, on: inverted, pressed: down, hot: hot, seed: Double(index), t: t)
+                    if hot > 0 && !inverted {
+                        Text(shown).font(f).lineLimit(1).foregroundColor(Color(hex: 0xFF468C, alpha: 0.78 * hot)).offset(x: -4 * CGFloat(hot))
+                        Text(shown).font(f).lineLimit(1).foregroundColor(Color(hex: 0x3CE6FF, alpha: 0.78 * hot)).offset(x: 4 * CGFloat(hot))
+                    }
+                    GlassText(text: shown, font: f, dark: inverted)
+                    VStack {
+                        HStack { Text(String(format: "%02d", index + 1)); Spacer() }
+                        Spacer()
+                        HStack { Spacer(); Text(String(format: "0x%02X", (code >> 8) & 0xFF)) }
+                    }
+                    .font(Prism.body(12))
+                    .foregroundColor(inverted ? Prism.ink.opacity(0.67) : Term.dim)
+                    .padding(.horizontal, 13).padding(.vertical, 9)
+                }
+            }
+        }
+    }
+
+    private var terminalFace: some View {
         let inv = inverted != down
         let fg: Color = inv ? .black : Term.fg
-        GeometryReader { g in
+        return GeometryReader { g in
             ZStack {
                 Rectangle().fill(inv ? Term.fg : Color.black)
                 Rectangle().strokeBorder(down ? Term.fg : Term.line, lineWidth: 1)
@@ -284,24 +334,11 @@ struct KeyView: View {
                 }
             }
         }
-        .scaleEffect(down ? 0.97 : 1)
-        .opacity(visible ? 1 : 0)
-        .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
-            .onChanged { v in
-                if !down {
-                    RatSim.shared.scare(at: v.startLocation)   // крысы убегают от пальца
-                    pressDown()
-                }
-            }
-            .onEnded { _ in down = false; onUp() })
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(.isButton)
-        .onAppear { reveal() }
     }
 
     private func pressDown() {
         down = true
+        pressedAt = Date()
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         onDown()
         // глитч: полосы текста разъезжаются на 180 мс

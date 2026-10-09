@@ -17,8 +17,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ru.irbis.krisa
         PRODUCT_NAME: krisa
-        MARKETING_VERSION: "1.10"
-        CURRENT_PROJECT_VERSION: "14"
+        MARKETING_VERSION: "1.13"
+        CURRENT_PROJECT_VERSION: "16"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         GENERATE_INFOPLIST_FILE: NO
@@ -29,7 +29,7 @@ targets:
         CFBundleDisplayName: krisa
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        UIAppFonts: [VT323-Regular.ttf]
+        UIAppFonts: [VT323-Regular.ttf, Unbounded-Medium.ttf, Manrope-Regular.ttf, Manrope-SemiBold.ttf]
         UILaunchScreen:
           UIColorName: ""
         UIStatusBarStyle: UIStatusBarStyleLightContent
