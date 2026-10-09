@@ -51,7 +51,17 @@ object Term {
     /** Русский текст: в VT323 нет кириллицы, поэтому в «Терминале» — системный моноширинный. */
     var ru: Typeface = Typeface.MONOSPACE; private set
 
-    fun init(c: Context, theme: String) {
+    /** Цвета «люминофора» для первой темы: выбираются во вкладке «Цвет». */
+    val PHOSPHOR = listOf(
+        "Белый" to Color.parseColor("#EDEDED"), "Зелёный" to Color.parseColor("#33FF66"), "Янтарь" to Color.parseColor("#FFB000"),
+        "Голубой" to Color.parseColor("#4FD8FF"), "Розовый" to Color.parseColor("#FF6AD5"), "Красный" to Color.parseColor("#FF4D4D"),
+        "Сирень" to Color.parseColor("#A98BFF"), "Лимон" to Color.parseColor("#E9F55A"))
+    val DEFAULT_COLOR = PHOSPHOR[0].second
+
+    /** Цвет, умноженный на k (k < 1 — темнее). */
+    fun shade(c: Int, k: Float) = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
+
+    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR) {
         prism = theme == "prism"
         thermal = theme == "thermal"
         if (thermal) {
@@ -63,8 +73,9 @@ object Term {
             LINE = Color.parseColor("#4B4270"); FAINT = Color.parseColor("#1A1726")
             mono = c.resources.getFont(R.font.unbounded); ru = c.resources.getFont(R.font.manrope)
         } else {
-            BG = Color.BLACK; FG = Color.parseColor("#EDEDED"); DIM = Color.parseColor("#8A8A8A")
-            LINE = Color.parseColor("#5C5C5C"); FAINT = Color.parseColor("#151515")
+            // весь «Терминал» строится от одного цвета: основной, приглушённый, рамки и фон-лог
+            BG = Color.BLACK; FG = termColor; DIM = shade(termColor, 0.58f)
+            LINE = shade(termColor, 0.39f); FAINT = shade(termColor, 0.089f)
             mono = c.resources.getFont(R.font.vt323); ru = Typeface.MONOSPACE
         }
     }
@@ -163,6 +174,7 @@ class TerminalBackground(c: Context) : View(c) {
     private val ratW = Term.RAT[0][0].length * ratPx
     private val ratH = Term.RAT[0].size * ratPx
     private val ratDst = RectF()
+    private val termTint = PorterDuffColorFilter(Term.FG, PorterDuff.Mode.SRC_IN)
     private val box = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = d }
     private val tag = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = c.resources.getFont(R.font.vt323); textSize = 12 * d }
 
@@ -268,7 +280,9 @@ class TerminalBackground(c: Context) : View(c) {
                 ratPaint.colorFilter = null
             } else {
                 ratPaint.alpha = r.shade
+                ratPaint.colorFilter = if (Term.FG == Term.DEFAULT_COLOR) null else termTint
                 canvas.drawBitmap(ratFrames[frame], null, ratDst, ratPaint)
+                ratPaint.colorFilter = null
             }
             canvas.restore()
             if (Term.thermal) {
@@ -335,7 +349,10 @@ object PrismScene {
             intArrayOf(Color.TRANSPARENT, a(Term.IRIS[0], 30), a(Term.IRIS[1], 46), a(Term.IRIS[2], 40), a(Term.IRIS[3], 34),
                 a(Term.IRIS[4], 30), a(Term.IRIS[5], 26), Color.TRANSPARENT),
             null, android.graphics.Shader.TileMode.CLAMP)
-        burst = makeBurst((min(w, h) * 1.05f).toInt().coerceAtMost(1400))
+        // узор призмы рисуется заметное время — в фоновом потоке, чтобы не задерживать запуск
+        val side = (min(w, h) * 1.05f).toInt().coerceAtMost(1400)
+        burst = null
+        Thread { burst = makeBurst(side) }.apply { priority = Thread.MIN_PRIORITY }.start()
         vignette = android.graphics.RadialGradient(w / 2, h * 0.45f, max(w, h) * 0.78f,
             intArrayOf(Color.TRANSPARENT, Color.argb(210, 0, 0, 0)), floatArrayOf(0.35f, 1f), android.graphics.Shader.TileMode.CLAMP)
     }
@@ -378,7 +395,7 @@ object PrismScene {
         add.shader = null
     }
 
-    private var burst: Bitmap? = null
+    @Volatile private var burst: Bitmap? = null
     private val burstP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 185 }
 
     /**
@@ -475,31 +492,43 @@ class GlassDrawable(c: Context, private val on: Boolean) : android.graphics.draw
     private val path = android.graphics.Path()
     private val m = android.graphics.Matrix()
 
-    override fun draw(canvas: Canvas) {
-        val v = callback as? View ?: return
-        val b = bounds; val w = b.width().toFloat(); val h = b.height().toFloat()
+    // градиенты зависят только от размера — создаются при изменении размера, не каждый кадр
+    private var holo: android.graphics.Shader? = null
+    private var frost: android.graphics.Shader? = null
+    private var spot: android.graphics.Shader? = null
+    private var edge: android.graphics.Shader? = null
+
+    override fun onBoundsChange(b: android.graphics.Rect) {
+        val w = b.width().toFloat(); val h = b.height().toFloat()
         val r = min(16 * d, h / 2)
-        val t = PrismScene.time()
         val sh = android.graphics.Shader.TileMode.CLAMP
         box.set(b.left + d / 2, b.top + d / 2, b.right - d / 2, b.bottom - d / 2)
+        path.reset(); path.addRoundRect(box, r, r, android.graphics.Path.Direction.CW)
+        holo = android.graphics.LinearGradient(0f, 0f, max(1f, w), max(1f, h), Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR)
+        frost = android.graphics.LinearGradient(0f, box.top, 0f, box.bottom,
+            intArrayOf(Color.argb(56, 255, 255, 255), Color.argb(12, 255, 255, 255), Color.argb(40, 120, 220, 255)), floatArrayOf(0f, 0.55f, 1f), sh)
+        spot = android.graphics.RadialGradient(box.left + w * 0.2f, box.top, max(1f, max(w, h) * 0.6f), Color.argb(70, 255, 255, 255), Color.TRANSPARENT, sh)
+        edge = android.graphics.LinearGradient(0f, box.top, 0f, box.bottom,
+            intArrayOf(Color.argb(220, 255, 255, 255), Color.argb(50, 255, 255, 255), Color.argb(120, 190, 170, 255)), floatArrayOf(0f, 0.5f, 1f), sh)
+    }
+
+    override fun draw(canvas: Canvas) {
+        val v = callback as? View ?: return
+        if (frost == null) onBoundsChange(bounds)
+        val w = bounds.width().toFloat(); val h = bounds.height().toFloat()
+        val r = min(16 * d, h / 2)
+        val t = PrismScene.time()
         canvas.save()
-        path.reset(); path.addRoundRect(box, r, r, android.graphics.Path.Direction.CW); canvas.clipPath(path)
+        canvas.clipPath(path)
         PrismScene.refract(canvas, v, 1.03f, t, if (h > 90 * d) 32 else 70)   // под большими плашками с текстом призма почти гаснет
         if (on) {
-            p.shader = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR).apply {
-                m.setTranslate((t * 0.2f % 2f) * w, 0f); setLocalMatrix(m)
-            }
-            p.alpha = 225; canvas.drawRect(box, p); p.alpha = 255
+            m.setTranslate((t * 0.2f % 2f) * w, 0f); holo!!.setLocalMatrix(m)
+            p.shader = holo; p.alpha = 225; canvas.drawRect(box, p); p.alpha = 255
         }
-        p.shader = android.graphics.LinearGradient(0f, box.top, 0f, box.bottom,
-            intArrayOf(Color.argb(56, 255, 255, 255), Color.argb(12, 255, 255, 255), Color.argb(40, 120, 220, 255)), floatArrayOf(0f, 0.55f, 1f), sh)
-        canvas.drawRect(box, p)
-        p.shader = android.graphics.RadialGradient(box.left + w * 0.2f, box.top, max(w, h) * 0.6f,
-            Color.argb(70, 255, 255, 255), Color.TRANSPARENT, sh)
-        canvas.drawRect(box, p)
+        p.shader = frost; canvas.drawRect(box, p)
+        p.shader = spot; canvas.drawRect(box, p)
         canvas.restore()
-        rim.shader = android.graphics.LinearGradient(0f, box.top, 0f, box.bottom,
-            intArrayOf(Color.argb(220, 255, 255, 255), Color.argb(50, 255, 255, 255), Color.argb(120, 190, 170, 255)), floatArrayOf(0f, 0.5f, 1f), sh)
+        rim.shader = edge
         canvas.drawRoundRect(box, r, r, rim)
         v.postInvalidateOnAnimation()
     }
@@ -559,41 +588,53 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
     private val clip = android.graphics.Path()
     private val sweepM = android.graphics.Matrix()
 
+    /** Градиенты стекла зависят только от размера кнопки — создаются один раз, а не каждый кадр. */
+    private class GlassShaders(w: Float, h: Float, d: Float, box: RectF) {
+        private val cl = android.graphics.Shader.TileMode.CLAMP
+        val holo = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR)
+        val frost = android.graphics.LinearGradient(0f, 0f, 0f, h, Color.argb(40, 255, 255, 255), Color.argb(8, 230, 220, 255), cl)
+        val frostDown = android.graphics.LinearGradient(0f, 0f, 0f, h, Color.argb(64, 255, 255, 255), Color.argb(26, 230, 220, 255), cl)
+        val spot = android.graphics.RadialGradient(w * 0.22f, h * 0.05f, max(w, h) * 0.55f,
+            intArrayOf(Color.argb(78, 255, 255, 255), Color.argb(18, 255, 255, 255), Color.TRANSPARENT), floatArrayOf(0f, 0.45f, 1f), cl)
+        val arc = android.graphics.LinearGradient(0f, box.top, 0f, box.top + h * 0.3f, Color.argb(64, 255, 255, 255), Color.TRANSPARENT, cl)
+        val bottom = android.graphics.LinearGradient(0f, h * 0.6f, 0f, h, Color.TRANSPARENT, Color.argb(54, 120, 220, 255), cl)
+        val edge = android.graphics.LinearGradient(0f, 0f, 0f, h,
+            intArrayOf(Color.argb(210, 255, 255, 255), Color.argb(40, 255, 255, 255), Color.argb(110, 200, 190, 255)), floatArrayOf(0f, 0.55f, 1f), cl)
+        val sweep = android.graphics.SweepGradient(w / 2, h / 2, Term.IRIS, null)
+        val arcRect = RectF(box.left + 5 * d, box.top + 2 * d, box.right - 5 * d, box.top + h * 0.42f)
+        val inner = RectF(box.left + 2.2f * d, box.top + 2.2f * d, box.right - 2.2f * d, box.bottom - 2.2f * d)
+        var text: android.graphics.Shader? = null; var textKey = 0f
+    }
+    private var gs: GlassShaders? = null
+    private val shaderM = android.graphics.Matrix()
+
     private fun drawPrism(canvas: Canvas, since: Long) {
         val w = width.toFloat(); val h = height.toFloat(); val r = 22 * d
         val t = PrismScene.time()
         box.set(d, d, w - d, h - d)
+        val g = gs?.takeIf { it.inner.right == box.right - 2.2f * d && it.inner.bottom == box.bottom - 2.2f * d }
+            ?: GlassShaders(w, h, d, RectF(box)).also { gs = it; clip.reset(); clip.addRoundRect(box, r, r, android.graphics.Path.Direction.CW) }
         val hot = (1f - since / 520f).coerceIn(0f, 1f)          // 1 сразу после нажатия → 0
         val sh = android.graphics.Shader.TileMode.CLAMP
 
         canvas.save()
-        clip.reset(); clip.addRoundRect(box, r, r, android.graphics.Path.Direction.CW); canvas.clipPath(clip)
-        // 1. преломлённый фон: линза увеличивает то, что под кнопкой; при нажатии — сильнее
+        canvas.clipPath(clip)
+        // 1. фон под стеклом (чуть увеличен, при нажатии — сильнее)
         PrismScene.refract(canvas, this, 1.03f + 0.08f * hot + if (down) 0.03f else 0f, t)
+        glass.alpha = 255
         if (inverted) {
             // POWER — голограмма: перелив поверх стекла, медленно течёт
-            glass.shader = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR).apply {
-                sweepM.setTranslate((t * 0.18f % 2f) * w, 0f); setLocalMatrix(sweepM)
-            }
-            glass.alpha = if (down) 170 else 205
+            shaderM.setTranslate((t * 0.18f % 2f) * w, 0f); g.holo.setLocalMatrix(shaderM)
+            glass.shader = g.holo; glass.alpha = if (down) 170 else 205
             canvas.drawRect(box, glass)
+            glass.alpha = 255
         }
-        // 2. матовость: стекло светлее сверху
-        glass.shader = android.graphics.LinearGradient(0f, 0f, 0f, h,
-            intArrayOf(Color.argb(if (down) 64 else 40, 255, 255, 255), Color.argb(if (down) 26 else 8, 230, 220, 255)), null, sh)
-        glass.alpha = 255
-        canvas.drawRect(box, glass)
-        // 3. блик: мягкое пятно слева сверху и тонкая дуга по верхнему краю
-        glass.shader = android.graphics.RadialGradient(w * 0.22f, h * 0.05f, max(w, h) * 0.55f,
-            intArrayOf(Color.argb(78, 255, 255, 255), Color.argb(18, 255, 255, 255), Color.TRANSPARENT), floatArrayOf(0f, 0.45f, 1f), sh)
-        canvas.drawRect(box, glass)
-        glass.shader = android.graphics.LinearGradient(0f, box.top, 0f, box.top + h * 0.3f, Color.argb(64, 255, 255, 255), Color.TRANSPARENT, sh)
-        canvas.drawRoundRect(RectF(box.left + 5 * d, box.top + 2 * d, box.right - 5 * d, box.top + h * 0.42f), r * 0.8f, r * 0.8f, glass)
-        // 4. внизу — отражённый цветной свет, как у толстого стекла
-        glass.shader = android.graphics.LinearGradient(0f, h * 0.6f, 0f, h,
-            Color.TRANSPARENT, Color.argb(54, 120, 220, 255), sh)
-        canvas.drawRect(box, glass)
-        // перелив, пробегающий по кнопке после нажатия
+        // 2. матовость, 3. блик и дуга сверху, 4. отражённый свет снизу
+        glass.shader = if (down) g.frostDown else g.frost; canvas.drawRect(box, glass)
+        glass.shader = g.spot; canvas.drawRect(box, glass)
+        glass.shader = g.arc; canvas.drawRoundRect(g.arcRect, r * 0.8f, r * 0.8f, glass)
+        glass.shader = g.bottom; canvas.drawRect(box, glass)
+        // перелив, пробегающий по кнопке после нажатия (только полсекунды после нажатия)
         if (hot > 0f) {
             val x = -w * 0.5f + w * 2f * (1f - hot)
             glass.shader = android.graphics.LinearGradient(x, 0f, x + w * 0.5f, h,
@@ -603,17 +644,13 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         }
         canvas.restore()
 
-        // 5. край: светлый сверху, гаснет к низу, снизу — слабый отсвет
-        rim.shader = android.graphics.LinearGradient(0f, 0f, 0f, h,
-            intArrayOf(Color.argb(210, 255, 255, 255), Color.argb(40, 255, 255, 255), Color.argb(110, 200, 190, 255)), floatArrayOf(0f, 0.55f, 1f), sh)
-        rim.strokeWidth = 1.2f * d; rim.alpha = 255
+        // 5. край: светлый сверху, гаснет к низу; радужная кайма чуть внутри — вращается
+        rim.shader = g.edge; rim.strokeWidth = 1.2f * d; rim.alpha = 255
         canvas.drawRoundRect(box, r, r, rim)
-        // радужная кайма чуть внутри; вращается всё время, после нажатия — быстро
-        val sweep = android.graphics.SweepGradient(w / 2, h / 2, Term.IRIS, null)
-        sweepM.setRotate(index * 37f + t * 24f + hot * 260f, w / 2, h / 2); sweep.setLocalMatrix(sweepM)
-        rim.shader = sweep; rim.strokeWidth = (1.1f + 1.8f * hot) * d; rim.alpha = if (inverted) 110 else 120 + (135 * hot).toInt()
+        shaderM.setRotate(index * 37f + t * 24f + hot * 260f, w / 2, h / 2); g.sweep.setLocalMatrix(shaderM)
+        rim.shader = g.sweep; rim.strokeWidth = (1.1f + 1.8f * hot) * d; rim.alpha = if (inverted) 110 else 120 + (135 * hot).toInt()
         val inset = 2.2f * d
-        canvas.drawRoundRect(RectF(box.left + inset, box.top + inset, box.right - inset, box.bottom - inset), r - inset, r - inset, rim)
+        canvas.drawRoundRect(g.inner, r - inset, r - inset, rim)
 
         val ink = if (inverted) Color.parseColor("#120E1F") else Term.FG
         small.typeface = Term.ru; small.color = if (inverted) Color.argb(170, 18, 14, 31) else Term.DIM
@@ -633,8 +670,12 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         if (inverted) { main.shader = null; main.color = ink; main.clearShadowLayer() }
         else {
             main.color = Color.WHITE
-            main.shader = android.graphics.LinearGradient(0f, ty + main.ascent(), 0f, ty + main.descent(),
-                intArrayOf(Color.WHITE, Color.parseColor("#E9E3FF"), Color.parseColor("#B9A9FF")), floatArrayOf(0f, 0.5f, 1f), sh)
+            if (g.text == null || g.textKey != ty + main.textSize) {
+                g.text = android.graphics.LinearGradient(0f, ty + main.ascent(), 0f, ty + main.descent(),
+                    intArrayOf(Color.WHITE, Color.parseColor("#E9E3FF"), Color.parseColor("#B9A9FF")), floatArrayOf(0f, 0.5f, 1f), sh)
+                g.textKey = ty + main.textSize
+            }
+            main.shader = g.text
             main.setShadowLayer(5 * d, 0f, 1.5f * d, Color.argb(150, 20, 10, 50))
         }
         canvas.drawText(shown, w / 2, ty, main)
@@ -689,9 +730,9 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         // луч передачи сверху вниз
         if (since < 420) {
             val y = h * since / 420f
-            fill.color = if (inv) Color.argb(120, 0, 0, 0) else Color.argb(150, 255, 255, 255)
+            fill.color = if (inv) Color.argb(120, 0, 0, 0) else Color.argb(150, Color.red(Term.FG), Color.green(Term.FG), Color.blue(Term.FG))
             canvas.drawRect(0f, y, w, y + 2 * d, fill)
-            fill.color = if (inv) Color.argb(30, 0, 0, 0) else Color.argb(28, 255, 255, 255)
+            fill.color = if (inv) Color.argb(30, 0, 0, 0) else Color.argb(28, Color.red(Term.FG), Color.green(Term.FG), Color.blue(Term.FG))
             canvas.drawRect(0f, max(0f, y - 24 * d), w, y, fill)
         }
         if (since < 420) postInvalidateOnAnimation()
@@ -773,13 +814,24 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     private val txt = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Term.mono; textSize = 17 * d; color = Term.DIM }
     private val big = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = Term.mono; textSize = 64 * d; color = Term.FG; textAlign = Paint.Align.CENTER
-        setShadowLayer(14 * d, 0f, 0f, Color.WHITE)
+        setShadowLayer(14 * d, 0f, 0f, Term.FG)
     }
-    private val bmp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val glowP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        maskFilter = BlurMaskFilter(18 * d, BlurMaskFilter.Blur.NORMAL); colorFilter = PorterDuffColorFilter(Color.WHITE, PorterDuff.Mode.SRC_IN)
+    // крыса на заставке «Терминала» перекрашивается в выбранный цвет
+    private val bmp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        if (Term.FG != Term.DEFAULT_COLOR) colorFilter = PorterDuffColorFilter(Term.FG, PorterDuff.Mode.SRC_IN)
     }
-    private val line = Paint().apply { color = Color.WHITE }
+    private val glowP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = PorterDuffColorFilter(Term.FG, PorterDuff.Mode.SRC_IN)
+    }
+    /**
+     * Размытый ореол и «трубки» стекла готовятся один раз в фоновом потоке.
+     * Раньше размытие требовало программной отрисовки всей заставки — в «Призме» и «Тепловизоре»
+     * это давало подвисания при запуске; теперь заставка рисуется видеокартой.
+     */
+    @Volatile private var glowBlur: Bitmap? = null
+    @Volatile private var tubeBmp: Bitmap? = null
+    private val blurPad = 48
+    private val line = Paint().apply { color = Term.FG }
     // «Призма»: крыса залита радужным переливом, по краям — красный и бирюзовый «призраки»
     private val irisP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fringe = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -790,7 +842,13 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     private var finished = false
 
     init {
-        setLayerType(LAYER_TYPE_SOFTWARE, null)   // BlurMaskFilter
+        Thread {
+            val g = Bitmap.createBitmap(rat.width + 2 * blurPad, rat.height + 2 * blurPad, Bitmap.Config.ARGB_8888)
+            Canvas(g).drawBitmap(glow, blurPad.toFloat(), blurPad.toFloat(),
+                Paint(Paint.FILTER_BITMAP_FLAG).apply { color = Color.WHITE; maskFilter = BlurMaskFilter(blurPad * 0.6f, BlurMaskFilter.Blur.NORMAL) })
+            glowBlur = g
+            if (Term.prism) tubeBmp = makeTube()
+        }.apply { priority = Thread.MIN_PRIORITY }.start()
         isClickable = true
         setOnClickListener { finish() }           // тап — пропустить
         setBackgroundColor(Term.BG)
@@ -816,7 +874,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     override fun onDraw(canvas: Canvas) {
         val t = (SystemClock.uptimeMillis() - start).toFloat()
         val w = width.toFloat(); val h = height.toFloat()
-        if (Term.prism) renderScene(canvas)
+        if (Term.prism) { PrismScene.draw(canvas, PrismScene.time()); updateLens() }
         if (Term.thermal) ThermalScene.draw(canvas, ThermalScene.time())
 
         // 1. загрузочный лог
@@ -843,8 +901,11 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             canvas.translate(cx, ry)
             canvas.rotate(rot)
             val dst = RectF(-rw / 2, -rh / 2, rw / 2, rh / 2)
-            glowP.alpha = (90 * f).toInt()
-            canvas.drawBitmap(glow, null, dst, glowP)
+            glowBlur?.let { gb ->
+                val pad = blurPad * rw / rat.width
+                glowP.alpha = (90 * f).toInt()
+                canvas.drawBitmap(gb, null, RectF(dst.left - pad, dst.top - pad, dst.right + pad, dst.bottom + pad), glowP)
+            }
             val moving = f < 0.95f || (t in 1800f..1900f) || (t in 2050f..2110f)
             if (Term.thermal) {
                 // крыса — тепловое пятно: горячая середина, остывающие края; в полёте — полосы «помех» матрицы
@@ -861,6 +922,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             } else if (Term.prism) {
                 // в полёте «призраки» расходятся сильнее, на месте — едва заметны
                 val dx = (if (moving) 9f else 2.5f) * d
+                val tube = tubeBmp ?: glow   // пока «трубки» готовятся в фоне — обычный силуэт
                 fringe.color = Color.argb(150, 255, 60, 140); canvas.drawBitmap(tube, null, RectF(dst.left - dx, dst.top, dst.right - dx, dst.bottom), fringe)
                 fringe.color = Color.argb(150, 50, 225, 255); canvas.drawBitmap(tube, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
                 drawGlassRat(canvas, dst, cx, ry, rot, t)
@@ -957,7 +1019,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     }
 
     /** «Трубки» стекла: контур крысы, утолщённый во все стороны. */
-    private val tube: Bitmap by lazy {
+    private fun makeTube(): Bitmap {
         val out = Bitmap.createBitmap(rat.width, rat.height, Bitmap.Config.ARGB_8888)
         val cv = Canvas(out); val pp = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = Color.WHITE }
         val rr = rat.width / 150f
@@ -966,20 +1028,20 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             cv.drawBitmap(glow, (rr * kotlin.math.cos(an)).toFloat(), (rr * sin(an)).toFloat(), pp)
         }
         cv.drawBitmap(glow, 0f, 0f, pp)
-        out.extractAlpha()
+        return out.extractAlpha()
     }
-    /** Сцена в 1/2 разрешения: из неё и фон заставки (мягкий), и «линза» внутри крысы. */
+    /** Маленький снимок сцены (1/4 разрешения) для «линзы» внутри крысы; обновляется раз в несколько кадров. */
     private var sceneBmp: Bitmap? = null
+    private var lensFrame = 0
     private val sceneM = android.graphics.Matrix()
     private val glassP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
-    private fun renderScene(canvas: Canvas) {
+    private fun updateLens() {
         val w = width; val h = height
-        if (w == 0) return
-        val bm = sceneBmp ?: Bitmap.createBitmap(max(1, w / 2), max(1, h / 2), Bitmap.Config.ARGB_8888).also { sceneBmp = it }
+        if (w == 0 || lensFrame++ % 4 != 0) return
+        val bm = sceneBmp ?: Bitmap.createBitmap(max(1, w / 4), max(1, h / 4), Bitmap.Config.ARGB_8888).also { sceneBmp = it }
         val cv = Canvas(bm); cv.scale(bm.width / w.toFloat(), bm.height / h.toFloat())
         PrismScene.draw(cv, PrismScene.time())
-        canvas.drawBitmap(bm, null, RectF(0f, 0f, w.toFloat(), h.toFloat()), signP)
     }
 
     /**
@@ -989,11 +1051,12 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
      */
     private fun drawGlassRat(canvas: Canvas, dst: RectF, cx: Float, cy: Float, rot: Float, t: Float) {
         val bm = sceneBmp ?: return
+        val tube = tubeBmp ?: return
         val sh = android.graphics.Shader.TileMode.CLAMP
         val e = 1.8f * d
         fringe.color = Color.argb(235, 255, 255, 255); canvas.drawBitmap(tube, null, RectF(dst.left - e, dst.top - e, dst.right - e, dst.bottom - e), fringe)
         fringe.color = Color.argb(210, 80, 225, 255); canvas.drawBitmap(tube, null, RectF(dst.left + e, dst.top + e, dst.right + e, dst.bottom + e), fringe)
-        // линза: пиксель фона → экран (×2), увеличение ×1.35 вокруг крысы, затем в её повёрнутые координаты
+        // линза: пиксель фона → экран (×4), увеличение ×1.35 вокруг крысы, затем в её повёрнутые координаты
         sceneM.setScale(width / bm.width.toFloat(), height / bm.height.toFloat())
         sceneM.postScale(1.35f, 1.35f, cx, cy); sceneM.postTranslate(-cx, -cy); sceneM.postRotate(-rot)
         val lens = android.graphics.BitmapShader(bm, sh, sh).apply { setLocalMatrix(sceneM) }

@@ -193,7 +193,7 @@ class MainActivity : Activity() {
     private lateinit var bg: TerminalBackground
 
     private fun buildUi(withSplash: Boolean): View {
-        Term.init(this, themeId)
+        Term.init(this, themeId, getPreferences(MODE_PRIVATE).getInt(PREF_COLOR, Term.DEFAULT_COLOR))
         val frame = FrameLayout(this)
         bg = TerminalBackground(this)
         frame.addView(bg, FrameLayout.LayoutParams(-1, -1))
@@ -209,7 +209,7 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 54f)
             typeface = Term.mono
             setTextColor(Term.FG)
-            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else if (Term.thermal) Heat.GLOW else Color.WHITE)
+            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else if (Term.thermal) Heat.GLOW else Term.FG)
             includeFontPadding = false
         }
         if (Term.prism) {
@@ -276,12 +276,17 @@ class MainActivity : Activity() {
         header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
 
-        // вкладки: IRBIS (пульт) и MocTec (подбор кода выключения)
+        // вкладки: IRBIS (пульт), MocTec (подбор кода выключения), в «Терминале» ещё «Цвет»
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        tabIrbis = tabButton("IRBIS") { showTab(false) }
-        tabMoc = tabButton("MocTec") { showTab(true) }
+        tabIrbis = tabButton("IRBIS") { showTab(TAB_IRBIS) }
+        tabMoc = tabButton("MocTec") { showTab(TAB_MOC) }
         tabs.addView(tabIrbis, LinearLayout.LayoutParams(0, dp(40), 1f).apply { rightMargin = dp(8) })
         tabs.addView(tabMoc, LinearLayout.LayoutParams(0, dp(40), 1f))
+        val colorTab = !Term.prism && !Term.thermal
+        if (colorTab) {
+            tabColor = tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) }
+            tabs.addView(tabColor, LinearLayout.LayoutParams(0, dp(40), 0.8f).apply { leftMargin = dp(8) })
+        }
         root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
 
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
@@ -302,7 +307,14 @@ class MainActivity : Activity() {
         irbisGrid = grid
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        showTab(getPreferences(MODE_PRIVATE).getBoolean("tab_moc", false))
+        if (colorTab) {
+            colorPanel = buildColorPanel()
+            root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        }
+        val prefs = getPreferences(MODE_PRIVATE)
+        var start = prefs.getString(PREF_TAB, null) ?: if (prefs.getBoolean("tab_moc", false)) TAB_MOC else TAB_IRBIS
+        if (start == TAB_COLOR && !colorTab) start = TAB_IRBIS
+        showTab(start)
 
         status = TypeLine(this).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -372,13 +384,83 @@ class MainActivity : Activity() {
         t.background = Term.boxBg(this, on)
     }
 
-    private fun showTab(moc: Boolean) {
-        if (!moc) mocRun = false
-        styleTab(tabIrbis, !moc); styleTab(tabMoc, moc)
-        irbisGrid.visibility = if (moc) View.GONE else View.VISIBLE
-        mocPanel.visibility = if (moc) View.VISIBLE else View.GONE
-        subtitle.text = if (moc) "MocTec :: подбор :: NEC 04 FB" else "#500202 :: IRBIS :: NEC 38kHz"
-        getPreferences(MODE_PRIVATE).edit().putBoolean("tab_moc", moc).apply()
+    private fun showTab(tab: String) {
+        if (tab != TAB_MOC) mocRun = false
+        styleTab(tabIrbis, tab == TAB_IRBIS); styleTab(tabMoc, tab == TAB_MOC)
+        tabColor?.let { styleTab(it, tab == TAB_COLOR) }
+        irbisGrid.visibility = if (tab == TAB_IRBIS) View.VISIBLE else View.GONE
+        mocPanel.visibility = if (tab == TAB_MOC) View.VISIBLE else View.GONE
+        colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
+        subtitle.text = when (tab) {
+            TAB_MOC -> "MocTec :: подбор :: NEC 04 FB"
+            TAB_COLOR -> "terminal :: phosphor color"
+            else -> "#500202 :: IRBIS :: NEC 38kHz"
+        }
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
+    }
+
+    private var tabColor: TextView? = null
+    private var colorPanel: View? = null
+
+    /**
+     * Вкладка «Цвет» (только в первой теме): цвет «люминофора» — надписи, рамки, лог на фоне, крысы.
+     * Восемь готовых цветов и ползунок «свой оттенок». Выбор сразу применяется и запоминается.
+     */
+    private fun buildColorPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(text("> phosphor color", 30f, Term.FG))
+        p.addView(text("Цвет первой темы: надписи, рамки кнопок, лог на фоне и крысы. Выбор применяется сразу.", 13f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(10)) })
+        val cur = getPreferences(MODE_PRIVATE).getInt(PREF_COLOR, Term.DEFAULT_COLOR)
+        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
+        Term.PHOSPHOR.forEachIndexed { i, (name, c) ->
+            val on = c == cur
+            val sw = TextView(this).apply {
+                text = (if (on) "[x] " else "[ ] ") + name
+                typeface = Term.ru
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), 0, dp(8), 0)
+                setTextColor(if (on) Color.BLACK else c)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(if (on) c else Color.BLACK); setStroke(dp(1), c)
+                }
+                setOnClickListener { glitch(it); applyColor(c) }
+            }
+            grid.addView(sw, GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f)).apply {
+                width = 0; height = dp(50); setMargins(if (i % 2 == 1) dp(5) else 0, dp(5), if (i % 2 == 0) dp(5) else 0, dp(5))
+            })
+        }
+        p.addView(grid, LinearLayout.LayoutParams(-1, -2))
+
+        // свой оттенок: ползунок по кругу цветов, образец меняется сразу, применяется при отпускании
+        val hsv = FloatArray(3).also { Color.colorToHSV(cur, it) }
+        val sample = View(this).apply { setBackgroundColor(cur) }
+        val label = text("> свой оттенок", 24f, Term.FG).apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); setPadding(0, dp(14), 0, dp(4)) }
+        p.addView(label)
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val seek = android.widget.SeekBar(this).apply {
+            max = 359; progress = hsv[0].toInt()
+            progressTintList = android.content.res.ColorStateList.valueOf(Term.FG)
+            thumbTintList = android.content.res.ColorStateList.valueOf(Term.FG)
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Term.LINE)
+            fun hue(h: Int) = Color.HSVToColor(floatArrayOf(h.toFloat(), 0.72f, 1f))
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: android.widget.SeekBar, v: Int, fromUser: Boolean) { sample.setBackgroundColor(hue(v)) }
+                override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
+                override fun onStopTrackingTouch(sb: android.widget.SeekBar) { applyColor(hue(sb.progress)) }
+            })
+        }
+        row.addView(seek, LinearLayout.LayoutParams(0, dp(44), 1f))
+        row.addView(sample, LinearLayout.LayoutParams(dp(44), dp(28)).apply { leftMargin = dp(10) })
+        p.addView(row)
+        return p
+    }
+
+    /** Запомнить цвет и пересоздать экран (без заставки — она только при запуске). */
+    private fun applyColor(c: Int) {
+        getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR, c).putString(PREF_TAB, TAB_COLOR).commit()
+        recreate()
     }
 
     /** В «Призме» кнопки без квадратных скобок терминала. */
@@ -415,7 +497,7 @@ class MainActivity : Activity() {
         }
         p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { if (Term.prism || Term.thermal) topMargin = dp(10) })
         mocCode = text("", if (Term.prism) 34f else 52f, Term.FG).apply {
-            gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, Color.WHITE); setPadding(0, dp(14), 0, 0)
+            gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, if (Term.thermal) Heat.GLOW else Term.FG); setPadding(0, dp(14), 0, 0)
         }
         box.addView(mocCode, LinearLayout.LayoutParams(-1, -2))
         mocInfo = text("", 18f, Term.DIM).apply { gravity = Gravity.CENTER }
@@ -714,6 +796,11 @@ class MainActivity : Activity() {
     companion object {
         private const val PREF_MODE = "tx_mode"
         private const val PREF_THEME = "theme"
+        private const val PREF_COLOR = "term_color"
+        private const val PREF_TAB = "tab"
+        private const val TAB_IRBIS = "irbis"
+        private const val TAB_MOC = "moc"
+        private const val TAB_COLOR = "color"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
     }
 }
