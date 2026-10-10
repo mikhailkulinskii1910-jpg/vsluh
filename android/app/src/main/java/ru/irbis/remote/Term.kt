@@ -51,19 +51,27 @@ object Term {
     /** Русский текст: в VT323 нет кириллицы, поэтому в «Терминале» — системный моноширинный. */
     var ru: Typeface = Typeface.MONOSPACE; private set
 
-    /** Цвета «люминофора» для первой темы: выбираются во вкладке «Цвет». */
+    /**
+     * Цвета «люминофора» для первой темы (вкладка «Цвет»), подобраны по референсам:
+     * зелёный бегущий код, красный, оранжевый и янтарный неон, фиолетовый.
+     */
     val PHOSPHOR = listOf(
-        "Белый" to Color.parseColor("#EDEDED"), "Зелёный" to Color.parseColor("#33FF66"), "Янтарь" to Color.parseColor("#FFB000"),
-        "Голубой" to Color.parseColor("#4FD8FF"), "Розовый" to Color.parseColor("#FF6AD5"), "Красный" to Color.parseColor("#FF4D4D"),
-        "Сирень" to Color.parseColor("#A98BFF"), "Лимон" to Color.parseColor("#E9F55A"))
+        "Белый" to Color.parseColor("#EDEDED"), "Зелёный" to Color.parseColor("#1FFF3A"),
+        "Красный" to Color.parseColor("#FF2A1A"), "Оранжевый" to Color.parseColor("#FF8C1A"),
+        "Янтарь" to Color.parseColor("#FFB52E"), "Фиолетовый" to Color.parseColor("#A855FF"))
     val DEFAULT_COLOR = PHOSPHOR[0].second
+    /** Зелёный «Матрицы»: только с ним доступен фон с бегущим кодом. */
+    val MATRIX_GREEN = PHOSPHOR[1].second
+    /** Фон «Матрица» — бегущий код из фильма вместо лога (первая тема, зелёный цвет). */
+    var matrix = false; private set
 
     /** Цвет, умноженный на k (k < 1 — темнее). */
     fun shade(c: Int, k: Float) = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
 
-    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR) {
+    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR, matrixOn: Boolean = false) {
         prism = theme == "prism"
         thermal = theme == "thermal"
+        matrix = matrixOn && !prism && !thermal && termColor == MATRIX_GREEN
         if (thermal) {
             BG = Color.parseColor("#050308"); FG = Color.parseColor("#FFF1DC"); DIM = Color.parseColor("#E0974A")
             LINE = Heat.YELLOW; FAINT = Color.parseColor("#1A0E10")
@@ -228,6 +236,12 @@ class TerminalBackground(c: Context) : View(c) {
             postInvalidateOnAnimation()
             return
         }
+        if (Term.matrix) {
+            drawMatrix(canvas, t)
+            drawRats(canvas, t)
+            postInvalidateOnAnimation()
+            return
+        }
         val off = (t * 14f * d) % (lineH * Term.LOG.size)
         val first = (off / lineH).toInt()
         var y = -(off % lineH) + lineH
@@ -241,6 +255,59 @@ class TerminalBackground(c: Context) : View(c) {
         val step = 3f * d
         while (s < height) { canvas.drawRect(0f, s, width.toFloat(), s + step / 3, scan); s += step }
         postInvalidateOnAnimation()
+    }
+
+    // «Матрица»: колонки падающих символов — полуширинная катакана и цифры, яркая «голова» и гаснущий хвост
+    private val mxChars = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789Z:.=*+-<>|"
+    private val mxP = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.MONOSPACE; textAlign = Paint.Align.CENTER; textSize = 15 * d }
+    private val mxCell = 17 * d
+    private var mxCols = 0; private var mxRows = 0
+    private var mxGrid = CharArray(0)
+    private var mxHead = FloatArray(0); private var mxSpeed = FloatArray(0); private var mxLen = IntArray(0)
+    private var mxLast = -1f
+    private val mxRnd = Random(13)
+
+    private fun mxReset(i: Int, top: Boolean) {
+        mxHead[i] = if (top) -mxRnd.nextFloat() * mxRows * 0.6f else mxRnd.nextFloat() * mxRows
+        mxSpeed[i] = 6f + mxRnd.nextFloat() * 16f          // клеток в секунду
+        mxLen[i] = 8 + mxRnd.nextInt(22)
+    }
+
+    private fun drawMatrix(canvas: Canvas, t: Float) {
+        canvas.drawColor(Color.BLACK)
+        if (width == 0) return
+        val cols = (width / mxCell).toInt() + 1; val rows = (height / mxCell).toInt() + 2
+        if (cols != mxCols || rows != mxRows) {
+            mxCols = cols; mxRows = rows
+            mxGrid = CharArray(cols * rows) { mxChars[mxRnd.nextInt(mxChars.length)] }
+            mxHead = FloatArray(cols); mxSpeed = FloatArray(cols); mxLen = IntArray(cols)
+            for (i in 0 until cols) mxReset(i, top = false)
+        }
+        val dt = if (mxLast < 0) 0f else min(t - mxLast, 0.05f)
+        mxLast = t
+        repeat(cols / 2 + 1) { mxGrid[mxRnd.nextInt(mxGrid.size)] = mxChars[mxRnd.nextInt(mxChars.length)] }   // символы мерцают
+        val fg = Term.FG
+        for (i in 0 until cols) {
+            mxHead[i] += mxSpeed[i] * dt
+            if (mxHead[i] - mxLen[i] > rows) mxReset(i, top = true)
+            val head = mxHead[i].toInt()
+            val x = i * mxCell + mxCell / 2
+            for (k in 0 until mxLen[i]) {
+                val r = head - k
+                if (r < 0 || r >= rows) continue
+                val ch = mxGrid[r * cols + i]
+                if (k == 0) {
+                    mxP.color = Color.rgb(220, 255, 225)                 // «голова» почти белая
+                    mxP.setShadowLayer(8 * d, 0f, 0f, fg)
+                } else {
+                    val a = (235 * (1f - k.toFloat() / mxLen[i])).toInt().coerceIn(0, 255)
+                    mxP.color = Color.argb(a, Color.red(fg), Color.green(fg), Color.blue(fg))
+                    mxP.clearShadowLayer()
+                }
+                canvas.drawText(ch.toString(), x, r * mxCell, mxP)
+            }
+        }
+        mxP.clearShadowLayer()
     }
 
     private fun drawRats(canvas: Canvas, t: Float) {
@@ -537,6 +604,58 @@ class GlassDrawable(c: Context, private val on: Boolean) : android.graphics.draw
     override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+}
+
+/**
+ * Палитра «свой цвет»: круг цветов (оттенок по кругу, к центру — бледнее, как на референсе).
+ * Пока палец ведёт по кругу — [onPick] с final = false (образец), при отпускании — final = true.
+ */
+class ColorWheel(c: Context, initial: Int, private val onPick: (Int, Boolean) -> Unit) : View(c) {
+    private val d = c.resources.displayMetrics.density
+    private val wheel = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val pale = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val mark = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 3 * d }
+    private var hue: Float; private var sat: Float
+
+    init {
+        val hsv = FloatArray(3).also { Color.colorToHSV(initial, it) }
+        hue = hsv[0]; sat = hsv[1]
+    }
+
+    private fun color() = Color.HSVToColor(floatArrayOf(hue, sat, 1f))
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        val cx = w / 2f; val cy = h / 2f; val r = min(w, h) / 2f - 6 * d
+        // SweepGradient идёт от «3 часов» по часовой стрелке — как угол касания atan2 на экране
+        wheel.shader = android.graphics.SweepGradient(cx, cy, IntArray(13) { Color.HSVToColor(floatArrayOf(it * 30f % 360f, 1f, 1f)) }, null)
+        pale.shader = android.graphics.RadialGradient(cx, cy, max(1f, r), Color.WHITE, Color.TRANSPARENT, android.graphics.Shader.TileMode.CLAMP)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val cx = width / 2f; val cy = height / 2f; val r = min(width, height) / 2f - 6 * d
+        canvas.drawCircle(cx, cy, r, wheel)
+        canvas.drawCircle(cx, cy, r, pale)
+        // метка выбранного цвета
+        val a = Math.toRadians(hue.toDouble())
+        val mx = cx + (r * sat * kotlin.math.cos(a)).toFloat(); val my = cy + (r * sat * sin(a)).toFloat()
+        mark.color = Color.BLACK; canvas.drawCircle(mx, my, 11 * d, mark)
+        mark.color = Color.WHITE; canvas.drawCircle(mx, my, 8 * d, mark)
+    }
+
+    override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
+        val cx = width / 2f; val cy = height / 2f; val r = min(width, height) / 2f - 6 * d
+        val dx = e.x - cx; val dy = e.y - cy
+        hue = ((Math.toDegrees(kotlin.math.atan2(dy, dx).toDouble()) + 360) % 360).toFloat()
+        sat = (kotlin.math.sqrt(dx * dx + dy * dy) / r).coerceIn(0f, 1f)
+        invalidate()
+        parent?.requestDisallowInterceptTouchEvent(true)   // не прокручивать экран, пока выбирают цвет
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_UP -> onPick(color(), true)
+            android.view.MotionEvent.ACTION_CANCEL -> {}
+            else -> onPick(color(), false)
+        }
+        return true
+    }
 }
 
 /** Кнопка пульта: рамка с «уголками», номер, байт команды, глитч и луч передачи при нажатии. */

@@ -193,7 +193,7 @@ class MainActivity : Activity() {
     private lateinit var bg: TerminalBackground
 
     private fun buildUi(withSplash: Boolean): View {
-        Term.init(this, themeId, getPreferences(MODE_PRIVATE).getInt(PREF_COLOR, Term.DEFAULT_COLOR))
+        getPreferences(MODE_PRIVATE).let { Term.init(this, themeId, it.getInt(PREF_COLOR, Term.DEFAULT_COLOR), it.getBoolean(PREF_MATRIX, false)) }
         val frame = FrameLayout(this)
         bg = TerminalBackground(this)
         frame.addView(bg, FrameLayout.LayoutParams(-1, -1))
@@ -425,7 +425,8 @@ class MainActivity : Activity() {
     private fun buildColorPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         p.addView(text("> phosphor color", 30f, Term.FG))
-        p.addView(text("Цвет первой темы: надписи, рамки кнопок, лог на фоне и крысы. Выбор применяется сразу.", 13f, Term.DIM)
+        p.addView(text("Цвет первой темы: надписи, рамки кнопок, лог на фоне и крысы. Выбор применяется сразу. " +
+            "У зелёного есть фон «Матрица» — бегущий код.", 13f, Term.DIM)
             .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(10)) })
         val cur = getPreferences(MODE_PRIVATE).getInt(PREF_COLOR, Term.DEFAULT_COLOR)
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
@@ -449,27 +450,29 @@ class MainActivity : Activity() {
         }
         p.addView(grid, LinearLayout.LayoutParams(-1, -2))
 
-        // свой оттенок: ползунок по кругу цветов, образец меняется сразу, применяется при отпускании
-        val hsv = FloatArray(3).also { Color.colorToHSV(cur, it) }
-        val sample = View(this).apply { setBackgroundColor(cur) }
-        val label = text("> свой оттенок", 24f, Term.FG).apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); setPadding(0, dp(14), 0, dp(4)) }
-        p.addView(label)
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val seek = android.widget.SeekBar(this).apply {
-            max = 359; progress = hsv[0].toInt()
-            progressTintList = android.content.res.ColorStateList.valueOf(Term.FG)
-            thumbTintList = android.content.res.ColorStateList.valueOf(Term.FG)
-            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(Term.LINE)
-            fun hue(h: Int) = Color.HSVToColor(floatArrayOf(h.toFloat(), 0.72f, 1f))
-            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(sb: android.widget.SeekBar, v: Int, fromUser: Boolean) { sample.setBackgroundColor(hue(v)) }
-                override fun onStartTrackingTouch(sb: android.widget.SeekBar) {}
-                override fun onStopTrackingTouch(sb: android.widget.SeekBar) { applyColor(hue(sb.progress)) }
-            })
+        // «Матрица»: только для зелёного — фон превращается в бегущий код из фильма
+        if (cur == Term.MATRIX_GREEN) {
+            val mx = mocButton(if (Term.matrix) "[ MATRIX: ВКЛ ]" else "[ MATRIX ]") {
+                getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_MATRIX, !Term.matrix).putString(PREF_TAB, TAB_COLOR).commit()
+                recreate()
+            }.apply { if (Term.matrix) { setTextColor(Color.BLACK); background = Term.boxBg(this@MainActivity, true) } }
+            p.addView(mx, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(8) })
         }
-        row.addView(seek, LinearLayout.LayoutParams(0, dp(44), 1f))
-        row.addView(sample, LinearLayout.LayoutParams(dp(44), dp(28)).apply { leftMargin = dp(10) })
-        p.addView(row)
+
+        // свой цвет: круг цветов, как на референсе — по кругу оттенок, к центру бледнее.
+        // Пока ведёте пальцем — меняется образец, при отпускании цвет применяется.
+        p.addView(text("> свой цвет", 24f, Term.FG).apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); setPadding(0, dp(16), 0, dp(6)) })
+        val sample = TextView(this).apply {
+            text = "образец"; typeface = Term.ru; gravity = Gravity.CENTER
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setTextColor(cur)
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), cur) }
+        }
+        val wheel = ColorWheel(this, cur) { c, final ->
+            sample.setTextColor(c); (sample.background as android.graphics.drawable.GradientDrawable).setStroke(dp(1), c)
+            if (final) applyColor(c)
+        }
+        p.addView(wheel, LinearLayout.LayoutParams(dp(240), dp(240)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        p.addView(sample, LinearLayout.LayoutParams(dp(160), dp(36)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(8) })
         return p
     }
 
@@ -817,6 +820,7 @@ class MainActivity : Activity() {
         private const val PREF_MODE = "tx_mode"
         private const val PREF_THEME = "theme"
         private const val PREF_COLOR = "term_color"
+        private const val PREF_MATRIX = "matrix"
         private const val PREF_TAB = "tab"
         private const val TAB_IRBIS = "irbis"
         private const val TAB_MOC = "moc"

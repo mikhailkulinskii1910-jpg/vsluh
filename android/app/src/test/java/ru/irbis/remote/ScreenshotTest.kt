@@ -98,7 +98,29 @@ class ScreenshotTest {
         val out = File(System.getProperty("shots.dir") ?: "build/shots", "color").apply { mkdirs() }
         org.robolectric.RuntimeEnvironment.getApplication()
             .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
-            .putString("theme", "terminal").putInt("term_color", android.graphics.Color.parseColor("#33FF66")).putString("tab", "color").commit()
+            .putString("theme", "terminal").putInt("term_color", android.graphics.Color.parseColor("#1FFF3A"))
+            .putBoolean("matrix", false).putString("tab", "color").commit()
+        val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val root = ctl.get().window.decorView
+        fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+            root.draw(Canvas(bmp)); File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1900)); shot("splash")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800))
+        findText(root, "IRBIS")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
+        findText(root, "Цвет")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+    }
+
+    /** Зелёный + «Матрица»: бегущий код на фоне пульта и вкладка «Цвет» с включённой кнопкой. */
+    @Test
+    fun shotsMatrix() {
+        val out = File(System.getProperty("shots.dir") ?: "build/shots", "matrix").apply { mkdirs() }
+        org.robolectric.RuntimeEnvironment.getApplication()
+            .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
+            .putString("theme", "terminal").putInt("term_color", android.graphics.Color.parseColor("#1FFF3A"))
+            .putBoolean("matrix", true).putString("tab", "color").commit()
         val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
         val root = ctl.get().window.decorView
         fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
