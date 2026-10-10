@@ -10,6 +10,25 @@ val KEYS = listOf(
     "J RIGHT" to 0x807FA857, "J UP" to 0x807F629D,
 )
 
+/**
+ * Доски MocTec / «МОСТЕХ»: пульт «Interactive Board RC 52 Key» из облачной базы IrCode Finder
+ * (бренд MOSTEH, #500275), NEC, адрес 04 FB. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ».
+ */
+val MOC_KEYS = listOf(
+    "POWER" to 0x04FB4AB5L, "J OK" to 0x04FB52ADL,
+    "VOL-" to 0x04FB827DL, "VOL+" to 0x04FBC03FL,
+    "EMPTY SCREEN" to 0x04FB728DL, "INPUT" to 0x04FBE01FL,
+    "J UP" to 0x04FBE21DL, "J DOWN" to 0x04FBB24DL,
+    "J LEFT" to 0x04FB926DL, "J RIGHT" to 0x04FBD22DL,
+    "HOME" to 0x04FB12EDL, "BACK" to 0x04FB50AFL,
+)
+
+/**
+ * «Рулетка»: адреса NEC, которые перебираются по очереди (по 256 команд на адрес).
+ * Первым — 04 FB (MocTec), дальше — адреса, частые у китайских панелей и пультов.
+ */
+val ROULETTE_ADDR = intArrayOf(0x04FB, 0x807F, 0x00FF, 0x01FE, 0x02FD, 0x03FC, 0x08F7, 0x10EF, 0x40BF, 0x7F80)
+
 /** При удержании этих кнопок шлются NEC-повторы, как у настоящего пульта. */
 val REPEATABLE = setOf("VOL-", "VOL+", "J DOWN", "J LEFT", "J RIGHT", "J UP")
 
