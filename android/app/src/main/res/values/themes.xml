@@ -7,7 +7,7 @@
     <style name="Theme.Irbis" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">@color/bg</item>
-        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:colorAccent">#FFFFFF</item>
         <item name="android:fontFamily">@font/vt323</item>
         <item name="android:alertDialogTheme">@style/Theme.Term.Dialog</item>
@@ -27,7 +27,7 @@
     <style name="Theme.Prism" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/prism_bg</item>
         <item name="android:statusBarColor">@color/prism_bg</item>
-        <item name="android:navigationBarColor">@color/prism_bg</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:colorAccent">#B49CFF</item>
         <item name="android:fontFamily">@font/manrope</item>
         <item name="android:alertDialogTheme">@style/Theme.Prism.Dialog</item>
@@ -46,7 +46,7 @@
     <style name="Theme.Thermal" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/thermal_bg</item>
         <item name="android:statusBarColor">@color/thermal_bg</item>
-        <item name="android:navigationBarColor">@color/thermal_bg</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:colorAccent">#FFD43B</item>
         <item name="android:fontFamily">@font/vt323</item>
         <item name="android:alertDialogTheme">@style/Theme.Thermal.Dialog</item>
@@ -65,7 +65,7 @@
     <style name="Theme.Blueprint" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/blueprint_bg</item>
         <item name="android:statusBarColor">@color/blueprint_bg</item>
-        <item name="android:navigationBarColor">@color/blueprint_bg</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:colorAccent">#FFFFFF</item>
         <item name="android:fontFamily">@font/manrope</item>
         <item name="android:alertDialogTheme">@style/Theme.Blueprint.Dialog</item>

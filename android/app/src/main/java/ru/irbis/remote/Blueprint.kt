@@ -18,10 +18,36 @@ import kotlin.math.sin
  * которую медленно «сканирует» светлая полоса, и штамп чертежа в углу.
  */
 object Blueprint {
-    val BG = Color.parseColor("#1A4A9E")
-    /** Фон кнопок и плашек: синий с лёгкой прозрачностью — схема чуть просвечивает. */
-    val PANEL = Color.argb(199, 0x1A, 0x4A, 0x9E)
-    private val EDGE = Color.parseColor("#10357A")
+    private val PAPER = Color.parseColor("#F2F5FA")
+    private val BLUE = Color.parseColor("#1A4A9E")
+    private val NIGHT = Color.parseColor("#05070D")
+    private val NAVY_INK = Color.parseColor("#0E2A66")
+
+    /** Светлота чертежа с ползунка: 0 — светокопия (белая бумага, синие линии), 0.5 — синий, 1 — ночной. */
+    var shade = 0.5f; private set
+    var BG = BLUE; private set
+    /** «Чернила»: линии, текст, рамки. На светлой бумаге — синие, на тёмной — белые. */
+    var INK = Color.WHITE; private set
+    /** Фон кнопок и плашек: цвет фона с лёгкой прозрачностью — схема чуть просвечивает. */
+    var PANEL = Color.argb(199, 0x1A, 0x4A, 0x9E); private set
+    private var EDGE = Color.parseColor("#10357A")
+    private val inkTint get() = android.graphics.PorterDuffColorFilter(INK, android.graphics.PorterDuff.Mode.SRC_IN)
+
+    fun mix(a: Int, b: Int, k: Float) = Color.rgb(
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * k).toInt(),
+        (Color.green(a) + (Color.green(b) - Color.green(a)) * k).toInt(),
+        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * k).toInt())
+
+    fun setShade(v: Float) {
+        shade = v.coerceIn(0f, 1f)
+        BG = if (shade < 0.5f) mix(PAPER, BLUE, shade / 0.5f) else mix(BLUE, NIGHT, (shade - 0.5f) / 0.5f)
+        val lum = (0.2126f * Color.red(BG) + 0.7152f * Color.green(BG) + 0.0722f * Color.blue(BG)) / 255f
+        INK = if (lum > 0.5f) NAVY_INK else Color.WHITE
+        PANEL = Color.argb(199, Color.red(BG), Color.green(BG), Color.blue(BG))
+        EDGE = Term.shade(BG, 0.7f)
+        img.colorFilter = if (INK == Color.WHITE) null else inkTint
+        if (w > 0f) makeShaders()
+    }
 
     private var w = 0f; private var h = 0f; private var d = 1f
     private var schematic: Bitmap? = null
@@ -40,15 +66,20 @@ object Blueprint {
         if (schematic == null) schematic = BitmapFactory.decodeResource(c.resources, R.drawable.schematic)
         stampText.typeface = c.resources.getFont(R.font.manrope_semibold)
         w = width.toFloat(); h = height.toFloat()
+        makeShaders()
+    }
+
+    private fun makeShaders() {
         vignette.shader = RadialGradient(w / 2, h * 0.45f, max(w, h) * 0.75f, intArrayOf(Color.TRANSPARENT, EDGE),
             floatArrayOf(0.45f, 1f), Shader.TileMode.CLAMP)
-        glow.shader = LinearGradient(0f, -12 * d, 0f, 12 * d, intArrayOf(Color.TRANSPARENT, Color.argb(46, 255, 255, 255), Color.TRANSPARENT),
+        glow.shader = LinearGradient(0f, -12 * d, 0f, 12 * d, intArrayOf(Color.TRANSPARENT, Color.argb(46, Color.red(INK), Color.green(INK), Color.blue(INK)), Color.TRANSPARENT),
             null, Shader.TileMode.CLAMP)
     }
 
     fun draw(canvas: Canvas, t: Float) {
         canvas.drawColor(BG)
         if (w == 0f) return
+        grid.color = INK; line.color = INK; stamp.color = INK; stampText.color = INK
         canvas.drawRect(0f, 0f, w, h, vignette)
         // миллиметровка: мелкая сетка через 14dp, крупная — через 70dp
         val step = 14 * d
@@ -92,5 +123,65 @@ object Blueprint {
             canvas.drawText(a, l + 5 * d, by, stampText)
             canvas.drawText(b, l + 63 * d, by, stampText)
         }
+    }
+}
+
+/**
+ * Ползунок светлоты чертежа: ⬜ ——|—🟦——— ⬛. Дорожка — градиент бумага → синий → ночь,
+ * синяя метка — значение по умолчанию, бегунок — вертикальная черта.
+ * [onPick]: при перетаскивании final = false, при отпускании — true.
+ */
+class ShadeSlider(c: android.content.Context, initial: Float, private val onPick: (Float, Boolean) -> Unit) : android.view.View(c) {
+    private val d = c.resources.displayMetrics.density
+    private var v = initial
+    private val track = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val box = RectF()
+    private val sq = 20f   // сторона квадратиков ⬜ ⬛, dp
+    private fun left() = (sq + 10) * d
+    private fun right() = width - (sq + 10) * d
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        track.shader = LinearGradient(left(), 0f, right(), 0f,
+            intArrayOf(Color.parseColor("#F2F5FA"), Color.parseColor("#1A4A9E"), Color.parseColor("#05070D")), null, Shader.TileMode.CLAMP)
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val cy = height / 2f + 6 * d; val th = 26 * d
+        // ⬜ и ⬛ по краям
+        val s = sq * d
+        p.style = Paint.Style.FILL; p.color = Color.WHITE
+        canvas.drawRect(0f, cy - s / 2, s, cy + s / 2, p)
+        p.color = Color.BLACK; canvas.drawRect(width - s, cy - s / 2, width.toFloat(), cy + s / 2, p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = d; p.color = Term.FG
+        canvas.drawRect(0f, cy - s / 2, s, cy + s / 2, p); canvas.drawRect(width - s, cy - s / 2, width.toFloat(), cy + s / 2, p)
+        // дорожка
+        box.set(left(), cy - th / 2, right(), cy + th / 2)
+        canvas.drawRect(box, track)
+        canvas.drawRect(box, p)
+        // 🟦 — синий по умолчанию, над серединой
+        val mx = (left() + right()) / 2; val ms = 11 * d
+        p.style = Paint.Style.FILL; p.color = Color.parseColor("#2F6BD8")
+        canvas.drawRect(mx - ms / 2, box.top - ms - 4 * d, mx + ms / 2, box.top - 4 * d, p)
+        p.style = Paint.Style.STROKE; p.color = Color.WHITE
+        canvas.drawRect(mx - ms / 2, box.top - ms - 4 * d, mx + ms / 2, box.top - 4 * d, p)
+        // бегунок «|»
+        val x = left() + (right() - left()) * v
+        p.style = Paint.Style.FILL
+        p.color = Color.BLACK; canvas.drawRect(x - 3.5f * d, box.top - 8 * d, x + 3.5f * d, box.bottom + 8 * d, p)
+        p.color = Color.WHITE; canvas.drawRect(x - 2f * d, box.top - 6.5f * d, x + 2f * d, box.bottom + 6.5f * d, p)
+    }
+
+    override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
+        v = ((e.x - left()) / (right() - left())).coerceIn(0f, 1f)
+        if (kotlin.math.abs(v - 0.5f) < 0.025f) v = 0.5f          // «прилипает» к синему
+        invalidate()
+        parent?.requestDisallowInterceptTouchEvent(true)
+        when (e.actionMasked) {
+            android.view.MotionEvent.ACTION_UP -> onPick(v, true)
+            android.view.MotionEvent.ACTION_CANCEL -> {}
+            else -> onPick(v, false)
+        }
+        return true
     }
 }

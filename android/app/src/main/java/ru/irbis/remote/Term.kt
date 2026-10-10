@@ -116,7 +116,8 @@ object Term {
     /** Цвет, умноженный на k (k < 1 — темнее). */
     fun shade(c: Int, k: Float) = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
 
-    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR, matrixOn: Boolean = false, rgbName: String? = null, heat: String? = null) {
+    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR, matrixOn: Boolean = false, rgbName: String? = null, heat: String? = null,
+             bpShade: Float = 0.5f) {
         prism = theme == "prism"
         thermal = theme == "thermal"
         blueprint = theme == "blueprint"
@@ -130,8 +131,9 @@ object Term {
             LINE = p.accent; FAINT = shade(p.pal[2], 0.25f)
             mono = c.resources.getFont(R.font.vt323); ru = Typeface.MONOSPACE
         } else if (blueprint) {
-            BG = Blueprint.BG; FG = Color.WHITE; DIM = Color.parseColor("#BFD3F2")
-            LINE = Color.parseColor("#9FB8E2"); FAINT = Color.parseColor("#2A5AAA")
+            Blueprint.setShade(bpShade)
+            BG = Blueprint.BG; FG = Blueprint.INK; DIM = Blueprint.mix(BG, FG, 0.72f)
+            LINE = Blueprint.mix(BG, FG, 0.6f); FAINT = Blueprint.mix(BG, FG, 0.12f)
             mono = c.resources.getFont(R.font.manrope_semibold); ru = c.resources.getFont(R.font.manrope)
         } else if (prism) {
             BG = Color.parseColor("#07060B"); FG = Color.parseColor("#F4F1FF"); DIM = Color.parseColor("#A79FC6")
@@ -152,8 +154,8 @@ object Term {
         if (prism) return GlassDrawable(c, on)
         val d = c.resources.displayMetrics.density
         if (blueprint) return android.graphics.drawable.GradientDrawable().apply {
-            setColor(if (on) Color.WHITE else Blueprint.PANEL)
-            setStroke(d.toInt().coerceAtLeast(1), Color.WHITE)
+            setColor(if (on) FG else Blueprint.PANEL)
+            setStroke(d.toInt().coerceAtLeast(1), FG)
         }
         if (thermal) return android.graphics.drawable.GradientDrawable().apply {
             // рамка обнаружения; «включённая» — раскалённая полоса
@@ -973,7 +975,7 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         val w = w(); val h = height.toFloat()
         val fade = (1f - since / 500f).coerceIn(0f, 1f)
         val m = 5 * d                       // поле под метки совмещения
-        fill.color = if (inverted) Color.WHITE else Blueprint.PANEL
+        fill.color = if (inverted) Term.FG else Blueprint.PANEL
         canvas.drawRect(m, m, w - m, h - m, fill)
         val hatchA = if (down) 0.35f else 0.35f * fade
         if (hatchA > 0f && !inverted) {
@@ -983,18 +985,18 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
                 while (x < w) { hatch.moveTo(x, h); hatch.lineTo(x + h, 0f); x += 6 * d }
             }
             canvas.save(); canvas.clipRect(m, m, w - m, h - m)
-            stroke.color = Color.WHITE; stroke.alpha = (255 * hatchA).toInt(); stroke.strokeWidth = d
+            stroke.color = Term.FG; stroke.alpha = (255 * hatchA).toInt(); stroke.strokeWidth = d
             canvas.drawPath(hatch, stroke)
             canvas.restore()
         }
-        val ink = if (inverted) Term.BG else Color.WHITE
+        val ink = if (inverted) Term.BG else Term.FG
         // двойная рамка
         stroke.color = ink; stroke.alpha = 255; stroke.strokeWidth = 1.5f * d
         canvas.drawRect(m, m, w - m, h - m, stroke)
         stroke.alpha = 115; stroke.strokeWidth = 0.75f * d
         canvas.drawRect(m + 4 * d, m + 4 * d, w - m - 4 * d, h - m - 4 * d, stroke)
         // метки совмещения «+» в углах, снаружи рамки
-        stroke.color = Color.WHITE; stroke.alpha = 200; stroke.strokeWidth = d
+        stroke.color = Term.FG; stroke.alpha = 200; stroke.strokeWidth = d
         val k = 4 * d
         for ((x, y) in listOf(m to m, w - m to m, m to h - m, w - m to h - m)) {
             canvas.drawLine(x - k, y, x + k, y, stroke); canvas.drawLine(x, y - k, x, y + k, stroke)
@@ -1016,7 +1018,7 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
         // «скан» сверху вниз после нажатия
         if (since < 420) {
             val y = m + (h - 2 * m) * since / 420f
-            fill.color = if (inverted) Term.BG else Color.WHITE; fill.alpha = 150
+            fill.color = if (inverted) Term.BG else Term.FG; fill.alpha = 150
             canvas.drawRect(m, y, w - m, y + 1.5f * d, fill)
             fill.alpha = 255
         }
@@ -1108,6 +1110,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             wordEdge.strokeWidth = 1.3f * d
         }
         if (Term.blueprint) {
+            if (Term.FG != Color.WHITE) signP.colorFilter = PorterDuffColorFilter(Term.FG, PorterDuff.Mode.SRC_IN)   // подпись — синими чернилами на светлой бумаге
             txt.typeface = Term.ru; txt.textSize = 14 * d
             big.typeface = c.resources.getFont(R.font.unbounded); big.textSize = 50 * d; big.clearShadowLayer()
         }
@@ -1176,9 +1179,9 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
                 // крыса — контурный чертёж: обводка и едва заметная заливка
                 val tube = tubeBmp ?: glow
                 val dx = if (moving) (rnd.nextFloat() - 0.5f) * 6 * d else 0f
-                fringe.color = Color.WHITE; canvas.drawBitmap(tube, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
+                fringe.color = Term.FG; canvas.drawBitmap(tube, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
                 fringe.color = Term.BG; canvas.drawBitmap(glow, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
-                fringe.color = Color.argb(22, 255, 255, 255); canvas.drawBitmap(glow, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
+                fringe.color = Term.FG; fringe.alpha = 22; canvas.drawBitmap(glow, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
             } else if (Term.prism) {
                 // в полёте «призраки» расходятся сильнее, на месте — едва заметны
                 val dx = (if (moving) 9f else 2.5f) * d
@@ -1287,6 +1290,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     /** Чертёж крысы: размерные линии с засечками снизу и слева, «Fig.1 — RAT» и выноска к хвосту. Проявляются за 0,3 с. */
     private fun drawDimensions(canvas: Canvas, r: RectF, t: Float) {
         val a = ((t - 1530f) / 300f).coerceIn(0f, 1f)
+        dim.color = Term.FG; dimText.color = Term.FG
         dim.strokeWidth = d; dim.alpha = (220 * a).toInt()
         dimText.typeface = Term.ru; dimText.textSize = 12 * d; dimText.alpha = (235 * a).toInt(); dimText.letterSpacing = 0.06f
         val k = 5 * d

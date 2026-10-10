@@ -5,9 +5,67 @@ import SwiftUI
  в углу штамп. Кнопки — двойные рамки с метками совмещения, надписи Manrope заглавными.
  */
 enum Blueprint {
-    static let bgHex: UInt32 = 0x1A4A9E
-    static let edgeHex: UInt32 = 0x10357A
-    static var bg: Color { Color(hex: bgHex) }
+    /// Цвет в долях 0…1.
+    struct RGB {
+        let r: Double
+        let g: Double
+        let b: Double
+        init(_ r: Double, _ g: Double, _ b: Double) {
+            self.r = r
+            self.g = g
+            self.b = b
+        }
+        init(hex: UInt32) {
+            self.init(Double((hex >> 16) & 0xFF) / 255.0, Double((hex >> 8) & 0xFF) / 255.0, Double(hex & 0xFF) / 255.0)
+        }
+        func mix(_ o: RGB, _ k: Double) -> RGB {
+            RGB(r + (o.r - r) * k, g + (o.g - g) * k, b + (o.b - b) * k)
+        }
+        func scaled(_ k: Double) -> RGB { RGB(r * k, g * k, b * k) }
+        var luminance: Double {
+            let a: Double = 0.2126 * r
+            let c: Double = 0.7152 * g
+            let d: Double = 0.0722 * b
+            return a + c + d
+        }
+        func color(_ alpha: Double = 1) -> Color { Color(.sRGB, red: r, green: g, blue: b, opacity: alpha) }
+    }
+
+    static let lightHex: UInt32 = 0xF2F5FA
+    static let midHex: UInt32 = 0x1A4A9E
+    static let darkHex: UInt32 = 0x05070D
+    /// Чернила на светлой бумаге — синие линии, как на светокопии.
+    static let inkDarkHex: UInt32 = 0x0E2A66
+
+    /// Светлота чертежа (ключ "bpShade"): 0 — белая бумага, 0.5 — синий, 1 — почти чёрный.
+    /// Пока тянут ползунок, меняется сразу — фон перерисовывается каждый кадр.
+    static var shade: Double = Blueprint.loadShade()
+
+    private static func loadShade() -> Double {
+        let n: NSNumber? = UserDefaults.standard.object(forKey: "bpShade") as? NSNumber
+        let v: Double = n?.doubleValue ?? 0.5
+        return min(1, max(0, v))
+    }
+
+    static func paper(_ v: Double) -> RGB {
+        if v < 0.5 { return RGB(hex: lightHex).mix(RGB(hex: midHex), v / 0.5) }
+        return RGB(hex: midHex).mix(RGB(hex: darkHex), (v - 0.5) / 0.5)
+    }
+    static var paperRGB: RGB { paper(shade) }
+    /// Светлая бумага: чернила синие, иначе белые.
+    static var light: Bool { paperRGB.luminance > 0.5 }
+    static var inkRGB: RGB { light ? RGB(hex: inkDarkHex) : RGB(1, 1, 1) }
+
+    static var bg: Color { paperRGB.color() }
+    /// «Чернила»: линии, текст, рамки, схема, сетка, штамп, контур крысы.
+    static var ink: Color { inkRGB.color() }
+    /// Смесь бумаги и чернил.
+    static func blend(_ k: Double) -> Color { paperRGB.mix(inkRGB, k).color() }
+    static var dim: Color { blend(0.72) }
+    static var line: Color { blend(0.6) }
+    static var faint: Color { blend(0.12) }
+    /// Край виньетки — темнее бумаги.
+    static var edge: Color { paperRGB.scaled(0.7).color() }
 
     /// Подписи и кнопки — Manrope SemiBold.
     static func semi(_ size: CGFloat) -> Font { .custom("Manrope-SemiBold", size: size) }
@@ -36,8 +94,8 @@ enum Blueprint {
             y += step
             i += 1
         }
-        ctx.stroke(fine, with: .color(Color.white.opacity(0.06)), lineWidth: 0.6)
-        ctx.stroke(bold, with: .color(Color.white.opacity(0.15)), lineWidth: 0.8)
+        ctx.stroke(fine, with: .color(Blueprint.ink.opacity(0.06)), lineWidth: 0.6)
+        ctx.stroke(bold, with: .color(Blueprint.ink.opacity(0.15)), lineWidth: 0.8)
     }
 
     private static func vline(_ p: inout Path, _ x: CGFloat, _ h: CGFloat) {
@@ -63,16 +121,21 @@ enum Blueprint {
         }
         let rect = CGRect(x: x0, y: y0, width: iw, height: ih)
         let img = ctx.resolve(Image("schematic"))
+        let inkColor: Color = Blueprint.ink
         var base = ctx
         base.opacity = 0.33
-        base.draw(img, in: rect)
+        base.drawLayer { layer in
+            layer.draw(img, in: rect)
+            layer.blendMode = .sourceIn          // белая схема подкрашивается в цвет чернил
+            layer.fill(Path(rect), with: .color(inkColor))
+        }
 
         // скан: полоса проходит экран за 7 с, в ней схема ярче
         let band: CGFloat = 70
         let p: Double = (t / 7.0).truncatingRemainder(dividingBy: 1.0)
         let ly: CGFloat = -band / 2 + (size.height + band) * CGFloat(p)
         let bandRect = CGRect(x: 0, y: ly - band / 2, width: size.width, height: band)
-        let fade = Gradient(colors: [Color.white.opacity(0), Color.white, Color.white.opacity(0)])
+        let fade = Gradient(colors: [Blueprint.ink.opacity(0), Blueprint.ink, Blueprint.ink.opacity(0)])
         let top = CGPoint(x: 0, y: bandRect.minY)
         let bottom = CGPoint(x: 0, y: bandRect.maxY)
         var lit = ctx
@@ -80,45 +143,52 @@ enum Blueprint {
         lit.drawLayer { layer in
             layer.clip(to: Path(bandRect))
             layer.draw(img, in: rect)
+            layer.blendMode = .sourceIn
+            layer.fill(Path(rect), with: .color(inkColor))
             layer.blendMode = .destinationIn
             layer.fill(Path(bandRect), with: .linearGradient(fade, startPoint: top, endPoint: bottom))
         }
-        let haze = Gradient(colors: [Color.white.opacity(0), Color.white.opacity(0.06), Color.white.opacity(0)])
+        let haze = Gradient(colors: [Blueprint.ink.opacity(0), Blueprint.ink.opacity(0.06), Blueprint.ink.opacity(0)])
         ctx.fill(Path(bandRect), with: .linearGradient(haze, startPoint: top, endPoint: bottom))
         var line = ctx
-        line.addFilter(.shadow(color: Color.white.opacity(0.9), radius: 4))
-        line.fill(Path(CGRect(x: 0, y: ly - 0.5, width: size.width, height: 1)), with: .color(Color.white.opacity(0.5)))
+        line.addFilter(.shadow(color: Blueprint.ink.opacity(0.9), radius: 4))
+        line.fill(Path(CGRect(x: 0, y: ly - 0.5, width: size.width, height: 1)), with: .color(Blueprint.ink.opacity(0.5)))
     }
 }
 
 /// Фон «Чертежа»: заливка с виньеткой, миллиметровка, схема со сканом, штамп.
 struct BlueprintBackground: View {
     var body: some View {
+        // всё внутри TimelineView: пока тянут ползунок светлоты, бумага и чернила меняются сразу
         GeometryReader { g in
-            ZStack {
-                paper(g.size)
-                Canvas { ctx, size in Blueprint.drawGrid(ctx, size) }
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { tl in
-                    Canvas { ctx, size in Blueprint.drawScheme(ctx, size, Prism.time(tl.date)) }
-                }
-                BlueprintStamp().position(x: g.size.width - 75 - 14, y: g.size.height - 32 - 14)
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { tl in
+                layers(g.size, t: Prism.time(tl.date))
             }
         }
         .clipped()
         .allowsHitTesting(false)
     }
 
+    private func layers(_ size: CGSize, t: Double) -> some View {
+        ZStack {
+            paper(size)
+            Canvas { ctx, sz in Blueprint.drawGrid(ctx, sz) }
+            Canvas { ctx, sz in Blueprint.drawScheme(ctx, sz, t) }
+            BlueprintStamp().position(x: size.width - 75 - 14, y: size.height - 32 - 14)
+        }
+    }
+
     private func paper(_ size: CGSize) -> some View {
         let r: CGFloat = max(size.width, size.height) * 0.75
         let stops: [Gradient.Stop] = [.init(color: Blueprint.bg, location: 0.45),
-                                      .init(color: Color(hex: Blueprint.edgeHex), location: 1)]
+                                      .init(color: Blueprint.edge, location: 1)]
         return RadialGradient(gradient: Gradient(stops: stops), center: .center, startRadius: 0, endRadius: r)
     }
 }
 
 /// Штамп чертежа в правом нижнем углу.
 struct BlueprintStamp: View {
-    private let ink = Color.white.opacity(0.55)
+    private var ink: Color { Blueprint.ink.opacity(0.55) }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -144,7 +214,7 @@ struct BlueprintStamp: View {
             Text(key).font(Blueprint.semi(8)).foregroundColor(ink)
                 .frame(width: 48, alignment: .leading).padding(.leading, 4)
             vRule
-            Text(value).font(Blueprint.semi(9)).foregroundColor(Color.white.opacity(0.75))
+            Text(value).font(Blueprint.semi(9)).foregroundColor(Blueprint.ink.opacity(0.75))
                 .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 5)
         }
@@ -152,7 +222,7 @@ struct BlueprintStamp: View {
     }
 
     private func cell(_ text: String) -> some View {
-        Text(text).font(Blueprint.semi(9)).foregroundColor(Color.white.opacity(0.75))
+        Text(text).font(Blueprint.semi(9)).foregroundColor(Blueprint.ink.opacity(0.75))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -200,8 +270,8 @@ struct BlueprintKey: View {
     let scan: Double
     let size: CGSize
 
-    private var ink: Color { inverted ? Blueprint.bg : Color.white }
-    private var fill: Color { inverted ? Color.white : Blueprint.bg.opacity(0.78) }
+    private var ink: Color { inverted ? Blueprint.bg : Blueprint.ink }
+    private var fill: Color { inverted ? Blueprint.ink : Blueprint.bg.opacity(0.78) }
     private var fontSize: CGFloat {
         let k: CGFloat = size.width / CGFloat(max(6, label.count))
         return min(22, k * 1.05)
@@ -213,7 +283,7 @@ struct BlueprintKey: View {
             if hatch > 0.01 {
                 Hatch45().stroke(ink.opacity(0.35 * hatch), lineWidth: 1)
             }
-            Rectangle().strokeBorder(inverted ? Color.white : ink, lineWidth: 1.5)
+            Rectangle().strokeBorder(inverted ? Blueprint.ink : ink, lineWidth: 1.5)
             Rectangle().strokeBorder(ink.opacity(0.45), lineWidth: 0.7).padding(4)
             if scan >= 0 && scan < 1 { scanBar }
             Blueprint.caps(label, fontSize).foregroundColor(ink)
@@ -221,7 +291,7 @@ struct BlueprintKey: View {
             corners
         }
         .clipped()
-        .overlay(RegMarks().stroke(Color.white.opacity(0.8), lineWidth: 1))
+        .overlay(RegMarks().stroke(Blueprint.ink.opacity(0.8), lineWidth: 1))
     }
 
     private var scanBar: some View {
@@ -259,7 +329,7 @@ struct BlueprintRat: View {
 
     var body: some View {
         ZStack {
-            silhouette(Color.white.opacity(0.08))
+            silhouette(Blueprint.ink.opacity(0.08))
             outline
         }
     }
@@ -271,9 +341,9 @@ struct BlueprintRat: View {
     private var outline: some View {
         ZStack {
             ForEach(0..<BlueprintRat.offsets.count, id: \.self) { i in
-                silhouette(Color.white).offset(BlueprintRat.offsets[i])
+                silhouette(Blueprint.ink).offset(BlueprintRat.offsets[i])
             }
-            silhouette(Color.white).blendMode(.destinationOut)
+            silhouette(Blueprint.ink).blendMode(.destinationOut)
         }
         .compositingGroup()
     }
@@ -292,7 +362,7 @@ struct BlueprintDims: View {
     }
 
     private static func label(_ s: String, _ size: CGFloat) -> Text {
-        Text(s).font(Blueprint.semi(size)).foregroundColor(Color.white.opacity(0.9))
+        Text(s).font(Blueprint.semi(size)).foregroundColor(Blueprint.ink.opacity(0.9))
     }
 
     /// Засечка 45° на конце размерной линии.
@@ -327,8 +397,8 @@ struct BlueprintDims: View {
         let knee = CGPoint(x: right + 8, y: top - 14)
         let end = CGPoint(x: right + 40, y: top - 14)
         p.move(to: tail); p.addLine(to: knee); p.addLine(to: end)
-        ctx.stroke(p, with: .color(Color.white.opacity(0.75)), lineWidth: 1)
-        ctx.fill(Path(ellipseIn: CGRect(x: tail.x - 2, y: tail.y - 2, width: 4, height: 4)), with: .color(Color.white))
+        ctx.stroke(p, with: .color(Blueprint.ink.opacity(0.75)), lineWidth: 1)
+        ctx.fill(Path(ellipseIn: CGRect(x: tail.x - 2, y: tail.y - 2, width: 4, height: 4)), with: .color(Blueprint.ink))
 
         ctx.draw(label("420 mm", 11), at: CGPoint(x: (left + right) / 2, y: by + 3), anchor: .top)
         ctx.draw(label("TAIL", 10), at: CGPoint(x: end.x, y: end.y - 2), anchor: .bottomTrailing)
@@ -337,5 +407,115 @@ struct BlueprintDims: View {
         rot.translateBy(x: lx - 3, y: (top + bottom) / 2)
         rot.rotate(by: .degrees(-90))
         rot.draw(label("260 mm", 11), at: .zero, anchor: .bottom)
+    }
+}
+
+/// Ползунок светлоты чертежа: ⬜ — дорожка-градиент с меткой 🟦 посередине и бегунком «|» — ⬛.
+struct BlueprintShadeSlider: View {
+    let value: Double
+    let onDrag: (Double) -> Void
+    let onDone: (Double) -> Void
+
+    private static let rim = Color(hex: 0x7F8899)
+    private static let colors: [Color] = [Color(hex: Blueprint.lightHex), Color(hex: Blueprint.midHex), Color(hex: Blueprint.darkHex)]
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 10) {
+                swatch(Blueprint.lightHex)
+                GeometryReader { g in track(width: g.size.width) }
+                    .frame(height: 64)
+                swatch(Blueprint.darkHex)
+            }
+            HStack {
+                Text("светлее")
+                Spacer()
+                Text("темнее")
+            }
+            .font(Prism.body(12))
+            .foregroundColor(Term.dim)
+            .padding(.horizontal, 32)
+        }
+    }
+
+    private func swatch(_ hex: UInt32) -> some View {
+        Rectangle().fill(Color(hex: hex))
+            .frame(width: 22, height: 22)
+            .overlay(Rectangle().strokeBorder(BlueprintShadeSlider.rim, lineWidth: 1))
+            .offset(y: 4)
+    }
+
+    private static func clamp(_ x: CGFloat, _ width: CGFloat) -> Double {
+        if width <= 0 { return 0.5 }
+        let k: CGFloat = x / width
+        return Double(min(1, max(0, k)))
+    }
+
+    private func track(width: CGFloat) -> some View {
+        let x: CGFloat = CGFloat(value) * width
+        return ZStack {
+            // метка «по умолчанию» (синий) над серединой
+            Rectangle().fill(Color(hex: Blueprint.midHex)).frame(width: 10, height: 10)
+                .overlay(Rectangle().strokeBorder(BlueprintShadeSlider.rim, lineWidth: 1))
+                .position(x: width / 2, y: 7)
+            LinearGradient(colors: BlueprintShadeSlider.colors, startPoint: .leading, endPoint: .trailing)
+                .frame(width: width, height: 28)
+                .overlay(Rectangle().strokeBorder(BlueprintShadeSlider.rim, lineWidth: 1))
+                .position(x: width / 2, y: 36)
+            Rectangle().fill(Color.white).frame(width: 4, height: 44)
+                .overlay(Rectangle().stroke(Color(hex: Blueprint.darkHex), lineWidth: 1))
+                .position(x: x, y: 36)
+        }
+        .frame(width: width, height: 64)
+        .contentShape(Rectangle())
+        .gesture(DragGesture(minimumDistance: 0)
+            .onChanged { v in onDrag(BlueprintShadeSlider.clamp(v.location.x, width)) }
+            .onEnded { v in onDone(BlueprintShadeSlider.clamp(v.location.x, width)) })
+    }
+}
+
+/// Вкладка «Цвет» темы «Чертёж»: светлота листа.
+struct BlueprintPanel: View {
+    @AppStorage("bpShade") private var bpShade = 0.5
+    /// Значение, пока палец на ползунке.
+    @State private var live: Double?
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                Blueprint.caps("> оттенок чертежа", 15).foregroundColor(Term.fg)
+                Text("Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж.")
+                    .font(Prism.body(13)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                BlueprintShadeSlider(value: live ?? Blueprint.shade, onDrag: { v in drag(v) }, onDone: { v in done(v) })
+                    .padding(.top, 6)
+                resetButton.padding(.top, 8)
+            }
+            .padding(12)
+            .background(Blueprint.bg.opacity(0.78))
+            .overlay(Rectangle().strokeBorder(Term.fg, lineWidth: 1))
+        }
+    }
+
+    private var resetButton: some View {
+        Button { done(0.5) } label: {
+            Blueprint.caps("по умолчанию", 13).foregroundColor(Term.fg)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(Blueprint.bg.opacity(0.78))
+                .overlay(Rectangle().strokeBorder(Term.fg, lineWidth: 1))
+        }
+    }
+
+    /// Пока тянут — меняется только фон (он перерисовывается каждый кадр).
+    private func drag(_ v: Double) {
+        live = v
+        Blueprint.shade = v
+    }
+
+    /// Отпустили — сохранить; экран перестроится с новыми цветами.
+    private func done(_ v: Double) {
+        Blueprint.shade = v
+        live = nil
+        bpShade = v
     }
 }

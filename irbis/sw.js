@@ -1,5 +1,5 @@
 /* IRBIS пульт: офлайн-кэш. */
-const V = 'irbis-remote-19';
+const V = 'irbis-remote-20';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'favicon.png', 'vt323.ttf', 'unbounded.ttf', 'manrope.ttf', 'rat.png', 'sign.png', 'iris.jpg', 'iris_white.jpg', 'iris_rainbow.jpg', 'iris_arctic.jpg', 'schematic.png', 'icon-maskable-512.png', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('irbis-remote-') && k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())));

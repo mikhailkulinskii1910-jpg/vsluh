@@ -85,12 +85,38 @@ class MainActivity : Activity() {
         // По умолчанию — встроенный ИК-порт. Ключ новый, чтобы после обновления старый выбор «Авто» не мешал.
         mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString(PREF_MODE, null)!!) }.getOrDefault(Mode.BUILTIN)
         setContentView(buildUi(withSplash = savedInstanceState == null))
+        hideNavBar()
+        if (Term.blueprint) paintBars()   // окно уже создано — можно менять цвет строки состояния
 
         val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
 
         findUsb(intent)
         renderMode()
+    }
+
+    /**
+     * Кнопки навигации (назад / домой / недавние) скрыты: пульт занимает весь экран.
+     * Свайп от нижнего края показывает их ненадолго — поверх, на прозрачном фоне.
+     */
+    private fun hideNavBar() {
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.let {
+                it.hide(android.view.WindowInsets.Type.navigationBars())
+                it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideNavBar()   // после диалогов и возврата в приложение — снова спрятать
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -196,7 +222,7 @@ class MainActivity : Activity() {
     private fun buildUi(withSplash: Boolean): View {
         getPreferences(MODE_PRIVATE).let {
             Term.init(this, themeId, it.getInt(PREF_COLOR, Term.DEFAULT_COLOR), it.getBoolean(PREF_MATRIX, false),
-                it.getString(PREF_RGB, null), it.getString(PREF_HEAT, null))
+                it.getString(PREF_RGB, null), it.getString(PREF_HEAT, null), it.getFloat(PREF_BP, 0.5f))
         }
         // RGB-перелив: весь экран рисуется белым и умножается на текущий перелив
         val frame = Term.rgb?.let { RgbFrame(this, it.second).also { f -> rgbFrame = f } } ?: FrameLayout(this)
@@ -295,7 +321,7 @@ class MainActivity : Activity() {
         // русские подписи — другим шрифтом (в VT323 нет кириллицы) и чуть мельче, чтобы четыре вкладки поместились
         tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!clean) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
         // «Цвет»: в «Терминале» — цвет и переливы, в «Тепловизоре» — палитры
-        val colorTab = !Term.prism && !Term.blueprint
+        val colorTab = !Term.prism
         val tabList = mutableListOf(tabIrbis, tabMoc, tabRoulette)
         if (colorTab) tabList += tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }.also { tabColor = it }
         tabList.forEachIndexed { i, t ->
@@ -310,7 +336,7 @@ class MainActivity : Activity() {
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         if (colorTab) {
-            colorPanel = if (Term.thermal) buildHeatPanel() else buildColorPanel()
+            colorPanel = if (Term.thermal) buildHeatPanel() else if (Term.blueprint) buildShadePanel() else buildColorPanel()
             root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         }
         val prefs = getPreferences(MODE_PRIVATE)
@@ -421,7 +447,7 @@ class MainActivity : Activity() {
         subtitle.text = when (tab) {
             TAB_MOC -> "MocTec :: MOSTEH :: NEC 04FB"
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
-            TAB_COLOR -> if (Term.thermal) "thermal :: palette" else "terminal :: phosphor color"
+            TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else "terminal :: phosphor color"
             else -> "#500202 :: IRBIS :: NEC 38kHz"
         }
         getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
@@ -546,6 +572,51 @@ class MainActivity : Activity() {
     }
 
     private var rgbFrame: RgbFrame? = null
+
+    /** Фон окна и цвет значков строки состояния — под оттенок «Чертежа» (на светлой бумаге значки тёмные). */
+    private fun paintBars() {
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Term.BG))
+        @Suppress("DEPRECATION")
+        window.statusBarColor = Term.BG
+        val light = Term.FG != Color.WHITE
+        if (Build.VERSION.SDK_INT >= 30) window.insetsController?.setSystemBarsAppearance(
+            if (light) android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+        else @Suppress("DEPRECATION") {
+            val f = window.decorView.systemUiVisibility
+            window.decorView.systemUiVisibility = if (light) f or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else f and View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv()
+        }
+    }
+
+    /**
+     * Вкладка «Цвет» в «Чертеже»: ползунок светлоты ⬜ — 🟦 — ⬛.
+     * Пока тянешь — сразу меняется фон, при отпускании оттенок запоминается и применяется ко всему экрану.
+     */
+    private fun buildShadePanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(text("> оттенок чертежа", 22f, Term.FG).apply { typeface = Term.ru })
+        p.addView(text("Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж.", 13f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(14)) })
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; background = Term.boxBg(this@MainActivity); setPadding(dp(12), dp(16), dp(12), dp(10))
+        }
+        box.addView(ShadeSlider(this, Blueprint.shade) { v, final ->
+            if (final) {
+                getPreferences(MODE_PRIVATE).edit().putFloat(PREF_BP, v).putString(PREF_TAB, TAB_COLOR).commit()
+                recreate()
+            } else Blueprint.setShade(v)       // фон меняется сразу, кнопки — после отпускания
+        }, LinearLayout.LayoutParams(-1, dp(64)))
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        labels.addView(text("светлее", 13f, Term.DIM).apply { typeface = Term.ru }, LinearLayout.LayoutParams(0, -2, 1f))
+        labels.addView(text("темнее", 13f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.END }, LinearLayout.LayoutParams(0, -2, 1f))
+        box.addView(labels)
+        p.addView(box, LinearLayout.LayoutParams(-1, -2))
+        p.addView(mocButton("[по умолчанию — синий]") {
+            getPreferences(MODE_PRIVATE).edit().putFloat(PREF_BP, 0.5f).putString(PREF_TAB, TAB_COLOR).commit()
+            recreate()
+        }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(12) })
+        return p
+    }
 
     /** Вкладка «Цвет» в «Тепловизоре»: четыре популярные палитры, своего цвета нет. */
     private fun buildHeatPanel(): View {
@@ -914,6 +985,7 @@ class MainActivity : Activity() {
         private const val PREF_RGB = "rgb"
         private const val PREF_RGB_OPEN = "rgb_open"
         private const val PREF_HEAT = "heat"
+        private const val PREF_BP = "bp_shade"
         private const val PREF_TAB = "tab"
         private const val TAB_IRBIS = "irbis"
         private const val TAB_MOC = "moc"

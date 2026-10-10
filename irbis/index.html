@@ -413,16 +413,16 @@ html[data-theme=blueprint]{
 [data-theme=blueprint] h1::after{content:none}
 [data-theme=blueprint] .id{font:600 11px var(--ru);letter-spacing:.08em;margin-top:10px}
 [data-theme=blueprint] .mode{font:500 13px var(--ru);margin-top:5px}
-[data-theme=blueprint] .gear{background:var(--bga);border:1px solid #fff;font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase}
-[data-theme=blueprint] .gear:active,[data-theme=blueprint] .gear.tab.on{background:#fff;color:var(--bg)}
+[data-theme=blueprint] .gear{background:var(--bga);border:1px solid var(--fg);font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+[data-theme=blueprint] .gear:active,[data-theme=blueprint] .gear.tab.on{background:var(--fg);color:var(--bg)}
 [data-theme=blueprint] .grid{gap:16px}
 /* кнопка: двойная рамка (внутренняя — outline), «+» в углах снаружи, FIG.01 / 0x18, штриховка при нажатии */
-[data-theme=blueprint] .key{overflow:visible;background:var(--bga);border:1.5px solid #fff;outline:1px solid rgba(255,255,255,.45);outline-offset:-6.5px;
-  font:600 clamp(14px,4.2vw,19px)/1.15 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#fff;isolation:isolate}
-[data-theme=blueprint] .key::before{inset:0;z-index:-1;background:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 1px,transparent 1px 6px);
+[data-theme=blueprint] .key{overflow:visible;background:var(--bga);border:1.5px solid var(--fg);outline:1px solid color-mix(in srgb,var(--fg) 45%,transparent);outline-offset:-6.5px;
+  font:600 clamp(14px,4.2vw,19px)/1.15 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--fg);isolation:isolate}
+[data-theme=blueprint] .key::before{inset:0;z-index:-1;background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--fg) 35%,transparent) 0 1px,transparent 1px 6px);
   opacity:0;transition:opacity .5s ease-out}
 [data-theme=blueprint] .key.on::before{opacity:1;transition:none}
-[data-theme=blueprint] .key::after{content:"";position:absolute;inset:-8px;pointer-events:none;--w:rgba(255,255,255,.85);background:
+[data-theme=blueprint] .key::after{content:"";position:absolute;inset:-8px;pointer-events:none;--w:color-mix(in srgb,var(--fg) 85%,transparent);background:
   linear-gradient(var(--w),var(--w)) left 0 top 3px/7px 1px,linear-gradient(var(--w),var(--w)) left 3px top 0/1px 7px,
   linear-gradient(var(--w),var(--w)) right 0 top 3px/7px 1px,linear-gradient(var(--w),var(--w)) right 3px top 0/1px 7px,
   linear-gradient(var(--w),var(--w)) left 0 bottom 3px/7px 1px,linear-gradient(var(--w),var(--w)) left 3px bottom 0/1px 7px,
@@ -432,46 +432,60 @@ html[data-theme=blueprint]{
 [data-theme=blueprint] .key .n{top:10px;left:12px;font-size:0}
 [data-theme=blueprint] .key .n::after{content:attr(data-f);font:600 10px var(--ru)}
 [data-theme=blueprint] .key .h{bottom:10px;right:12px;text-transform:none}
-[data-theme=blueprint] .key.on{background:var(--bga);color:#fff;border-color:#fff}
+[data-theme=blueprint] .key.on{background:var(--bga);color:var(--fg);border-color:var(--fg)}
 [data-theme=blueprint] .key.on .n,[data-theme=blueprint] .key.on .h{color:var(--dim)}
-[data-theme=blueprint] .key .beam{background:#fff;opacity:.85;box-shadow:0 0 8px #fff}
+[data-theme=blueprint] .key .beam{background:var(--fg);opacity:.85;box-shadow:0 0 8px var(--fg)}
 /* POWER — инвертированная: залита белым, текст цвета фона */
-[data-theme=blueprint] .key.inv,[data-theme=blueprint] .key.inv.on{background:#fff;color:var(--bg);outline-color:rgba(26,74,158,.45)}
-[data-theme=blueprint] .key.inv::before{background:repeating-linear-gradient(45deg,rgba(26,74,158,.35) 0 1px,transparent 1px 6px)}
+[data-theme=blueprint] .key.inv,[data-theme=blueprint] .key.inv.on{background:var(--fg);color:var(--bg);outline-color:color-mix(in srgb,var(--bg) 45%,transparent)}
+[data-theme=blueprint] .key.inv::before{background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--bg) 35%,transparent) 0 1px,transparent 1px 6px)}
 [data-theme=blueprint] .key.inv .n,[data-theme=blueprint] .key.inv .h{color:var(--bg)}
 [data-theme=blueprint] .key.inv .beam{background:var(--bg);box-shadow:none}
 [data-theme=blueprint] .status{font:500 13px var(--ru);letter-spacing:.02em}
 [data-theme=blueprint] #splash{background:var(--bg)}
 [data-theme=blueprint] #splash pre{position:relative;font:500 13px/1.55 var(--ru);color:var(--dim)}
 [data-theme=blueprint] #splash .ratw{display:none}
-[data-theme=blueprint] #splash .sign{right:auto;left:18px}
-.ratbp{display:none}
+[data-theme=blueprint] #splash .sign{bottom:calc(env(safe-area-inset-bottom) + 86px)}  /* над штампом */
+.ratbp{display:none;color:var(--fg)}
 [data-theme=blueprint] #splash .ratbp{display:block;aspect-ratio:605/358;filter:none}
 .ratbp img{display:block;width:100%;height:100%}
 .ratbp svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
 .ratbp svg path,.ratbp svg line{vector-effect:non-scaling-stroke}
-.ratbp svg text{font-family:Manrope,system-ui,sans-serif;font-weight:600;fill:#fff;letter-spacing:.06em}
-[data-theme=blueprint] #splash .lines{background:repeating-linear-gradient(#fff 0 1px,transparent 1px 5px)}
-[data-theme=blueprint] #splash .name{top:calc(50% + min(28vw,160px) + 36px);font:600 44px Unbounded,var(--mono);text-shadow:none;color:#fff}
+.ratbp svg text{font-family:Manrope,system-ui,sans-serif;font-weight:600;fill:var(--fg);letter-spacing:.06em}
+[data-theme=blueprint] #splash .lines{background:repeating-linear-gradient(var(--fg) 0 1px,transparent 1px 5px)}
+[data-theme=blueprint] #splash .name{top:calc(50% + min(28vw,160px) + 36px);font:600 44px Unbounded,var(--mono);text-shadow:none;color:var(--fg)}
 /* уход заставки — белые горизонтальные полосы */
 [data-theme=blueprint] #splash.out{animation:bpout .32s linear forwards}
 [data-theme=blueprint] #splash.out::after{content:"";position:absolute;inset:0;z-index:3;
-  background:repeating-linear-gradient(#fff 0 2px,transparent 2px 12px);animation:bpstripes .32s linear forwards}
+  background:repeating-linear-gradient(var(--fg) 0 2px,transparent 2px 12px);animation:bpstripes .32s linear forwards}
 @keyframes bpout{0%,55%{opacity:1}100%{opacity:0}}
 @keyframes bpstripes{0%{opacity:0;background-size:100% 40px}35%{opacity:.9}100%{opacity:1;background-size:100% 12px}}
-[data-theme=blueprint] dialog{background:#123E86;border:1px solid #fff}
+[data-theme=blueprint] dialog{background:color-mix(in srgb,var(--bg) 88%,#000);border:1px solid var(--fg)}
 [data-theme=blueprint] dialog::backdrop{background:rgba(8,26,64,.7)}
 [data-theme=blueprint] .sheet h2,[data-theme=blueprint] .sheet h3{font:600 18px var(--ru);letter-spacing:.04em}
-[data-theme=blueprint] .opt{border-color:var(--line);background:rgba(255,255,255,.04)}
-[data-theme=blueprint] .btn{font:600 14px var(--ru);letter-spacing:.08em;text-transform:uppercase;background:transparent;border-color:#fff}
-[data-theme=blueprint] .btn.primary{background:#fff;color:var(--bg)}
-[data-theme=blueprint] input[type=text]{background:#0F3270}
-[data-theme=blueprint] td{border-top-color:#2F5DA8}
+[data-theme=blueprint] .opt{border-color:var(--line);background:color-mix(in srgb,var(--fg) 4%,transparent)}
+[data-theme=blueprint] .btn{font:600 14px var(--ru);letter-spacing:.08em;text-transform:uppercase;background:transparent;border-color:var(--fg)}
+[data-theme=blueprint] .btn.primary{background:var(--fg);color:var(--bg)}
+[data-theme=blueprint] input[type=text]{background:color-mix(in srgb,var(--bg) 75%,#000)}
+[data-theme=blueprint] td{border-top-color:var(--faint)}
+/* светлая «светокопия» (ползунок во вкладке «Цвет»): подпись-картинка белая — перекрашиваем в синие чернила */
+html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%) sepia(70%) saturate(2400%) hue-rotate(208deg) brightness(.9)}
+[data-theme=blueprint] .gear.tab.ctab{display:block}
+/* ползунок светлоты чертежа: ⬜ —|—🟦—— ⬛ */
+.cp .bps{display:flex;align-items:center;gap:10px;margin:26px 0 8px}
+.cp .bps .sq{flex:none;width:22px;height:22px;border:1px solid var(--line)}
+.cp .bps .sq.w{background:#F2F5FA}
+.cp .bps .sq.k{background:#05070D}
+.cp .trk{position:relative;flex:1;height:28px;border:1px solid var(--line);background:linear-gradient(90deg,#F2F5FA,#1A4A9E,#05070D);touch-action:none;cursor:pointer}
+.cp .trk .mark{position:absolute;left:50%;top:-21px;width:11px;height:11px;margin-left:-5.5px;background:#1A4A9E;border:1px solid var(--fg)}
+.cp .trk .thumb{position:absolute;top:-9px;bottom:-9px;left:calc(var(--v) * 100%);width:4px;margin-left:-2px;background:#fff;box-shadow:0 0 0 1.5px #05070D}
+.cp .bpl{display:flex;justify-content:space-between;padding:0 32px;font:600 11px var(--ru);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+[data-theme=blueprint] .cp .wide{margin-top:22px;background:var(--bga);font:600 13px var(--ru);letter-spacing:.08em;text-transform:uppercase}
+[data-theme=blueprint] .cp p{font:500 13px/1.5 var(--ru)}
 </style>
 
 </head>
 <body>
-<div id="splash" aria-hidden="true"><canvas class="bpc"></canvas><div class="therm"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="rat ratbp"><img id="ratbpImg" alt=""><svg viewBox="0 0 605 358" preserveAspectRatio="none"><defs><marker id="ar" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" orient="auto-start-reverse"><path d="M0 1.5L10 5L0 8.5" fill="none" stroke="#fff" stroke-width="1.6"/></marker></defs><g stroke="#fff" stroke-width="1" fill="none" opacity=".9"><path d="M10 330V420M598 150V420M-8 6H40M-8 352H90" opacity=".6"/><path d="M10 404H598" marker-start="url(#ar)" marker-end="url(#ar)"/><path d="M-48 6V352" marker-start="url(#ar)" marker-end="url(#ar)"/><path d="M-8 6H-62M-8 352H-62" opacity=".6"/><path d="M590 126L622 52H676"/></g><circle cx="590" cy="126" r="4" fill="#fff"/><text x="304" y="440" font-size="24" text-anchor="middle">420 mm</text><text transform="translate(-62 179) rotate(-90)" font-size="24" text-anchor="middle">260 mm</text><text x="0" y="-26" font-size="24">Fig.1 — RAT</text><text x="626" y="44" font-size="22">TAIL</text></svg></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="splash" aria-hidden="true"><canvas class="bpc"></canvas><div class="therm"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="rat ratbp"><img id="ratbpImg" alt=""><svg viewBox="0 0 605 358" preserveAspectRatio="none"><defs><marker id="ar" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" orient="auto-start-reverse"><path d="M0 1.5L10 5L0 8.5" fill="none" stroke="currentColor" stroke-width="1.6"/></marker></defs><g stroke="currentColor" stroke-width="1" fill="none" opacity=".9"><path d="M10 330V420M598 150V420M-8 6H40M-8 352H90" opacity=".6"/><path d="M10 404H598" marker-start="url(#ar)" marker-end="url(#ar)"/><path d="M-48 6V352" marker-start="url(#ar)" marker-end="url(#ar)"/><path d="M-8 6H-62M-8 352H-62" opacity=".6"/><path d="M590 126L622 52H676"/></g><circle cx="590" cy="126" r="4" fill="currentColor"/><text x="304" y="440" font-size="24" text-anchor="middle">420 mm</text><text transform="translate(-62 179) rotate(-90)" font-size="24" text-anchor="middle">260 mm</text><text x="0" y="-26" font-size="24">Fig.1 — RAT</text><text x="626" y="44" font-size="22">TAIL</text></svg></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
 <div id="therm" class="therm" aria-hidden="true"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div>
 <div id="aura" class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div>
 <canvas id="bp" class="bpc" aria-hidden="true"></canvas>
@@ -701,7 +715,7 @@ function makeKey([label, hex]) {
   grid.appendChild(b);
 }
 
-/* ---------- Цвет «Терминала» и палитра «Тепловизора» (вкладка «Цвет») ----------
+/* ---------- Цвет «Терминала», палитра «Тепловизора», светлота «Чертежа» (вкладка «Цвет») ----------
    Вся тема «Терминал» строится от одного цвета FG: DIM = FG×0.58, LINE = FG×0.39, FAINT = FG×0.089.
    В RGB-переливе интерфейс рисуется белым, а цвет даёт градиент поверх экрана (multiply). */
 const PRESETS = [['Белый', '#EDEDED'], ['Зелёный', '#1FFF3A'], ['Красный', '#FF2A1A'], ['Оранжевый', '#FF8C1A'], ['Янтарь', '#FFB52E'], ['Фиолетовый', '#A855FF']];
@@ -796,17 +810,38 @@ addEventListener('resize', () => rgbFlow());
 /** Применить цвет/палитру к странице: CSS-переменные, перелив, «Матрица», крысы. */
 function applyColor() {
   const root = document.documentElement, isTerm = theme() === 'terminal', fg = termFg();
+  ['--fg', '--dim', '--line', '--faint', '--bg', '--bga'].forEach(v => root.style.removeProperty(v));
   if (isTerm) {
     root.style.setProperty('--fg', fg); root.style.setProperty('--dim', mulHex(fg, 0.58));
     root.style.setProperty('--line', mulHex(fg, 0.39)); root.style.setProperty('--faint', mulHex(fg, 0.089));
-  } else ['--fg', '--dim', '--line', '--faint'].forEach(v => root.style.removeProperty(v));
+  }
+  // «Чертёж»: все цвета от положения ползунка светлоты
+  const bp = bpColors(bpShade);
+  if (theme() === 'blueprint') {
+    root.style.setProperty('--bg', bp.bg); root.style.setProperty('--fg', bp.ink); root.style.setProperty('--dim', bp.dim);
+    root.style.setProperty('--line', bp.line); root.style.setProperty('--faint', bp.faint);
+    root.style.setProperty('--bga', 'rgba(' + rgbOf(bp.bg).join(',') + ',.78)');
+  }
+  root.classList.toggle('bplight', bp.light);
+  window.bpApply && bpApply();
   root.classList.toggle('rgb', !!rgbNow());
   root.classList.toggle('matrix', isTerm && !rgbNow() && term.matrix && term.color === MATRIX_GREEN);
   if (heatId === 'ironbow') delete root.dataset.heat; else root.dataset.heat = heatId;
   rgbFlow();
   window.ratColors && ratColors();
   const t = theme();
-  document.querySelector('meta[name=theme-color]').content = t === 'prism' ? '#07060B' : t === 'blueprint' ? '#1A4A9E' : t === 'thermal' ? HEATS[heatId].pal[0] : '#000000';
+  document.querySelector('meta[name=theme-color]').content = t === 'prism' ? '#07060B' : t === 'blueprint' ? bp.bg : t === 'thermal' ? HEATS[heatId].pal[0] : '#000000';
+}
+
+/* Светлота «Чертежа»: v ∈ [0, 1], 0.5 — синий по умолчанию. Светлее — светокопия (белая бумага, синие линии), темнее — ночной чертёж.
+   BG — между #F2F5FA, #1A4A9E и #05070D; «чернила» INK — синие на светлом фоне, иначе белые. */
+let bpShade = 0.5, bpLive = null;   // bpLive — значение, пока тянут ползунок (меняется только фон)
+try { const v = parseFloat(localStorage.getItem('krisa-bp')); if (v >= 0 && v <= 1) bpShade = v; } catch {}
+function lerpHex(a, b, k) { const A = rgbOf(a), B = rgbOf(b); return hexOf(A.map((v, i) => v + (B[i] - v) * k)); }
+function bpColors(v) {
+  const bg = v < 0.5 ? lerpHex('#F2F5FA', '#1A4A9E', v / 0.5) : lerpHex('#1A4A9E', '#05070D', (v - 0.5) / 0.5);
+  const [r, g, b] = rgbOf(bg), light = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5, ink = light ? '#0E2A66' : '#FFFFFF';
+  return { bg, ink, light, dim: lerpHex(bg, ink, 0.72), line: lerpHex(bg, ink, 0.6), faint: lerpHex(bg, ink, 0.12), edge: mulHex(bg, 0.7) };
 }
 
 /* Круг цветов: по кругу — оттенок HSV, к центру — бледнее, V = 1. Картинка считается один раз. */
@@ -835,6 +870,23 @@ function drawWheel(cv, hex) {
 
 const cpanel = $('cpanel');
 function renderPanel() {
+  if (theme() === 'blueprint') {
+    cpanel.innerHTML = '<h3>&gt; оттенок чертежа</h3><p>Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж.</p>'
+      + '<div class="bps"><i class="sq w"></i><div class="trk" role="slider" aria-label="Светлота чертежа"><b class="mark"></b><b class="thumb"></b></div><i class="sq k"></i></div>'
+      + '<div class="bpl"><span>светлее</span><span>темнее</span></div><button class="wide">по умолчанию</button>';
+    const trk = cpanel.querySelector('.trk');
+    trk.style.setProperty('--v', bpShade);
+    // пока тянешь — меняется только фон; при отпускании значение сохраняется и применяется ко всему
+    const at = e => { const r = trk.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
+    const commit = v => { bpShade = v; bpLive = null; try { localStorage.setItem('krisa-bp', String(Math.round(v * 1000) / 1000)); } catch {} applyColor(); trk.style.setProperty('--v', v); };
+    let drag = false;
+    trk.addEventListener('pointerdown', e => { drag = true; trk.setPointerCapture?.(e.pointerId); bpLive = at(e); trk.style.setProperty('--v', bpLive); });
+    trk.addEventListener('pointermove', e => { if (!drag) return; bpLive = at(e); trk.style.setProperty('--v', bpLive); });
+    trk.addEventListener('pointerup', e => { if (!drag) return; drag = false; commit(at(e)); });
+    trk.addEventListener('pointercancel', () => { drag = false; if (bpLive !== null) commit(bpLive); });
+    cpanel.querySelector('.wide').addEventListener('click', () => commit(0.5));
+    return;
+  }
   if (theme() === 'thermal') {
     cpanel.innerHTML = '<h3>&gt; палитра</h3><p>Палитра тепловизора: фон, кнопки, рамки обнаружения.</p><div class="heats"></div>';
     Object.entries(HEATS).forEach(([id, h]) => {
@@ -895,7 +947,9 @@ function renderPanel() {
     const b = document.createElement('button'), sel = i ? term.rgb === name : !rgb;
     b.className = sel ? 'sel' : '';
     b.innerHTML = '<b></b><span></span>';
-    b.firstChild.style.background = 'linear-gradient(90deg,' + cols.join(',') + ')';
+    // у «выкл» вместо полосы — пустая рамка
+    if (i) b.firstChild.style.background = 'linear-gradient(90deg,' + cols.join(',') + ')';
+    else { b.firstChild.style.background = '#000'; b.firstChild.style.outline = '1px solid #777'; b.firstChild.style.outlineOffset = '-1px'; }
     b.lastChild.textContent = (sel ? '[x] ' : '[ ] ') + name;
     b.addEventListener('click', () => { term.rgb = i ? name : ''; saveColor(); applyColor(); renderPanel(); });
     list.appendChild(b);
@@ -906,8 +960,8 @@ function renderPanel() {
 let remote = 'irbis', tab = 'irbis';
 try { if (localStorage.getItem('krisa-remote') === 'moc') remote = tab = 'moc'; } catch {}
 function syncTabs() {
-  // «Цвет» есть только в «Терминале» и «Тепловизоре»
-  if (tab === 'color' && theme() !== 'terminal' && theme() !== 'thermal') tab = remote;
+  // «Цвет» есть в «Терминале», «Тепловизоре» и «Чертеже»
+  if (tab === 'color' && theme() === 'prism') tab = remote;
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
   document.body.classList.toggle('ctab', tab === 'color');
 }
@@ -1189,32 +1243,43 @@ renderMode();
 })();
 
 /* ---------- «Чертёж»: миллиметровка, схема со «сканом», штамп ----------
-   Рисуется на каждом canvas.bpc (фон страницы и фон заставки). Статичный слой (виньетка + сетка) кэшируется. */
+   Рисуется на каждом canvas.bpc (фон страницы и фон заставки). Статичный слой (виньетка + сетка) кэшируется.
+   Цвета — от ползунка светлоты: фон BG, всё «белое» рисуется чернилами INK (схема перекрашивается в офскрин-канвасе). */
 (function () {
   const sch = new Image(); sch.src = 'schematic.png';
-  let base = null, t0 = performance.now();
-  function baseLayer(W, H, dpr) {
-    if (base && base.w === W && base.h === H && base.dpr === dpr) return base.c;
+  let base = null, tinted = null, t0 = performance.now();
+  const rgba = (hex, a) => 'rgba(' + rgbOf(hex).join(',') + ',' + a + ')';
+  function baseLayer(W, H, dpr, P) {
+    if (base && base.w === W && base.h === H && base.dpr === dpr && base.bg === P.bg) return base.c;
     const c = document.createElement('canvas'); c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
     const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
     const R = Math.hypot(W, H) / 2, g = x.createRadialGradient(W / 2, H / 2, R * 0.35, W / 2, H / 2, R);
-    g.addColorStop(0, '#1A4A9E'); g.addColorStop(1, '#10357A');
+    g.addColorStop(0, P.bg); g.addColorStop(1, P.edge);   // виньетка: к краям темнее
     x.fillStyle = g; x.fillRect(0, 0, W, H);
     // сетка: тонкая каждые 14px, крупная каждые 70px
     [[14, 0.06], [70, 0.15]].forEach(([st, a]) => {
-      x.strokeStyle = 'rgba(255,255,255,' + a + ')'; x.lineWidth = 1; x.beginPath();
+      x.strokeStyle = rgba(P.ink, P.light ? a * 1.6 : a); x.lineWidth = 1; x.beginPath();
       for (let i = st; i < W; i += st) { x.moveTo(Math.round(i) + .5, 0); x.lineTo(Math.round(i) + .5, H); }
       for (let j = st; j < H; j += st) { x.moveTo(0, Math.round(j) + .5); x.lineTo(W, Math.round(j) + .5); }
       x.stroke();
     });
-    base = { w: W, h: H, dpr, c };
+    base = { w: W, h: H, dpr, bg: P.bg, c };
+    return c;
+  }
+  // схема, перекрашенная в цвет чернил (source-in)
+  function schematic(ink) {
+    if (tinted && tinted.ink === ink) return tinted.c;
+    const c = document.createElement('canvas'); c.width = sch.naturalWidth; c.height = sch.naturalHeight;
+    const x = c.getContext('2d'); x.drawImage(sch, 0, 0);
+    x.globalCompositeOperation = 'source-in'; x.fillStyle = ink; x.fillRect(0, 0, c.width, c.height);
+    tinted = { ink, c };
     return c;
   }
   // штамп в правом нижнем углу, как на чертеже
-  function stamp(x, W, H) {
+  function stamp(x, W, H, ink) {
     const w = 150, h = 64, bx = W - w - 12, by = H - h - 12, rh = h / 3, col = 58;
     x.save();
-    x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1;
+    x.strokeStyle = rgba(ink, .55); x.lineWidth = 1;
     x.strokeRect(bx + .5, by + .5, w, h);
     x.beginPath();
     x.moveTo(bx, by + rh + .5); x.lineTo(bx + w, by + rh + .5);
@@ -1222,10 +1287,10 @@ renderMode();
     x.moveTo(bx + col + .5, by); x.lineTo(bx + col + .5, by + 2 * rh);
     x.moveTo(bx + 92.5, by + 2 * rh); x.lineTo(bx + 92.5, by + h);
     x.stroke();
-    x.fillStyle = 'rgba(255,255,255,.6)'; x.font = '600 9px Manrope, sans-serif'; x.textBaseline = 'middle';
+    x.fillStyle = rgba(ink, .6); x.font = '600 9px Manrope, sans-serif'; x.textBaseline = 'middle';
     x.fillText('MODEL', bx + 5, by + rh / 2 + 1); x.fillText('DRAWN BY', bx + 5, by + rh * 1.5 + 1);
     x.fillText('SCALE 1:1', bx + 5, by + rh * 2.5 + 1); x.fillText('REV. A', bx + 98, by + rh * 2.5 + 1);
-    x.fillStyle = 'rgba(255,255,255,.85)'; x.font = '600 10px Manrope, sans-serif';
+    x.fillStyle = rgba(ink, .85); x.font = '600 10px Manrope, sans-serif';
     x.fillText('KRISA IR-REMOTE', bx + col + 5, by + rh / 2 + 1); x.fillText('krisa', bx + col + 5, by + rh * 1.5 + 1);
     x.restore();
   }
@@ -1233,43 +1298,51 @@ renderMode();
     requestAnimationFrame(draw);
     if (document.documentElement.dataset.theme !== 'blueprint') return;
     const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight, t = (now - t0) / 1000;
+    const P = bpColors(bpLive !== null ? bpLive : bpShade), ink = P.ink;
     document.querySelectorAll('canvas.bpc').forEach(cv => {
       if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
       const x = cv.getContext('2d');
-      x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(baseLayer(W, H, dpr), 0, 0);
+      x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(baseLayer(W, H, dpr, P), 0, 0);
       x.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (sch.complete && sch.naturalWidth) {
+        const img = schematic(ink);
         // схема по ширине экрана; если выше экрана — медленно плавает вверх-вниз (цикл 60 с)
         const sw = W * 0.95, sh = sw * sch.naturalHeight / sch.naturalWidth, sx = (W - sw) / 2;
         const sy = sh > H ? -(sh - H) * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 60)) : (H - sh) / 2;
-        x.globalAlpha = 0.33; x.drawImage(sch, sx, sy, sw, sh);
+        x.globalAlpha = 0.33; x.drawImage(img, sx, sy, sw, sh);
         // «скан»: полоса сверху вниз за 7 с, вокруг линии схема ярче
         const ly = ((t % 7) / 7) * (H + 80) - 40;
         [[35, 0.45], [20, 0.7], [9, 0.9]].forEach(([band, a]) => {
           x.save(); x.beginPath(); x.rect(0, ly - band, W, band * 2); x.clip();
-          x.globalAlpha = a; x.drawImage(sch, sx, sy, sw, sh); x.restore();
+          x.globalAlpha = a; x.drawImage(img, sx, sy, sw, sh); x.restore();
         });
         x.globalAlpha = 1;
         const g = x.createLinearGradient(0, ly - 35, 0, ly + 35);
-        g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.07)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        g.addColorStop(0, rgba(ink, 0)); g.addColorStop(.5, rgba(ink, .07)); g.addColorStop(1, rgba(ink, 0));
         x.fillStyle = g; x.fillRect(0, ly - 35, W, 70);
-        x.shadowBlur = 8; x.shadowColor = '#fff'; x.fillStyle = 'rgba(255,255,255,.5)'; x.fillRect(0, ly, W, 1); x.shadowBlur = 0;
+        x.shadowBlur = 8; x.shadowColor = ink; x.fillStyle = rgba(ink, .5); x.fillRect(0, ly, W, 1); x.shadowBlur = 0;
       }
       x.globalAlpha = 1;
-      stamp(x, W, H);
+      stamp(x, W, H, ink);
     });
   }
   requestAnimationFrame(draw);
-  // крыса на заставке — контурный чертёж: утолщённый силуэт минус сам силуэт + слабая заливка
+  // крыса на заставке — контурный чертёж: утолщённый силуэт минус сам силуэт + слабая заливка, цветом чернил
   const rat = new Image();
-  rat.onload = () => {
+  let ratInk = '';
+  window.bpApply = () => {
+    const ink = bpColors(bpShade).ink;
+    if (!rat.complete || !rat.naturalWidth || ink === ratInk || !$('ratbpImg')) return;
+    ratInk = ink;
     const w = rat.naturalWidth, h = rat.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h;
     const x = c.getContext('2d');
     for (let a = 0; a < 16; a++) for (const r of [2, 4]) x.drawImage(rat, Math.cos(a * Math.PI / 8) * r, Math.sin(a * Math.PI / 8) * r);
     x.globalCompositeOperation = 'destination-out'; x.drawImage(rat, 0, 0);
     x.globalCompositeOperation = 'source-over'; x.globalAlpha = 0.08; x.drawImage(rat, 0, 0);
-    const img = $('ratbpImg'); if (img) img.src = c.toDataURL();
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-in'; x.fillStyle = ink; x.fillRect(0, 0, w, h);
+    $('ratbpImg').src = c.toDataURL();
   };
+  rat.onload = bpApply;
   rat.src = 'rat.png';
 })();
 
@@ -1297,7 +1370,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa ir-remote v1.19', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa ir-remote v1.20', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

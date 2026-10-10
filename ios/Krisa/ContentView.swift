@@ -23,6 +23,7 @@ struct ContentView: View {
     @AppStorage("matrix") private var matrix = false
     @AppStorage("rgb") private var rgb = ""
     @AppStorage("heat") private var heat = "ironbow"
+    @AppStorage("bpShade") private var bpShade = 0.5
     /// Где на экране область пульта — туда кладётся панель «Цвет» (поверх RGB-перелива).
     @State private var panelFrame: CGRect = .zero
 
@@ -55,7 +56,7 @@ struct ContentView: View {
 
     /// Ключ перестройки экрана: тема, цвет терминала, перелив, «Матрица», палитра тепловизора.
     private var screenKey: String {
-        let parts: [String] = [theme, String(termColor), rgb, matrix ? "m" : "-", heat]
+        let parts: [String] = [theme, String(termColor), rgb, matrix ? "m" : "-", heat, String(bpShade)]
         return parts.joined(separator: "|")
     }
 
@@ -166,11 +167,17 @@ struct ContentView: View {
     }
 
     @ViewBuilder private func colorPanel() -> some View {
-        if Term.thermal { HeatPanel() } else { TermColorPanel() }
+        if Term.thermal {
+            HeatPanel()
+        } else if Term.blueprint {
+            BlueprintPanel()
+        } else {
+            TermColorPanel()
+        }
     }
 
-    /// Вкладка «Цвет» есть только в «Терминале» и «Тепловизоре».
-    private var hasColorTab: Bool { theme == "terminal" || theme == "thermal" }
+    /// Вкладка «Цвет» есть в «Терминале», «Тепловизоре» и «Чертеже» (не в «Призме»).
+    private var hasColorTab: Bool { theme != "prism" }
     private var colorTab: Bool { remote == "color" && hasColorTab }
     private var showPanel: Bool { colorTab && ready && !splash && panelFrame.width > 1 }
 }
@@ -190,7 +197,7 @@ struct SettingsView: View {
         if !on { return AnyView(Term.bg) }
         if Term.prism { return AnyView(Color(hex: 0x8B6CFF, alpha: 0.35)) }
         if Term.thermal { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
-        if Term.blueprint { return AnyView(Color.white) }
+        if Term.blueprint { return AnyView(Blueprint.ink) }
         return AnyView(Term.fg)
     }
 
@@ -337,10 +344,10 @@ extension ContentView {
                 .background(thermalTabFill(on))
                 .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
         } else if Term.blueprint {
-            Blueprint.caps(title, 13).foregroundColor(on ? Blueprint.bg : Color.white)
+            Blueprint.caps(title, 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
                 .frame(maxWidth: .infinity).frame(height: 40)
-                .background(on ? Color.white : Blueprint.bg.opacity(0.78))
-                .overlay(Rectangle().strokeBorder(Color.white, lineWidth: 1))
+                .background(on ? Blueprint.ink : Blueprint.bg.opacity(0.78))
+                .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
         } else {
             Text(title).font(tabFont(title)).foregroundColor(on ? Color.black : Term.fg)
                 .frame(maxWidth: .infinity).frame(height: 40)
@@ -379,7 +386,7 @@ extension ContentView {
         } else if Term.thermal {
             HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
         } else if Term.blueprint {
-            Text(ready ? "krisa" : " ").font(Prism.display(38)).foregroundColor(.white)
+            Text(ready ? "krisa" : " ").font(Prism.display(38)).foregroundColor(Blueprint.ink)
                 .padding(.vertical, 6)
         } else {
             TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
@@ -394,10 +401,10 @@ extension ContentView {
                 .frame(width: width, height: 44)
                 .background(GlassBox(radius: 16, seed: Double(width)))
         } else if Term.blueprint {
-            Text(text).font(Blueprint.semi(15)).foregroundColor(.white)
+            Text(text).font(Blueprint.semi(15)).foregroundColor(Blueprint.ink)
                 .frame(width: width, height: 44)
                 .background(Blueprint.bg.opacity(0.78))
-                .overlay(Rectangle().strokeBorder(Color.white, lineWidth: 1))
+                .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
         } else {
             Text(text).font(Term.mono(24)).foregroundColor(Term.fg)
                 .frame(width: width, height: 44)

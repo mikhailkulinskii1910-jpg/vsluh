@@ -96,6 +96,31 @@ class ScreenshotTest {
     @Test
     fun shotsBlueprint() = themed("blueprint")
 
+    /** Ползунок светлоты «Чертежа»: светокопия, синий и ночной — пульт и вкладка «Цвет». */
+    @Test
+    fun shotsShade() {
+        for (v in listOf(0.1f, 0.3f, 0.5f, 0.9f)) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", "shade-$v").apply { mkdirs() }
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
+                .putString("theme", "blueprint").putFloat("bp_shade", v).putString("tab", "irbis").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp)); File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1900)); shot("splash")
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800))
+            findText(root, "Цвет")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+            findText(root, "IRBIS")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
+            findText(root, "Цвет")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+            ctl.pause().stop().destroy()
+        }
+    }
+
     /** Палитры тепловизора: пульт в каждой и вкладка «Цвет». */
     @Test
     fun shotsHeat() {
