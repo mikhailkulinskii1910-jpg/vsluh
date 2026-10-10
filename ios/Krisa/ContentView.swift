@@ -16,6 +16,8 @@ struct ContentView: View {
     @State private var help = false
     @State private var noIr = false
     @AppStorage("theme") private var theme = "terminal"
+    /// Какой пульт на экране: "irbis" или "moc" (MocTec).
+    @AppStorage("remote") private var remote = "irbis"
 
     var body: some View {
         ZStack {
@@ -26,7 +28,7 @@ struct ContentView: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 2) {
                         titleView()
-                        Text("#500202 :: IRBIS :: NEC 38kHz").font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
+                        Text(remoteSubtitle).font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
                         Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
                             .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
                     }
@@ -39,11 +41,13 @@ struct ContentView: View {
                     .accessibilityLabel("Передатчик")
                 }
 
+                remoteTabs().padding(.top, 12)
+
                 GeometryReader { g in
                     let rowH = min(110, max(64, (g.size.height - 5 * 10) / 6))
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                         if ready {
-                            ForEach(Array(KEYS.enumerated()), id: \.offset) { i, k in
+                            ForEach(Array(currentKeys.enumerated()), id: \.offset) { i, k in
                                 KeyView(index: i, label: k.label, code: k.code, inverted: k.label == "POWER",
                                         revealDelay: 0.06 * Double(i),
                                         onDown: { model.press(k.label, k.code) },
@@ -52,8 +56,9 @@ struct ContentView: View {
                             }
                         }
                     }
+                    .id(remote)   // другой пульт — кнопки создаются заново и снова «расшифровываются»
                 }
-                .padding(.top, 14)
+                .padding(.top, 12)
 
                 TypeLine(text: model.status, font: Term.ru(14),
                          color: model.status.hasPrefix("!!") || model.status.contains("[sent]") ? Term.fg : Term.dim)
@@ -222,6 +227,45 @@ struct SettingsView: View {
 }
 
 extension ContentView {
+    var currentKeys: [(label: String, code: UInt32)] { remote == "moc" ? MOC_KEYS : KEYS }
+    var remoteSubtitle: String { remote == "moc" ? "MocTec :: NEC 04FB" : "#500202 :: IRBIS :: NEC 38kHz" }
+
+    /// Вкладки IRBIS / MocTec над кнопками.
+    func remoteTabs() -> some View {
+        HStack(spacing: 8) {
+            remoteTab("irbis", "IRBIS")
+            remoteTab("moc", "MocTec")
+        }
+    }
+
+    private func remoteTab(_ id: String, _ title: String) -> some View {
+        let on: Bool = remote == id
+        return Button { remote = id } label: { tabLabel(title, on: on) }
+    }
+
+    @ViewBuilder private func tabLabel(_ title: String, on: Bool) -> some View {
+        if Term.prism {
+            Text(title).font(Prism.display(15)).foregroundColor(on ? Prism.ink : Term.fg)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
+        } else if Term.thermal {
+            Text(title).font(Term.mono(22)).foregroundColor(on ? Heat.ink : Term.fg)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(thermalTabFill(on))
+                .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
+        } else {
+            Text(title).font(Term.mono(22)).foregroundColor(on ? Color.black : Term.fg)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(on ? Term.fg : Color.black)
+                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
+    private func thermalTabFill(_ on: Bool) -> AnyView {
+        if on { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
+        return AnyView(Color.black.opacity(0.65))
+    }
+
     /// Фон текущей темы. Во второй теме крыс нет, в «Тепловизоре» они — тёплые пятна в рамках.
     @ViewBuilder func themeBackground() -> some View {
         if Term.prism {

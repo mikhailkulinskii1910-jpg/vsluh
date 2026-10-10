@@ -276,35 +276,25 @@ class MainActivity : Activity() {
         header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
 
-        // вкладки: IRBIS (пульт), MocTec (подбор кода выключения), в «Терминале» ещё «Цвет»
-        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        // вкладки: IRBIS и MocTec (пульты), «Рулетка» (подбор кода), в «Терминале» ещё «Цвет».
+        // Без выравнивания по базовой линии: у русских подписей другой шрифт, и вкладка уезжала вниз.
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         tabIrbis = tabButton("IRBIS") { showTab(TAB_IRBIS) }
         tabMoc = tabButton("MocTec") { showTab(TAB_MOC) }
-        tabs.addView(tabIrbis, LinearLayout.LayoutParams(0, dp(40), 1f).apply { rightMargin = dp(8) })
-        tabs.addView(tabMoc, LinearLayout.LayoutParams(0, dp(40), 1f))
+        // русские подписи — другим шрифтом (в VT323 нет кириллицы) и чуть мельче, чтобы четыре вкладки поместились
+        tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!Term.prism) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
         val colorTab = !Term.prism && !Term.thermal
-        if (colorTab) {
-            tabColor = tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f) }
-            tabs.addView(tabColor, LinearLayout.LayoutParams(0, dp(40), 0.8f).apply { leftMargin = dp(8) })
+        val tabList = mutableListOf(tabIrbis, tabMoc, tabRoulette)
+        if (colorTab) tabList += tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }.also { tabColor = it }
+        tabList.forEachIndexed { i, t ->
+            tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), 1f).apply { if (i > 0) leftMargin = dp(6) })
         }
         root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
 
-        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
-        val gap = dp(5)
-        // Все 12 кнопок на один экран, как в IrCode Finder.
-        val rowH = ((resources.configuration.screenHeightDp - 300) / 6 - 10).coerceIn(60, 110)
-        KEYS.forEachIndexed { i, (label, code) ->
-            val k = KeyView(this, label, i, code, inverted = label == "POWER")
-            k.setOnTouchListener { v, e -> onKeyTouch(v as KeyView, e, label, code) }
-            keyViews += k
-            val lp = GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f)).apply {
-                width = 0; height = dp(rowH)
-                setMargins(gap, gap, gap, gap)
-            }
-            grid.addView(k, lp)
-        }
-        root.addView(grid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        irbisGrid = grid
+        irbisGrid = keyGrid(KEYS)
+        root.addView(irbisGrid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        mocGrid = keyGrid(MOC_KEYS)
+        root.addView(mocGrid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         if (colorTab) {
@@ -312,7 +302,7 @@ class MainActivity : Activity() {
             root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         }
         val prefs = getPreferences(MODE_PRIVATE)
-        var start = prefs.getString(PREF_TAB, null) ?: if (prefs.getBoolean("tab_moc", false)) TAB_MOC else TAB_IRBIS
+        var start = prefs.getString(PREF_TAB, null) ?: TAB_IRBIS
         if (start == TAB_COLOR && !colorTab) start = TAB_IRBIS
         showTab(start)
 
@@ -348,11 +338,30 @@ class MainActivity : Activity() {
 
     private val versionName get() = packageManager.getPackageInfo(packageName, 0).versionName
 
-    /* ---------- Вкладка MocTec: подбор кода выключения ---------- */
+    /** Сетка кнопок пульта (12 штук на один экран, как в IrCode Finder). */
+    private fun keyGrid(keys: List<Pair<String, Long>>): GridLayout {
+        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
+        val gap = dp(5)
+        val rowH = ((resources.configuration.screenHeightDp - 300) / 6 - 10).coerceIn(60, 110)
+        keys.forEachIndexed { i, (label, code) ->
+            val k = KeyView(this, label, i, code, inverted = label == "POWER")
+            k.setOnTouchListener { v, e -> onKeyTouch(v as KeyView, e, label, code) }
+            keyViews += k
+            grid.addView(k, GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f)).apply {
+                width = 0; height = dp(rowH)
+                setMargins(gap, gap, gap, gap)
+            })
+        }
+        return grid
+    }
+
+    /* ---------- Вкладка «Рулетка»: подбор кода по очереди ---------- */
 
     private lateinit var subtitle: TextView
     private lateinit var tabIrbis: TextView
     private lateinit var tabMoc: TextView
+    private lateinit var tabRoulette: TextView
+    private lateinit var mocGrid: View
     private lateinit var irbisGrid: View
     private lateinit var mocPanel: View
     private lateinit var mocCode: TextView
@@ -364,17 +373,22 @@ class MainActivity : Activity() {
     @Volatile private var mocIdx = 0
     private val mocSent = ArrayDeque<Int>()
 
-    /**
-     * Код MocTec из файла «Мостех» для пульта Delly Changer расшифрован не до конца:
-     * адрес NEC 04 FB известен, а команда — нет. Подбор шлёт все 256 команд по очереди.
-     */
-    private fun mocCodeOf(cmd: Int): Long =
-        (0x04FBL shl 16) or ((cmd and 0xFF).toLong() shl 8) or ((cmd.inv() and 0xFF).toLong())
+    /** Сколько кодов в «Рулетке»: все 256 команд на каждом адресе из [ROULETTE_ADDR]. */
+    private val rouletteSize = ROULETTE_ADDR.size * 256
+
+    /** Код номер idx «Рулетки»: адрес idx / 256, команда idx % 256, затем инверсия команды (NEC). */
+    private fun mocCodeOf(idx: Int): Long {
+        val addr = ROULETTE_ADDR[(idx / 256).coerceIn(0, ROULETTE_ADDR.size - 1)].toLong()
+        val cmd = idx and 0xFF
+        return (addr shl 16) or (cmd.toLong() shl 8) or ((cmd.inv() and 0xFF).toLong())
+    }
 
     private fun tabButton(label: String, onClick: () -> Unit) = TextView(this).apply {
         text = label
         typeface = Term.mono
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+        isSingleLine = true
+        includeFontPadding = false
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 14f else 20f)
         gravity = Gravity.CENTER
         setOnClickListener { glitch(it); onClick() }
     }
@@ -385,14 +399,16 @@ class MainActivity : Activity() {
     }
 
     private fun showTab(tab: String) {
-        if (tab != TAB_MOC) mocRun = false
-        styleTab(tabIrbis, tab == TAB_IRBIS); styleTab(tabMoc, tab == TAB_MOC)
+        if (tab != TAB_ROULETTE) mocRun = false
+        styleTab(tabIrbis, tab == TAB_IRBIS); styleTab(tabMoc, tab == TAB_MOC); styleTab(tabRoulette, tab == TAB_ROULETTE)
         tabColor?.let { styleTab(it, tab == TAB_COLOR) }
         irbisGrid.visibility = if (tab == TAB_IRBIS) View.VISIBLE else View.GONE
-        mocPanel.visibility = if (tab == TAB_MOC) View.VISIBLE else View.GONE
+        mocGrid.visibility = if (tab == TAB_MOC) View.VISIBLE else View.GONE
+        mocPanel.visibility = if (tab == TAB_ROULETTE) View.VISIBLE else View.GONE
         colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
         subtitle.text = when (tab) {
-            TAB_MOC -> "MocTec :: подбор :: NEC 04 FB"
+            TAB_MOC -> "MocTec :: MOSTEH :: NEC 04FB"
+            TAB_ROULETTE -> "рулетка :: подбор :: NEC"
             TAB_COLOR -> "terminal :: phosphor color"
             else -> "#500202 :: IRBIS :: NEC 38kHz"
         }
@@ -480,12 +496,15 @@ class MainActivity : Activity() {
 
     private fun buildMocPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        p.addView(text("Код выключения MocTec расшифрован не до конца: адрес NEC 04 FB известен, команда — нет. " +
-            "Подбор по очереди отправит все 256 команд (около 1,5 минуты).\n\n" +
+        p.addView(text("⚠ Результат непредсказуем. Рулетка по очереди шлёт ${rouletteSize} разных ИК-команд " +
+            "(${ROULETTE_ADDR.size} адресов NEC × 256 команд). Доска может сменить источник или громкость, открыть меню, " +
+            "заблокировать экран или кнопки, выключиться — или не отреагировать вовсе. Сначала попробуйте вкладку MocTec: " +
+            "там точный код выключения. Если доска заблокировала экран или кнопки, дойдите здесь кнопками ◀ / ▶| " +
+            "до кода 04FB 3AC5 (№ 59) и отправьте его ещё раз — это переключатель блокировки.\n\n" +
             "1. Встаньте в 1–3 м и направьте телефон на нижнюю рамку доски.\n" +
-            "2. Нажмите «старт». Как только доска погаснет — «пауза».\n" +
+            "2. «старт» — коды идут быстро, около 5 в секунду. Как только доска отреагирует — «пауза».\n" +
             "3. Кнопкой «◀» отправляйте последние коды по одному, пока доска снова не отреагирует.\n" +
-            "4. Нажмите «сработало» и пришлите код разработчику.", 14f, Term.DIM).apply {
+            "4. «сработало» запомнит код.", 14f, Term.DIM).apply {
             typeface = Term.ru
             // в «Призме» текст лежит на стеклянной плашке — иначе теряется на фоне призмы
             if (Term.prism || Term.thermal) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(14), dp(12), dp(14), dp(12)) }
@@ -519,7 +538,7 @@ class MainActivity : Activity() {
         mocFound = text("", 18f, Term.FG).apply { typeface = Term.ru; gravity = Gravity.CENTER; setPadding(0, dp(12), 0, 0) }
         p.addView(mocFound, LinearLayout.LayoutParams(-1, -2))
         val prefs = getPreferences(MODE_PRIVATE)
-        mocIdx = prefs.getInt("moc_idx", 0)
+        mocIdx = prefs.getInt("moc_idx", 0).coerceIn(0, rouletteSize - 1)
         prefs.getString("moc_found", null)?.let { mocFound.text = "> найден: $it" }
         mocRender()
         return p
@@ -528,9 +547,9 @@ class MainActivity : Activity() {
     private fun mocRender() {
         val c = mocCodeOf(mocIdx)
         mocCode.text = "%04X %04X".format(c ushr 16, c and 0xFFFF)
-        mocInfo.text = "команда 0x%02X  ·  %d / 256".format(mocIdx, mocIdx + 1)
+        mocInfo.text = "адрес %04X · команда 0x%02X · %d / %d".format(ROULETTE_ADDR[mocIdx / 256], mocIdx and 0xFF, mocIdx + 1, rouletteSize)
         mocRecent.text = if (mocSent.isEmpty()) "ещё ничего не отправлено"
-            else "последние: " + mocSent.joinToString("  ") { "%02X".format(it) }
+            else "последние: " + mocSent.joinToString("  ") { "%04X·%02X".format(ROULETTE_ADDR[it / 256], it and 0xFF) }
         getPreferences(MODE_PRIVATE).edit().putInt("moc_idx", mocIdx).apply()
     }
 
@@ -544,18 +563,19 @@ class MainActivity : Activity() {
 
     private fun mocStart() {
         val tx = current() ?: return say(noTxMessage(), err = true)
-        if (mocIdx > 255) mocIdx = 0
+        if (mocIdx >= rouletteSize) mocIdx = 0
         mocRun = true
         mocPlay.text = btnLabel("[|| пауза]")
-        say("> подбор MocTec: старт с 0x%02X".format(mocIdx))
+        say("> рулетка: старт с 0x%08X".format(mocCodeOf(mocIdx)))
         io.execute {
             try {
-                while (mocRun && mocIdx <= 255) {
+                val last = rouletteSize - 1
+                while (mocRun && mocIdx <= last) {
                     val i = mocIdx
                     mocSend(i, tx)
-                    Thread.sleep(350)                 // время доске отреагировать
+                    Thread.sleep(110)                 // кадр NEC ~70 мс + пауза: около 5 кодов в секунду
                     if (!mocRun) break
-                    if (i < 255) mocIdx = i + 1 else { mocRun = false }
+                    if (i < last) mocIdx = i + 1 else { mocRun = false }
                 }
             } catch (e: Exception) {
                 ui.post { say(e.message ?: "Ошибка передачи", err = true) }
@@ -563,7 +583,7 @@ class MainActivity : Activity() {
             ui.post {
                 mocRun = false
                 mocPlay.text = btnLabel("[▶ старт]")
-                if (mocIdx >= 255) say("> подбор закончен: все 256 команд отправлены")
+                if (mocIdx >= rouletteSize - 1) say("> рулетка закончена: все $rouletteSize команд отправлены")
                 mocRender()
             }
         }
@@ -572,18 +592,18 @@ class MainActivity : Activity() {
     private fun mocPause() {
         mocRun = false
         mocPlay.text = btnLabel("[▶ старт]")
-        say("> пауза на команде 0x%02X".format(mocIdx))
+        say("> пауза на коде 0x%08X".format(mocCodeOf(mocIdx)))
     }
 
     /** Отправить соседний (−1 / +1) или текущий (0) код один раз. */
     private fun mocStep(delta: Int) {
         if (mocRun) mocPause()
         val tx = current() ?: return say(noTxMessage(), err = true)
-        mocIdx = (mocIdx + delta).coerceIn(0, 255)
+        mocIdx = (mocIdx + delta).coerceIn(0, rouletteSize - 1)
         mocRender()
         val i = mocIdx
         io.execute { try { mocSend(i, tx) } catch (e: Exception) { ui.post { say(e.message ?: "Ошибка передачи", err = true) } } }
-        say("> tx MocTec 0x%08X [sent]".format(mocCodeOf(i)))
+        say("> tx рулетка 0x%08X [sent]".format(mocCodeOf(i)))
     }
 
     private fun mocMark() {
@@ -800,6 +820,7 @@ class MainActivity : Activity() {
         private const val PREF_TAB = "tab"
         private const val TAB_IRBIS = "irbis"
         private const val TAB_MOC = "moc"
+        private const val TAB_ROULETTE = "roulette"
         private const val TAB_COLOR = "color"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
     }

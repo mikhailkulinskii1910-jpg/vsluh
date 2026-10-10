@@ -10,6 +10,17 @@ let KEYS: [(label: String, code: UInt32)] = [
     ("J RIGHT", 0x807FA857), ("J UP", 0x807F629D),
 ]
 
+/// Доски MocTec / «МОСТЕХ»: пульт «Interactive Board RC 52 Key» из облачной базы IrCode Finder
+/// (бренд MOSTEH, #500275), NEC, адрес 04 FB. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ».
+let MOC_KEYS: [(label: String, code: UInt32)] = [
+    ("POWER", 0x04FB4AB5), ("J OK", 0x04FB52AD),
+    ("VOL-", 0x04FB827D), ("VOL+", 0x04FBC03F),
+    ("EMPTY SCREEN", 0x04FB728D), ("INPUT", 0x04FBE01F),
+    ("J UP", 0x04FBE21D), ("J DOWN", 0x04FBB24D),
+    ("J LEFT", 0x04FB926D), ("J RIGHT", 0x04FBD22D),
+    ("HOME", 0x04FB12ED), ("BACK", 0x04FB50AF),
+]
+
 /// При удержании этих кнопок шлются NEC-повторы, как у настоящего пульта.
 let REPEATABLE: Set<String> = ["VOL-", "VOL+", "J DOWN", "J LEFT", "J RIGHT", "J UP"]
 

@@ -50,6 +50,12 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 .hbtns{display:flex;gap:8px;flex:none}
 .gear.help{width:52px;display:grid;place-items:center;text-decoration:none}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+/* вкладки IRBIS / MocTec — в стиле кнопок шапки текущей темы */
+.tabs{display:flex;gap:8px;margin:0 0 12px}
+.gear.tab{flex:1;width:auto;margin:0;height:40px}
+.gear.tab.on{background:var(--fg);color:#000}
+[data-theme=prism] .gear.tab.on{background:linear-gradient(135deg,var(--iris));color:var(--ink)}
+[data-theme=thermal] .gear.tab.on{background:linear-gradient(90deg,#E8382F,#FF7A1A,#FFC233);color:var(--ink)}
 .key{position:relative;height:clamp(76px,12dvh,118px);border:1px solid var(--line);background:#000;color:var(--fg);
   font:clamp(26px,8vw,40px)/1 var(--mono);cursor:pointer;padding:8px;touch-action:manipulation;overflow:hidden;
   transition:transform .08s;opacity:0}
@@ -331,6 +337,7 @@ html[data-theme=thermal]{
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button></nav>
   <main class="grid" id="grid"></main>
   <div class="status" id="status" role="status" aria-live="polite"></div>
 </div>
@@ -379,6 +386,17 @@ const KEYS = [
   ['J LEFT', '807FE21D'], ['J OK', '807FAA55'],
   ['J RIGHT', '807FA857'], ['J UP', '807F629D'],
 ];
+/* Доски MocTec / «МОСТЕХ»: пульт «Interactive Board RC 52 Key» из облачной базы IrCode Finder
+   (бренд MOSTEH, #500275), NEC, адрес 04 FB. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ». */
+const MOC_KEYS = [
+  ['POWER', '04FB4AB5'], ['J OK', '04FB52AD'],
+  ['VOL-', '04FB827D'], ['VOL+', '04FBC03F'],
+  ['EMPTY SCREEN', '04FB728D'], ['INPUT', '04FBE01F'],
+  ['J UP', '04FBE21D'], ['J DOWN', '04FBB24D'],
+  ['J LEFT', '04FB926D'], ['J RIGHT', '04FBD22D'],
+  ['HOME', '04FB12ED'], ['BACK', '04FB50AF'],
+];
+const REMOTES = { irbis: { keys: KEYS, id: '#500202 :: IRBIS :: NEC 38kHz' }, moc: { keys: MOC_KEYS, id: 'MocTec :: NEC 04FB' } };
 // При удержании этих кнопок пульт шлёт NEC-повтор, как настоящий.
 const REPEATABLE = new Set(['VOL-', 'VOL+', 'J DOWN', 'J LEFT', 'J RIGHT', 'J UP']);
 
@@ -496,7 +514,7 @@ function transmit(label, hex, isRepeat) {
 }
 
 const grid = $('grid');
-KEYS.forEach(([label, hex]) => {
+function makeKey([label, hex]) {
   const b = document.createElement('button');
   b.className = 'key' + (label === 'POWER' ? ' inv' : '');
   b.setAttribute('aria-label', label);
@@ -526,7 +544,25 @@ KEYS.forEach(([label, hex]) => {
   b.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); transmit(label, hex, false); } });
   b.addEventListener('contextmenu', e => e.preventDefault());
   grid.appendChild(b);
-});
+}
+
+/* Вкладки IRBIS / MocTec: меняют набор кнопок, выбор запоминается. */
+let remote = 'irbis';
+try { if (localStorage.getItem('krisa-remote') === 'moc') remote = 'moc'; } catch {}
+function buildGrid(reveal) {
+  grid.textContent = '';
+  REMOTES[remote].keys.forEach(makeKey);
+  document.querySelector('.id').textContent = REMOTES[remote].id;
+  document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === remote));
+  if (reveal) showRemote();
+}
+document.querySelectorAll('#tabs .tab').forEach(t => t.addEventListener('click', () => {
+  if (remote === t.dataset.r) return;
+  remote = t.dataset.r;
+  try { localStorage.setItem('krisa-remote', remote); } catch {}
+  buildGrid(true);
+}));
+buildGrid(false);
 
 /* ---------- Диалог настроек ---------- */
 const dlg = $('dlg');
@@ -555,7 +591,7 @@ $('host').addEventListener('input', e => { settings.host = e.target.value; save(
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
 const codes = $('codes');
-KEYS.forEach(([label, hex]) => {
+[...KEYS, ...MOC_KEYS.map(([l, h]) => ['MOC ' + l, h])].forEach(([label, hex]) => {
   const tr = codes.insertRow(), pronto = prontoOf(hex);
   tr.insertCell().textContent = label;
   const td = tr.insertCell();
@@ -738,7 +774,7 @@ function showRemote() {
     b.classList.add('shown');
     scramble(b.querySelector('.t'), b.getAttribute('aria-label'), 480);
   }, 60 * i));
-  status('> ready. ' + KEYS.length + ' keys loaded');
+  status('> ready. ' + REMOTES[remote].keys.length + ' keys loaded');
 }
 
 /* ---------- Заставка с крысой — при каждом открытии ---------- */
