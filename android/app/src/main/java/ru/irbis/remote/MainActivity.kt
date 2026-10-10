@@ -69,13 +69,14 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Тема оформления: «terminal» (по умолчанию), «prism» или «thermal». Меняется в [tx] → «Тема». */
+    /** Тема оформления: «terminal» (по умолчанию), «prism», «thermal» или «blueprint». Меняется в [tx] → «Тема». */
     private val themeId get() = getPreferences(MODE_PRIVATE).getString(PREF_THEME, "terminal") ?: "terminal"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         when (themeId) {
             "prism" -> setTheme(R.style.Theme_Prism)
             "thermal" -> setTheme(R.style.Theme_Thermal)
+            "blueprint" -> setTheme(R.style.Theme_Blueprint)
         }
         super.onCreate(savedInstanceState)
         usb = getSystemService(USB_SERVICE) as UsbManager
@@ -193,8 +194,12 @@ class MainActivity : Activity() {
     private lateinit var bg: TerminalBackground
 
     private fun buildUi(withSplash: Boolean): View {
-        getPreferences(MODE_PRIVATE).let { Term.init(this, themeId, it.getInt(PREF_COLOR, Term.DEFAULT_COLOR), it.getBoolean(PREF_MATRIX, false)) }
-        val frame = FrameLayout(this)
+        getPreferences(MODE_PRIVATE).let {
+            Term.init(this, themeId, it.getInt(PREF_COLOR, Term.DEFAULT_COLOR), it.getBoolean(PREF_MATRIX, false),
+                it.getString(PREF_RGB, null), it.getString(PREF_HEAT, null))
+        }
+        // RGB-перелив: весь экран рисуется белым и умножается на текущий перелив
+        val frame = Term.rgb?.let { RgbFrame(this, it.second).also { f -> rgbFrame = f } } ?: FrameLayout(this)
         bg = TerminalBackground(this)
         frame.addView(bg, FrameLayout.LayoutParams(-1, -1))
 
@@ -211,6 +216,12 @@ class MainActivity : Activity() {
             setTextColor(Term.FG)
             setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else if (Term.thermal) Heat.GLOW else Term.FG)
             includeFontPadding = false
+        }
+        if (Term.blueprint) {
+            // заголовок как на чертеже «F-16C»: широкий Unbounded, без свечения
+            title.typeface = resources.getFont(R.font.unbounded)
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
+            title.setShadowLayer(0f, 0f, 0f, 0)
         }
         if (Term.prism) {
             // заголовок залит радугой, перелив медленно «плывёт»
@@ -243,8 +254,8 @@ class MainActivity : Activity() {
             title.post(flow)
         }
         titles.addView(title)
-        subtitle = text("#500202 :: IRBIS :: NEC 38kHz", if (Term.prism) 13f else 18f, Term.DIM)
-        if (Term.prism) subtitle.typeface = Term.ru
+        subtitle = text("#500202 :: IRBIS :: NEC 38kHz", if (clean) 13f else 18f, Term.DIM)
+        if (clean) subtitle.typeface = Term.ru
         titles.addView(subtitle)
         modeLine = text("", 15f, Term.FG).apply {
             typeface = Term.ru; setPadding(0, dp(6), 0, 0)
@@ -282,8 +293,9 @@ class MainActivity : Activity() {
         tabIrbis = tabButton("IRBIS") { showTab(TAB_IRBIS) }
         tabMoc = tabButton("MocTec") { showTab(TAB_MOC) }
         // русские подписи — другим шрифтом (в VT323 нет кириллицы) и чуть мельче, чтобы четыре вкладки поместились
-        tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!Term.prism) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
-        val colorTab = !Term.prism && !Term.thermal
+        tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!clean) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
+        // «Цвет»: в «Терминале» — цвет и переливы, в «Тепловизоре» — палитры
+        val colorTab = !Term.prism && !Term.blueprint
         val tabList = mutableListOf(tabIrbis, tabMoc, tabRoulette)
         if (colorTab) tabList += tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }.also { tabColor = it }
         tabList.forEachIndexed { i, t ->
@@ -298,7 +310,7 @@ class MainActivity : Activity() {
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         if (colorTab) {
-            colorPanel = buildColorPanel()
+            colorPanel = if (Term.thermal) buildHeatPanel() else buildColorPanel()
             root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         }
         val prefs = getPreferences(MODE_PRIVATE)
@@ -388,7 +400,7 @@ class MainActivity : Activity() {
         typeface = Term.mono
         isSingleLine = true
         includeFontPadding = false
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 14f else 20f)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 20f)
         gravity = Gravity.CENTER
         setOnClickListener { glitch(it); onClick() }
     }
@@ -409,7 +421,7 @@ class MainActivity : Activity() {
         subtitle.text = when (tab) {
             TAB_MOC -> "MocTec :: MOSTEH :: NEC 04FB"
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
-            TAB_COLOR -> "terminal :: phosphor color"
+            TAB_COLOR -> if (Term.thermal) "thermal :: palette" else "terminal :: phosphor color"
             else -> "#500202 :: IRBIS :: NEC 38kHz"
         }
         getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
@@ -429,9 +441,10 @@ class MainActivity : Activity() {
             "У зелёного есть фон «Матрица» — бегущий код.", 13f, Term.DIM)
             .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(10)) })
         val cur = getPreferences(MODE_PRIVATE).getInt(PREF_COLOR, Term.DEFAULT_COLOR)
+        val rgb = Term.rgb
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
         Term.PHOSPHOR.forEachIndexed { i, (name, c) ->
-            val on = c == cur
+            val on = c == cur && rgb == null
             val sw = TextView(this).apply {
                 text = (if (on) "[x] " else "[ ] ") + name
                 typeface = Term.ru
@@ -449,9 +462,10 @@ class MainActivity : Activity() {
             })
         }
         p.addView(grid, LinearLayout.LayoutParams(-1, -2))
+        rgbFrame?.exempt?.add(grid)       // кнопки цветов — в своих настоящих цветах, без перелива
 
         // «Матрица»: только для зелёного — фон превращается в бегущий код из фильма
-        if (cur == Term.MATRIX_GREEN) {
+        if (cur == Term.MATRIX_GREEN && rgb == null) {
             val mx = mocButton(if (Term.matrix) "[ MATRIX: ВКЛ ]" else "[ MATRIX ]") {
                 getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_MATRIX, !Term.matrix).putString(PREF_TAB, TAB_COLOR).commit()
                 recreate()
@@ -473,23 +487,98 @@ class MainActivity : Activity() {
         }
         p.addView(wheel, LinearLayout.LayoutParams(dp(240), dp(240)).apply { gravity = Gravity.CENTER_HORIZONTAL })
         p.addView(sample, LinearLayout.LayoutParams(dp(160), dp(36)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(8) })
+        rgbFrame?.exempt?.addAll(listOf(wheel, sample))
+
+        // RGB-перелив: кнопка раскрывает графу с переливами (как на картинке палитр)
+        val prefs = getPreferences(MODE_PRIVATE)
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = if (prefs.getBoolean(PREF_RGB_OPEN, false)) View.VISIBLE else View.GONE
+        }
+        val rgbBtn = mocButton(rgb?.let { "[ RGB: ${it.first} ]" } ?: "[ RGB ]") {
+            val open = list.visibility != View.VISIBLE
+            list.visibility = if (open) View.VISIBLE else View.GONE
+            prefs.edit().putBoolean(PREF_RGB_OPEN, open).apply()
+        }.apply { if (rgb != null) { setTextColor(Color.BLACK); background = Term.boxBg(this@MainActivity, true) } }
+        p.addView(rgbBtn, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(18) })
+        p.addView(list, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        list.addView(rgbRow("выкл — один цвет", null, rgb == null) { applyRgb(null) })
+        Term.RGB.forEach { (name, cols) -> list.addView(rgbRow(name, cols, rgb?.first == name) { applyRgb(name) }) }
         return p
     }
 
-    /** Запомнить цвет и пересоздать экран (без заставки — она только при запуске). */
-    private fun applyColor(c: Int) {
-        getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR, c).putString(PREF_TAB, TAB_COLOR).commit()
+    /** Строка графы переливов: полоса-градиент и имя справа; выбранная — в рамке. */
+    private fun rgbRow(name: String, cols: IntArray?, on: Boolean, onClick: () -> Unit): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(3), dp(4), dp(3))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.BLACK); setStroke(dp(1), if (on) Color.WHITE else Color.BLACK)
+            }
+            setOnClickListener { glitch(it); onClick() }
+        }
+        val bar = View(this).apply {
+            background = if (cols != null) android.graphics.drawable.GradientDrawable(android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, cols)
+                else android.graphics.drawable.GradientDrawable().apply { setColor(Color.BLACK); setStroke(dp(1), Color.GRAY) }
+        }
+        row.addView(bar, LinearLayout.LayoutParams(0, dp(24), 1f))
+        val label = TextView(this).apply {
+            text = (if (on) "[x] " else "") + name
+            typeface = if (cols == null) Term.ru else Term.mono
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, if (cols == null) 13f else 17f)
+            setTextColor(if (on) Color.WHITE else Color.parseColor("#B8B8B8"))
+            isSingleLine = true
+        }
+        row.addView(label, LinearLayout.LayoutParams(dp(150), -2).apply { leftMargin = dp(10) })
+        rgbFrame?.exempt?.add(row)
+        return row
+    }
+
+    private fun applyRgb(name: String?) {
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_RGB, name ?: "").putString(PREF_TAB, TAB_COLOR).commit()
         recreate()
     }
 
-    /** В «Призме» кнопки без квадратных скобок терминала. */
-    private fun btnLabel(s: String) = if (Term.prism) s.removePrefix("[").removeSuffix("]") else s
+    /** Запомнить цвет и пересоздать экран (без заставки — она только при запуске). Один цвет выключает перелив. */
+    private fun applyColor(c: Int) {
+        getPreferences(MODE_PRIVATE).edit().putInt(PREF_COLOR, c).putString(PREF_RGB, "").putString(PREF_TAB, TAB_COLOR).commit()
+        recreate()
+    }
+
+    private var rgbFrame: RgbFrame? = null
+
+    /** Вкладка «Цвет» в «Тепловизоре»: четыре популярные палитры, своего цвета нет. */
+    private fun buildHeatPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(text("> палитра", 30f, Term.FG).apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f) })
+        p.addView(text("Палитра тепловизора: фон, кнопки, рамки обнаружения. Выбор применяется сразу.", 13f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(10)) })
+        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
+        Heat.PALETTES.forEachIndexed { i, pal ->
+            val b = HeatButton(this, pal, pal === Heat.P).apply {
+                setOnClickListener {
+                    glitch(it)
+                    getPreferences(MODE_PRIVATE).edit().putString(PREF_HEAT, pal.id).putString(PREF_TAB, TAB_COLOR).commit()
+                    recreate()
+                }
+            }
+            grid.addView(b, GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f)).apply {
+                width = 0; height = dp(92); setMargins(if (i % 2 == 1) dp(5) else 0, dp(5), if (i % 2 == 0) dp(5) else 0, dp(5))
+            })
+        }
+        p.addView(grid, LinearLayout.LayoutParams(-1, -2))
+        return p
+    }
+
+    /** В «Призме» и «Чертеже» — шрифт Manrope и кнопки без квадратных скобок терминала. */
+    private val clean get() = Term.prism || Term.blueprint
+    private fun btnLabel(s: String) = if (clean) s.removePrefix("[").removeSuffix("]") else s
 
     private fun mocButton(label: String, onClick: (View) -> Unit) = TextView(this).apply {
         text = label
         typeface = Term.mono
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 15f else 24f)
-        if (Term.prism) { typeface = Term.ru; text = label.removePrefix("[").removeSuffix("]") }
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 15f else 24f)
+        if (clean) { typeface = Term.ru; text = label.removePrefix("[").removeSuffix("]") }
         setTextColor(Term.FG)
         gravity = Gravity.CENTER
         isSingleLine = true
@@ -510,15 +599,15 @@ class MainActivity : Activity() {
             "4. «сработало» запомнит код.", 14f, Term.DIM).apply {
             typeface = Term.ru
             // в «Призме» текст лежит на стеклянной плашке — иначе теряется на фоне призмы
-            if (Term.prism || Term.thermal) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(14), dp(12), dp(14), dp(12)) }
+            if (Term.prism || Term.thermal || Term.blueprint) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(14), dp(12), dp(14), dp(12)) }
         })
         // код и счётчик — тоже на стекле в «Призме»
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            if (Term.prism || Term.thermal) { background = Term.boxBg(this@MainActivity); setPadding(0, 0, 0, dp(4)) }
+            if (Term.prism || Term.thermal || Term.blueprint) { background = Term.boxBg(this@MainActivity); setPadding(0, 0, 0, dp(4)) }
         }
-        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { if (Term.prism || Term.thermal) topMargin = dp(10) })
-        mocCode = text("", if (Term.prism) 34f else 52f, Term.FG).apply {
+        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { if (Term.prism || Term.thermal || Term.blueprint) topMargin = dp(10) })
+        mocCode = text("", if (clean) 34f else 52f, Term.FG).apply {
             gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, if (Term.thermal) Heat.GLOW else Term.FG); setPadding(0, dp(14), 0, 0)
         }
         box.addView(mocCode, LinearLayout.LayoutParams(-1, -2))
@@ -699,8 +788,9 @@ class MainActivity : Activity() {
     }
 
     private fun chooseTheme() {
-        val ids = arrayOf("terminal", "prism", "thermal")
-        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло", "Тепловизор — кадр тепловизора, ironbow")
+        val ids = arrayOf("terminal", "prism", "thermal", "blueprint")
+        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло", "Тепловизор — кадр тепловизора, 4 палитры",
+            "Чертёж — синий blueprint, схема на фоне")
         val cur = ids.indexOf(themeId).coerceAtLeast(0)
         AlertDialog.Builder(this)
             .setTitle("Тема оформления")
@@ -821,6 +911,9 @@ class MainActivity : Activity() {
         private const val PREF_THEME = "theme"
         private const val PREF_COLOR = "term_color"
         private const val PREF_MATRIX = "matrix"
+        private const val PREF_RGB = "rgb"
+        private const val PREF_RGB_OPEN = "rgb_open"
+        private const val PREF_HEAT = "heat"
         private const val PREF_TAB = "tab"
         private const val TAB_IRBIS = "irbis"
         private const val TAB_MOC = "moc"

@@ -29,11 +29,13 @@ import kotlin.random.Random
  * Палитра и шрифты. Три темы:
  *  - «Терминал» — чёрно-белый терминал, пиксельный VT323;
  *  - «Призма» — чёрный фон, переливающееся «плёночное» стекло, радужные блики как на CD и призмах;
- *  - «Тепловизор» — кадр тепловизора: палитра ironbow, жёлтые рамки обнаружения, HUD и зерно.
+ *  - «Тепловизор» — кадр тепловизора: палитра ironbow (или White Hot, Rainbow, Arctic), рамки обнаружения, HUD и зерно;
+ *  - «Чертёж» — синий blueprint: миллиметровка, схема на фоне, белые линии.
  */
 object Term {
     var prism = false; private set
     var thermal = false; private set
+    var blueprint = false; private set
     var BG = Color.BLACK; private set
     var FG = Color.parseColor("#EDEDED"); private set
     var DIM = Color.parseColor("#8A8A8A"); private set
@@ -65,25 +67,82 @@ object Term {
     /** Фон «Матрица» — бегущий код из фильма вместо лога (первая тема, зелёный цвет). */
     var matrix = false; private set
 
+    /**
+     * RGB-переливы первой темы (имена и цвета — с картинки-референса палитр).
+     * Интерфейс рисуется белым, а поверх кладётся текущий перелив в режиме «умножение».
+     */
+    val RGB: List<Pair<String, IntArray>> = listOf(
+        "Rainbow" to "#7F00FF #0000FF #00FFFF #00FF00 #FFFF00 #FF0000",
+        "Mac Style" to "#8000FF #0040FF #00FFFF #00FF00 #FFFF00 #FF0000",
+        "jet" to "#0000FF #00FFFF #80FF80 #FFFF00 #FF0000 #800000",
+        "Blue-Red" to "#0000C0 #0060FF #00FFFF #80FF80 #FFFF00 #FF4000 #C00000",
+        "Eos A" to "#0010C0 #00A0FF #00FF80 #E0FF00 #FFA000 #FF3000 #A00000",
+        "16 LEVEL" to "#009900 #00FF00 #00FF99 #00FFFF #0000FF #9900FF #FF00FF #FF0066 #FF0000 #FFCCCC #FFFFFF",
+        "Rainbow18" to "#A000A0 #6060FF #00C0C0 #00A000 #A0C000 #FFFF00 #FF8000 #FF0000 #FF60A0",
+        "PRISM" to "#FF0000 #FFA000 #80FF00 #00FFFF #0040FF",
+        "Pastels" to "#FF0080 #FF40C0 #00FFFF #00FF80 #C0FF00 #FFFF00",
+        "Hardcandy" to "#3060FF #00E0FF #FF0080 #40FF60 #FFE000 #FF60C0",
+        "GREEN-PINK" to "#00A040 #0080C0 #8000FF #FF00C0 #FFC0E0",
+        "GRN-RED-BLU-WHT" to "#00FF00 #FF0000 #FF00FF #A000FF #FFFFFF",
+        "RED TEMPERATURE" to "#C00000 #FF6000 #FFC000 #FFFFE0",
+        "RED-PURPLE" to "#C00040 #FF0080 #FF60C0 #FFC0FF",
+        "hot" to "#FF0000 #FF8000 #FFFF00 #FFFFFF",
+        "STD GAMMA-II" to "#0000FF #FF00FF #FF0000 #FFFF00 #FFFFFF",
+        "STERN SPECIAL" to "#FF2040 #4040FF #8080FF #C0C000 #FFFFC0",
+        "Volcano" to "#6040C0 #00A000 #C06000 #FF0000 #FFFF00 #6060FF",
+        "Ocean" to "#6060E0 #C04040 #C0A040 #00C060 #60C0FF #60FFE0",
+        "Nature" to "#00FFC0 #C0FF40 #008000 #4000FF #FF0000",
+        "algae" to "#6000C0 #0060FF #00C080 #C0FF00 #FFA000 #FF0000",
+        "arbre" to "#C00000 #C040C0 #4080FF #00FFC0 #FFFF00",
+        "kamae" to "#C03000 #FF8000 #C0FF40 #40FFC0 #60C0FF #C0A0FF",
+        "kelp" to "#3000A0 #4060C0 #60A0A0 #C0C060 #FFE080",
+        "dusk" to "#204080 #408080 #C08060 #FFA040 #FFF0C0",
+        "octarine" to "#206080 #408060 #C08080 #FF80C0 #FFC0FF",
+        "Haze" to "#FF80FF #C0C0FF #80A0FF #C0A0A0 #FFC080 #FFE000",
+        "RdBu" to "#B00020 #FF8060 #FFFFFF #60A0FF #2040A0",
+    ).map { (n, hex) -> n to hex.split(" ").map { brighten(Color.parseColor(it)) }.toIntArray() }
+
+    /** Слишком тёмные точки перелива осветляются: при умножении они погасили бы надписи. */
+    private fun brighten(c: Int): Int {
+        val m = max(Color.red(c), max(Color.green(c), Color.blue(c)))
+        if (m == 0) return Color.rgb(150, 150, 150)
+        if (m >= 150) return c
+        val k = 150f / m
+        return Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
+    }
+    /** Включённый перелив (null — один цвет). */
+    var rgb: Pair<String, IntArray>? = null; private set
+
     /** Цвет, умноженный на k (k < 1 — темнее). */
     fun shade(c: Int, k: Float) = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
 
-    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR, matrixOn: Boolean = false) {
+    fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR, matrixOn: Boolean = false, rgbName: String? = null, heat: String? = null) {
         prism = theme == "prism"
         thermal = theme == "thermal"
-        matrix = matrixOn && !prism && !thermal && termColor == MATRIX_GREEN
+        blueprint = theme == "blueprint"
+        val term = !prism && !thermal && !blueprint
+        rgb = if (term) RGB.firstOrNull { it.first == rgbName } else null
+        matrix = matrixOn && term && rgb == null && termColor == MATRIX_GREEN
+        Heat.use(heat)
         if (thermal) {
-            BG = Color.parseColor("#050308"); FG = Color.parseColor("#FFF1DC"); DIM = Color.parseColor("#E0974A")
-            LINE = Heat.YELLOW; FAINT = Color.parseColor("#1A0E10")
+            val p = Heat.P
+            BG = p.bg; FG = p.fg; DIM = p.dim
+            LINE = p.accent; FAINT = shade(p.pal[2], 0.25f)
             mono = c.resources.getFont(R.font.vt323); ru = Typeface.MONOSPACE
+        } else if (blueprint) {
+            BG = Blueprint.BG; FG = Color.WHITE; DIM = Color.parseColor("#BFD3F2")
+            LINE = Color.parseColor("#9FB8E2"); FAINT = Color.parseColor("#2A5AAA")
+            mono = c.resources.getFont(R.font.manrope_semibold); ru = c.resources.getFont(R.font.manrope)
         } else if (prism) {
             BG = Color.parseColor("#07060B"); FG = Color.parseColor("#F4F1FF"); DIM = Color.parseColor("#A79FC6")
             LINE = Color.parseColor("#4B4270"); FAINT = Color.parseColor("#1A1726")
             mono = c.resources.getFont(R.font.unbounded); ru = c.resources.getFont(R.font.manrope)
         } else {
             // весь «Терминал» строится от одного цвета: основной, приглушённый, рамки и фон-лог
-            BG = Color.BLACK; FG = termColor; DIM = shade(termColor, 0.58f)
-            LINE = shade(termColor, 0.39f); FAINT = shade(termColor, 0.089f)
+            // в RGB-переливе всё рисуется белым, цвет даёт перелив поверх экрана
+            val fg = if (rgb != null) Color.WHITE else termColor
+            BG = Color.BLACK; FG = fg; DIM = shade(fg, 0.58f)
+            LINE = shade(fg, 0.39f); FAINT = shade(fg, 0.089f)
             mono = c.resources.getFont(R.font.vt323); ru = Typeface.MONOSPACE
         }
     }
@@ -92,6 +151,10 @@ object Term {
     fun boxBg(c: Context, on: Boolean = false): android.graphics.drawable.Drawable {
         if (prism) return GlassDrawable(c, on)
         val d = c.resources.displayMetrics.density
+        if (blueprint) return android.graphics.drawable.GradientDrawable().apply {
+            setColor(if (on) Color.WHITE else Blueprint.PANEL)
+            setStroke(d.toInt().coerceAtLeast(1), Color.WHITE)
+        }
         if (thermal) return android.graphics.drawable.GradientDrawable().apply {
             // рамка обнаружения; «включённая» — раскалённая полоса
             if (on) { orientation = android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT; colors = intArrayOf(Heat.color(0.55f), Heat.color(0.72f), Heat.color(0.86f)) }
@@ -105,7 +168,7 @@ object Term {
     }
 
     /** Цвет текста на «включённом» фоне boxBg. */
-    fun onBoxText() = if (prism) Color.parseColor("#120E1F") else if (thermal) Heat.INK else Color.BLACK
+    fun onBoxText() = if (prism) Color.parseColor("#120E1F") else if (thermal) Heat.INK else if (blueprint) BG else Color.BLACK
 
     /** Строки «лога» для фона: установка пакетов, скан портов и коды пульта. */
     val LOG: List<String> by lazy {
@@ -215,7 +278,7 @@ class TerminalBackground(c: Context) : View(c) {
 
     private val loc = IntArray(2)
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        if (Term.thermal) ThermalScene.resize(context, w, h) else PrismScene.resize(w, h)
+        if (Term.thermal) ThermalScene.resize(context, w, h) else if (Term.blueprint) Blueprint.resize(context, w, h) else PrismScene.resize(w, h)
     }
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
         getLocationInWindow(loc); PrismScene.ox = loc[0].toFloat(); PrismScene.oy = loc[1].toFloat()
@@ -233,6 +296,12 @@ class TerminalBackground(c: Context) : View(c) {
             // тепловизор: вращающаяся радужка, HUD, а крысы — тёплые пятна в рамках обнаружения
             ThermalScene.draw(canvas, ThermalScene.time())
             drawRats(canvas, t)
+            postInvalidateOnAnimation()
+            return
+        }
+        if (Term.blueprint) {
+            // чертёж: миллиметровка и схема вместо лога и крыс
+            Blueprint.draw(canvas, t)
             postInvalidateOnAnimation()
             return
         }
@@ -805,6 +874,7 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
     override fun onDraw(canvas: Canvas) {
         if (Term.prism) { drawPrism(canvas, SystemClock.uptimeMillis() - pressedAt); return }
         if (Term.thermal) { drawThermal(canvas, SystemClock.uptimeMillis() - pressedAt); return }
+        if (Term.blueprint) { drawBlueprint(canvas, SystemClock.uptimeMillis() - pressedAt); return }
         val w = width.toFloat(); val h = height.toFloat()
         val now = SystemClock.uptimeMillis()
         val since = now - pressedAt
@@ -894,6 +964,65 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
     }
     private fun w() = width.toFloat()
 
+    // «Чертёж»: двойная рамка, метки совмещения в углах, подписи FIG.01; при нажатии — штриховка 45°
+    private val figTag = "FIG.%02d".format(index + 1)
+    private val hatch = android.graphics.Path()
+    private var hatchW = 0
+
+    private fun drawBlueprint(canvas: Canvas, since: Long) {
+        val w = w(); val h = height.toFloat()
+        val fade = (1f - since / 500f).coerceIn(0f, 1f)
+        val m = 5 * d                       // поле под метки совмещения
+        fill.color = if (inverted) Color.WHITE else Blueprint.PANEL
+        canvas.drawRect(m, m, w - m, h - m, fill)
+        val hatchA = if (down) 0.35f else 0.35f * fade
+        if (hatchA > 0f && !inverted) {
+            if (hatchW != width) {
+                hatchW = width; hatch.reset()
+                var x = -h
+                while (x < w) { hatch.moveTo(x, h); hatch.lineTo(x + h, 0f); x += 6 * d }
+            }
+            canvas.save(); canvas.clipRect(m, m, w - m, h - m)
+            stroke.color = Color.WHITE; stroke.alpha = (255 * hatchA).toInt(); stroke.strokeWidth = d
+            canvas.drawPath(hatch, stroke)
+            canvas.restore()
+        }
+        val ink = if (inverted) Term.BG else Color.WHITE
+        // двойная рамка
+        stroke.color = ink; stroke.alpha = 255; stroke.strokeWidth = 1.5f * d
+        canvas.drawRect(m, m, w - m, h - m, stroke)
+        stroke.alpha = 115; stroke.strokeWidth = 0.75f * d
+        canvas.drawRect(m + 4 * d, m + 4 * d, w - m - 4 * d, h - m - 4 * d, stroke)
+        // метки совмещения «+» в углах, снаружи рамки
+        stroke.color = Color.WHITE; stroke.alpha = 200; stroke.strokeWidth = d
+        val k = 4 * d
+        for ((x, y) in listOf(m to m, w - m to m, m to h - m, w - m to h - m)) {
+            canvas.drawLine(x - k, y, x + k, y, stroke); canvas.drawLine(x, y - k, x, y + k, stroke)
+        }
+        stroke.alpha = 255; stroke.strokeWidth = d
+
+        small.textSize = 10 * d; small.letterSpacing = 0.08f
+        small.color = if (inverted) Term.BG else Term.DIM
+        small.textAlign = Paint.Align.LEFT; canvas.drawText(figTag, m + 8 * d, m + 17 * d, small)
+        small.textAlign = Paint.Align.RIGHT; canvas.drawText(hex, w - m - 8 * d, h - m - 9 * d, small)
+        small.textSize = 13 * d; small.letterSpacing = 0f
+
+        main.color = ink; main.letterSpacing = 0.08f
+        main.textSize = min(22 * d, w / max(6, shown.length) * 1.05f)
+        val ty = h / 2 - (main.descent() + main.ascent()) / 2
+        canvas.drawText(shown, w / 2, ty, main)
+        main.letterSpacing = 0f
+
+        // «скан» сверху вниз после нажатия
+        if (since < 420) {
+            val y = m + (h - 2 * m) * since / 420f
+            fill.color = if (inverted) Term.BG else Color.WHITE; fill.alpha = 150
+            canvas.drawRect(m, y, w - m, y + 1.5f * d, fill)
+            fill.alpha = 255
+        }
+        if (since < 520 || down) postInvalidateOnAnimation()
+    }
+
     private data class Quad(val x: Float, val y: Float, val sx: Int, val sy: Int)
 }
 
@@ -966,7 +1095,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             Canvas(g).drawBitmap(glow, blurPad.toFloat(), blurPad.toFloat(),
                 Paint(Paint.FILTER_BITMAP_FLAG).apply { color = Color.WHITE; maskFilter = BlurMaskFilter(blurPad * 0.6f, BlurMaskFilter.Blur.NORMAL) })
             glowBlur = g
-            if (Term.prism) tubeBmp = makeTube()
+            if (Term.prism || Term.blueprint) tubeBmp = makeTube()
         }.apply { priority = Thread.MIN_PRIORITY }.start()
         isClickable = true
         setOnClickListener { finish() }           // тап — пропустить
@@ -977,6 +1106,10 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             big.setShadowLayer(18 * d, 0f, 0f, Color.parseColor("#8B6CFF"))
             glowP.colorFilter = PorterDuffColorFilter(Color.parseColor("#8B6CFF"), PorterDuff.Mode.SRC_IN)
             wordEdge.strokeWidth = 1.3f * d
+        }
+        if (Term.blueprint) {
+            txt.typeface = Term.ru; txt.textSize = 14 * d
+            big.typeface = c.resources.getFont(R.font.unbounded); big.textSize = 50 * d; big.clearShadowLayer()
         }
         if (Term.thermal) {
             big.setShadowLayer(18 * d, 0f, 0f, Heat.GLOW)
@@ -995,6 +1128,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         val w = width.toFloat(); val h = height.toFloat()
         if (Term.prism) { PrismScene.draw(canvas, PrismScene.time()); updateLens() }
         if (Term.thermal) ThermalScene.draw(canvas, ThermalScene.time())
+        if (Term.blueprint) Blueprint.draw(canvas, t / 1000f)
 
         // 1. загрузочный лог
         var y = 40 * d
@@ -1020,7 +1154,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             canvas.translate(cx, ry)
             canvas.rotate(rot)
             val dst = RectF(-rw / 2, -rh / 2, rw / 2, rh / 2)
-            glowBlur?.let { gb ->
+            if (!Term.blueprint) glowBlur?.let { gb ->
                 val pad = blurPad * rw / rat.width
                 glowP.alpha = (90 * f).toInt()
                 canvas.drawBitmap(gb, null, RectF(dst.left - pad, dst.top - pad, dst.right + pad, dst.bottom + pad), glowP)
@@ -1038,6 +1172,13 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
                         canvas.drawBitmap(glow, Rect(0, sy0, rat.width, sy1), RectF(-rw / 2 + dx, top, rw / 2 + dx, bottom), irisP)
                     }
                 } else canvas.drawBitmap(glow, null, dst, irisP)
+            } else if (Term.blueprint) {
+                // крыса — контурный чертёж: обводка и едва заметная заливка
+                val tube = tubeBmp ?: glow
+                val dx = if (moving) (rnd.nextFloat() - 0.5f) * 6 * d else 0f
+                fringe.color = Color.WHITE; canvas.drawBitmap(tube, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
+                fringe.color = Term.BG; canvas.drawBitmap(glow, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
+                fringe.color = Color.argb(22, 255, 255, 255); canvas.drawBitmap(glow, null, RectF(dst.left + dx, dst.top, dst.right + dx, dst.bottom), fringe)
             } else if (Term.prism) {
                 // в полёте «призраки» расходятся сильнее, на месте — едва заметны
                 val dx = (if (moving) 9f else 2.5f) * d
@@ -1057,8 +1198,11 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             } else canvas.drawBitmap(rat, null, dst, bmp)
             canvas.restore()
 
+            // крыса легла — размерные линии и подписи, как на чертеже
+            if (Term.blueprint && f >= 0.97f) drawDimensions(canvas, RectF(cx - rw / 2, restY - rh / 2, cx + rw / 2, restY + rh / 2), t)
+
             // удар об «пол» — горизонтальные полосы, как у солнца на референсе
-            if (f > 0.42f && f < 0.9f) {
+            if (!Term.blueprint && f > 0.42f && f < 0.9f) {
                 val k = 1 - abs(f - 0.55f) / 0.35f
                 for (i in 0 until 7) {
                     val ly = restY + rh * 0.33f + (i - 3) * 4 * d
@@ -1114,7 +1258,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         if (t > 700) {
             val p = ((t - 700) / 650f).coerceIn(0f, 1f)
             val sw = 110 * d; val sh = sw * sign.height / sign.width
-            val sx = w - sw - 18 * d; val sy = h - sh - 22 * d
+            val sx = w - sw - 18 * d; val sy = h - sh - (if (Term.blueprint) 86 else 22) * d   // в «Чертеже» — над штампом
             canvas.save()
             canvas.clipRect(sx, sy, sx + sw * p, sy + sh)
             signP.alpha = 220
@@ -1135,6 +1279,38 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
             if (p >= 1f) finish()
         }
         if (!finished) postInvalidateOnAnimation()
+    }
+
+    private val dim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = 1f }
+    private val dimText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER }
+
+    /** Чертёж крысы: размерные линии с засечками снизу и слева, «Fig.1 — RAT» и выноска к хвосту. Проявляются за 0,3 с. */
+    private fun drawDimensions(canvas: Canvas, r: RectF, t: Float) {
+        val a = ((t - 1530f) / 300f).coerceIn(0f, 1f)
+        dim.strokeWidth = d; dim.alpha = (220 * a).toInt()
+        dimText.typeface = Term.ru; dimText.textSize = 12 * d; dimText.alpha = (235 * a).toInt(); dimText.letterSpacing = 0.06f
+        val k = 5 * d
+        fun tick(x: Float, y: Float) = canvas.drawLine(x - k * 0.7f, y + k * 0.7f, x + k * 0.7f, y - k * 0.7f, dim)
+        // снизу: ширина
+        val by = r.bottom + 16 * d
+        canvas.drawLine(r.left, by, r.right, by, dim); tick(r.left, by); tick(r.right, by)
+        canvas.drawLine(r.left, r.bottom + 4 * d, r.left, by + k, dim); canvas.drawLine(r.right, r.bottom + 4 * d, r.right, by + k, dim)
+        canvas.drawText("420 mm", (r.left + r.right) / 2, by + 15 * d, dimText)
+        // слева: высота
+        val lx = r.left - 14 * d
+        canvas.drawLine(lx, r.top, lx, r.bottom, dim); tick(lx, r.top); tick(lx, r.bottom)
+        canvas.drawLine(r.left - 4 * d, r.top, lx - k, r.top, dim); canvas.drawLine(r.left - 4 * d, r.bottom, lx - k, r.bottom, dim)
+        canvas.save(); canvas.rotate(-90f, lx - 6 * d, (r.top + r.bottom) / 2)
+        canvas.drawText("260 mm", lx - 6 * d, (r.top + r.bottom) / 2, dimText); canvas.restore()
+        // подпись и выноска к хвосту
+        dimText.textAlign = Paint.Align.LEFT
+        canvas.drawText("Fig.1 — RAT", r.left, r.top - 12 * d, dimText)
+        val tx = r.left + r.width() * 0.95f; val ty = r.top + r.height() * 0.33f
+        val ex = tx + 10 * d; val ey = r.top - 18 * d
+        canvas.drawLine(tx, ty, ex, ey, dim); canvas.drawLine(ex, ey, ex + 26 * d, ey, dim)
+        canvas.drawCircle(tx, ty, 2 * d, dim)
+        canvas.drawText("TAIL", ex + 4 * d, ey - 4 * d, dimText)
+        dimText.textAlign = Paint.Align.CENTER
     }
 
     /** «Трубки» стекла: контур крысы, утолщённый во все стороны. */
@@ -1196,6 +1372,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         if (Term.prism) PrismScene.resize(w, h)
         if (Term.thermal) ThermalScene.resize(context, w, h)
+        if (Term.blueprint) Blueprint.resize(context, w, h)
         sceneBmp = null
     }
 

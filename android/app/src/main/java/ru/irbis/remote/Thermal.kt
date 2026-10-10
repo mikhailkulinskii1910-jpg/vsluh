@@ -22,14 +22,31 @@ import kotlin.random.Random
  * жёлтые рамки «обнаружения», HUD тепловизора и зерно матрицы.
  */
 object Heat {
-    /** Ironbow: от холодного к горячему. */
-    val PAL = intArrayOf(
-        Color.parseColor("#0B0418"), Color.parseColor("#2E0B5E"), Color.parseColor("#6B1585"), Color.parseColor("#B51F7A"),
-        Color.parseColor("#E8382F"), Color.parseColor("#FF7A1A"), Color.parseColor("#FFC233"), Color.parseColor("#FFF27A"), Color.WHITE)
-    /** Рамки обнаружения, как PERSON_01XX на референсах. */
-    val YELLOW = Color.parseColor("#FFD43B")
-    val INK = Color.parseColor("#140700")
-    val GLOW = Color.parseColor("#FF4A12")
+    /** Палитра тепловизора: id, подпись, цвета от холодного к горячему, картинка радужки. */
+    class Palette(val id: String, val title: String, val pal: IntArray, val bg: Int, val fg: Int, val dim: Int,
+                  val accent: Int, val glow: Int, val ink: Int, val iris: Int)
+    private fun cs(vararg h: String) = h.map { Color.parseColor(it) }.toIntArray()
+    private fun c(h: String) = Color.parseColor(h)
+    /** Четыре самые популярные палитры тепловизоров (как у FLIR): Ironbow, White Hot, Rainbow HC, Arctic. */
+    val PALETTES = listOf(
+        Palette("ironbow", "IRONBOW", cs("#0B0418", "#2E0B5E", "#6B1585", "#B51F7A", "#E8382F", "#FF7A1A", "#FFC233", "#FFF27A", "#FFFFFF"),
+            c("#050308"), c("#FFF1DC"), c("#E0974A"), c("#FFD43B"), c("#FF4A12"), c("#140700"), R.drawable.iris),
+        Palette("white", "WHITE HOT", cs("#050505", "#1E1E22", "#3C3C42", "#616168", "#8A8A90", "#B2B2B6", "#D6D6D8", "#F0F0F0", "#FFFFFF"),
+            c("#050505"), c("#F2F2F2"), c("#A3A8AE"), c("#4DFF7A"), c("#D0D8E0"), c("#0A0A0A"), R.drawable.iris_white),
+        Palette("rainbow", "RAINBOW HC", cs("#0A0030", "#1A1AA8", "#0070FF", "#00C8E0", "#00E060", "#B8F000", "#FFD000", "#FF5000", "#FF0030", "#FFFFFF"),
+            c("#07001F"), c("#FFFFFF"), c("#7FD6FF"), c("#FFFFFF"), c("#FF3060"), c("#10001A"), R.drawable.iris_rainbow),
+        Palette("arctic", "ARCTIC", cs("#020617", "#0B1E5B", "#1C47A8", "#3C82E0", "#8EC3F2", "#E9D9A6", "#F7B733", "#FFD966", "#FFFFFF"),
+            c("#020617"), c("#F2F8FF"), c("#8EC3F2"), c("#7FE3FF"), c("#F7B733"), c("#04102A"), R.drawable.iris_arctic),
+    )
+    var P = PALETTES[0]; private set
+    fun use(id: String?) { P = PALETTES.firstOrNull { it.id == id } ?: PALETTES[0] }
+
+    /** Текущая палитра: от холодного к горячему. */
+    val PAL get() = P.pal
+    /** Рамки обнаружения, как PERSON_01XX на референсах (в ironbow — жёлтые). */
+    val YELLOW get() = P.accent
+    val INK get() = P.ink
+    val GLOW get() = P.glow
 
     /** Цвет «температуры» f = 0 (холодно) … 1 (раскалено). */
     fun color(f: Float, alpha: Int = 255): Int {
@@ -59,6 +76,7 @@ object ThermalScene {
     fun time() = (SystemClock.uptimeMillis() - t0) / 1000f
 
     private var iris: Bitmap? = null
+    private var irisRes = 0
     private var grain: BitmapShader? = null
     private val irisP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val grainP = Paint().apply { alpha = 38 }
@@ -73,7 +91,7 @@ object ThermalScene {
     fun resize(c: Context, width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
         d = c.resources.displayMetrics.density
-        if (iris == null) iris = BitmapFactory.decodeResource(c.resources, R.drawable.iris)
+        if (iris == null || irisRes != Heat.P.iris) { irisRes = Heat.P.iris; iris = BitmapFactory.decodeResource(c.resources, irisRes) }
         if (grain == null) {
             // зерно: случайные светлые точки, плитка повторяется и каждый кадр сдвигается
             val n = 128
@@ -114,7 +132,7 @@ object ThermalScene {
 
     private fun drawHud(canvas: Canvas, t: Float) {
         // уголки кадра
-        hud.style = Paint.Style.STROKE; hud.strokeWidth = 1.5f * d; hud.color = Color.argb(150, 255, 212, 59); hud.shader = null
+        hud.style = Paint.Style.STROKE; hud.strokeWidth = 1.5f * d; hud.color = Heat.YELLOW; hud.alpha = 150; hud.shader = null
         val k = 22 * d; val mg = 8 * d
         for ((x, y, sx, sy) in listOf(Q(mg, mg, 1, 1), Q(w - mg, mg, -1, 1), Q(mg, h - mg, 1, -1), Q(w - mg, h - mg, -1, -1))) {
             canvas.drawLine(x, y, x + sx * k, y, hud); canvas.drawLine(x, y, x, y + sy * k, hud)
@@ -122,16 +140,16 @@ object ThermalScene {
         // шкала температур у правого края
         val bx = w - 7 * d; val top = h * 0.3f; val bot = h * 0.7f
         canvas.drawRect(bx, top, bx + 3 * d, bot, scale)
-        hud.strokeWidth = d; hud.color = Color.argb(140, 255, 241, 220)
+        hud.strokeWidth = d; hud.color = Term.FG; hud.alpha = 140
         for (i in 0..8) { val y = top + (bot - top) * i / 8f; canvas.drawLine(bx - 3 * d, y, bx, y, hud) }
         // подписи: дата внизу, REC мигает
-        hudText.textSize = 15 * d; hudText.textAlign = Paint.Align.CENTER; hudText.color = Color.argb(200, 255, 150, 50)
+        hudText.textSize = 15 * d; hudText.textAlign = Paint.Align.CENTER; hudText.color = Term.DIM; hudText.alpha = 200
         canvas.drawText(date + "   ZOOM:OFF", w / 2, h - 6 * d, hudText)
         if ((t * 1.25f).toInt() % 2 == 0) {
             hud.style = Paint.Style.FILL; hud.color = Color.argb(220, 255, 50, 40)
             canvas.drawCircle(w - mg - 50 * d, h - mg - 26 * d, 3.5f * d, hud)
         }
-        hudText.textAlign = Paint.Align.LEFT; hudText.color = Color.argb(200, 255, 241, 220)
+        hudText.textAlign = Paint.Align.LEFT; hudText.color = Term.FG; hudText.alpha = 200
         canvas.drawText("REC", w - mg - 44 * d, h - mg - 21 * d, hudText)
     }
 
