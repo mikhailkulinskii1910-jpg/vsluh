@@ -444,7 +444,7 @@ html[data-theme=blueprint]{
 [data-theme=blueprint] #splash{background:var(--bg)}
 [data-theme=blueprint] #splash pre{position:relative;font:500 13px/1.55 var(--ru);color:var(--dim)}
 [data-theme=blueprint] #splash .ratw{display:none}
-[data-theme=blueprint] #splash .sign{right:auto;left:18px}
+[data-theme=blueprint] #splash .sign{bottom:calc(env(safe-area-inset-bottom) + 86px)}  /* над штампом */
 .ratbp{display:none}
 [data-theme=blueprint] #splash .ratbp{display:block;aspect-ratio:605/358;filter:none}
 .ratbp img{display:block;width:100%;height:100%}
@@ -895,7 +895,9 @@ function renderPanel() {
     const b = document.createElement('button'), sel = i ? term.rgb === name : !rgb;
     b.className = sel ? 'sel' : '';
     b.innerHTML = '<b></b><span></span>';
-    b.firstChild.style.background = 'linear-gradient(90deg,' + cols.join(',') + ')';
+    // у «выкл» вместо полосы — пустая рамка
+    if (i) b.firstChild.style.background = 'linear-gradient(90deg,' + cols.join(',') + ')';
+    else { b.firstChild.style.background = '#000'; b.firstChild.style.outline = '1px solid #777'; b.firstChild.style.outlineOffset = '-1px'; }
     b.lastChild.textContent = (sel ? '[x] ' : '[ ] ') + name;
     b.addEventListener('click', () => { term.rgb = i ? name : ''; saveColor(); applyColor(); renderPanel(); });
     list.appendChild(b);
@@ -1297,7 +1299,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa ir-remote v1.19', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa ir-remote v1.20', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

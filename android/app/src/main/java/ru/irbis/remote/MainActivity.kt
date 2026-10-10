@@ -85,12 +85,37 @@ class MainActivity : Activity() {
         // По умолчанию — встроенный ИК-порт. Ключ новый, чтобы после обновления старый выбор «Авто» не мешал.
         mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString(PREF_MODE, null)!!) }.getOrDefault(Mode.BUILTIN)
         setContentView(buildUi(withSplash = savedInstanceState == null))
+        hideNavBar()
 
         val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
 
         findUsb(intent)
         renderMode()
+    }
+
+    /**
+     * Кнопки навигации (назад / домой / недавние) скрыты: пульт занимает весь экран.
+     * Свайп от нижнего края показывает их ненадолго — поверх, на прозрачном фоне.
+     */
+    private fun hideNavBar() {
+        window.navigationBarColor = Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
+        if (Build.VERSION.SDK_INT >= 30) {
+            window.insetsController?.let {
+                it.hide(android.view.WindowInsets.Type.navigationBars())
+                it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideNavBar()   // после диалогов и возврата в приложение — снова спрятать
     }
 
     override fun onNewIntent(intent: Intent) {

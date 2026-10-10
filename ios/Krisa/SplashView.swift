@@ -47,7 +47,8 @@ struct SplashView: View {
             // тепловизор «захватил» крысу: рамка обнаружения с подписью (мигает при появлении)
             if Term.thermal && f > 0.62 && !(t < 1700 && Int(t / 70) % 2 == 0) { detectionBox(rw: rw, rh: rh).position(x: w / 2, y: h * 0.5 - 2) }
             // подпись в правом нижнем углу «расписывается» слева направо
-            if t > 700 { signature(p: CGFloat(min((t - 700) / 650, 1))).position(x: w - 18 - 55, y: h - 22 - 46) }
+            // (в «Чертеже» — выше, над штампом)
+            if t > 700 { signature(p: CGFloat(min((t - 700) / 650, 1))).position(x: w - 18 - 55, y: h - 46 - signatureLift) }
             // 4. уход: экран рассыпается полосами
             if t > 2350 { exitStripes(t: t, w: w, h: h) }
         }
@@ -137,6 +138,8 @@ struct SplashView: View {
             Rectangle().strokeBorder(Heat.yellow, lineWidth: 1.5).frame(width: rw * 1.12, height: rh * 1.2)
         }
     }
+
+    private var signatureLift: CGFloat { Term.blueprint ? 90 : 22 }
 
     private func signature(p: CGFloat) -> some View {
         Image("sign").resizable().aspectRatio(contentMode: .fit)
