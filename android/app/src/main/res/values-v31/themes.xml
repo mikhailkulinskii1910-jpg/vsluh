@@ -33,4 +33,15 @@
         <item name="android:windowSplashScreenBackground">@color/thermal_bg</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
     </style>
+
+    <style name="Theme.Blueprint" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/blueprint_bg</item>
+        <item name="android:statusBarColor">@color/blueprint_bg</item>
+        <item name="android:navigationBarColor">@color/blueprint_bg</item>
+        <item name="android:colorAccent">#FFFFFF</item>
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:alertDialogTheme">@style/Theme.Blueprint.Dialog</item>
+        <item name="android:windowSplashScreenBackground">@color/blueprint_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+    </style>
 </resources>

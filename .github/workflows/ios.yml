@@ -64,12 +64,44 @@ jobs:
           sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-thermal.png"
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-thermal.png"
+          # «Тепловизор», палитра RAINBOW HC
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa heat rainbow
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-thermal-rainbow.png"
+          # тема «Чертёж»
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme blueprint
+          SIMCTL_CHILD_KRISA_SPLASH_AT=1600 xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-blueprint.png"
+          SIMCTL_CHILD_KRISA_SPLASH_AT=2000 xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-blueprint-2000.png"
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-blueprint.png"
           # пульт MocTec (тема «Терминал»)
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme terminal
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote moc
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-moc.png"
+          # «Терминал» с RGB-переливом Rainbow: пульт и вкладка «Цвет»
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote irbis
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa rgb Rainbow
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-rgb.png"
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote color
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-rgb-color.png"
+          # «Терминал», зелёный + «Матрица»
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa rgb ""
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote irbis
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa termColor -int 2096954
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa matrix -bool true
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-matrix.png"
           # уменьшенные кадры — в лог, чтобы их можно было посмотреть без скачивания артефактов
           for f in out/shot-*.png out/splash-*.png; do
             sips -Z 360 -s format jpeg -s formatOptions 55 "$f" --out "${f%.png}.jpg" >/dev/null

@@ -13,8 +13,12 @@
 <meta name="apple-mobile-web-app-title" content="krisa">
 <title>krisa</title>
 <script>
-// Тема применяется до первой отрисовки, чтобы не мигала старая. «terminal» (по умолчанию), «prism» или «thermal».
-try { const t = localStorage.getItem('krisa-theme'); if (t === 'prism' || t === 'thermal') document.documentElement.dataset.theme = t; } catch {}
+// Тема применяется до первой отрисовки, чтобы не мигала старая. «terminal» (по умолчанию), «prism», «thermal» или «blueprint».
+// Палитра тепловизора (krisa-heat) — тоже сразу: ironbow (по умолчанию), white, rainbow, arctic.
+try {
+  const t = localStorage.getItem('krisa-theme'); if (t === 'prism' || t === 'thermal' || t === 'blueprint') document.documentElement.dataset.theme = t;
+  const h = localStorage.getItem('krisa-heat'); if (h === 'white' || h === 'rainbow' || h === 'arctic') document.documentElement.dataset.heat = h;
+} catch {}
 </script>
 <style>
 @font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:block}
@@ -36,9 +40,10 @@ body{min-height:100dvh;padding:calc(env(safe-area-inset-top) + 18px) 16px calc(e
 #rats{position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%;image-rendering:pixelated}
 body::after{content:"";position:fixed;inset:0;z-index:5;pointer-events:none;
   background:repeating-linear-gradient(to bottom,rgba(0,0,0,.28) 0 1px,transparent 1px 3px)}
-.wrap{position:relative;z-index:1;max-width:560px;margin:0 auto}
+/* без своего z-index: панель «Цвет» должна подниматься над RGB-переливом, а он — над пультом */
+.wrap{position:relative;max-width:560px;margin:0 auto}
 header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:0 2px 14px}
-h1{margin:0;font:400 64px/0.9 var(--mono);color:var(--fg);text-shadow:0 0 10px #fff,0 0 2px #fff}
+h1{margin:0;font:400 64px/0.9 var(--mono);color:var(--fg);text-shadow:0 0 10px var(--fg),0 0 2px var(--fg)}
 h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
 .id{font:20px var(--mono);color:var(--dim);margin-top:6px}
@@ -55,7 +60,7 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 .gear.tab{flex:1;width:auto;margin:0;height:40px}
 .gear.tab.on{background:var(--fg);color:#000}
 [data-theme=prism] .gear.tab.on{background:linear-gradient(135deg,var(--iris));color:var(--ink)}
-[data-theme=thermal] .gear.tab.on{background:linear-gradient(90deg,#E8382F,#FF7A1A,#FFC233);color:var(--ink)}
+[data-theme=thermal] .gear.tab.on{background:linear-gradient(90deg,var(--hot3));color:var(--ink)}
 .key{position:relative;height:clamp(76px,12dvh,118px);border:1px solid var(--line);background:#000;color:var(--fg);
   font:clamp(26px,8vw,40px)/1 var(--mono);cursor:pointer;padding:8px;touch-action:manipulation;overflow:hidden;
   transition:transform .08s;opacity:0}
@@ -91,7 +96,11 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 #splash{position:fixed;inset:0;z-index:10;background:#000;overflow:hidden;cursor:pointer}
 #splash pre{margin:0;padding:24px 16px;font:17px/1.25 var(--mono);color:var(--dim);white-space:pre-wrap}
 #splash .rat{position:absolute;left:50%;top:50%;width:min(72vw,420px);transform:translate(-50%,-160vh) rotate(-38deg);
-  filter:drop-shadow(0 0 14px rgba(255,255,255,.55))}
+  filter:drop-shadow(0 0 14px color-mix(in srgb,var(--fg) 55%,transparent))}
+/* крыса — силуэт rat.png, залитый цветом люминофора */
+#splash img.rat{display:none}
+#splash .ratw{display:block;aspect-ratio:605/358}
+#splash .ratp{position:absolute;inset:0;background:var(--fg);-webkit-mask:url(rat.png) center/contain no-repeat;mask:url(rat.png) center/contain no-repeat}
 #splash.go .rat{animation:drop .9s cubic-bezier(.3,0,.6,1) forwards,rglitch .9s steps(6) 1}
 @keyframes drop{0%{transform:translate(-50%,-160vh) rotate(-38deg)}55%{transform:translate(-50%,-50%) rotate(-6deg)}
   70%{transform:translate(-50%,-62%) rotate(3deg)}82%{transform:translate(-50%,-50%) rotate(-2deg)}
@@ -101,7 +110,7 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
   background:repeating-linear-gradient(#fff 0 1px,transparent 1px 4px);opacity:0}
 #splash.go .lines{animation:hit .5s .45s ease-out forwards}
 @keyframes hit{0%{opacity:.9;transform:translateX(-50%) scaleX(.2)}40%{opacity:.8;transform:translateX(-50%) scaleX(1)}100%{opacity:0;transform:translateX(-50%) scaleX(1.1)}}
-#splash .name{position:absolute;left:0;right:0;top:calc(50% + min(28vw,160px));text-align:center;font:64px var(--mono);color:var(--fg);text-shadow:0 0 14px #fff}
+#splash .name{position:absolute;left:0;right:0;top:calc(50% + min(28vw,160px));text-align:center;font:64px var(--mono);color:var(--fg);text-shadow:0 0 14px var(--fg)}
 /* подпись в углу «расписывается» слева направо */
 #splash .sign{position:absolute;right:18px;bottom:calc(env(safe-area-inset-bottom) + 22px);width:110px;opacity:.86;clip-path:inset(0 100% 0 0)}
 #splash.go .sign{animation:sign .65s .05s ease-out forwards}
@@ -229,7 +238,6 @@ html[data-theme=prism]{
 [data-theme=prism] #splash pre{position:relative}
 [data-theme=prism] #splash pre{font:500 13px/1.5 var(--ru)}
 [data-theme=prism] #splash img.rat{display:none}
-.ratw{display:none}
 /* крыса из жидкого стекла: перелив + блик внутри силуэта, светлый край сверху-слева и бирюзовый снизу-справа */
 [data-theme=prism] #splash .ratw{display:block;aspect-ratio:605/358;
   filter:drop-shadow(-1.5px -1.5px 0 rgba(255,255,255,.9)) drop-shadow(1.5px 1.5px 0 rgba(80,225,255,.85)) drop-shadow(0 0 22px #8B6CFF88)}
@@ -257,76 +265,218 @@ html[data-theme=prism]{
    Кадр тепловизора: на чёрном вращается радужка, палитра ironbow (холод — фиолетовый, жар — жёлто-белый),
    жёлтые рамки обнаружения как PERSON_01XX, HUD (уголки, шкала температур, REC, дата) и зерно матрицы. */
 html[data-theme=thermal]{
-  --bg:#000; --fg:#FFF1DC; --dim:#E0974A; --line:#FFD43B; --faint:#1A0E10; --yel:#FFD43B; --ink:#140700;
+  --bg:#050308; --fg:#FFF1DC; --dim:#E0974A; --line:#FFD43B; --faint:#1A0E10; --yel:#FFD43B; --glow:#FF4A12; --ink:#140700;
+  /* палитра: --heat холод→жар, --heatr наоборот, --warm/--warmr — горячая половина, --hot3 — «нагретая» кнопка */
   --heat:#0B0418,#2E0B5E,#6B1585,#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff;
+  --heatr:#fff,#FFF27A,#FFC233,#FF7A1A,#E8382F,#B51F7A,#6B1585,#2E0B5E,#0B0418;
+  --warm:#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff; --warmr:#fff,#FFF27A,#FFC233,#FF7A1A,#E8382F,#B51F7A;
+  --hot3:#E8382F,#FF7A1A,#FFC233; --irisimg:url(iris.jpg);
+}
+/* палитры тепловизора (вкладка «Цвет»): white hot, rainbow hc, arctic */
+html[data-theme=thermal][data-heat=white]{
+  --bg:#050505; --fg:#F2F2F2; --dim:#A3A8AE; --line:#4DFF7A; --faint:#141414; --yel:#4DFF7A; --glow:#D0D8E0; --ink:#0A0A0A;
+  --heat:#050505,#1E1E22,#3C3C42,#616168,#8A8A90,#B2B2B6,#D6D6D8,#F0F0F0,#fff;
+  --heatr:#fff,#F0F0F0,#D6D6D8,#B2B2B6,#8A8A90,#616168,#3C3C42,#1E1E22,#050505;
+  --warm:#616168,#8A8A90,#B2B2B6,#D6D6D8,#F0F0F0,#fff; --warmr:#fff,#F0F0F0,#D6D6D8,#B2B2B6,#8A8A90,#616168;
+  --hot3:#8A8A90,#B2B2B6,#D6D6D8; --irisimg:url(iris_white.jpg);
+}
+html[data-theme=thermal][data-heat=rainbow]{
+  --bg:#07001F; --fg:#FFFFFF; --dim:#7FD6FF; --line:#FFFFFF; --faint:#140A2E; --yel:#FFFFFF; --glow:#FF3060; --ink:#10001A;
+  --heat:#0A0030,#1A1AA8,#0070FF,#00C8E0,#00E060,#B8F000,#FFD000,#FF5000,#FF0030,#fff;
+  --heatr:#fff,#FF0030,#FF5000,#FFD000,#B8F000,#00E060,#00C8E0,#0070FF,#1A1AA8,#0A0030;
+  --warm:#00E060,#B8F000,#FFD000,#FF5000,#FF0030,#fff; --warmr:#fff,#FF0030,#FF5000,#FFD000,#B8F000,#00E060;
+  --hot3:#FFD000,#FF5000,#FF0030; --irisimg:url(iris_rainbow.jpg);
+}
+html[data-theme=thermal][data-heat=arctic]{
+  --bg:#020617; --fg:#F2F8FF; --dim:#8EC3F2; --line:#7FE3FF; --faint:#0B1630; --yel:#7FE3FF; --glow:#F7B733; --ink:#04102A;
+  --heat:#020617,#0B1E5B,#1C47A8,#3C82E0,#8EC3F2,#E9D9A6,#F7B733,#FFD966,#fff;
+  --heatr:#fff,#FFD966,#F7B733,#E9D9A6,#8EC3F2,#3C82E0,#1C47A8,#0B1E5B,#020617;
+  --warm:#3C82E0,#8EC3F2,#E9D9A6,#F7B733,#FFD966,#fff; --warmr:#fff,#FFD966,#F7B733,#E9D9A6,#8EC3F2,#3C82E0;
+  --hot3:#8EC3F2,#E9D9A6,#F7B733; --irisimg:url(iris_arctic.jpg);
 }
 .therm{display:none}
-[data-theme=thermal] .therm{display:block;position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:#000}
+[data-theme=thermal] .therm{display:block;position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:var(--bg)}
 [data-theme=thermal] .therm .iris{position:absolute;left:50%;top:50%;width:min(118vmin,1000px);aspect-ratio:1;translate:-50% -50%;
-  background:url(iris.jpg) center/cover;-webkit-mask:radial-gradient(closest-side,#000 86%,transparent 99%);mask:radial-gradient(closest-side,#000 86%,transparent 99%);
+  background:var(--irisimg) center/cover;-webkit-mask:radial-gradient(closest-side,#000 86%,transparent 99%);mask:radial-gradient(closest-side,#000 86%,transparent 99%);
   animation:spin 80s linear infinite,breathe 8s ease-in-out infinite alternate}
 @keyframes breathe{to{scale:1.05}}
 [data-theme=thermal] .therm .grain{position:absolute;inset:-50%;opacity:.17;animation:grain .45s steps(3) infinite;
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .9 0 0 0 0 .8 0 0 0 1.8 -.7'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 @keyframes grain{33%{transform:translate(-7%,4%)}66%{transform:translate(5%,-6%)}}
-[data-theme=thermal] .hud i{position:absolute;width:22px;height:22px;border:1.5px solid #FFD43B99}
+[data-theme=thermal] .hud i{position:absolute;width:22px;height:22px;border:1.5px solid color-mix(in srgb,var(--yel) 60%,transparent)}
 [data-theme=thermal] .hud i:nth-child(1){top:calc(env(safe-area-inset-top) + 8px);left:8px;border-right:0;border-bottom:0}
 [data-theme=thermal] .hud i:nth-child(2){top:calc(env(safe-area-inset-top) + 8px);right:8px;border-left:0;border-bottom:0}
 [data-theme=thermal] .hud i:nth-child(3){bottom:calc(env(safe-area-inset-bottom) + 8px);left:8px;border-right:0;border-top:0}
 [data-theme=thermal] .hud i:nth-child(4){bottom:calc(env(safe-area-inset-bottom) + 8px);right:8px;border-left:0;border-top:0}
 [data-theme=thermal] .hud s{position:absolute;right:4px;top:30%;height:40%;width:3px;background:linear-gradient(to top,var(--heat))}
 [data-theme=thermal] .hud s::after{content:"";position:absolute;right:3px;top:0;bottom:0;width:4px;
-  background:repeating-linear-gradient(#FFF1DC99 0 1px,transparent 1px 12.5%)}
+  background:repeating-linear-gradient(color-mix(in srgb,var(--fg) 60%,transparent) 0 1px,transparent 1px 12.5%)}
 [data-theme=thermal] .hud u{position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 3px);text-align:center;
-  font:15px var(--mono);color:#FF9632cc;text-decoration:none;letter-spacing:.06em}
-[data-theme=thermal] .hud em{position:absolute;right:20px;bottom:calc(env(safe-area-inset-bottom) + 28px);font:15px var(--mono);font-style:normal;color:#FFF1DCcc}
+  font:15px var(--mono);color:var(--dim);opacity:.8;text-decoration:none;letter-spacing:.06em}
+[data-theme=thermal] .hud em{position:absolute;right:20px;bottom:calc(env(safe-area-inset-bottom) + 28px);font:15px var(--mono);font-style:normal;color:color-mix(in srgb,var(--fg) 80%,transparent)}
 [data-theme=thermal] .hud em::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#FF3228;margin-right:5px;animation:blink 1.6s steps(1) infinite}
 [data-theme=thermal] #log,[data-theme=thermal] body::after{display:none}
-[data-theme=thermal] h1{text-shadow:none;background:linear-gradient(90deg,#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff,#FFF27A,#FFC233,#FF7A1A,#E8382F,#B51F7A);
-  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 5s linear infinite;filter:drop-shadow(0 0 10px #FF4A12aa)}
-[data-theme=thermal] h1::after{color:#FFC233;-webkit-text-fill-color:#FFC233}
+[data-theme=thermal] h1{text-shadow:none;background:linear-gradient(90deg,var(--warm),var(--warmr));
+  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:flow 5s linear infinite;filter:drop-shadow(0 0 10px color-mix(in srgb,var(--glow) 67%,transparent))}
+[data-theme=thermal] h1::after{color:var(--yel);-webkit-text-fill-color:var(--yel)}
 [data-theme=thermal] .gear{border-color:var(--yel);background:rgba(0,0,0,.65)}
-[data-theme=thermal] .gear:active{background:linear-gradient(90deg,#E8382F,#FF7A1A,#FFC233);color:var(--ink)}
+[data-theme=thermal] .gear:active{background:linear-gradient(90deg,var(--hot3));color:var(--ink)}
 /* кнопка — рамка обнаружения; при нажатии «нагревается» и потом плавно остывает */
-[data-theme=thermal] .key{background:rgba(0,0,0,.6);border:1.5px solid var(--yel);isolation:isolate;text-shadow:0 0 10px #FF4A12;transition:transform .08s,color .5s}
+[data-theme=thermal] .key{background:rgba(0,0,0,.6);border:1.5px solid var(--yel);isolation:isolate;text-shadow:0 0 10px var(--glow);transition:transform .08s,color .5s}
 [data-theme=thermal] .key::before,[data-theme=thermal] .key .beam{display:none}
 [data-theme=thermal] .key::after{content:"";position:absolute;inset:-25%;z-index:-1;pointer-events:none;opacity:0;transition:opacity .95s ease-out;
-  background:radial-gradient(closest-side,#fff,#FFF27A 22%,#FFC233 38%,#FF7A1A 52%,#E8382F 66%,#B51F7Acc 80%,transparent 100%)}
+  background:radial-gradient(closest-side,var(--warmr),transparent)}
 [data-theme=thermal] .key.on::after{opacity:1;transition:none}
 [data-theme=thermal] .key.inv::after{opacity:.8;animation:warm 2.4s ease-in-out infinite alternate}
 [data-theme=thermal] .key.inv.on::after{opacity:1}
 @keyframes warm{to{opacity:.62}}
-[data-theme=thermal] .key.on,[data-theme=thermal] .key.inv{background:rgba(0,0,0,.6);color:var(--ink);text-shadow:none;border-color:#FFF27A}
+[data-theme=thermal] .key.on,[data-theme=thermal] .key.inv{background:rgba(0,0,0,.6);color:var(--ink);text-shadow:none;border-color:var(--fg)}
 [data-theme=thermal] .key.inv.on{color:var(--ink)}
 [data-theme=thermal] .key .n{font-size:0;color:var(--yel)}
 [data-theme=thermal] .key .n::after{content:attr(data-k);font:13px var(--mono)}
 [data-theme=thermal] .key .h{font-size:13px}
-[data-theme=thermal] .key.on .n,[data-theme=thermal] .key.on .h,[data-theme=thermal] .key.inv .n,[data-theme=thermal] .key.inv .h{color:rgba(20,7,0,.8)}
-[data-theme=thermal] #splash{background:#000}
+[data-theme=thermal] .key.on .n,[data-theme=thermal] .key.on .h,[data-theme=thermal] .key.inv .n,[data-theme=thermal] .key.inv .h{color:color-mix(in srgb,var(--ink) 80%,transparent)}
+[data-theme=thermal] #splash{background:var(--bg)}
 [data-theme=thermal] #splash pre{position:relative}
-[data-theme=thermal] #splash img.rat{display:none}
 /* крыса на заставке — тепловое пятно в рамке обнаружения */
-[data-theme=thermal] #splash .ratw{display:block;aspect-ratio:605/358;filter:drop-shadow(0 0 16px #E8382F) drop-shadow(0 0 3px #FF7A1A)}
-[data-theme=thermal] #splash .ratp{position:absolute;inset:0;
-  background:radial-gradient(circle at 38% 58%,#fff 0,#FFF27A 14%,#FFC233 26%,#FF7A1A 40%,#E8382F 54%,#B51F7A 70%,#6B1585 85%,#2E0B5E 100%);
-  -webkit-mask:url(rat.png) center/contain no-repeat;mask:url(rat.png) center/contain no-repeat}
+[data-theme=thermal] #splash .ratw{filter:drop-shadow(0 0 16px var(--glow)) drop-shadow(0 0 3px var(--glow))}
+[data-theme=thermal] #splash .ratp{background:radial-gradient(circle at 38% 58%,var(--heatr))}
 [data-theme=thermal] #splash .ratw::after{content:"RAT_01XX  37.2°C";position:absolute;inset:-12% -6%;border:1.5px solid var(--yel);
   font:16px/1 var(--mono);color:var(--yel);padding:4px 6px;opacity:0}
 [data-theme=thermal] #splash.go .ratw::after{animation:boxin .4s .95s steps(4) forwards}
 @keyframes boxin{0%{opacity:0}25%{opacity:1}50%{opacity:0}100%{opacity:1}}
-[data-theme=thermal] #splash .lines{background:repeating-linear-gradient(#FF7A1A 0 1px,transparent 1px 4px)}
-[data-theme=thermal] #splash .name{text-shadow:none;background:linear-gradient(90deg,#B51F7A,#E8382F,#FF7A1A,#FFC233,#FFF27A,#fff);
-  -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px #FF4A12)}
+[data-theme=thermal] #splash .lines{background:repeating-linear-gradient(var(--glow) 0 1px,transparent 1px 4px)}
+[data-theme=thermal] #splash .name{text-shadow:none;background:linear-gradient(90deg,var(--warm));
+  -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px var(--glow))}
 [data-theme=thermal] dialog{border:1px solid var(--yel);background:#0A0508}
-[data-theme=thermal] .btn.primary{background:linear-gradient(90deg,#E8382F,#FF7A1A,#FFC233);color:var(--ink);border:0}
+[data-theme=thermal] .btn.primary{background:linear-gradient(90deg,var(--hot3));color:var(--ink);border:0}
 @media (prefers-reduced-motion:reduce){[data-theme=thermal] .therm *{animation:none}}
+/* ================= Вкладка «Цвет» =================
+   В «Терминале» — цвет люминофора (пресеты, «Матрица», круг цветов, RGB-переливы), в «Тепловизоре» — палитра.
+   Панель поднята над RGB-переливом (z-index), чтобы показывать цвета как есть. */
+.gear.tab.ctab{display:none}
+html:not([data-theme]) .gear.tab.ctab,[data-theme=thermal] .gear.tab.ctab{display:block;font-size:18px}
+#cpanel{display:none;position:relative;z-index:12;padding-bottom:6px}
+body.ctab #grid,body.ctab .status{display:none}
+body.ctab #cpanel{display:block}
+.cp h3{margin:16px 2px 8px;font:24px var(--mono);color:var(--fg)}
+.cp h3:first-child{margin-top:2px}
+.cp p{margin:-2px 2px 10px;font-size:12px;line-height:1.45;color:var(--dim)}
+.cp button{cursor:pointer;touch-action:manipulation;border-radius:0}
+.cp .pre{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cp .pre button{height:46px;border:1px solid var(--c);background:#000;color:var(--c);font:22px var(--mono);text-align:left;padding:0 12px;white-space:nowrap;overflow:hidden}
+.cp .pre button.sel{background:var(--c);color:#000}
+.cp .wide{display:block;width:100%;margin-top:8px;height:46px;border:1px solid var(--fg);background:#000;color:var(--fg);font:22px var(--mono)}
+.cp .wide.sel{background:var(--fg);color:#000}
+.cp .whw{display:flex;flex-direction:column;align-items:center;gap:10px}
+.cp canvas.wh{width:240px;height:240px;touch-action:none;cursor:crosshair}
+.cp .smp{width:240px;height:34px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font:18px var(--mono);color:#000}
+.cp .rgbl{display:none;margin-top:8px;border:1px solid var(--line);background:#000;padding:4px}
+.cp .rgbl.open{display:block}
+.cp .rgbl button{display:flex;align-items:center;gap:10px;width:100%;margin:0;padding:3px 4px;background:none;border:1px solid transparent;
+  color:var(--dim);font:18px/1 var(--mono);text-align:left}
+.cp .rgbl button.sel{border-color:var(--fg);color:var(--fg)}
+.cp .rgbl b{flex:1;height:26px;min-width:0}
+.cp .rgbl span{flex:none;width:158px;white-space:nowrap;overflow:hidden}
+/* палитры тепловизора: 4 крупные кнопки 2×2 */
+.cp .heats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cp .heats button{height:86px;display:flex;flex-direction:column;justify-content:space-between;gap:4px;padding:7px 8px;
+  border:1px solid color-mix(in srgb,var(--dim) 70%,transparent);background:rgba(0,0,0,.65);color:var(--fg);font:18px/1 var(--mono);text-align:left}
+.cp .heats button.sel{border:3px solid var(--yel);padding:5px 6px;color:var(--yel)}
+.cp .heats b{display:block;height:26px}
+.cp .heats small{font:13px/1 var(--mono);color:var(--dim);display:flex;justify-content:space-between}
+
+/* ================= RGB-перелив =================
+   Градиент поверх всего экрана в режиме multiply: чёрное остаётся чёрным, белое и серое окрашиваются.
+   Внутренний слой больше экрана и сдвигается по диагонали ровно на период (2 прохода палитры — прямо и зеркально). */
+#rgbov{display:none;position:fixed;inset:0;z-index:11;pointer-events:none;mix-blend-mode:multiply;overflow:hidden}
+html.rgb:not([data-theme]) #rgbov{display:block}
+#rgbov i{position:absolute;right:0;bottom:0;left:calc(var(--d) * -1);top:calc(var(--d) * -1);animation:rgbflow 12s linear infinite;will-change:transform}
+@keyframes rgbflow{to{transform:translate(var(--d),var(--d))}}
+
+/* ================= Фон «Матрица» (зелёный люминофор) ================= */
+#matrix{display:none;position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%}
+html.matrix:not([data-theme]) #matrix{display:block}
+html.matrix:not([data-theme]) #log{display:none}
+
+/* ================= Тема «Чертёж» =================
+   Синий blueprint: миллиметровка, схема schematic.png с проходящим «сканом», штамп в углу (всё рисует скрипт на canvas.bpc),
+   кнопки с двойной рамкой и метками совмещения, заставка — крыса контурным чертежом с размерными линиями. */
+html[data-theme=blueprint]{
+  --bg:#1A4A9E; --fg:#FFFFFF; --dim:#BFD3F2; --line:#9FB8E2; --faint:#2A5AAA; --ink:#1A4A9E; --bga:rgba(26,74,158,.78);
+  --mono:Manrope,"Segoe UI",system-ui,sans-serif; --ru:Manrope,"Segoe UI",system-ui,sans-serif;
+}
+.bpc{display:none}
+[data-theme=blueprint] .bpc{display:block;position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}
+[data-theme=blueprint] #log,[data-theme=blueprint] #rats,[data-theme=blueprint] body::after{display:none}
+[data-theme=blueprint] h1{font:600 40px/1.1 Unbounded,var(--mono);letter-spacing:-.5px;text-shadow:none}
+[data-theme=blueprint] h1::after{content:none}
+[data-theme=blueprint] .id{font:600 11px var(--ru);letter-spacing:.08em;margin-top:10px}
+[data-theme=blueprint] .mode{font:500 13px var(--ru);margin-top:5px}
+[data-theme=blueprint] .gear{background:var(--bga);border:1px solid #fff;font:600 13px var(--mono);letter-spacing:.08em;text-transform:uppercase}
+[data-theme=blueprint] .gear:active,[data-theme=blueprint] .gear.tab.on{background:#fff;color:var(--bg)}
+[data-theme=blueprint] .grid{gap:16px}
+/* кнопка: двойная рамка (внутренняя — outline), «+» в углах снаружи, FIG.01 / 0x18, штриховка при нажатии */
+[data-theme=blueprint] .key{overflow:visible;background:var(--bga);border:1.5px solid #fff;outline:1px solid rgba(255,255,255,.45);outline-offset:-6.5px;
+  font:600 clamp(14px,4.2vw,19px)/1.15 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#fff;isolation:isolate}
+[data-theme=blueprint] .key::before{inset:0;z-index:-1;background:repeating-linear-gradient(45deg,rgba(255,255,255,.35) 0 1px,transparent 1px 6px);
+  opacity:0;transition:opacity .5s ease-out}
+[data-theme=blueprint] .key.on::before{opacity:1;transition:none}
+[data-theme=blueprint] .key::after{content:"";position:absolute;inset:-8px;pointer-events:none;--w:rgba(255,255,255,.85);background:
+  linear-gradient(var(--w),var(--w)) left 0 top 3px/7px 1px,linear-gradient(var(--w),var(--w)) left 3px top 0/1px 7px,
+  linear-gradient(var(--w),var(--w)) right 0 top 3px/7px 1px,linear-gradient(var(--w),var(--w)) right 3px top 0/1px 7px,
+  linear-gradient(var(--w),var(--w)) left 0 bottom 3px/7px 1px,linear-gradient(var(--w),var(--w)) left 3px bottom 0/1px 7px,
+  linear-gradient(var(--w),var(--w)) right 0 bottom 3px/7px 1px,linear-gradient(var(--w),var(--w)) right 3px bottom 0/1px 7px;
+  background-repeat:no-repeat}
+[data-theme=blueprint] .key .n,[data-theme=blueprint] .key .h{font:600 10px var(--ru);letter-spacing:.08em;color:var(--dim)}
+[data-theme=blueprint] .key .n{top:10px;left:12px;font-size:0}
+[data-theme=blueprint] .key .n::after{content:attr(data-f);font:600 10px var(--ru)}
+[data-theme=blueprint] .key .h{bottom:10px;right:12px;text-transform:none}
+[data-theme=blueprint] .key.on{background:var(--bga);color:#fff;border-color:#fff}
+[data-theme=blueprint] .key.on .n,[data-theme=blueprint] .key.on .h{color:var(--dim)}
+[data-theme=blueprint] .key .beam{background:#fff;opacity:.85;box-shadow:0 0 8px #fff}
+/* POWER — инвертированная: залита белым, текст цвета фона */
+[data-theme=blueprint] .key.inv,[data-theme=blueprint] .key.inv.on{background:#fff;color:var(--bg);outline-color:rgba(26,74,158,.45)}
+[data-theme=blueprint] .key.inv::before{background:repeating-linear-gradient(45deg,rgba(26,74,158,.35) 0 1px,transparent 1px 6px)}
+[data-theme=blueprint] .key.inv .n,[data-theme=blueprint] .key.inv .h{color:var(--bg)}
+[data-theme=blueprint] .key.inv .beam{background:var(--bg);box-shadow:none}
+[data-theme=blueprint] .status{font:500 13px var(--ru);letter-spacing:.02em}
+[data-theme=blueprint] #splash{background:var(--bg)}
+[data-theme=blueprint] #splash pre{position:relative;font:500 13px/1.55 var(--ru);color:var(--dim)}
+[data-theme=blueprint] #splash .ratw{display:none}
+[data-theme=blueprint] #splash .sign{right:auto;left:18px}
+.ratbp{display:none}
+[data-theme=blueprint] #splash .ratbp{display:block;aspect-ratio:605/358;filter:none}
+.ratbp img{display:block;width:100%;height:100%}
+.ratbp svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.ratbp svg path,.ratbp svg line{vector-effect:non-scaling-stroke}
+.ratbp svg text{font-family:Manrope,system-ui,sans-serif;font-weight:600;fill:#fff;letter-spacing:.06em}
+[data-theme=blueprint] #splash .lines{background:repeating-linear-gradient(#fff 0 1px,transparent 1px 5px)}
+[data-theme=blueprint] #splash .name{top:calc(50% + min(28vw,160px) + 36px);font:600 44px Unbounded,var(--mono);text-shadow:none;color:#fff}
+/* уход заставки — белые горизонтальные полосы */
+[data-theme=blueprint] #splash.out{animation:bpout .32s linear forwards}
+[data-theme=blueprint] #splash.out::after{content:"";position:absolute;inset:0;z-index:3;
+  background:repeating-linear-gradient(#fff 0 2px,transparent 2px 12px);animation:bpstripes .32s linear forwards}
+@keyframes bpout{0%,55%{opacity:1}100%{opacity:0}}
+@keyframes bpstripes{0%{opacity:0;background-size:100% 40px}35%{opacity:.9}100%{opacity:1;background-size:100% 12px}}
+[data-theme=blueprint] dialog{background:#123E86;border:1px solid #fff}
+[data-theme=blueprint] dialog::backdrop{background:rgba(8,26,64,.7)}
+[data-theme=blueprint] .sheet h2,[data-theme=blueprint] .sheet h3{font:600 18px var(--ru);letter-spacing:.04em}
+[data-theme=blueprint] .opt{border-color:var(--line);background:rgba(255,255,255,.04)}
+[data-theme=blueprint] .btn{font:600 14px var(--ru);letter-spacing:.08em;text-transform:uppercase;background:transparent;border-color:#fff}
+[data-theme=blueprint] .btn.primary{background:#fff;color:var(--bg)}
+[data-theme=blueprint] input[type=text]{background:#0F3270}
+[data-theme=blueprint] td{border-top-color:#2F5DA8}
 </style>
+
 </head>
 <body>
-<div id="splash" aria-hidden="true"><div class="therm"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
+<div id="splash" aria-hidden="true"><canvas class="bpc"></canvas><div class="therm"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div><div class="sky"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div><pre id="boot"></pre><img class="rat" src="rat.png" alt=""><div class="rat ratw"><div class="ratp"></div></div><div class="rat ratbp"><img id="ratbpImg" alt=""><svg viewBox="0 0 605 358" preserveAspectRatio="none"><defs><marker id="ar" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="16" markerHeight="16" orient="auto-start-reverse"><path d="M0 1.5L10 5L0 8.5" fill="none" stroke="#fff" stroke-width="1.6"/></marker></defs><g stroke="#fff" stroke-width="1" fill="none" opacity=".9"><path d="M10 330V420M598 150V420M-8 6H40M-8 352H90" opacity=".6"/><path d="M10 404H598" marker-start="url(#ar)" marker-end="url(#ar)"/><path d="M-48 6V352" marker-start="url(#ar)" marker-end="url(#ar)"/><path d="M-8 6H-62M-8 352H-62" opacity=".6"/><path d="M590 126L622 52H676"/></g><circle cx="590" cy="126" r="4" fill="#fff"/><text x="304" y="440" font-size="24" text-anchor="middle">420 mm</text><text transform="translate(-62 179) rotate(-90)" font-size="24" text-anchor="middle">260 mm</text><text x="0" y="-26" font-size="24">Fig.1 — RAT</text><text x="626" y="44" font-size="22">TAIL</text></svg></div><div class="lines"></div><div class="name" id="splashName"></div><img class="sign" src="sign.png" alt=""></div>
 <div id="therm" class="therm" aria-hidden="true"><b class="iris"></b><b class="grain"></b><div class="hud"><i></i><i></i><i></i><i></i><s></s><em>REC</em><u></u></div></div>
 <div id="aura" class="sky" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="rays"></b><b class="sheen"></b><b class="burst"></b></div>
+<canvas id="bp" class="bpc" aria-hidden="true"></canvas>
 <div id="log" aria-hidden="true"><div id="logText"></div></div>
+<canvas id="matrix" aria-hidden="true"></canvas>
 <canvas id="rats" aria-hidden="true"></canvas>
 <div class="wrap">
   <header>
@@ -337,10 +487,12 @@ html[data-theme=thermal]{
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button><button class="gear tab ctab" data-r="color">Цвет</button></nav>
   <main class="grid" id="grid"></main>
+  <section class="cp" id="cpanel" aria-label="Цвет"></section>
   <div class="status" id="status" role="status" aria-live="polite"></div>
 </div>
+<div id="rgbov" aria-hidden="true"><i></i></div>
 
 <dialog id="dlg">
   <form method="dialog" class="sheet">
@@ -351,6 +503,8 @@ html[data-theme=thermal]{
       <div><b>Призма</b><span>Переливающееся стекло, радужные блики, как на CD и призмах.</span></div></label>
     <label class="opt"><input type="radio" name="theme" value="thermal">
       <div><b>Тепловизор</b><span>Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка.</span></div></label>
+    <label class="opt"><input type="radio" name="theme" value="blueprint">
+      <div><b>Чертёж</b><span>Синий blueprint, схема на фоне.</span></div></label>
 
     <h2 style="margin-top:22px">Как передавать сигнал</h2>
     <label class="opt"><input type="radio" name="mode" value="audio">
@@ -521,6 +675,7 @@ function makeKey([label, hex]) {
   b.innerHTML = '<span class="n"></span><span class="t"></span><span class="h"></span><i class="beam"></i>';
   b.querySelector('.n').textContent = '[' + String(grid.children.length + 1).padStart(2, '0') + ']';
   b.querySelector('.n').dataset.k = 'KEY_' + String(grid.children.length + 1).padStart(2, '0') + 'XX';   // подпись рамки в «Тепловизоре»
+  b.querySelector('.n').dataset.f = 'FIG.' + String(grid.children.length + 1).padStart(2, '0');           // подпись в «Чертеже»
   b.querySelector('.h').textContent = '0x' + hex.slice(4, 6);
   b.querySelector('.t').textContent = label;
   let hold = null;
@@ -546,23 +701,232 @@ function makeKey([label, hex]) {
   grid.appendChild(b);
 }
 
-/* Вкладки IRBIS / MocTec: меняют набор кнопок, выбор запоминается. */
-let remote = 'irbis';
-try { if (localStorage.getItem('krisa-remote') === 'moc') remote = 'moc'; } catch {}
+/* ---------- Цвет «Терминала» и палитра «Тепловизора» (вкладка «Цвет») ----------
+   Вся тема «Терминал» строится от одного цвета FG: DIM = FG×0.58, LINE = FG×0.39, FAINT = FG×0.089.
+   В RGB-переливе интерфейс рисуется белым, а цвет даёт градиент поверх экрана (multiply). */
+const PRESETS = [['Белый', '#EDEDED'], ['Зелёный', '#1FFF3A'], ['Красный', '#FF2A1A'], ['Оранжевый', '#FF8C1A'], ['Янтарь', '#FFB52E'], ['Фиолетовый', '#A855FF']];
+const MATRIX_GREEN = '#1FFF3A';
+const RGBS = [
+  ['Rainbow', '7F00FF 0000FF 00FFFF 00FF00 FFFF00 FF0000'],
+  ['Mac Style', '8000FF 0040FF 00FFFF 00FF00 FFFF00 FF0000'],
+  ['jet', '0000FF 00FFFF 80FF80 FFFF00 FF0000 800000'],
+  ['Blue-Red', '0000C0 0060FF 00FFFF 80FF80 FFFF00 FF4000 C00000'],
+  ['Eos A', '0010C0 00A0FF 00FF80 E0FF00 FFA000 FF3000 A00000'],
+  ['16 LEVEL', '009900 00FF00 00FF99 00FFFF 0000FF 9900FF FF00FF FF0066 FF0000 FFCCCC FFFFFF'],
+  ['Rainbow18', 'A000A0 6060FF 00C0C0 00A000 A0C000 FFFF00 FF8000 FF0000 FF60A0'],
+  ['PRISM', 'FF0000 FFA000 80FF00 00FFFF 0040FF'],
+  ['Pastels', 'FF0080 FF40C0 00FFFF 00FF80 C0FF00 FFFF00'],
+  ['Hardcandy', '3060FF 00E0FF FF0080 40FF60 FFE000 FF60C0'],
+  ['GREEN-PINK', '00A040 0080C0 8000FF FF00C0 FFC0E0'],
+  ['GRN-RED-BLU-WHT', '00FF00 FF0000 FF00FF A000FF FFFFFF'],
+  ['RED TEMPERATURE', 'C00000 FF6000 FFC000 FFFFE0'],
+  ['RED-PURPLE', 'C00040 FF0080 FF60C0 FFC0FF'],
+  ['hot', 'FF0000 FF8000 FFFF00 FFFFFF'],
+  ['STD GAMMA-II', '0000FF FF00FF FF0000 FFFF00 FFFFFF'],
+  ['STERN SPECIAL', 'FF2040 4040FF 8080FF C0C000 FFFFC0'],
+  ['Volcano', '6040C0 00A000 C06000 FF0000 FFFF00 6060FF'],
+  ['Ocean', '6060E0 C04040 C0A040 00C060 60C0FF 60FFE0'],
+  ['Nature', '00FFC0 C0FF40 008000 4000FF FF0000'],
+  ['algae', '6000C0 0060FF 00C080 C0FF00 FFA000 FF0000'],
+  ['arbre', 'C00000 C040C0 4080FF 00FFC0 FFFF00'],
+  ['kamae', 'C03000 FF8000 C0FF40 40FFC0 60C0FF C0A0FF'],
+  ['kelp', '3000A0 4060C0 60A0A0 C0C060 FFE080'],
+  ['dusk', '204080 408080 C08060 FFA040 FFF0C0'],
+  ['octarine', '206080 408060 C08080 FF80C0 FFC0FF'],
+  ['Haze', 'FF80FF C0C0FF 80A0FF C0A0A0 FFC080 FFE000'],
+  ['RdBu', 'B00020 FF8060 FFFFFF 60A0FF 2040A0'],
+].map(([n, c]) => [n, c.split(' ').map(h => lift('#' + h))]);
+/* Палитры тепловизора: холод → жар, акцент (рамки обнаружения), свечение. Остальные цвета — в CSS (html[data-heat]). */
+const HEATS = {
+  ironbow: { name: 'IRONBOW', acc: '#FFD43B', glow: '#FF4A12', pal: '0B0418 2E0B5E 6B1585 B51F7A E8382F FF7A1A FFC233 FFF27A FFFFFF' },
+  white: { name: 'WHITE HOT', acc: '#4DFF7A', glow: '#D0D8E0', pal: '050505 1E1E22 3C3C42 616168 8A8A90 B2B2B6 D6D6D8 F0F0F0 FFFFFF' },
+  rainbow: { name: 'RAINBOW HC', acc: '#FFFFFF', glow: '#FF3060', pal: '0A0030 1A1AA8 0070FF 00C8E0 00E060 B8F000 FFD000 FF5000 FF0030 FFFFFF' },
+  arctic: { name: 'ARCTIC', acc: '#7FE3FF', glow: '#F7B733', pal: '020617 0B1E5B 1C47A8 3C82E0 8EC3F2 E9D9A6 F7B733 FFD966 FFFFFF' },
+};
+Object.values(HEATS).forEach(h => { h.pal = h.pal.split(' ').map(x => '#' + x); });
+
+function rgbOf(h) { return [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); }
+function hexOf(c) { return '#' + c.map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('').toUpperCase(); }
+function mulHex(h, k) { return hexOf(rgbOf(h).map(v => v * k)); }
+/** «Осветлить» точку перелива: если max(r,g,b) < 150 — дотянуть до 150 (чёрная — серая #969696). */
+function lift(h) {
+  const c = rgbOf(h), m = Math.max(...c);
+  if (m === 0) return '#969696';
+  return m < 150 ? hexOf(c.map(v => v * 150 / m)) : h.toUpperCase();
+}
+function hsv2rgb(h, s, v) {
+  const f = n => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+  return [f(5), f(3), f(1)].map(x => x * 255);
+}
+function rgb2hs([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [(h * 60 + 360) % 360, mx ? d / mx : 0];
+}
+
+const term = { color: '#EDEDED', matrix: false, rgb: '' };
+let heatId = 'ironbow';
+try {
+  const c = localStorage.getItem('krisa-color'); if (/^#[0-9A-Fa-f]{6}$/.test(c || '')) term.color = c.toUpperCase();
+  term.matrix = localStorage.getItem('krisa-matrix') === '1';
+  const r = localStorage.getItem('krisa-rgb') || ''; if (RGBS.some(([n]) => n === r)) term.rgb = r;
+  const h = localStorage.getItem('krisa-heat'); if (HEATS[h]) heatId = h;
+} catch {}
+function saveColor() {
+  try { localStorage.setItem('krisa-color', term.color); localStorage.setItem('krisa-matrix', term.matrix ? '1' : '0'); localStorage.setItem('krisa-rgb', term.rgb); } catch {}
+}
+const theme = () => document.documentElement.dataset.theme || 'terminal';
+const rgbNow = () => theme() === 'terminal' ? RGBS.find(([n]) => n === term.rgb) : null;
+/** Текущий цвет люминофора (в RGB-переливе — белый). */
+function termFg() { return rgbNow() ? '#FFFFFF' : term.color; }
+
+/* Градиент перелива: палитра прямо и зеркально (период 2 прохода), один проход ≈ 1.2 высоты экрана. */
+function rgbFlow() {
+  const ov = $('rgbov'), r = rgbNow();
+  if (!r) { ov.firstElementChild.style.background = ''; return; }
+  const L = innerHeight * 1.2, cols = r[1], n = cols.length;
+  const stops = cols.map((c, i) => c + ' ' + (L * i / (n - 1)).toFixed(1) + 'px')
+    .concat(cols.slice(0, -1).reverse().map((c, i) => c + ' ' + (L + L * (i + 1) / (n - 1)).toFixed(1) + 'px'));
+  ov.firstElementChild.style.background = 'repeating-linear-gradient(135deg,' + stops.join(',') + ')';
+  ov.style.setProperty('--d', (L * Math.SQRT2).toFixed(1) + 'px');
+}
+addEventListener('resize', () => rgbFlow());
+
+/** Применить цвет/палитру к странице: CSS-переменные, перелив, «Матрица», крысы. */
+function applyColor() {
+  const root = document.documentElement, isTerm = theme() === 'terminal', fg = termFg();
+  if (isTerm) {
+    root.style.setProperty('--fg', fg); root.style.setProperty('--dim', mulHex(fg, 0.58));
+    root.style.setProperty('--line', mulHex(fg, 0.39)); root.style.setProperty('--faint', mulHex(fg, 0.089));
+  } else ['--fg', '--dim', '--line', '--faint'].forEach(v => root.style.removeProperty(v));
+  root.classList.toggle('rgb', !!rgbNow());
+  root.classList.toggle('matrix', isTerm && !rgbNow() && term.matrix && term.color === MATRIX_GREEN);
+  if (heatId === 'ironbow') delete root.dataset.heat; else root.dataset.heat = heatId;
+  rgbFlow();
+  window.ratColors && ratColors();
+  const t = theme();
+  document.querySelector('meta[name=theme-color]').content = t === 'prism' ? '#07060B' : t === 'blueprint' ? '#1A4A9E' : t === 'thermal' ? HEATS[heatId].pal[0] : '#000000';
+}
+
+/* Круг цветов: по кругу — оттенок HSV, к центру — бледнее, V = 1. Картинка считается один раз. */
+let wheelImg = null, rgbOpen = false;
+function wheelImage(N) {
+  if (wheelImg && wheelImg.width === N) return wheelImg;
+  const c = document.createElement('canvas'); c.width = c.height = N;
+  const x = c.getContext('2d'), d = x.createImageData(N, N), R = N / 2;
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+    const dx = i + .5 - R, dy = j + .5 - R, r = Math.hypot(dx, dy), a = Math.max(0, Math.min(1, R - r));
+    if (!a) continue;
+    const [cr, cg, cb] = hsv2rgb((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, Math.min(1, r / R), 1), k = (j * N + i) * 4;
+    d.data[k] = cr; d.data[k + 1] = cg; d.data[k + 2] = cb; d.data[k + 3] = a * 255;
+  }
+  x.putImageData(d, 0, 0);
+  return (wheelImg = c);
+}
+function drawWheel(cv, hex) {
+  const N = cv.width, x = cv.getContext('2d'), R = N / 2, s = N / 240;
+  x.clearRect(0, 0, N, N); x.drawImage(wheelImage(N), 0, 0);
+  const [h, sat] = rgb2hs(rgbOf(hex)), a = h * Math.PI / 180, px = R + Math.cos(a) * sat * R, py = R + Math.sin(a) * sat * R;
+  // метка: чёрное кольцо + белое кольцо
+  x.lineWidth = 3 * s; x.strokeStyle = '#000'; x.beginPath(); x.arc(px, py, 9 * s, 0, 7); x.stroke();
+  x.lineWidth = 2 * s; x.strokeStyle = '#fff'; x.beginPath(); x.arc(px, py, 6 * s, 0, 7); x.stroke();
+}
+
+const cpanel = $('cpanel');
+function renderPanel() {
+  if (theme() === 'thermal') {
+    cpanel.innerHTML = '<h3>&gt; палитра</h3><p>Палитра тепловизора: фон, кнопки, рамки обнаружения.</p><div class="heats"></div>';
+    Object.entries(HEATS).forEach(([id, h]) => {
+      const b = document.createElement('button'), sel = id === heatId;
+      b.className = sel ? 'sel' : '';
+      b.innerHTML = '<span></span><b></b><small><span>COLD</span><span>HOT</span></small>';
+      b.firstChild.textContent = (sel ? '[x] ' : '[ ] ') + h.name;
+      b.querySelector('b').style.background = 'linear-gradient(90deg,' + h.pal.join(',') + ')';
+      b.addEventListener('click', () => {
+        heatId = id;
+        try { localStorage.setItem('krisa-heat', id); } catch {}
+        applyColor(); renderPanel();
+      });
+      cpanel.querySelector('.heats').appendChild(b);
+    });
+    return;
+  }
+  const rgb = rgbNow(), fg = termFg();
+  cpanel.innerHTML = '<h3>&gt; люминофор</h3><div class="pre"></div><div class="mx"></div><h3>&gt; свой цвет</h3>'
+    + '<div class="whw"><canvas class="wh"></canvas><div class="smp"></div></div><button class="wide rgbb"></button><div class="rgbl"></div>';
+  PRESETS.forEach(([name, hex]) => {
+    const b = document.createElement('button'), sel = !rgb && term.color === hex;
+    b.className = sel ? 'sel' : ''; b.style.setProperty('--c', hex);
+    b.textContent = (sel ? '[x] ' : '[ ] ') + name;
+    b.addEventListener('click', () => { term.color = hex; term.rgb = ''; saveColor(); applyColor(); renderPanel(); });
+    cpanel.querySelector('.pre').appendChild(b);
+  });
+  // «Матрица» — только для зелёного
+  if (!rgb && term.color === MATRIX_GREEN) {
+    const m = document.createElement('button');
+    m.className = 'wide' + (term.matrix ? ' sel' : '');
+    m.textContent = term.matrix ? '[ MATRIX: ВКЛ ]' : '[ MATRIX ]';
+    m.addEventListener('click', () => { term.matrix = !term.matrix; saveColor(); applyColor(); renderPanel(); });
+    cpanel.querySelector('.mx').appendChild(m);
+  }
+  // круг цветов: пока палец ведёт — меняется образец, при отпускании цвет применяется
+  const cv = cpanel.querySelector('.wh'), smp = cpanel.querySelector('.smp'), dpr = Math.min(3, devicePixelRatio || 1);
+  cv.width = cv.height = Math.round(240 * dpr);
+  let pick = rgb ? '#FFFFFF' : term.color;
+  const showSample = h => { smp.style.background = h; smp.textContent = h; smp.style.color = Math.max(...rgbOf(h)) > 120 ? '#000' : '#fff'; };
+  drawWheel(cv, pick); showSample(pick);
+  const at = e => {
+    const r = cv.getBoundingClientRect(), dx = e.clientX - r.left - r.width / 2, dy = e.clientY - r.top - r.height / 2;
+    return hexOf(hsv2rgb((Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360, Math.min(1, Math.hypot(dx, dy) / (r.width / 2)), 1));
+  };
+  let drag = false;
+  cv.addEventListener('pointerdown', e => { drag = true; cv.setPointerCapture?.(e.pointerId); pick = at(e); drawWheel(cv, pick); showSample(pick); });
+  cv.addEventListener('pointermove', e => { if (!drag) return; pick = at(e); drawWheel(cv, pick); showSample(pick); });
+  cv.addEventListener('pointerup', () => { if (!drag) return; drag = false; term.color = pick; term.rgb = ''; saveColor(); applyColor(); renderPanel(); });
+  cv.addEventListener('pointercancel', () => { drag = false; });
+  // RGB-перелив: кнопка раскрывает/скрывает список, первая строка — «выкл»
+  const rb = cpanel.querySelector('.rgbb'), list = cpanel.querySelector('.rgbl');
+  rb.className = 'wide rgbb' + (rgb ? ' sel' : '');
+  rb.textContent = rgb ? '[ RGB: ' + rgb[0] + ' ]' : '[ RGB ]';
+  list.classList.toggle('open', rgbOpen);
+  rb.addEventListener('click', () => { rgbOpen = !rgbOpen; list.classList.toggle('open', rgbOpen); });
+  [['выкл', [term.color, term.color]], ...RGBS].forEach(([name, cols], i) => {
+    const b = document.createElement('button'), sel = i ? term.rgb === name : !rgb;
+    b.className = sel ? 'sel' : '';
+    b.innerHTML = '<b></b><span></span>';
+    b.firstChild.style.background = 'linear-gradient(90deg,' + cols.join(',') + ')';
+    b.lastChild.textContent = (sel ? '[x] ' : '[ ] ') + name;
+    b.addEventListener('click', () => { term.rgb = i ? name : ''; saveColor(); applyColor(); renderPanel(); });
+    list.appendChild(b);
+  });
+}
+
+/* Вкладки IRBIS / MocTec меняют набор кнопок (выбор запоминается), «Цвет» — показывает панель цвета вместо кнопок. */
+let remote = 'irbis', tab = 'irbis';
+try { if (localStorage.getItem('krisa-remote') === 'moc') remote = tab = 'moc'; } catch {}
+function syncTabs() {
+  // «Цвет» есть только в «Терминале» и «Тепловизоре»
+  if (tab === 'color' && theme() !== 'terminal' && theme() !== 'thermal') tab = remote;
+  document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
+  document.body.classList.toggle('ctab', tab === 'color');
+}
 function buildGrid(reveal) {
   grid.textContent = '';
   REMOTES[remote].keys.forEach(makeKey);
   document.querySelector('.id').textContent = REMOTES[remote].id;
-  document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === remote));
+  tab = remote; syncTabs();
   if (reveal) showRemote();
 }
 document.querySelectorAll('#tabs .tab').forEach(t => t.addEventListener('click', () => {
-  if (remote === t.dataset.r) return;
+  if (tab === t.dataset.r) return;
+  if (t.dataset.r === 'color') { tab = 'color'; renderPanel(); syncTabs(); return; }
   remote = t.dataset.r;
   try { localStorage.setItem('krisa-remote', remote); } catch {}
   buildGrid(true);
 }));
 buildGrid(false);
+applyColor();
 
 /* ---------- Диалог настроек ---------- */
 const dlg = $('dlg');
@@ -585,7 +949,8 @@ dlg.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change
 dlg.querySelectorAll('input[name=theme]').forEach(r => r.addEventListener('change', () => {
   if (r.value === 'terminal') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = r.value;
   try { localStorage.setItem('krisa-theme', r.value); } catch {}
-  document.querySelector('meta[name=theme-color]').content = r.value === 'prism' ? '#07060B' : '#000000';
+  applyColor(); syncTabs();
+  if (tab === 'color') renderPanel();
 }));
 $('host').addEventListener('input', e => { settings.host = e.target.value; save(); renderMode(); });
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
@@ -633,8 +998,8 @@ renderMode();
     rows.forEach((r, y) => [...r].forEach((ch, i) => { if (ch === '#') x.fillRect(i, y, 1, 1); }));
     return c;
   });
-  // «Тепловизор»: палитра ironbow и кадры, перекрашенные в цвет «температуры»
-  const HEAT = [[11, 4, 24], [46, 11, 94], [107, 21, 133], [181, 31, 122], [232, 56, 47], [255, 122, 26], [255, 194, 51], [255, 242, 122], [255, 255, 255]];
+  // «Тепловизор»: палитра (по умолчанию ironbow) и кадры, перекрашенные в цвет «температуры»
+  let HEAT = [];
   const heat = f => {
     const x = Math.max(0, Math.min(1, f)) * (HEAT.length - 1), i = Math.min(Math.floor(x), HEAT.length - 2), k = x - i;
     return 'rgb(' + HEAT[i].map((v, j) => Math.round(v + (HEAT[i + 1][j] - v) * k)).join(',') + ')';
@@ -648,7 +1013,16 @@ renderMode();
   const px = 2.5, rw = 28 * px, rh = 11 * px;
   // крыса: x, y, направление, скорость, оттенок (белый с прозрачностью — от почти белого до тёмно-серого); panic — удирает от пальца; wait — сидит за краем экрана
   const rats = [[70, .85], [110, .38], [45, .63], [90, .28], [130, .5]].map(([speed, shade]) => ({ speed, shade, x: 0, y: 0, dir: 1, stride: 0, panic: false, wait: 0, hop: 1 }));
-  rats.forEach(r => { r.heat = 0.55 + r.shade * 0.4; r.hot = tint(heat(r.heat)); });
+  rats.forEach(r => { r.heat = 0.55 + r.shade * 0.4; });
+  // «Терминал»: крысы цвета люминофора; «Тепловизор»: по выбранной палитре. Вызывается при смене цвета/палитры.
+  let lit = frames, acc = '#FFD43B', glow = '#FF4A12';
+  window.ratColors = () => {
+    lit = tint(termFg());
+    const h = HEATS[heatId];
+    HEAT = h.pal.map(rgbOf); acc = h.acc; glow = h.glow;
+    rats.forEach(r => { r.hot = tint(heat(r.heat)); });
+  };
+  ratColors();
   const respawn = (r, anywhere) => {
     r.dir = Math.random() < .5 ? 1 : -1;
     r.x = anywhere ? Math.random() * innerWidth : r.dir > 0 ? -rw : innerWidth;
@@ -669,7 +1043,8 @@ renderMode();
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = false;
     const dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
-    if (document.documentElement.dataset.theme === 'prism') { requestAnimationFrame(draw); return; }   // во второй теме крыс нет
+    const th = document.documentElement.dataset.theme;
+    if (th === 'prism' || th === 'blueprint') { requestAnimationFrame(draw); return; }   // в «Призме» и «Чертеже» крыс нет
     rats.forEach(r => {
       if (r.wait > 0) { r.wait -= dt; if (r.wait <= 0) respawn(r, false); return; }
       const v = r.speed * (r.panic ? 4.5 : 1);
@@ -678,8 +1053,8 @@ renderMode();
       const thermal = document.documentElement.dataset.theme === 'thermal';
       ctx.globalAlpha = thermal ? 1 : r.shade;
       const f = Math.floor(r.stride / 9) % 2;
-      const img = thermal ? r.hot[f] : frames[f];                   // лапы в такт пройденному пути
-      if (thermal) { ctx.shadowBlur = 9; ctx.shadowColor = '#E8382F'; }
+      const img = thermal ? r.hot[f] : lit[f];                      // лапы в такт пройденному пути
+      if (thermal) { ctx.shadowBlur = 9; ctx.shadowColor = glow; }
       const y = r.y - Math.sin(r.hop * Math.PI) * 10 - (f ? 1 : 0);   // прыжок от испуга
       ctx.save();
       if (r.dir < 0) { ctx.translate(r.x + rw, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, y, rw, rh); }
@@ -688,8 +1063,8 @@ renderMode();
       if (thermal) {
         // тёплое пятно в рамке обнаружения, как PERSON_01XX
         ctx.shadowBlur = 0; ctx.globalAlpha = .8;
-        ctx.strokeStyle = '#FFD43B'; ctx.lineWidth = 1; ctx.strokeRect(r.x - 4, y - 4, rw + 8, rh + 7);
-        ctx.fillStyle = '#FFD43B'; ctx.font = '12px VT323, monospace';
+        ctx.strokeStyle = acc; ctx.lineWidth = 1; ctx.strokeRect(r.x - 4, y - 4, rw + 8, rh + 7);
+        ctx.fillStyle = acc; ctx.font = '12px VT323, monospace';
         ctx.fillText('RAT_0' + (rats.indexOf(r) + 1) + 'XX ' + (22.4 + r.heat * 14.8).toFixed(1) + '°', r.x - 4, y - 6);
         ctx.globalAlpha = 1;
       }
@@ -763,6 +1138,141 @@ renderMode();
   document.querySelectorAll('.sky .burst').forEach(b => b.style.backgroundImage = url);
 })();
 
+/* ---------- Фон «Матрица»: колонки падающих символов (только зелёный люминофор) ----------
+   Клетка 17px, у каждой колонки своя скорость (6–22 клетки/с) и длина хвоста (8–30);
+   «голова» почти белая со свечением, хвост гаснет к концу, символы мерцают. Крысы бегают поверх. */
+(function () {
+  const cv = $('matrix'), x = cv.getContext('2d');
+  const CH = 'ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789Z:.=*+-<>|';
+  const S = 17;
+  const pick = () => CH[Math.random() * CH.length | 0];
+  let cols = [], rows = 0, last = 0;
+  const spawn = (c, anywhere) => {
+    c.speed = 6 + Math.random() * 16; c.len = 8 + (Math.random() * 23 | 0);
+    c.y = anywhere ? Math.random() * (rows + c.len) : -Math.random() * rows * 0.5;
+  };
+  function draw(now) {
+    requestAnimationFrame(draw);
+    if (!document.documentElement.classList.contains('matrix') || document.documentElement.dataset.theme) { last = 0; return; }
+    const dpr = devicePixelRatio || 1, W = innerWidth, H = innerHeight;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr) || !cols.length) {
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      rows = Math.ceil(H / S) + 1;
+      cols = Array.from({ length: Math.ceil(W / S) }, () => { const c = { ch: Array.from({ length: rows }, pick) }; spawn(c, true); return c; });
+    }
+    const dt = last ? Math.min((now - last) / 1000, 0.05) : 0; last = now;
+    const fg = term.color, rgb = rgbOf(fg).join(',');
+    x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.fillStyle = '#000'; x.fillRect(0, 0, W, H);
+    x.font = '15px "Noto Sans Mono CJK JP","MS Gothic",ui-monospace,monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    cols.forEach((c, i) => {
+      const prev = Math.floor(c.y);
+      c.y += c.speed * dt;
+      if (c.y - c.len > rows) spawn(c, false);
+      const head = Math.floor(c.y);
+      if (head !== prev && head >= 0 && head < rows) c.ch[head] = pick();
+      if (Math.random() < 0.25) c.ch[Math.random() * rows | 0] = pick();   // мерцание
+      const cx = i * S + S / 2;
+      for (let k = c.len; k >= 1; k--) {
+        const r = head - k; if (r < 0 || r >= rows) continue;
+        x.fillStyle = 'rgba(' + rgb + ',' + (0.9 * (1 - k / (c.len + 1))).toFixed(3) + ')';
+        x.fillText(c.ch[r], cx, r * S + S / 2);
+      }
+      if (head >= 0 && head < rows) {
+        x.shadowBlur = 10; x.shadowColor = fg; x.fillStyle = 'rgb(220,255,225)';
+        x.fillText(c.ch[head], cx, head * S + S / 2);
+        x.shadowBlur = 0;
+      }
+    });
+  }
+  requestAnimationFrame(draw);
+})();
+
+/* ---------- «Чертёж»: миллиметровка, схема со «сканом», штамп ----------
+   Рисуется на каждом canvas.bpc (фон страницы и фон заставки). Статичный слой (виньетка + сетка) кэшируется. */
+(function () {
+  const sch = new Image(); sch.src = 'schematic.png';
+  let base = null, t0 = performance.now();
+  function baseLayer(W, H, dpr) {
+    if (base && base.w === W && base.h === H && base.dpr === dpr) return base.c;
+    const c = document.createElement('canvas'); c.width = Math.round(W * dpr); c.height = Math.round(H * dpr);
+    const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const R = Math.hypot(W, H) / 2, g = x.createRadialGradient(W / 2, H / 2, R * 0.35, W / 2, H / 2, R);
+    g.addColorStop(0, '#1A4A9E'); g.addColorStop(1, '#10357A');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    // сетка: тонкая каждые 14px, крупная каждые 70px
+    [[14, 0.06], [70, 0.15]].forEach(([st, a]) => {
+      x.strokeStyle = 'rgba(255,255,255,' + a + ')'; x.lineWidth = 1; x.beginPath();
+      for (let i = st; i < W; i += st) { x.moveTo(Math.round(i) + .5, 0); x.lineTo(Math.round(i) + .5, H); }
+      for (let j = st; j < H; j += st) { x.moveTo(0, Math.round(j) + .5); x.lineTo(W, Math.round(j) + .5); }
+      x.stroke();
+    });
+    base = { w: W, h: H, dpr, c };
+    return c;
+  }
+  // штамп в правом нижнем углу, как на чертеже
+  function stamp(x, W, H) {
+    const w = 150, h = 64, bx = W - w - 12, by = H - h - 12, rh = h / 3, col = 58;
+    x.save();
+    x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1;
+    x.strokeRect(bx + .5, by + .5, w, h);
+    x.beginPath();
+    x.moveTo(bx, by + rh + .5); x.lineTo(bx + w, by + rh + .5);
+    x.moveTo(bx, by + 2 * rh + .5); x.lineTo(bx + w, by + 2 * rh + .5);
+    x.moveTo(bx + col + .5, by); x.lineTo(bx + col + .5, by + 2 * rh);
+    x.moveTo(bx + 92.5, by + 2 * rh); x.lineTo(bx + 92.5, by + h);
+    x.stroke();
+    x.fillStyle = 'rgba(255,255,255,.6)'; x.font = '600 9px Manrope, sans-serif'; x.textBaseline = 'middle';
+    x.fillText('MODEL', bx + 5, by + rh / 2 + 1); x.fillText('DRAWN BY', bx + 5, by + rh * 1.5 + 1);
+    x.fillText('SCALE 1:1', bx + 5, by + rh * 2.5 + 1); x.fillText('REV. A', bx + 98, by + rh * 2.5 + 1);
+    x.fillStyle = 'rgba(255,255,255,.85)'; x.font = '600 10px Manrope, sans-serif';
+    x.fillText('KRISA IR-REMOTE', bx + col + 5, by + rh / 2 + 1); x.fillText('krisa', bx + col + 5, by + rh * 1.5 + 1);
+    x.restore();
+  }
+  function draw(now) {
+    requestAnimationFrame(draw);
+    if (document.documentElement.dataset.theme !== 'blueprint') return;
+    const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight, t = (now - t0) / 1000;
+    document.querySelectorAll('canvas.bpc').forEach(cv => {
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+      const x = cv.getContext('2d');
+      x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(baseLayer(W, H, dpr), 0, 0);
+      x.setTransform(dpr, 0, 0, dpr, 0, 0);
+      if (sch.complete && sch.naturalWidth) {
+        // схема по ширине экрана; если выше экрана — медленно плавает вверх-вниз (цикл 60 с)
+        const sw = W * 0.95, sh = sw * sch.naturalHeight / sch.naturalWidth, sx = (W - sw) / 2;
+        const sy = sh > H ? -(sh - H) * (0.5 - 0.5 * Math.cos(t * Math.PI * 2 / 60)) : (H - sh) / 2;
+        x.globalAlpha = 0.33; x.drawImage(sch, sx, sy, sw, sh);
+        // «скан»: полоса сверху вниз за 7 с, вокруг линии схема ярче
+        const ly = ((t % 7) / 7) * (H + 80) - 40;
+        [[35, 0.45], [20, 0.7], [9, 0.9]].forEach(([band, a]) => {
+          x.save(); x.beginPath(); x.rect(0, ly - band, W, band * 2); x.clip();
+          x.globalAlpha = a; x.drawImage(sch, sx, sy, sw, sh); x.restore();
+        });
+        x.globalAlpha = 1;
+        const g = x.createLinearGradient(0, ly - 35, 0, ly + 35);
+        g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(.5, 'rgba(255,255,255,.07)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        x.fillStyle = g; x.fillRect(0, ly - 35, W, 70);
+        x.shadowBlur = 8; x.shadowColor = '#fff'; x.fillStyle = 'rgba(255,255,255,.5)'; x.fillRect(0, ly, W, 1); x.shadowBlur = 0;
+      }
+      x.globalAlpha = 1;
+      stamp(x, W, H);
+    });
+  }
+  requestAnimationFrame(draw);
+  // крыса на заставке — контурный чертёж: утолщённый силуэт минус сам силуэт + слабая заливка
+  const rat = new Image();
+  rat.onload = () => {
+    const w = rat.naturalWidth, h = rat.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d');
+    for (let a = 0; a < 16; a++) for (const r of [2, 4]) x.drawImage(rat, Math.cos(a * Math.PI / 8) * r, Math.sin(a * Math.PI / 8) * r);
+    x.globalCompositeOperation = 'destination-out'; x.drawImage(rat, 0, 0);
+    x.globalCompositeOperation = 'source-over'; x.globalAlpha = 0.08; x.drawImage(rat, 0, 0);
+    const img = $('ratbpImg'); if (img) img.src = c.toDataURL();
+  };
+  rat.src = 'rat.png';
+})();
+
 /* ---------- «Тепловизор»: дата в HUD ---------- */
 document.querySelectorAll('.therm .hud u').forEach(u => {
   u.textContent = new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(',', '').toUpperCase() + '   ZOOM:OFF';
@@ -787,7 +1297,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa ir-remote', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa ir-remote v1.19', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

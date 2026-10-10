@@ -2,6 +2,7 @@
     <color name="bg">#000000</color>
     <color name="prism_bg">#07060B</color>
     <color name="thermal_bg">#050308</color>
+    <color name="blueprint_bg">#1A4A9E</color>
     <color name="icon_bg">#59646C</color>
     <style name="Theme.Irbis" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
@@ -58,5 +59,24 @@
         <item name="android:textColorSecondary">#E0974A</item>
         <item name="android:fontFamily">@font/vt323</item>
         <item name="android:textSize">20sp</item>
+    </style>
+
+    <!-- Тема «Чертёж»: синий blueprint, белые линии, Manrope -->
+    <style name="Theme.Blueprint" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/blueprint_bg</item>
+        <item name="android:statusBarColor">@color/blueprint_bg</item>
+        <item name="android:navigationBarColor">@color/blueprint_bg</item>
+        <item name="android:colorAccent">#FFFFFF</item>
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:alertDialogTheme">@style/Theme.Blueprint.Dialog</item>
+    </style>
+    <style name="Theme.Blueprint.Dialog" parent="android:Theme.Material.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_bg_blueprint</item>
+        <item name="android:colorBackground">#123E86</item>
+        <item name="android:colorAccent">#FFFFFF</item>
+        <item name="android:textColorPrimary">#FFFFFF</item>
+        <item name="android:textColorSecondary">#BFD3F2</item>
+        <item name="android:fontFamily">@font/manrope</item>
+        <item name="android:textSize">16sp</item>
     </style>
 </resources>

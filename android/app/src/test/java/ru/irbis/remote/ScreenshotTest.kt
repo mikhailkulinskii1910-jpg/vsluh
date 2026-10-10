@@ -92,6 +92,51 @@ class ScreenshotTest {
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("roulette")
     }
 
+    /** Тема «Чертёж». */
+    @Test
+    fun shotsBlueprint() = themed("blueprint")
+
+    /** Палитры тепловизора: пульт в каждой и вкладка «Цвет». */
+    @Test
+    fun shotsHeat() {
+        for (id in listOf("white", "rainbow", "arctic")) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", "heat-$id").apply { mkdirs() }
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
+                .putString("theme", "thermal").putString("heat", id).putString("tab", "irbis").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp)); File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700)); shot("remote")
+            findText(root, "Цвет")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+            ctl.pause().stop().destroy()
+        }
+    }
+
+    /** RGB-перелив: пульт и вкладка «Цвет» с открытой графой переливов. */
+    @Test
+    fun shotsRgb() {
+        val out = File(System.getProperty("shots.dir") ?: "build/shots", "rgb").apply { mkdirs() }
+        org.robolectric.RuntimeEnvironment.getApplication()
+            .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
+            .putString("theme", "terminal").putString("rgb", "Rainbow").putBoolean("rgb_open", true).putString("tab", "irbis").commit()
+        val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val root = ctl.get().window.decorView
+        fun shot(name: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+            root.draw(Canvas(bmp)); File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1900)); shot("splash")
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800)); shot("remote")
+        findText(root, "Цвет")!!.performClick()
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+        // прокрутить к графе переливов
+        (findText(root, "[ RGB: Rainbow ]")!!).let { b -> (b.parent.parent.parent as? android.widget.ScrollView)?.scrollTo(0, (b.parent as View).top + b.top - 200) }
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100)); shot("list")
+    }
+
     /** Вкладка «Цвет» первой темы: зелёный «люминофор» — сама вкладка и пульт в этом цвете. */
     @Test
     fun shotsColor() {

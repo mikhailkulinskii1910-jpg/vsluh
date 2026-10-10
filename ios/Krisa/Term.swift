@@ -1,23 +1,87 @@
 import SwiftUI
 
-/// Палитра и шрифты. Три темы: «Терминал» (чёрно-белый, VT323), «Призма» (стекло и радужные переливы)
-/// и «Тепловизор» (кадр тепловизора, палитра ironbow).
+/// Палитра и шрифты. Четыре темы: «Терминал» (VT323, цвет «люминофора» выбирается во вкладке «Цвет»),
+/// «Призма» (стекло и радужные переливы), «Тепловизор» (кадр тепловизора, палитры) и «Чертёж» (синий blueprint).
 enum Term {
-    /// Выбранная тема; меняется в настройках (ключ "theme": "terminal" / "prism" / "thermal").
+    /// Выбранная тема; меняется в настройках (ключ "theme": "terminal" / "prism" / "thermal" / "blueprint").
     static var theme = UserDefaults.standard.string(forKey: "theme") ?? "terminal"
     static var prism: Bool { theme == "prism" }
     static var thermal: Bool { theme == "thermal" }
-    static var bg: Color { prism ? Color(hex: 0x07060B) : .black }
-    static var fg: Color { prism ? Color(hex: 0xF4F1FF) : thermal ? Color(hex: 0xFFF1DC) : Color(white: 0.93) }
-    static var dim: Color { prism ? Color(hex: 0xA79FC6) : thermal ? Color(hex: 0xE0974A) : Color(white: 0.54) }
-    static var line: Color { prism ? Color(hex: 0x4B4270) : thermal ? Heat.yellow : Color(white: 0.36) }
-    static var faint: Color { prism ? Color(hex: 0x1A1726) : thermal ? Color(hex: 0x1A0E10) : Color(white: 0.085) }
+    static var blueprint: Bool { theme == "blueprint" }
+    static var terminal: Bool { !prism && !thermal && !blueprint }
+
+    /// Цвет «люминофора» в «Терминале» (ключ "termColor", 0xRRGGBB). Вся тема строится от него.
+    static var termHex: UInt32 = Term.loadTermHex()
+    /// Имя RGB-перелива (ключ "rgb"); пусто — обычный один цвет.
+    static var rgbName: String = UserDefaults.standard.string(forKey: "rgb") ?? ""
+    /// Фон «Матрица» вместо лога (ключ "matrix"), только для зелёного.
+    static var matrixOn: Bool = UserDefaults.standard.bool(forKey: "matrix")
+
+    private static func loadTermHex() -> UInt32 {
+        let v: Int = (UserDefaults.standard.object(forKey: "termColor") as? Int) ?? 0xEDEDED
+        return UInt32(truncatingIfNeeded: v) & 0xFFFFFF
+    }
+
+    /// Перелив включён: интерфейс рисуется белым, поверх кладётся градиент в режиме multiply.
+    static var rgbActive: Bool { terminal && !rgbName.isEmpty && TermColors.flowNames.contains(rgbName) }
+    /// «Матрица» включена: только зелёный и без перелива.
+    static var matrix: Bool { terminal && matrixOn && termHex == TermColors.green && !rgbActive }
+    /// Базовый цвет «Терминала» (в режиме перелива — белый).
+    static var baseHex: UInt32 { rgbActive ? 0xFFFFFF : termHex }
+
+    /// Покомпонентное умножение цвета терминала на k.
+    static func shade(_ k: Double) -> Color {
+        let h: UInt32 = baseHex
+        let r: Double = Double((h >> 16) & 0xFF) / 255.0 * k
+        let g: Double = Double((h >> 8) & 0xFF) / 255.0 * k
+        let b: Double = Double(h & 0xFF) / 255.0 * k
+        return Color(.sRGB, red: r, green: g, blue: b, opacity: 1)
+    }
+
+    static var bg: Color {
+        if prism { return Color(hex: 0x07060B) }
+        if thermal { return Color(hex: Heat.cur.bg) }
+        if blueprint { return Color(hex: Blueprint.bgHex) }
+        return .black
+    }
+    static var fg: Color {
+        if prism { return Color(hex: 0xF4F1FF) }
+        if thermal { return Color(hex: Heat.cur.fg) }
+        if blueprint { return .white }
+        return shade(1)
+    }
+    static var dim: Color {
+        if prism { return Color(hex: 0xA79FC6) }
+        if thermal { return Color(hex: Heat.cur.dim) }
+        if blueprint { return Color(hex: 0xBFD3F2) }
+        return shade(0.58)
+    }
+    static var line: Color {
+        if prism { return Color(hex: 0x4B4270) }
+        if thermal { return Heat.yellow }
+        if blueprint { return Color(hex: 0x9FB8E2) }
+        return shade(0.39)
+    }
+    static var faint: Color {
+        if prism { return Color(hex: 0x1A1726) }
+        if thermal { return Color(hex: 0x1A0E10) }
+        if blueprint { return Color(hex: 0x2A5AAA) }
+        return shade(0.089)
+    }
     static let noise = Array("#$%&@01<>/\\|=+*:;░▒▓")
 
-    /// Пиксельный VT323 (латиница); в «Призме» — Unbounded (он заметно крупнее, поэтому меньше кегль).
-    static func mono(_ size: CGFloat) -> Font { prism ? Prism.display(size * 0.62) : .custom("VT323-Regular", size: size) }
-    /// Русский текст: в VT323 нет кириллицы — системный моноширинный; в «Призме» — Manrope.
-    static func ru(_ size: CGFloat) -> Font { prism ? Prism.body(size) : .system(size: size, design: .monospaced) }
+    /// Пиксельный VT323 (латиница); в «Призме» — Unbounded (он заметно крупнее, поэтому меньше кегль),
+    /// в «Чертеже» — Manrope SemiBold.
+    static func mono(_ size: CGFloat) -> Font {
+        if prism { return Prism.display(size * 0.62) }
+        if blueprint { return Blueprint.semi(size * 0.64) }
+        return .custom("VT323-Regular", size: size)
+    }
+    /// Русский текст: в VT323 нет кириллицы — системный моноширинный; в «Призме» и «Чертеже» — Manrope.
+    static func ru(_ size: CGFloat) -> Font {
+        if prism || blueprint { return Prism.body(size) }
+        return .system(size: size, design: .monospaced)
+    }
 
     static func scramble(_ text: String, _ progress: Double) -> String {
         let shown = Int(Double(text.count) * progress)
@@ -199,7 +263,7 @@ extension RunningRats {
             if Term.thermal {
                 paintHot(ctx, body: body, pos: pos, index: i, shade: shade)
             } else {
-                ctx.fill(body, with: .color(.white.opacity(shade)))
+                ctx.fill(body, with: .color(Term.fg.opacity(shade)))   // крысы — цветом «люминофора»
             }
         }
     }
@@ -208,7 +272,7 @@ extension RunningRats {
     private static func paintHot(_ ctx: GraphicsContext, body: Path, pos: CGPoint, index: Int, shade: Double) {
         let heat: Double = 0.55 + shade * 0.4
         var c = ctx
-        c.addFilter(.shadow(color: Color(hex: 0xE8382F), radius: 5))
+        c.addFilter(.shadow(color: Heat.color(0.5), radius: 5))
         c.fill(body, with: .color(Heat.color(heat)))
         let box = CGRect(x: pos.x - 4, y: pos.y - 4, width: RatSim.w + 8, height: RatSim.h + 7)
         ctx.stroke(Path(box), with: .color(Heat.yellow.opacity(0.8)), lineWidth: 1)
@@ -291,7 +355,9 @@ struct KeyView: View {
     @State private var pressedAt = Date.distantPast
 
     var body: some View {
-        Group { if Term.prism { prismFace } else if Term.thermal { thermalFace } else { terminalFace } }
+        Group {
+            if Term.prism { prismFace } else if Term.thermal { thermalFace } else if Term.blueprint { blueprintFace } else { terminalFace }
+        }
         .scaleEffect(down ? 0.97 : 1)
         .opacity(visible ? 1 : 0)
         .contentShape(Rectangle())
@@ -375,6 +441,22 @@ struct KeyView: View {
             .padding(.horizontal, 7).padding(.vertical, 4)
         }
         .clipped()
+    }
+
+    /// «Чертёж»: двойная рамка, метки совмещения, FIG.01; при нажатии — штриховка 45°, гаснущая за 0,5 с, и полоса-скан.
+    private var blueprintFace: some View {
+        TimelineView(.animation) { tl in
+            GeometryReader { g in
+                BlueprintKey(label: shown, index: index, code: code, inverted: inverted,
+                             hatch: blueprintHatch(tl.date), scan: tl.date.timeIntervalSince(pressedAt) / 0.45, size: g.size)
+            }
+        }
+    }
+
+    private func blueprintHatch(_ now: Date) -> Double {
+        if down { return 1 }
+        let k: Double = 1 - now.timeIntervalSince(pressedAt) / 0.5
+        return max(0, k)
     }
 
     private var terminalFace: some View {
