@@ -16,76 +16,24 @@ struct ContentView: View {
     @State private var help = false
     @State private var noIr = false
     @AppStorage("theme") private var theme = "terminal"
-    /// Какой пульт на экране: "irbis" или "moc" (MocTec).
+    /// Какой пульт на экране: "irbis" или "moc" (MocTec); "color" — вкладка «Цвет».
     @AppStorage("remote") private var remote = "irbis"
+    // цвет «Терминала» и палитра «Тепловизора» (сами значения Term/Heat держат в статических полях)
+    @AppStorage("termColor") private var termColor = 0xEDEDED
+    @AppStorage("matrix") private var matrix = false
+    @AppStorage("rgb") private var rgb = ""
+    @AppStorage("heat") private var heat = "ironbow"
+    /// Где на экране область пульта — туда кладётся панель «Цвет» (поверх RGB-перелива).
+    @State private var panelFrame: CGRect = .zero
 
     var body: some View {
         ZStack {
-            Term.bg.ignoresSafeArea()
-            themeBackground().ignoresSafeArea()
-
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        titleView()
-                        Text(remoteSubtitle).font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
-                        Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
-                            .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
-                    }
-                    Spacer()
-                    Button { help = true } label: { headerLabel(Term.prism ? "?" : "[?]", width: 52) }
-                    .padding(.top, 10)
-                    .accessibilityLabel("Как пользоваться")
-                    Button { settings = true } label: { headerLabel(Term.prism ? "tx" : "[tx]", width: 64) }
-                    .padding(.top, 10)
-                    .accessibilityLabel("Передатчик")
-                }
-
-                remoteTabs().padding(.top, 12)
-
-                GeometryReader { g in
-                    let rowH = min(110, max(64, (g.size.height - 5 * 10) / 6))
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                        if ready {
-                            ForEach(Array(currentKeys.enumerated()), id: \.offset) { i, k in
-                                KeyView(index: i, label: k.label, code: k.code, inverted: k.label == "POWER",
-                                        revealDelay: 0.06 * Double(i),
-                                        onDown: { model.press(k.label, k.code) },
-                                        onUp: { model.release() })
-                                    .frame(height: rowH)
-                            }
-                        }
-                    }
-                    .id(remote)   // другой пульт — кнопки создаются заново и снова «расшифровываются»
-                }
-                .padding(.top, 12)
-
-                TypeLine(text: model.status, font: Term.ru(14),
-                         color: model.status.hasPrefix("!!") || model.status.contains("[sent]") ? Term.fg : Term.dim)
-                    .padding(.top, 10).padding(.leading, 4)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-
-            if !Term.prism && !Term.thermal { Scanlines().ignoresSafeArea() }
-
-            if splash {
-                SplashView(boot: [
-                    "krisa ir-remote ios",
-                    "loading nec table ........ [ok]",
-                    "audio out ................ [" + (AudioIr.adapterConnected ? "ok" : "--") + "]",
-                    "decoding rat.png ......... [ok]",
-                ]) {
-                    guard splash else { return }   // заставку уже убрали (отладочный запуск)
-                    withAnimation(.easeOut(duration: 0.26)) { splash = false }
-                    ready = true
-                    checkIrPort()
-                }
-                .transition(.opacity)
-                .zIndex(10)
-            }
+            screen
+                .id(screenKey)   // смена темы или цвета — перестроить экран с новой палитрой
+            if showPanel { colorPanelLayer }
         }
-        .id(theme)   // смена темы — перестроить экран с новой палитрой
+        .coordinateSpace(name: "krisa")
+        .onPreferenceChange(PanelFrameKey.self) { f in panelFrame = f }
         .preferredColorScheme(.dark)
         .statusBarHidden(splash)
         .sheet(isPresented: $settings) { SettingsView(model: model) }
@@ -104,6 +52,127 @@ struct ContentView: View {
             }
         }
     }
+
+    /// Ключ перестройки экрана: тема, цвет терминала, перелив, «Матрица», палитра тепловизора.
+    private var screenKey: String {
+        let parts: [String] = [theme, String(termColor), rgb, matrix ? "m" : "-", heat]
+        return parts.joined(separator: "|")
+    }
+
+    /// Весь экран, кроме панели «Цвет»: фон, шапка, пульт, статус, заставка и RGB-перелив поверх.
+    private var screen: some View {
+        ZStack {
+            Term.bg.ignoresSafeArea()
+            themeBackground().ignoresSafeArea()
+
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                remoteTabs().padding(.top, 12)
+                if colorTab {
+                    panelSlot.padding(.top, 12)
+                } else {
+                    keyGrid.padding(.top, 12)
+                }
+                TypeLine(text: model.status, font: Term.ru(14),
+                         color: model.status.hasPrefix("!!") || model.status.contains("[sent]") ? Term.fg : Term.dim)
+                    .padding(.top, 10).padding(.leading, 4)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+
+            if Term.terminal { Scanlines().ignoresSafeArea() }
+
+            if splash { splashLayer }
+
+            rgbLayer.zIndex(11)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
+                titleView()
+                Text(remoteSubtitle).font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
+                Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
+                    .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
+            }
+            Spacer()
+            Button { help = true } label: { headerLabel(Term.prism ? "?" : "[?]", width: 52) }
+            .padding(.top, 10)
+            .accessibilityLabel("Как пользоваться")
+            Button { settings = true } label: { headerLabel(Term.prism ? "tx" : "[tx]", width: 64) }
+            .padding(.top, 10)
+            .accessibilityLabel("Передатчик")
+        }
+    }
+
+    private var keyGrid: some View {
+        GeometryReader { g in
+            let rowH: CGFloat = min(110, max(64, (g.size.height - 5 * 10) / 6))
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                if ready {
+                    ForEach(Array(currentKeys.enumerated()), id: \.offset) { i, k in
+                        KeyView(index: i, label: k.label, code: k.code, inverted: k.label == "POWER",
+                                revealDelay: 0.06 * Double(i),
+                                onDown: { model.press(k.label, k.code) },
+                                onUp: { model.release() })
+                            .frame(height: rowH)
+                    }
+                }
+            }
+            .id(remote)   // другой пульт — кнопки создаются заново и снова «расшифровываются»
+        }
+    }
+
+    /// Пустое место под панель «Цвет»: только сообщает свою рамку.
+    private var panelSlot: some View {
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(GeometryReader { g in
+                Color.clear.preference(key: PanelFrameKey.self, value: g.frame(in: .named("krisa")))
+            })
+    }
+
+    private var splashLayer: some View {
+        SplashView(boot: [
+            "krisa ir-remote ios",
+            "loading nec table ........ [ok]",
+            "audio out ................ [" + (AudioIr.adapterConnected ? "ok" : "--") + "]",
+            "decoding rat.png ......... [ok]",
+        ]) {
+            guard splash else { return }   // заставку уже убрали (отладочный запуск)
+            withAnimation(.easeOut(duration: 0.26)) { splash = false }
+            ready = true
+            checkIrPort()
+        }
+        .transition(.opacity)
+        .zIndex(10)
+    }
+
+    /// RGB-перелив поверх всего экрана (и заставки) в режиме multiply.
+    @ViewBuilder private var rgbLayer: some View {
+        if let f = activeFlow {
+            RgbOverlay(colors: f.colors).ignoresSafeArea()
+        }
+    }
+
+    private var activeFlow: RgbFlow? { Term.rgbActive ? TermColors.flow(Term.rgbName) : nil }
+
+    /// Панель «Цвет» — над переливом, на месте кнопок пульта.
+    private var colorPanelLayer: some View {
+        colorPanel()
+            .frame(width: panelFrame.width, height: panelFrame.height)
+            .position(x: panelFrame.midX, y: panelFrame.midY)
+    }
+
+    @ViewBuilder private func colorPanel() -> some View {
+        if Term.thermal { HeatPanel() } else { TermColorPanel() }
+    }
+
+    /// Вкладка «Цвет» есть только в «Терминале» и «Тепловизоре».
+    private var hasColorTab: Bool { theme == "terminal" || theme == "thermal" }
+    private var colorTab: Bool { remote == "color" && hasColorTab }
+    private var showPanel: Bool { colorTab && ready && !splash && panelFrame.width > 1 }
 }
 
 struct SettingsView: View {
@@ -113,19 +182,23 @@ struct SettingsView: View {
     @AppStorage("theme") private var theme = "terminal"
     private let themes = [("terminal", "Терминал", "Чёрно-белый, пиксельный шрифт, бегущий лог и крысы"),
                           ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы"),
-                          ("thermal", "Тепловизор", "Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка")]
+                          ("thermal", "Тепловизор", "Кадр тепловизора: палитры, рамки обнаружения, вращающаяся радужка"),
+                          ("blueprint", "Чертёж", "Синий blueprint, схема на фоне")]
 
     /// Фон строки выбора в текущей теме: выбранная подсвечена.
     private func rowFill(_ on: Bool) -> AnyView {
         if !on { return AnyView(Term.bg) }
         if Term.prism { return AnyView(Color(hex: 0x8B6CFF, alpha: 0.35)) }
         if Term.thermal { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
+        if Term.blueprint { return AnyView(Color.white) }
         return AnyView(Term.fg)
     }
 
     /// Цвет текста строки выбора.
     private func rowInk(_ on: Bool) -> Color {
-        on && !Term.prism ? Color.black : Term.fg
+        if !on || Term.prism { return Term.fg }
+        if Term.blueprint { return Blueprint.bg }
+        return Color.black
     }
 
     private func themeRow(_ i: Int) -> some View {
@@ -230,17 +303,27 @@ extension ContentView {
     var currentKeys: [(label: String, code: UInt32)] { remote == "moc" ? MOC_KEYS : KEYS }
     var remoteSubtitle: String { remote == "moc" ? "MocTec :: NEC 04FB" : "#500202 :: IRBIS :: NEC 38kHz" }
 
-    /// Вкладки IRBIS / MocTec над кнопками.
+    /// Вкладки IRBIS / MocTec (и «Цвет» в «Терминале» и «Тепловизоре») над кнопками.
     func remoteTabs() -> some View {
         HStack(spacing: 8) {
             remoteTab("irbis", "IRBIS")
             remoteTab("moc", "MocTec")
+            if hasColorTab { remoteTab("color", "Цвет") }
         }
     }
 
+    /// Какая вкладка подсвечена: «Цвет» в теме без неё — значит пульт IRBIS.
+    private var shownRemote: String { remote == "color" && !hasColorTab ? "irbis" : remote }
+
     private func remoteTab(_ id: String, _ title: String) -> some View {
-        let on: Bool = remote == id
+        let on: Bool = shownRemote == id
         return Button { remote = id } label: { tabLabel(title, on: on) }
+    }
+
+    /// Шрифт вкладки: в VT323 нет кириллицы — «Цвет» системным моноширинным.
+    private func tabFont(_ title: String) -> Font {
+        if title == "Цвет" && (Term.terminal || Term.thermal) { return Term.ru(16) }
+        return Term.mono(22)
     }
 
     @ViewBuilder private func tabLabel(_ title: String, on: Bool) -> some View {
@@ -249,12 +332,17 @@ extension ContentView {
                 .frame(maxWidth: .infinity).frame(height: 40)
                 .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
         } else if Term.thermal {
-            Text(title).font(Term.mono(22)).foregroundColor(on ? Heat.ink : Term.fg)
+            Text(title).font(tabFont(title)).foregroundColor(on ? Heat.ink : Term.fg)
                 .frame(maxWidth: .infinity).frame(height: 40)
                 .background(thermalTabFill(on))
                 .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
+        } else if Term.blueprint {
+            Blueprint.caps(title, 13).foregroundColor(on ? Blueprint.bg : Color.white)
+                .frame(maxWidth: .infinity).frame(height: 40)
+                .background(on ? Color.white : Blueprint.bg.opacity(0.78))
+                .overlay(Rectangle().strokeBorder(Color.white, lineWidth: 1))
         } else {
-            Text(title).font(Term.mono(22)).foregroundColor(on ? Color.black : Term.fg)
+            Text(title).font(tabFont(title)).foregroundColor(on ? Color.black : Term.fg)
                 .frame(maxWidth: .infinity).frame(height: 40)
                 .background(on ? Term.fg : Color.black)
                 .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
@@ -266,7 +354,7 @@ extension ContentView {
         return AnyView(Color.black.opacity(0.65))
     }
 
-    /// Фон текущей темы. Во второй теме крыс нет, в «Тепловизоре» они — тёплые пятна в рамках.
+    /// Фон текущей темы. В «Призме» и «Чертеже» крыс нет, в «Тепловизоре» они — тёплые пятна в рамках.
     @ViewBuilder func themeBackground() -> some View {
         if Term.prism {
             PrismBackground()
@@ -275,6 +363,10 @@ extension ContentView {
                 ThermalBackground()
                 TimelineView(.animation) { tl in RunningRats(t: tl.date.timeIntervalSinceReferenceDate) }
             }
+        } else if Term.blueprint {
+            BlueprintBackground()
+        } else if Term.matrix {
+            MatrixBackground()
         } else {
             LogBackground()
         }
@@ -286,9 +378,12 @@ extension ContentView {
             IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
         } else if Term.thermal {
             HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
+        } else if Term.blueprint {
+            Text(ready ? "krisa" : " ").font(Prism.display(38)).foregroundColor(.white)
+                .padding(.vertical, 6)
         } else {
             TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
-                .shadow(color: .white.opacity(0.9), radius: 8)
+                .shadow(color: Term.fg.opacity(0.9), radius: 8)
         }
     }
 
@@ -298,6 +393,11 @@ extension ContentView {
             Text(text).font(Prism.display(17)).foregroundColor(Term.fg)
                 .frame(width: width, height: 44)
                 .background(GlassBox(radius: 16, seed: Double(width)))
+        } else if Term.blueprint {
+            Text(text).font(Blueprint.semi(15)).foregroundColor(.white)
+                .frame(width: width, height: 44)
+                .background(Blueprint.bg.opacity(0.78))
+                .overlay(Rectangle().strokeBorder(Color.white, lineWidth: 1))
         } else {
             Text(text).font(Term.mono(24)).foregroundColor(Term.fg)
                 .frame(width: width, height: 44)

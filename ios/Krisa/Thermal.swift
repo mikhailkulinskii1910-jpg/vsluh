@@ -2,18 +2,56 @@ import SwiftUI
 import UIKit
 
 /**
- Тема «Тепловизор»: кадр тепловизора. Палитра ironbow (холод — фиолетовый, жар — жёлто-белый),
- жёлтые рамки обнаружения как PERSON_01XX, HUD (уголки, шкала температур, REC, дата), зерно матрицы,
+ Тема «Тепловизор»: кадр тепловизора. Палитры ironbow / white hot / rainbow / arctic (выбор во вкладке «Цвет»),
+ рамки обнаружения как PERSON_01XX, HUD (уголки, шкала температур, REC, дата), зерно матрицы,
  а на фоне медленно вращается радужка.
  */
 enum Heat {
-    static let pal: [UInt32] = [0x0B0418, 0x2E0B5E, 0x6B1585, 0xB51F7A, 0xE8382F, 0xFF7A1A, 0xFFC233, 0xFFF27A, 0xFFFFFF]
-    static let yellow = Color(hex: 0xFFD43B)
-    static let ink = Color(hex: 0x140700)
-    static let glow = Color(hex: 0xFF4A12)
+    /// Палитра тепловизора: шкала от холодного к горячему и цвета интерфейса.
+    struct Palette {
+        let id: String
+        let title: String
+        let pal: [UInt32]
+        let bg: UInt32
+        let fg: UInt32
+        let dim: UInt32
+        /// Акцент: рамки обнаружения, HUD-уголки, подписи (в ironbow — жёлтый).
+        let accent: UInt32
+        let glow: UInt32
+        let ink: UInt32
+        /// Картинка радужки на фоне.
+        let iris: String
+    }
+
+    static let palettes: [Palette] = [
+        Palette(id: "ironbow", title: "IRONBOW",
+                pal: [0x0B0418, 0x2E0B5E, 0x6B1585, 0xB51F7A, 0xE8382F, 0xFF7A1A, 0xFFC233, 0xFFF27A, 0xFFFFFF],
+                bg: 0x050308, fg: 0xFFF1DC, dim: 0xE0974A, accent: 0xFFD43B, glow: 0xFF4A12, ink: 0x140700, iris: "iris"),
+        Palette(id: "white", title: "WHITE HOT",
+                pal: [0x050505, 0x1E1E22, 0x3C3C42, 0x616168, 0x8A8A90, 0xB2B2B6, 0xD6D6D8, 0xF0F0F0, 0xFFFFFF],
+                bg: 0x050505, fg: 0xF2F2F2, dim: 0xA3A8AE, accent: 0x4DFF7A, glow: 0xD0D8E0, ink: 0x0A0A0A, iris: "iris_white"),
+        Palette(id: "rainbow", title: "RAINBOW HC",
+                pal: [0x0A0030, 0x1A1AA8, 0x0070FF, 0x00C8E0, 0x00E060, 0xB8F000, 0xFFD000, 0xFF5000, 0xFF0030, 0xFFFFFF],
+                bg: 0x07001F, fg: 0xFFFFFF, dim: 0x7FD6FF, accent: 0xFFFFFF, glow: 0xFF3060, ink: 0x10001A, iris: "iris_rainbow"),
+        Palette(id: "arctic", title: "ARCTIC",
+                pal: [0x020617, 0x0B1E5B, 0x1C47A8, 0x3C82E0, 0x8EC3F2, 0xE9D9A6, 0xF7B733, 0xFFD966, 0xFFFFFF],
+                bg: 0x020617, fg: 0xF2F8FF, dim: 0x8EC3F2, accent: 0x7FE3FF, glow: 0xF7B733, ink: 0x04102A, iris: "iris_arctic"),
+    ]
+
+    static func find(_ id: String) -> Palette { palettes.first { $0.id == id } ?? palettes[0] }
+
+    /// Выбранная палитра (ключ "heat": ironbow / white / rainbow / arctic).
+    static var cur: Palette = Heat.find(UserDefaults.standard.string(forKey: "heat") ?? "ironbow")
+
+    static var pal: [UInt32] { cur.pal }
+    /// Акцентный цвет палитры (бывший жёлтый): рамки обнаружения, уголки, подписи.
+    static var yellow: Color { Color(hex: cur.accent) }
+    static var ink: Color { Color(hex: cur.ink) }
+    static var glow: Color { Color(hex: cur.glow) }
 
     /// Цвет «температуры» f = 0 (холодно) … 1 (раскалено).
     static func color(_ f: Double, alpha: Double = 1) -> Color {
+        let pal: [UInt32] = cur.pal
         let x = min(max(f, 0), 1) * Double(pal.count - 1)
         let i = min(Int(x), pal.count - 2), k = x - Double(i)
         func ch(_ v: UInt32, _ s: UInt32) -> Double { Double((v >> s) & 0xFF) }
@@ -29,7 +67,7 @@ enum Heat {
     }
 
     /// Раскалённый градиент для текста.
-    static let hot: [Color] = [0.45, 0.6, 0.75, 0.88, 1, 0.88, 0.75, 0.6, 0.45].map { color($0) }
+    static var hot: [Color] { [0.45, 0.6, 0.75, 0.88, 1, 0.88, 0.75, 0.6, 0.45].map { color($0) } }
 
     /// «Температура» для подписей: от комнатной до тела.
     static func temp(_ heat: Double) -> String { String(format: "%.1f°", 22.4 + heat * 14.8) }
@@ -84,7 +122,7 @@ struct ThermalFrame: View {
 
     var body: some View {
         ZStack {
-            Color.black
+            Color(hex: Heat.cur.bg)
             irisLayer
             grainLayer
             ThermalHud(t: t, size: size)
@@ -96,7 +134,7 @@ struct ThermalFrame: View {
         let s = side
         let fade = RadialGradient(stops: [.init(color: .black, location: 0.86), .init(color: .clear, location: 0.99)],
                                   center: .center, startRadius: 0, endRadius: s / 2)
-        return Image("iris").resizable()
+        return Image(Heat.cur.iris).resizable()
             .frame(width: s, height: s)
             .mask(fade)
             .rotationEffect(.degrees(t * 4.5))
@@ -128,14 +166,14 @@ struct ThermalHud: View {
     }
 
     private var dateLabel: some View {
-        Text(Heat.date + "   ZOOM:OFF").font(Term.mono(17)).foregroundColor(Color(hex: 0xFF9632, alpha: 0.8))
+        Text(Heat.date + "   ZOOM:OFF").font(Term.mono(17)).foregroundColor(Term.dim.opacity(0.8))
     }
 
     private var recLabel: some View {
         let on: Bool = Int(t * 1.25) % 2 == 0
         return HStack(spacing: 5) {
             Circle().fill(Color(hex: 0xFF3228)).frame(width: 7, height: 7).opacity(on ? 1 : 0)
-            Text("REC").font(Term.mono(17)).foregroundColor(Color(hex: 0xFFF1DC, alpha: 0.8))
+            Text("REC").font(Term.mono(17)).foregroundColor(Term.fg.opacity(0.8))
         }
     }
 
@@ -169,7 +207,7 @@ struct ThermalHud: View {
             ticks.move(to: CGPoint(x: bx - 3, y: y))
             ticks.addLine(to: CGPoint(x: bx, y: y))
         }
-        ctx.stroke(ticks, with: .color(Color(hex: 0xFFF1DC, alpha: 0.55)), lineWidth: 1)
+        ctx.stroke(ticks, with: .color(Term.fg.opacity(0.55)), lineWidth: 1)
     }
 }
 
@@ -186,7 +224,10 @@ struct HeatText: View {
 }
 
 extension HeatText {
-    private static let colors: [Color] = Heat.hot + Array(Heat.hot.dropFirst())
+    private static var colors: [Color] {
+        let hot: [Color] = Heat.hot
+        return hot + Array(hot.dropFirst())
+    }
 
     func heatBody(shift s: CGFloat) -> some View {
         let grad = LinearGradient(colors: HeatText.colors,
@@ -203,7 +244,7 @@ struct HeatRat: View {
     var body: some View {
         RadialGradient(gradient: Heat.bloom(1), center: UnitPoint(x: 0.38, y: 0.58), startRadius: 0, endRadius: 260)
             .mask(Image("rat").resizable())
-            .shadow(color: Color(hex: 0xE8382F), radius: 16)
-            .shadow(color: Color(hex: 0xFF7A1A, alpha: 0.6), radius: 3)
+            .shadow(color: Heat.color(0.5), radius: 16)
+            .shadow(color: Heat.color(0.625, alpha: 0.6), radius: 3)
     }
 }

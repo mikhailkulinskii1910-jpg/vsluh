@@ -36,10 +36,12 @@ struct SplashView: View {
             backdrop()
             // 1. загрузочный лог
             Text(bootText(chars: Int(t / 7)))
-                .font(Term.prism ? Prism.body(14) : Term.mono(18)).foregroundColor(Term.dim)
+                .font(bootFont).foregroundColor(Term.dim)
                 .padding(.horizontal, 16).padding(.top, 24)
             // 2. крыса падает сверху, отскакивает и «лежит»
             if t > 650 { ratLayer(t: t, date: date, w: w, h: h, rw: rw, rh: rh, f: f) }
+            // «Чертёж»: размерные линии вокруг улёгшейся крысы
+            if Term.blueprint && t > 1500 { dimsLayer(t: t, rw: rw, rh: rh).position(x: w / 2, y: h * 0.5) }
             // 3. надпись
             if t > 1500 { wordLayer(Term.scramble("krisa", min((t - 1500) / 450, 1))).position(x: w / 2, y: h * 0.5 + rh * 0.5 + 70) }
             // тепловизор «захватил» крысу: рамка обнаружения с подписью (мигает при появлении)
@@ -52,14 +54,26 @@ struct SplashView: View {
     }
 
     @ViewBuilder private func backdrop() -> some View {
-        if Term.prism { PrismBackground() } else if Term.thermal { ThermalBackground() } else { Color.black }
+        if Term.prism { PrismBackground() } else if Term.thermal { ThermalBackground() } else if Term.blueprint { BlueprintBackground() } else { Color.black }
+    }
+
+    /// Шрифт загрузочного лога.
+    private var bootFont: Font {
+        if Term.prism || Term.blueprint { return Prism.body(14) }
+        return Term.mono(18)
+    }
+
+    private func dimsLayer(t: Double, rw: CGFloat, rh: CGFloat) -> some View {
+        let a: Double = min(max((t - 1500) / 300, 0), 1)
+        return BlueprintDims(rw: rw, rh: rh).opacity(a)
     }
 
     /// Цвет полос удара и ухода в текущей теме.
     private func stripeColor(_ i: Int, _ heat: Double) -> Color {
         if Term.prism { return Prism.iris[i % 6] }
         if Term.thermal { return Heat.color(heat) }
-        return .white
+        if Term.blueprint { return .white }
+        return Term.fg
     }
 
     @ViewBuilder private func ratBody(moving: Bool, frame: Int, f: CGFloat, date: Date) -> some View {
@@ -67,9 +81,12 @@ struct SplashView: View {
             GlassRat(t: Prism.time(date), moving: moving)          // крыса из жидкого стекла
         } else if Term.thermal {
             HeatRat()                                               // крыса — тепловое пятно
+        } else if Term.blueprint {
+            BlueprintRat()                                          // крыса — контурный чертёж
         } else {
             RatSlices(bands: moving ? 9 : 1, frame: frame, amp: moving ? 22 : 0)
-                .shadow(color: .white.opacity(Double(0.55 * f)), radius: 14)
+                .colorMultiply(Term.fg)                             // перекрашена в цвет «люминофора»
+                .shadow(color: Term.fg.opacity(Double(0.55 * f)), radius: 14)
         }
     }
 
@@ -107,8 +124,10 @@ struct SplashView: View {
             IrisText(text: word, font: Prism.display(48))
         } else if Term.thermal {
             HeatText(text: word, font: Term.mono(64))
+        } else if Term.blueprint {
+            Text(word).font(Prism.display(46)).foregroundColor(.white)
         } else {
-            Text(word).font(Term.mono(64)).foregroundColor(Term.fg).shadow(color: .white, radius: 12)
+            Text(word).font(Term.mono(64)).foregroundColor(Term.fg).shadow(color: Term.fg, radius: 12)
         }
     }
 
