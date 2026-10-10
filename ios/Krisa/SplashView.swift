@@ -73,7 +73,7 @@ struct SplashView: View {
     private func stripeColor(_ i: Int, _ heat: Double) -> Color {
         if Term.prism { return Prism.iris[i % 6] }
         if Term.thermal { return Heat.color(heat) }
-        if Term.blueprint { return .white }
+        if Term.blueprint { return Blueprint.ink }
         return Term.fg
     }
 
@@ -126,7 +126,7 @@ struct SplashView: View {
         } else if Term.thermal {
             HeatText(text: word, font: Term.mono(64))
         } else if Term.blueprint {
-            Text(word).font(Prism.display(46)).foregroundColor(.white)
+            Text(word).font(Prism.display(46)).foregroundColor(Blueprint.ink)
         } else {
             Text(word).font(Term.mono(64)).foregroundColor(Term.fg).shadow(color: Term.fg, radius: 12)
         }

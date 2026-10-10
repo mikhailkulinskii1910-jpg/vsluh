@@ -41,31 +41,31 @@ enum Term {
     static var bg: Color {
         if prism { return Color(hex: 0x07060B) }
         if thermal { return Color(hex: Heat.cur.bg) }
-        if blueprint { return Color(hex: Blueprint.bgHex) }
+        if blueprint { return Blueprint.bg }
         return .black
     }
     static var fg: Color {
         if prism { return Color(hex: 0xF4F1FF) }
         if thermal { return Color(hex: Heat.cur.fg) }
-        if blueprint { return .white }
+        if blueprint { return Blueprint.ink }
         return shade(1)
     }
     static var dim: Color {
         if prism { return Color(hex: 0xA79FC6) }
         if thermal { return Color(hex: Heat.cur.dim) }
-        if blueprint { return Color(hex: 0xBFD3F2) }
+        if blueprint { return Blueprint.dim }
         return shade(0.58)
     }
     static var line: Color {
         if prism { return Color(hex: 0x4B4270) }
         if thermal { return Heat.yellow }
-        if blueprint { return Color(hex: 0x9FB8E2) }
+        if blueprint { return Blueprint.line }
         return shade(0.39)
     }
     static var faint: Color {
         if prism { return Color(hex: 0x1A1726) }
         if thermal { return Color(hex: 0x1A0E10) }
-        if blueprint { return Color(hex: 0x2A5AAA) }
+        if blueprint { return Blueprint.faint }
         return shade(0.089)
     }
     static let noise = Array("#$%&@01<>/\\|=+*:;░▒▓")

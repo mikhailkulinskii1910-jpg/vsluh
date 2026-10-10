@@ -78,6 +78,12 @@ jobs:
           sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-blueprint-2000.png"
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-blueprint.png"
+          # «Чертёж», светлый лист (светокопия)
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa bpShade -float 0.15
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-blueprint-light.png"
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa bpShade -float 0.5
           # пульт MocTec (тема «Терминал»)
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme terminal
