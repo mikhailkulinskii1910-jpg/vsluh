@@ -16,7 +16,11 @@
 
 Положение ковра запоминается между запусками.
 
-## Запуск
+## Скачать
+
+Готовая программа для Windows (переносная, без установки): [Kovyor.exe](https://github.com/mikhailkulinskii1910-jpg/vsluh/raw/ccr-08dbd7f4-695puj/kovyor/Kovyor.exe)
+
+## Запуск из исходников
 
 ```bash
 cd kovyor
