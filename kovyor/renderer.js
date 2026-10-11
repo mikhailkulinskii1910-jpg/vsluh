@@ -158,11 +158,31 @@ let tHead = new Int32Array(1), tCols = 1, tRows = 1;
 
 const wOf = (k) => pz[k] < 0.5 ? inv[k] * 0.15 : inv[k]; // лежащее на столе почти не продавить вниз
 
+// пробные точки: сами частицы и середины рёбер (горизонталь, вертикаль, диагональ ячейки) —
+// по серединам ловятся рёбра, проходящие сквозь чужую ткань на сгибах
+const SA = [], SB = [];
+for (let k = 0; k < N; k++) { SA.push(k); SB.push(-1); }
+for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+  const a = idx(i, j);
+  if (i + 1 < NX) { SA.push(a); SB.push(a + 1); }
+  if (j + 1 < NY) { SA.push(a); SB.push(a + NX); }
+  if (i + 1 < NX && j + 1 < NY) { SA.push(a + 1); SB.push(a + NX); }
+}
+const S = SA.length, sA = Int32Array.from(SA), sB = Int32Array.from(SB);
+// всё, что зависит только от треугольника, считаем один раз за проход
+const tN = new Float64Array(TRI * 3), tO = new Float64Array(TRI * 4), tB = new Float64Array(TRI * 4), tZ = new Float64Array(TRI * 2);
+const tOk = new Uint8Array(TRI);
+// толчки копятся и применяются усреднённо (метод Якоби) — так много одновременных касаний не раскачивают ткань
+const cX = new Float64Array(N), cY = new Float64Array(N), cZ = new Float64Array(N), cW = new Float64Array(N);
+const bX = new Float32Array(N), bY = new Float32Array(N), bZ = new Float32Array(N);
+const push = (k, x, y, z, w) => { cX[k] += x; cY[k] += y; cZ[k] += z; cW[k] += w; };
+
 function triCollide() {
-  const h = spacing * 0.55, C = spacing * 1.5, iC = 1 / C;
+  const h = spacing * 0.6, C = spacing * 1.5, iC = 1 / C;
   const cols = Math.ceil(W * iC) + 3, rows = Math.ceil(H * iC) + 3;
   if (cols * rows !== tHead.length) { tCols = cols; tRows = rows; tHead = new Int32Array(cols * rows); }
   tHead.fill(-1);
+  cX.fill(0); cY.fill(0); cZ.fill(0); cW.fill(0);
   let ne = 0;
   for (let t = 0; t < TRI; t++) {
     const a = triV[t * 3], b = triV[t * 3 + 1], c = triV[t * 3 + 2];
@@ -170,68 +190,100 @@ function triCollide() {
     const x1 = Math.min(tCols - 1, ((Math.max(px[a], px[b], px[c], ox[a], ox[b], ox[c]) + h) * iC | 0) + 1);
     const y0 = Math.max(0, ((Math.min(py[a], py[b], py[c], oy[a], oy[b], oy[c]) - h) * iC | 0) + 1);
     const y1 = Math.min(tRows - 1, ((Math.max(py[a], py[b], py[c], oy[a], oy[b], oy[c]) + h) * iC | 0) + 1);
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) continue; // сильно растянутый треугольник не ловим
+    tOk[t] = 0;
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) continue; // разорванный треугольник — не ловим
+    const ux = px[b] - px[a], uy = py[b] - py[a], uz = pz[b] - pz[a];
+    const vx = px[c] - px[a], vy = py[c] - py[a], vz = pz[c] - pz[a];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+    const nl = Math.hypot(nx, ny, nz);
+    const uu = ux * ux + uy * uy + uz * uz, vv = vx * vx + vy * vy + vz * vz, uv = ux * vx + uy * vy + uz * vz;
+    const den = uv * uv - uu * vv;
+    const oux = ox[b] - ox[a], ouy = oy[b] - oy[a], ouz = oz[b] - oz[a];
+    const ovx = ox[c] - ox[a], ovy = oy[c] - oy[a], ovz = oz[c] - oz[a];
+    const onx = ouy * ovz - ouz * ovy, ony = ouz * ovx - oux * ovz, onz = oux * ovy - ouy * ovx;
+    const ouu = oux * oux + ouy * ouy + ouz * ouz, ovv = ovx * ovx + ovy * ovy + ovz * ovz;
+    const ouv = oux * ovx + ouy * ovy + ouz * ovz, oden = ouv * ouv - ouu * ovv;
+    if (nl < 1e-6 || Math.abs(den) < 1e-9 || Math.abs(oden) < 1e-9) continue;
+    tOk[t] = 1;
+    tN[t * 3] = nx / nl; tN[t * 3 + 1] = ny / nl; tN[t * 3 + 2] = nz / nl;
+    tO[t * 4] = onx; tO[t * 4 + 1] = ony; tO[t * 4 + 2] = onz; tO[t * 4 + 3] = 1e-4 * Math.hypot(onx, ony, onz);
+    tB[t * 4] = ouu; tB[t * 4 + 1] = ovv; tB[t * 4 + 2] = ouv; tB[t * 4 + 3] = oden;
+    tZ[t * 2] = Math.min(pz[a], pz[b], pz[c]); tZ[t * 2 + 1] = Math.max(pz[a], pz[b], pz[c]);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       if (ne >= MAXE) break;
       const cell = y * tCols + x;
       eTri[ne] = t; eNext[ne] = tHead[cell]; tHead[cell] = ne++;
     }
   }
-  for (let p = 0; p < N; p++) {
-    if (inv[p] === 0) continue;
-    const pi = p % NX, pj = (p / NX) | 0;
-    const cx = (px[p] * iC | 0) + 1, cy = (py[p] * iC | 0) + 1;
+  for (let q = 0; q < S; q++) {
+    const pa = sA[q], pb = sB[q];
+    let qx, qy, qz, qox, qoy, qoz, wq;
+    if (pb < 0) {
+      wq = wOf(pa); if (wq === 0) continue;
+      qx = px[pa]; qy = py[pa]; qz = pz[pa]; qox = ox[pa]; qoy = oy[pa]; qoz = oz[pa];
+    } else {
+      wq = (wOf(pa) + wOf(pb)) * 0.25; if (wq === 0) continue; // середина: масса делится на два конца
+      qx = (px[pa] + px[pb]) * 0.5; qy = (py[pa] + py[pb]) * 0.5; qz = (pz[pa] + pz[pb]) * 0.5;
+      qox = (ox[pa] + ox[pb]) * 0.5; qoy = (oy[pa] + oy[pb]) * 0.5; qoz = (oz[pa] + oz[pb]) * 0.5;
+    }
+    const ai = pa % NX, aj = (pa / NX) | 0;
+    const bi = pb < 0 ? ai : pb % NX, bj = pb < 0 ? aj : (pb / NX) | 0;
+    const cx = (qx * iC | 0) + 1, cy = (qy * iC | 0) + 1;
     if (cx < 0 || cy < 0 || cx >= tCols || cy >= tRows) continue;
-    const motion = Math.abs(pz[p] - oz[p]) + Math.abs(px[p] - ox[p]) + Math.abs(py[p] - oy[p]);
+    const motion = Math.abs(qz - qoz) + Math.abs(qx - qox) + Math.abs(qy - qoy);
+    const m = h + motion + 1;
     for (let e = tHead[cy * tCols + cx]; e !== -1; e = eNext[e]) {
       const t = eTri[e], ti = triI[t], tj = triJ[t];
-      if (pi >= ti - 1 && pi <= ti + 2 && pj >= tj - 1 && pj <= tj + 2) continue; // свои соседи
+      if (ai >= ti - 1 && ai <= ti + 2 && aj >= tj - 1 && aj <= tj + 2) continue; // свои соседи
+      if (bi >= ti - 1 && bi <= ti + 2 && bj >= tj - 1 && bj <= tj + 2) continue;
+      if (!tOk[t] || qz > tZ[t * 2 + 1] + m || qz < tZ[t * 2] - m) continue;
       const a = triV[t * 3], b = triV[t * 3 + 1], c = triV[t * 3 + 2];
-      const zmin = Math.min(pz[a], pz[b], pz[c]), zmax = Math.max(pz[a], pz[b], pz[c]);
-      const m = h + motion + 1;
-      if (pz[p] > zmax + m || pz[p] < zmin - m) continue;
-      // текущая плоскость
+      const nx = tN[t * 3], ny = tN[t * 3 + 1], nz = tN[t * 3 + 2];
+      const wx = qx - px[a], wy = qy - py[a], wz = qz - pz[a];
+      const d = wx * nx + wy * ny + wz * nz;
+      if (d > m || d < -m) continue;
+      // проекция внутрь треугольника? (текущие рёбра)
       const ux = px[b] - px[a], uy = py[b] - py[a], uz = pz[b] - pz[a];
       const vx = px[c] - px[a], vy = py[c] - py[a], vz = pz[c] - pz[a];
-      let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      const nl = Math.hypot(nx, ny, nz); if (nl < 1e-6) continue;
-      nx /= nl; ny /= nl; nz /= nl;
-      const wx = px[p] - px[a], wy = py[p] - py[a], wz = pz[p] - pz[a];
-      const d = wx * nx + wy * ny + wz * nz;
-      if (d > h + motion + 1 || d < -h - motion - 1) continue;
-      // проекция внутрь треугольника?
       const uu = ux * ux + uy * uy + uz * uz, vv = vx * vx + vy * vy + vz * vz, uv = ux * vx + uy * vy + uz * vz;
       const wu = wx * ux + wy * uy + wz * uz, wv = wx * vx + wy * vy + wz * vz;
       const den = uv * uv - uu * vv; if (Math.abs(den) < 1e-9) continue;
       const bb = (uv * wv - vv * wu) / den, bc = (uv * wu - uu * wv) / den, ba = 1 - bb - bc;
       if (bb < -0.05 || bc < -0.05 || ba < -0.05) continue;
-      // с какой стороны частица была в начале шага
+      // с какой стороны точка была в начале шага
       const oux = ox[b] - ox[a], ouy = oy[b] - oy[a], ouz = oz[b] - oz[a];
       const ovx = ox[c] - ox[a], ovy = oy[c] - oy[a], ovz = oz[c] - oz[a];
-      const onx = ouy * ovz - ouz * ovy, ony = ouz * ovx - oux * ovz, onz = oux * ovy - ouy * ovx;
-      const owx = ox[p] - ox[a], owy = oy[p] - oy[a], owz = oz[p] - oz[a];
-      const d0 = owx * onx + owy * ony + owz * onz;
-      { // в начале шага частица тоже должна была быть над/под этим треугольником
-        const ouu = oux * oux + ouy * ouy + ouz * ouz, ovv = ovx * ovx + ovy * ovy + ovz * ovz;
-        const ouv = oux * ovx + ouy * ovy + ouz * ovz;
+      const owx = qox - ox[a], owy = qoy - oy[a], owz = qoz - oz[a];
+      const d0 = owx * tO[t * 4] + owy * tO[t * 4 + 1] + owz * tO[t * 4 + 2];
+      {
+        const ouu = tB[t * 4], ovv = tB[t * 4 + 1], ouv = tB[t * 4 + 2], oden = tB[t * 4 + 3];
         const owu = owx * oux + owy * ouy + owz * ouz, owv = owx * ovx + owy * ovy + owz * ovz;
-        const oden = ouv * ouv - ouu * ovv; if (Math.abs(oden) < 1e-9) continue;
         const ob = (ouv * owv - ovv * owu) / oden, oc = (ouv * owu - ouu * owv) / oden;
-        if (ob < -0.15 || oc < -0.15 || 1 - ob - oc < -0.15) continue;
+        if (ob < -0.3 || oc < -0.3 || 1 - ob - oc < -0.3) continue;
       }
-      const side = Math.abs(d0) > 1e-4 * Math.hypot(onx, ony, onz) ? Math.sign(d0) : (d >= 0 ? 1 : -1);
+      const side = Math.abs(d0) > tO[t * 4 + 3] ? Math.sign(d0) : (d >= 0 ? 1 : -1);
       let pen = h - d * side;
       if (pen <= 0) continue;
-      if (pen > h * 3) pen = h * 3; // не выстреливать частицу через полэкрана
-      const wp = wOf(p), wa = wOf(a), wb = wOf(b), wc = wOf(c);
-      const wsum = wp + wa * ba * ba + wb * bb * bb + wc * bc * bc;
+      if (pen > h * 3) pen = h * 3; // не выстреливать точку через полэкрана
+      const wa = wOf(a), wb = wOf(b), wc = wOf(c);
+      const wsum = wq + wa * ba * ba + wb * bb * bb + wc * bc * bc;
       if (wsum < 1e-6) continue;
       const s = pen / wsum, fx = nx * side * s, fy = ny * side * s, fz = nz * side * s;
-      px[p] += fx * wp; py[p] += fy * wp; pz[p] += fz * wp;
-      px[a] -= fx * wa * ba; py[a] -= fy * wa * ba; pz[a] -= fz * wa * ba;
-      px[b] -= fx * wb * bb; py[b] -= fy * wb * bb; pz[b] -= fz * wb * bb;
-      px[c] -= fx * wc * bc; py[c] -= fy * wc * bc; pz[c] -= fz * wc * bc;
+      if (pb < 0) push(pa, fx * wq, fy * wq, fz * wq, 1);
+      else { // ребро сдвигаем целиком, обоими концами
+        const wpa = wOf(pa) * 0.5, wpb = wOf(pb) * 0.5;
+        push(pa, fx * wpa, fy * wpa, fz * wpa, 0.5); push(pb, fx * wpb, fy * wpb, fz * wpb, 0.5);
+      }
+      push(a, -fx * wa * ba, -fy * wa * ba, -fz * wa * ba, ba);
+      push(b, -fx * wb * bb, -fy * wb * bb, -fz * wb * bb, bb);
+      push(c, -fx * wc * bc, -fy * wc * bc, -fz * wc * bc, bc);
     }
+  }
+  // применяем усреднённые толчки
+  for (let k = 0; k < N; k++) {
+    if (cW[k] === 0) continue;
+    const f = 1.2 / Math.max(1, cW[k]);
+    px[k] += cX[k] * f; py[k] += cY[k] * f; pz[k] += cZ[k] * f;
   }
 }
 
@@ -338,8 +390,14 @@ function step(dt, t) {
     }
   }
   // последним — непроницаемость: что бы ни сделали трение и нити, слои не пересекаются
-  triCollide();
   strainLimit(1.08);
+  bX.set(px); bY.set(py); bZ.set(pz);
+  triCollide();
+  triCollide();
+  // касание без отскока: толчок от столкновений почти не превращается в скорость
+  for (let k = 0; k < N; k++) {
+    ox[k] += (px[k] - bX[k]) * 0.7; oy[k] += (py[k] - bY[k]) * 0.7; oz[k] += (pz[k] - bZ[k]) * 0.7;
+  }
   bounds();
   for (let k = 0; k < N; k++) {
     const v = Math.abs(px[k] - ox[k]) + Math.abs(py[k] - oy[k]) + Math.abs(pz[k] - oz[k]);
