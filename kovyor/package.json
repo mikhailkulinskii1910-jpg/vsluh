@@ -1,0 +1,29 @@
+{
+  "name": "kovyor",
+  "productName": "Kovyor",
+  "version": "1.0.0",
+  "description": "Физический ковёр на рабочем столе",
+  "main": "main.js",
+  "author": "vsluh",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable nsis",
+    "dist:mac": "electron-builder --mac dmg",
+    "dist:linux": "electron-builder --linux AppImage"
+  },
+  "build": {
+    "appId": "ru.vsluh.kovyor",
+    "productName": "Kovyor",
+    "files": ["main.js", "preload.js", "index.html", "renderer.js", "assets/**"],
+    "win": { "icon": "assets/icon.png" },
+    "nsis": { "oneClick": true, "artifactName": "Kovyor-Setup-${version}.${ext}" },
+    "portable": { "artifactName": "Kovyor-${version}-portable.${ext}" },
+    "mac": { "icon": "assets/icon.png", "category": "public.app-category.entertainment" },
+    "linux": { "icon": "assets/icon.png", "category": "Game" }
+  },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8"
+  }
+}
