@@ -9,8 +9,10 @@ const api = window.desk || { // заглушка, чтобы страницу м
 
 // ---------- параметры ----------
 const NX = 30, NY = 46, N = NX * NY;
-const TEX_ASPECT = 1093 / 713;
-const SIZES = { small: 220, medium: 320, large: 440 };
+const SIZES = { small: 220, medium: 320, large: 440 }; // старые настройки размера
+// форма ковра: отношение высоты к ширине (null — как у картинки)
+const SHAPE_ASPECT = { rect: null, square: 1, circle: 1, oval: null, triangle: 0.866, hexagon: 0.866, diamond: 1.4 };
+const SHAPE_ID = { rect: 0, square: 0, circle: 1, oval: 1, triangle: 2, hexagon: 3, diamond: 4 };
 const DT = 1 / 120;
 const GRAVITY = -2600;          // px/с², вниз к столу
 const FRICTION = 0.55;          // коэффициент трения ковра о стол
@@ -25,9 +27,14 @@ function norm3(x, y, z) { const l = Math.hypot(x, y, z); return [x / l, y / l, z
 // ---------- состояние ----------
 let W = innerWidth, H = innerHeight;
 let width = SIZES.medium, spacing = 1;
+let shape = 'rect', opacity = 1, imgAspect = 1093 / 713, imageKey = '';
+let spX = 1, spY = 1, carpetH = 1, nxUsed = NX, nyUsed = NY;  // шаг сетки по ширине и по длине, длина ковра
 const px = new Float32Array(N), py = new Float32Array(N), pz = new Float32Array(N);
 const ox = new Float32Array(N), oy = new Float32Array(N), oz = new Float32Array(N);
 const inv = new Float32Array(N).fill(1);
+const act = new Uint8Array(N).fill(1);                                  // частица внутри формы
+const restX = new Float32Array(N), restY = new Float32Array(N);         // плоская раскладка от центра
+const gridData = new Float32Array(N * 2);                               // место частицы на ковре, 0..1
 const sx = new Float32Array(N), sy = new Float32Array(N); // экранные координаты
 let cA, cB, cRest, cK, cCount = 0;
 
@@ -39,7 +46,7 @@ const idx = (i, j) => j * NX + i;
 
 function buildConstraints() {
   const list = [];
-  const add = (a, b, k) => list.push(a, b, k);
+  const add = (a, b, k) => { if (act[a] && act[b]) list.push(a, b, k); };
   for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
     const a = idx(i, j);
     if (i + 1 < NX) add(a, idx(i + 1, j), 1);
@@ -55,21 +62,52 @@ function buildConstraints() {
 }
 
 function setRest() {
-  spacing = width / (NX - 1);
   for (let c = 0; c < cCount; c++) {
     const a = cA[c], b = cB[c];
-    const ai = a % NX, aj = (a / NX) | 0, bi = b % NX, bj = (b / NX) | 0;
-    cRest[c] = Math.hypot(ai - bi, aj - bj) * spacing;
+    cRest[c] = Math.hypot(restX[a] - restX[b], restY[a] - restY[b]);
   }
+}
+
+// ---------- форма ----------
+// расстояние до границы формы (отрицательное — внутри); x, y от центра, w × h — габарит
+function shapeDist(id, x, y, w, h) {
+  const ax = Math.abs(x), ay = Math.abs(y), hw = w / 2, hh = h / 2;
+  if (id === 1) { const k = Math.hypot(x / hw, y / hh); return (k - 1) * Math.min(hw, hh); }
+  if (id === 2) { // треугольник вершиной вверх
+    const s = hw / h, edge = (ax - (y + hh) * s) / Math.hypot(1, s);
+    return Math.max(edge, y - hh, -hh - y);
+  }
+  if (id === 3) return Math.max(ay - hh, (Math.sqrt(3) * ax + ay - Math.sqrt(3) * hw) / 2); // шестиугольник
+  if (id === 4) return (ax * hh + ay * hw - hw * hh) / Math.hypot(hw, hh);                  // ромб
+  return Math.max(ax - hw, ay - hh);
+}
+
+// пересобрать сетку под форму и размер: раскладка, маска, связи, треугольники
+function rebuildGeometry() {
+  const asp = SHAPE_ASPECT[shape] || (shape === 'oval' && Math.abs(imgAspect - 1) < 0.1 ? 1.35 : imgAspect);
+  carpetH = width * asp;
+  // ячейки сетки почти квадратные: лишние ряды или столбцы просто не участвуют
+  // (на вытянутых ячейках столкновения слоёв теряют устойчивость)
+  const sp = Math.max(width / (NX - 1), carpetH / (NY - 1));
+  nxUsed = Math.min(NX, Math.round(width / sp) + 1); nyUsed = Math.min(NY, Math.round(carpetH / sp) + 1);
+  spX = width / (nxUsed - 1); spY = carpetH / (nyUsed - 1);
+  spacing = Math.sqrt(spX * spY);
+  const id = SHAPE_ID[shape] || 0, margin = Math.hypot(spX, spY) * 1.02;
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+    const k = idx(i, j), inGrid = i < nxUsed && j < nyUsed;
+    restX[k] = Math.min(i, nxUsed - 1) * spX - width / 2; restY[k] = Math.min(j, nyUsed - 1) * spY - carpetH / 2;
+    gridData[k * 2] = Math.min(1, i / (nxUsed - 1)); gridData[k * 2 + 1] = Math.min(1, j / (nyUsed - 1));
+    act[k] = inGrid && shapeDist(id, restX[k], restY[k], width, carpetH) <= margin ? 1 : 0;
+    inv[k] = act[k];
+  }
+  buildConstraints(); setRest(); buildTopology(); buildUV();
 }
 
 // уложить ковёр плоско: центр, угол, высота, наклон (для эффектного падения)
 function layFlat(cx, cy, ang, z0, tilt = 0) {
   const ca = Math.cos(ang), sa = Math.sin(ang);
-  const w = (NX - 1) * spacing, h = (NY - 1) * spacing;
-  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
-    const k = idx(i, j);
-    const lx = i * spacing - w / 2, ly = j * spacing - h / 2;
+  for (let k = 0; k < N; k++) {
+    const lx = restX[k], ly = restY[k];
     px[k] = ox[k] = cx + lx * ca - ly * sa;
     py[k] = oy[k] = cy + lx * sa + ly * ca;
     pz[k] = oz[k] = Math.max(0, z0 + ly * tilt + Math.random() * 0.4);
@@ -78,17 +116,17 @@ function layFlat(cx, cy, ang, z0, tilt = 0) {
 }
 
 function pose() { // текущие центр и угол ковра
-  let cx = 0, cy = 0, dx = 0, dy = 0;
-  for (let k = 0; k < N; k++) { cx += px[k]; cy += py[k]; }
-  for (let j = 0; j < NY; j++) { dx += px[idx(NX - 1, j)] - px[idx(0, j)]; dy += py[idx(NX - 1, j)] - py[idx(0, j)]; }
-  return { cx: cx / N, cy: cy / N, ang: Math.atan2(dy, dx) };
+  let cx = 0, cy = 0, n = 0, dx = 0, dy = 0;
+  for (let k = 0; k < N; k++) if (act[k]) { cx += px[k]; cy += py[k]; n++; }
+  cx /= n; cy /= n;
+  for (let k = 0; k < N; k++) if (act[k]) { dx += restX[k] * (px[k] - cx); dy += restX[k] * (py[k] - cy); }
+  return { cx, cy, ang: Math.atan2(dy, dx) };
 }
 
-function setSize(name, keepPose) {
-  width = SIZES[name] || SIZES.medium;
+function setSize(keepPose) {
   const p = keepPose ? pose() : { cx: W / 2, cy: H / 2, ang: -0.12 };
-  setRest();
-  const h = width * TEX_ASPECT;
+  rebuildGeometry();
+  const h = carpetH;
   p.cx = Math.min(Math.max(p.cx, width / 2 + 10), W - width / 2 - 10);
   p.cy = Math.min(Math.max(p.cy, Math.min(h / 2 + 10, H / 2)), Math.max(H - h / 2 - 10, H / 2));
   layFlat(p.cx, p.cy, p.ang, keepPose ? 40 : 160, keepPose ? 0 : 0.25);
@@ -104,10 +142,12 @@ function selfCollide() {
   if (cols * rows !== gHead.length) { gridCols = cols; gridRows = rows; gHead = new Int32Array(cols * rows); }
   gHead.fill(-1);
   for (let k = 0; k < N; k++) {
+    if (!act[k]) continue;
     const c = (((py[k] * inv_r) | 0) + 1) * gridCols + ((px[k] * inv_r) | 0) + 1;
     gNext[k] = gHead[c]; gHead[c] = k;
   }
   for (let a = 0; a < N; a++) {
+    if (!act[a]) continue;
     const ai = a % NX, aj = (a / NX) | 0;
     const gx = ((px[a] * inv_r) | 0) + 1, gy = ((py[a] * inv_r) | 0) + 1;
     for (let dy = -1; dy <= 1; dy++) {
@@ -144,14 +184,7 @@ function selfCollide() {
 // и не может оказаться по другую сторону: слои ковра не проходят друг сквозь друга.
 const TRI = (NX - 1) * (NY - 1) * 2;
 const triV = new Int32Array(TRI * 3), triI = new Int32Array(TRI), triJ = new Int32Array(TRI);
-{
-  let t = 0;
-  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
-    const a = idx(i, j), b = a + 1, c = a + NX, d = c + 1;
-    triV.set([a, b, c], t * 3); triI[t] = i; triJ[t] = j; t++;
-    triV.set([b, d, c], t * 3); triI[t] = i; triJ[t] = j; t++;
-  }
-}
+let triCount = 0, sCount = 0;
 const MAXE = TRI * 24;
 const eTri = new Int32Array(MAXE), eNext = new Int32Array(MAXE);
 let tHead = new Int32Array(1), tCols = 1, tRows = 1;
@@ -160,15 +193,27 @@ const wOf = (k) => pz[k] < 0.5 ? inv[k] * 0.15 : inv[k]; // лежащее на 
 
 // пробные точки: сами частицы и середины рёбер (горизонталь, вертикаль, диагональ ячейки) —
 // по серединам ловятся рёбра, проходящие сквозь чужую ткань на сгибах
-const SA = [], SB = [];
-for (let k = 0; k < N; k++) { SA.push(k); SB.push(-1); }
-for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
-  const a = idx(i, j);
-  if (i + 1 < NX) { SA.push(a); SB.push(a + 1); }
-  if (j + 1 < NY) { SA.push(a); SB.push(a + NX); }
-  if (i + 1 < NX && j + 1 < NY) { SA.push(a + 1); SB.push(a + NX); }
+const S = N * 4, sA = new Int32Array(S), sB = new Int32Array(S);
+
+function buildTopology() {
+  let t = 0, q = 0;
+  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
+    const a = idx(i, j), b = a + 1, c = a + NX, d = c + 1;
+    if (act[a] && act[b] && act[c]) { triV[t * 3] = a; triV[t * 3 + 1] = b; triV[t * 3 + 2] = c; triI[t] = i; triJ[t] = j; t++; }
+    if (act[b] && act[d] && act[c]) { triV[t * 3] = b; triV[t * 3 + 1] = d; triV[t * 3 + 2] = c; triI[t] = i; triJ[t] = j; t++; }
+  }
+  triCount = t;
+  const addS = (a, b) => { if (act[a] && (b < 0 || act[b])) { sA[q] = a; sB[q] = b; q++; } };
+  for (let k = 0; k < N; k++) addS(k, -1);
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
+    const a = idx(i, j);
+    if (i + 1 < NX) addS(a, a + 1);
+    if (j + 1 < NY) addS(a, a + NX);
+    if (i + 1 < NX && j + 1 < NY) addS(a + 1, a + NX);
+  }
+  sCount = q;
+  if (typeof uploadIndices === 'function') uploadIndices();
 }
-const S = SA.length, sA = Int32Array.from(SA), sB = Int32Array.from(SB);
 // всё, что зависит только от треугольника, считаем один раз за проход
 const tN = new Float64Array(TRI * 3), tO = new Float64Array(TRI * 4), tB = new Float64Array(TRI * 4), tZ = new Float64Array(TRI * 2);
 const tOk = new Uint8Array(TRI);
@@ -183,8 +228,8 @@ function triCollide() {
   if (cols * rows !== tHead.length) { tCols = cols; tRows = rows; tHead = new Int32Array(cols * rows); }
   tHead.fill(-1);
   cX.fill(0); cY.fill(0); cZ.fill(0); cW.fill(0);
-  let ne = 0;
-  for (let t = 0; t < TRI; t++) {
+  let ne = 0, hits = 0;
+  for (let t = 0; t < triCount; t++) {
     const a = triV[t * 3], b = triV[t * 3 + 1], c = triV[t * 3 + 2];
     const x0 = Math.max(0, ((Math.min(px[a], px[b], px[c], ox[a], ox[b], ox[c]) - h) * iC | 0) + 1);
     const x1 = Math.min(tCols - 1, ((Math.max(px[a], px[b], px[c], ox[a], ox[b], ox[c]) + h) * iC | 0) + 1);
@@ -215,7 +260,7 @@ function triCollide() {
       eTri[ne] = t; eNext[ne] = tHead[cell]; tHead[cell] = ne++;
     }
   }
-  for (let q = 0; q < S; q++) {
+  for (let q = 0; q < sCount; q++) {
     const pa = sA[q], pb = sB[q];
     let qx, qy, qz, qox, qoy, qoz, wq;
     if (pb < 0) {
@@ -268,6 +313,7 @@ function triCollide() {
       const wa = wOf(a), wb = wOf(b), wc = wOf(c);
       const wsum = wq + wa * ba * ba + wb * bb * bb + wc * bc * bc;
       if (wsum < 1e-6) continue;
+      if (pen > h * 0.05) hits++;
       const s = pen / wsum, fx = nx * side * s, fy = ny * side * s, fz = nz * side * s;
       if (pb < 0) push(pa, fx * wq, fy * wq, fz * wq, 1);
       else { // ребро сдвигаем целиком, обоими концами
@@ -285,14 +331,14 @@ function triCollide() {
     const f = 1.2 / Math.max(1, cW[k]);
     px[k] += cX[k] * f; py[k] += cY[k] * f; pz[k] += cZ[k] * f;
   }
+  return hits;
 }
 
 // ---------- ограничение растяжения от точки захвата ----------
 // Ни одна точка ковра не может оказаться дальше от схваченной, чем позволяет сама ткань.
 const lraRest = new Float32Array(N);
 function setTethers(g) {
-  const gi = g % NX, gj = (g / NX) | 0;
-  for (let k = 0; k < N; k++) lraRest[k] = Math.hypot(k % NX - gi, ((k / NX) | 0) - gj) * spacing * 1.01;
+  for (let k = 0; k < N; k++) lraRest[k] = Math.hypot(restX[k] - restX[g], restY[k] - restY[g]) * 1.03;
 }
 function tethers() {
   if (grab < 0) return;
@@ -302,7 +348,7 @@ function tethers() {
     const ex = px[k] - gx, ey = py[k] - gy, ez = pz[k] - gz;
     const d = Math.sqrt(ex * ex + ey * ey + ez * ez);
     if (d <= lraRest[k]) continue;
-    const s = (d - lraRest[k]) / d;
+    const s = (d - lraRest[k]) / d * 0.35; // мягко: уступает столкновениям, иначе протащит ткань сквозь слой
     px[k] -= ex * s; py[k] -= ey * s; pz[k] -= ez * s;
   }
 }
@@ -341,7 +387,7 @@ function step(dt, t) {
     ox[grab] = px[grab]; oy[grab] = py[grab]; oz[grab] = pz[grab];
     // тяжёлый ковёр не успевает за резким рывком мыши: точка захвата догоняет курсор
     const tx = clamp(W / 2 + (mx - W / 2) * s, 0, W), ty = clamp(H / 2 + (my - H / 2) * s, 0, H);
-    const dx = tx - px[grab], dy = ty - py[grab], dl = Math.hypot(dx, dy), lim = spacing * 0.6;
+    const dx = tx - px[grab], dy = ty - py[grab], dl = Math.hypot(dx, dy), lim = spacing * 0.33;
     const f = dl > lim ? lim / dl : 1;
     px[grab] += dx * f; py[grab] += dy * f;
     pz[grab] = grabZ;
@@ -370,10 +416,10 @@ function step(dt, t) {
 
   // ковёр, улетевший за край экрана, сам выползает обратно (без жёстких стен — о них слои слипаются)
   if (grab < 0) {
-    let cx = 0, cy = 0;
-    for (let k = 0; k < N; k++) { cx += px[k]; cy += py[k]; }
-    cx /= N; cy /= N;
-    const mx = Math.min(width * 0.3, W / 2), my = Math.min(width * 0.45, H / 2);
+    let cx = 0, cy = 0, n = 0;
+    for (let k = 0; k < N; k++) if (act[k]) { cx += px[k]; cy += py[k]; n++; }
+    cx /= n; cy /= n;
+    const mx = Math.min(width * 0.3, W / 2), my = Math.min(carpetH * 0.3, H / 2);
     const sx = cx < mx ? Math.min(1.5, mx - cx) : cx > W - mx ? -Math.min(1.5, cx - W + mx) : 0;
     const sy = cy < my ? Math.min(1.5, my - cy) : cy > H - my ? -Math.min(1.5, cy - H + my) : 0;
     if (sx || sy) for (let k = 0; k < N; k++) { px[k] += sx; ox[k] += sx; py[k] += sy; oy[k] += sy; }
@@ -392,8 +438,8 @@ function step(dt, t) {
   // последним — непроницаемость: что бы ни сделали трение и нити, слои не пересекаются
   strainLimit(1.08);
   bX.set(px); bY.set(py); bZ.set(pz);
-  triCollide();
-  triCollide();
+  // до четырёх проходов, пока слои ещё давят друг на друга (ровный ковёр — один проход)
+  for (let pass = 0; pass < 4; pass++) if (!triCollide()) break;
   // касание без отскока: толчок от столкновений почти не превращается в скорость
   for (let k = 0; k < N; k++) {
     ox[k] += (px[k] - bX[k]) * 0.7; oy[k] += (py[k] - bY[k]) * 0.7; oz[k] += (pz[k] - bZ[k]) * 0.7;
@@ -427,13 +473,11 @@ function project() {
 // верхний треугольник ковра под точкой: { k — ближайшая частица, z — высота }
 function hitTest(x, y) {
   let best = null, bestZ = -1;
-  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
-    const a = idx(i, j), b = a + 1, c = a + NX, d = c + 1;
-    const minx = Math.min(sx[a], sx[b], sx[c], sx[d]), maxx = Math.max(sx[a], sx[b], sx[c], sx[d]);
-    if (x < minx || x > maxx) continue;
-    const miny = Math.min(sy[a], sy[b], sy[c], sy[d]), maxy = Math.max(sy[a], sy[b], sy[c], sy[d]);
-    if (y < miny || y > maxy) continue;
-    for (const [p, q, r] of [[a, b, c], [b, d, c]]) {
+  for (let t = 0; t < triCount; t++) {
+    const p = triV[t * 3], q = triV[t * 3 + 1], r = triV[t * 3 + 2];
+    if (x < Math.min(sx[p], sx[q], sx[r]) || x > Math.max(sx[p], sx[q], sx[r])) continue;
+    if (y < Math.min(sy[p], sy[q], sy[r]) || y > Math.max(sy[p], sy[q], sy[r])) continue;
+    {
       const bc = bary(x, y, p, q, r);
       if (!bc) continue;
       const z = pz[p] * bc[0] + pz[q] * bc[1] + pz[r] * bc[2];
@@ -481,6 +525,7 @@ function program(vs, fs) {
   const p = gl.createProgram();
   gl.attachShader(p, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
   gl.bindAttribLocation(p, 0, 'aPos'); gl.bindAttribLocation(p, 1, 'aNrm'); gl.bindAttribLocation(p, 2, 'aUV');
+  gl.bindAttribLocation(p, 3, 'aGrid');
   gl.linkProgram(p);
   if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
   const u = {};
@@ -491,9 +536,9 @@ function program(vs, fs) {
 }
 
 const CLOTH_VS = `#version 300 es
-in vec3 aPos; in vec3 aNrm; in vec2 aUV;
+in vec3 aPos; in vec3 aNrm; in vec2 aUV; in vec2 aGrid;
 uniform vec2 uView; uniform float uCam; uniform vec2 uShadow;
-out vec2 vUV; out vec3 vN; out float vZ;
+out vec2 vUV; out vec3 vN; out float vZ; out vec2 vGrid;
 void main() {
   vec2 p; float depth;
   if (uShadow.x > 0.0) {            // проекция на стол от лампы слева сверху
@@ -506,15 +551,26 @@ void main() {
   }
   vec2 ndc = p / uView * 2.0 - 1.0;
   gl_Position = vec4(ndc.x, -ndc.y, depth, 1.0);
-  vUV = aUV; vN = aNrm; vZ = aPos.z;
+  vUV = aUV; vN = aNrm; vZ = aPos.z; vGrid = aGrid;
 }`;
 
 const CLOTH_FS = `#version 300 es
 precision highp float;
-in vec2 vUV; in vec3 vN; in float vZ;
+in vec2 vUV; in vec3 vN; in float vZ; in vec2 vGrid;
 uniform sampler2D uTex; uniform vec3 uLight; uniform vec2 uShadow;
+uniform int uShape; uniform vec2 uDim; uniform float uAlpha;
 out vec4 o;
+// расстояние до края формы (как shapeDist в JS); vGrid — координаты на ковре 0..1
+float shapeDist(vec2 g) {
+  vec2 p = (g - 0.5) * uDim, a = abs(p), hd = uDim * 0.5;
+  if (uShape == 1) return (length(p / hd) - 1.0) * min(hd.x, hd.y);
+  if (uShape == 2) { float s = hd.x / uDim.y; return max((a.x - (p.y + hd.y) * s) / sqrt(1.0 + s * s), abs(p.y) - hd.y); }
+  if (uShape == 3) return max(a.y - hd.y, (1.7320508 * a.x + a.y - 1.7320508 * hd.x) * 0.5);
+  if (uShape == 4) return (a.x * hd.y + a.y * hd.x - hd.x * hd.y) / length(hd);
+  return max(a.x - hd.x, a.y - hd.y);
+}
 void main() {
+  if (shapeDist(vGrid) > 0.0) discard;
   vec4 t = texture(uTex, vUV);
   if (t.a < 0.5) discard;
   if (uShadow.x > 0.0) { o = vec4(clamp(1.0 - vZ / 450.0, 0.35, 1.0)); return; }
@@ -530,7 +586,7 @@ void main() {
   float sheen = pow(max(dot(n, h), 0.0), 18.0);
   float rim = pow(1.0 - max(n.z, 0.0), 2.0);   // складки темнее в глубине
   vec3 c = col * (0.22 + 0.78 * diff) * (1.0 - 0.35 * rim) + vec3(0.06) * sheen * (1.0 - rim);
-  o = vec4(c, 1.0);
+  o = vec4(c * uAlpha, uAlpha);
 }`;
 
 const QUAD_VS = `#version 300 es
@@ -552,26 +608,16 @@ void main() {
 
 const COMP_FS = `#version 300 es
 precision mediump float;
-in vec2 vUV; uniform sampler2D uTex; out vec4 o;
-void main() { float a = texture(uTex, vUV).r * 0.7; o = vec4(0.0, 0.0, 0.0, a); }`;
+in vec2 vUV; uniform sampler2D uTex; uniform float uAlpha; out vec4 o;
+void main() { float a = texture(uTex, vUV).r * 0.7 * uAlpha; o = vec4(0.0, 0.0, 0.0, a); }`;
 
 const clothProg = program(CLOTH_VS, CLOTH_FS);
 const blurProg = program(QUAD_VS, BLUR_FS);
 const compProg = program(QUAD_VS, COMP_FS);
 
 const posData = new Float32Array(N * 3), nrmData = new Float32Array(N * 3), uvData = new Float32Array(N * 2);
-for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) {
-  const k = idx(i, j);
-  uvData[k * 2] = 0.004 + 0.992 * i / (NX - 1); uvData[k * 2 + 1] = 0.003 + 0.994 * j / (NY - 1);
-}
-const indices = new Uint16Array((NX - 1) * (NY - 1) * 6);
-{
-  let n = 0;
-  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
-    const a = idx(i, j), b = a + 1, c = a + NX, d = c + 1;
-    indices.set([a, b, c, b, d, c], n); n += 6;
-  }
-}
+const indices = new Uint16Array(TRI * 3);
+let idxCount = 0;
 
 const vao = gl.createVertexArray();
 gl.bindVertexArray(vao);
@@ -580,9 +626,37 @@ gl.bindBuffer(gl.ARRAY_BUFFER, posBuf); gl.bufferData(gl.ARRAY_BUFFER, posData, 
 gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 gl.bindBuffer(gl.ARRAY_BUFFER, nrmBuf); gl.bufferData(gl.ARRAY_BUFFER, nrmData, gl.DYNAMIC_DRAW);
 gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 0, 0);
-gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf); gl.bufferData(gl.ARRAY_BUFFER, uvData, gl.STATIC_DRAW);
+gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf); gl.bufferData(gl.ARRAY_BUFFER, uvData, gl.DYNAMIC_DRAW);
 gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 0, 0);
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+const gridBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, gridBuf); gl.bufferData(gl.ARRAY_BUFFER, gridData, gl.DYNAMIC_DRAW);
+gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 2, gl.FLOAT, false, 0, 0);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.DYNAMIC_DRAW);
+
+function uploadIndices() {
+  for (let t = 0; t < triCount * 3; t++) indices[t] = triV[t];
+  idxCount = triCount * 3;
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
+  gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, indices.subarray(0, idxCount));
+  gl.bindVertexArray(null);
+  needDraw = true;
+}
+
+// картинка ложится на форму «с обрезкой», без растягивания
+function buildUV() {
+  const g = carpetH / width;
+  let u0 = 0, ur = 1, v0 = 0, vr = 1;
+  if (g > imgAspect) { ur = imgAspect / g; u0 = (1 - ur) / 2; } else { vr = g / imgAspect; v0 = (1 - vr) / 2; }
+  const inset = imageKey ? 0 : 0.004; // у стандартного ковра по краю бахрома
+  for (let k = 0; k < N; k++) {
+    uvData[k * 2] = u0 + ur * (inset + (1 - 2 * inset) * gridData[k * 2]);
+    uvData[k * 2 + 1] = v0 + vr * (inset + (1 - 2 * inset) * gridData[k * 2 + 1]);
+  }
+  gl.bindBuffer(gl.ARRAY_BUFFER, uvBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, uvData);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gridBuf); gl.bufferSubData(gl.ARRAY_BUFFER, 0, gridData);
+  needDraw = true;
+}
 
 const quadVao = gl.createVertexArray();
 gl.bindVertexArray(quadVao);
@@ -594,8 +668,11 @@ gl.bindVertexArray(null);
 
 const tex = gl.createTexture();
 let texReady = false;
-const img = new Image();
-img.onload = () => {
+// загрузить картинку ковра; onAspect — если у новой картинки другие пропорции
+function loadImage(url, onDone) {
+  const img = new Image();
+  img.onload = () => {
+  imgAspect = img.height / img.width;
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
@@ -606,8 +683,11 @@ img.onload = () => {
   const af = gl.getExtension('EXT_texture_filter_anisotropic');
   if (af) gl.texParameterf(gl.TEXTURE_2D, af.TEXTURE_MAX_ANISOTROPY_EXT, 8);
   texReady = true; needDraw = true;
-};
-img.src = 'assets/carpet.png';
+  onDone && onDone(true);
+  };
+  img.onerror = () => onDone && onDone(false);
+  img.src = url;
+}
 
 // тень рисуется в половинном разрешении и размывается
 let shadowW = 1, shadowH = 1;
@@ -636,10 +716,7 @@ function resize() {
 
 function computeNormals() {
   nrmData.fill(0);
-  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
-    const a = idx(i, j), b = a + 1, c = a + NX, d = c + 1;
-    faceNormal(a, b, c); faceNormal(b, d, c);
-  }
+  for (let t = 0; t < triCount; t++) faceNormal(triV[t * 3], triV[t * 3 + 1], triV[t * 3 + 2]);
   for (let k = 0; k < N; k++) {
     posData[k * 3] = px[k]; posData[k * 3 + 1] = py[k]; posData[k * 3 + 2] = pz[k];
   }
@@ -674,7 +751,10 @@ function draw() {
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
   gl.enable(gl.BLEND); gl.blendEquation(gl.MAX); gl.blendFunc(gl.ONE, gl.ONE);
   gl.uniform2f(clothProg.u.uShadow, 1, 0);
-  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+  gl.uniform1i(clothProg.u.uShape, SHAPE_ID[shape] || 0);
+  gl.uniform2f(clothProg.u.uDim, width, carpetH);
+  gl.uniform1f(clothProg.u.uAlpha, opacity);
+  gl.drawElements(gl.TRIANGLES, idxCount, gl.UNSIGNED_SHORT, 0);
   gl.blendEquation(gl.FUNC_ADD); gl.disable(gl.BLEND);
 
   // 2) размытие: 0 → 1 по горизонтали, 1 → 0 по вертикали
@@ -698,6 +778,7 @@ function draw() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   gl.useProgram(compProg.p);
   gl.uniform1i(compProg.u.uTex, 0);
+  gl.uniform1f(compProg.u.uAlpha, Math.min(1, 0.25 + opacity * 0.75));
   gl.bindTexture(gl.TEXTURE_2D, fbs[0].tex);
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -708,9 +789,147 @@ function draw() {
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.bindVertexArray(vao);
   gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.frontFace(gl.CW);
-  gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+  if (opacity < 1) { gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); }
+  gl.drawElements(gl.TRIANGLES, idxCount, gl.UNSIGNED_SHORT, 0);
+  gl.disable(gl.BLEND);
   gl.bindVertexArray(null);
 }
+
+// ---------- рулон ----------
+// Ковёр скатывается от нижнего края к верхнему по спирали (ворсом внутрь, изнанкой наружу,
+// как настоящий), а потом живёт как твёрдое тело: цилиндр катится поперёк оси и тяжело
+// скользит вдоль неё.
+let mode = 'cloth';                 // cloth | rolling | roll | unrolling
+let anim = null;                    // { t, dur, from: Float32Array, frame: {cx, cy, ang}, dir }
+const body = { x: 0, y: 0, psi: 0, sigma: 0, vx: 0, vy: 0, w: 0, R: 20 };
+const rollU = new Float32Array(N), rollC = new Float32Array(N), rollS = new Float32Array(N);
+let bodyGrab = null;                // { u } — где схватили рулон (вдоль оси)
+const ROLL_DUR = 1.4;
+
+function spiral() {
+  const r0 = Math.max(5, spacing * 0.5), t = Math.max(3, spacing * 0.42);
+  const th = (L) => (-r0 + Math.sqrt(r0 * r0 + t * L / Math.PI)) / (t / (2 * Math.PI));
+  return { r0, t, th };
+}
+
+// раскладка ковра, скатанного на долю p, в рамке (cx, cy, ang); пишет в tx/ty/tz
+const tx = new Float32Array(N), ty = new Float32Array(N), tz = new Float32Array(N);
+function rollTarget(fr, p) {
+  const { r0, t, th } = spiral();
+  const Lr = p * carpetH, thMax = th(Lr), R = r0 + t * thMax / (2 * Math.PI);
+  const ca = Math.cos(fr.ang), sa = Math.sin(fr.ang);
+  for (let k = 0; k < N; k++) {
+    const L = carpetH / 2 - restY[k];          // 0 у нижнего края, откуда начинаем катать
+    let a, z;
+    if (L <= Lr && p > 0) {
+      const tk = th(L), r = r0 + t * tk / (2 * Math.PI), phi = -Math.PI / 2 - (thMax - tk);
+      a = Lr + r * Math.cos(phi); z = R + r * Math.sin(phi);
+    } else { a = L; z = 0; }
+    const lx = restX[k], ly = carpetH / 2 - a;
+    tx[k] = fr.cx + lx * ca - ly * sa; ty[k] = fr.cy + lx * sa + ly * ca; tz[k] = Math.max(0, z);
+  }
+  return R;
+}
+const ease = (x) => x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+
+function startRoll() {
+  if (mode !== 'cloth') return;
+  release();
+  const fr = pose();
+  // рулон не должен уехать за край: катим к верхнему краю, если он ближе к центру экрана
+  anim = { t: 0, dur: ROLL_DUR, from: Float32Array.from([...px, ...py, ...pz]), frame: fr };
+  mode = 'rolling'; inv.fill(0); wake();
+}
+
+function finishRoll() {
+  const fr = anim.frame, R = rollTarget(fr, 1);
+  const ca = Math.cos(fr.ang), sa = Math.sin(fr.ang);
+  // центр оси рулона: на оси симметрии ковра, у бывшего верхнего края
+  const { r0, t, th } = spiral(), Lr = carpetH;
+  const ly = carpetH / 2 - Lr;
+  body.x = fr.cx - ly * sa; body.y = fr.cy + ly * ca; body.psi = fr.ang; body.sigma = 0;
+  body.vx = body.vy = body.w = 0; body.R = R;
+  for (let k = 0; k < N; k++) {
+    const L = carpetH / 2 - restY[k], tk = th(Math.min(L, Lr)), r = r0 + t * tk / (2 * Math.PI);
+    const phi = -Math.PI / 2 - (th(Lr) - tk);
+    rollU[k] = restX[k]; rollC[k] = r * Math.cos(phi); rollS[k] = r * Math.sin(phi);
+  }
+  mode = 'roll'; anim = null; placeBody();
+}
+
+// поставить частицы по положению твёрдого рулона
+function placeBody() {
+  const cp = Math.cos(body.psi), sp = Math.sin(body.psi);
+  const ax = sp, ay = -cp;                         // направление качения (поперёк оси)
+  const cs = Math.cos(body.sigma), ss = Math.sin(body.sigma);
+  for (let k = 0; k < N; k++) {
+    const c = rollC[k] * cs - rollS[k] * ss, z = rollC[k] * ss + rollS[k] * cs;
+    px[k] = ox[k] = body.x + cp * rollU[k] + ax * c;
+    py[k] = oy[k] = body.y + sp * rollU[k] + ay * c;
+    pz[k] = oz[k] = Math.max(0, body.R + z);
+  }
+}
+
+function startUnroll() {
+  if (mode !== 'roll') return;
+  bodyGrab = null; api.drag(false);
+  const cp = Math.cos(body.psi), sp = Math.sin(body.psi), ax = sp, ay = -cp;
+  // ковёр раскатывается назад, туда, откуда катили; если не влезает — сдвигаем всю раскладку
+  let cx = body.x - ax * carpetH / 2, cy = body.y - ay * carpetH / 2;
+  const rx = Math.abs(cp) * width / 2 + Math.abs(ax) * carpetH / 2, ry = Math.abs(sp) * width / 2 + Math.abs(ay) * carpetH / 2;
+  cx = clamp(cx, Math.min(rx, W / 2), Math.max(W - rx, W / 2)); cy = clamp(cy, Math.min(ry, H / 2), Math.max(H - ry, H / 2));
+  anim = { t: 0, dur: ROLL_DUR, from: Float32Array.from([...px, ...py, ...pz]), frame: { cx, cy, ang: body.psi } };
+  mode = 'unrolling'; wake();
+}
+
+function animStep(dt) {
+  anim.t += dt;
+  const k = Math.min(1, anim.t / anim.dur), e = ease(k);
+  const p = mode === 'rolling' ? e : 1 - e;
+  rollTarget(anim.frame, p);
+  const blend = ease(Math.min(1, anim.t / 0.35));  // плавно выходим из любой позы
+  const f = anim.from;
+  for (let q = 0; q < N; q++) {
+    px[q] = ox[q] = f[q] + (tx[q] - f[q]) * blend;
+    py[q] = oy[q] = f[N + q] + (ty[q] - f[N + q]) * blend;
+    pz[q] = oz[q] = f[2 * N + q] + (tz[q] - f[2 * N + q]) * blend;
+  }
+  if (k < 1) return;
+  if (mode === 'rolling') finishRoll();
+  else { mode = 'cloth'; anim = null; for (let q = 0; q < N; q++) inv[q] = act[q]; saveState(); }
+}
+
+// твёрдый рулон: пружина от курсора, качение поперёк оси, трение вдоль
+function bodyStep(dt) {
+  const cp = Math.cos(body.psi), sp = Math.sin(body.psi), ax = sp, ay = -cp;
+  const m = 1, I = m * width * width / 12;
+  let fx = 0, fy = 0, tq = 0;
+  if (bodyGrab) {
+    const gx = body.x + cp * bodyGrab.u, gy = body.y + sp * bodyGrab.u;
+    const vgx = body.vx - body.w * sp * bodyGrab.u, vgy = body.vy + body.w * cp * bodyGrab.u;
+    fx = 90 * (mouseX - gx) - 14 * vgx; fy = 90 * (mouseY - gy) - 14 * vgy;
+    tq = bodyGrab.u * (cp * fy - sp * fx);
+  }
+  body.vx += fx / m * dt; body.vy += fy / m * dt; body.w += tq / I * dt;
+  // трение: вдоль оси рулон скользит тяжело, поперёк — катится почти свободно
+  const va = body.vx * cp + body.vy * sp, vr = body.vx * ax + body.vy * ay;
+  const fric = (v, dec) => Math.sign(v) * Math.max(0, Math.abs(v) - dec * dt);
+  const na = fric(va, 1800), nr = fric(vr, 160);
+  body.vx = cp * na + ax * nr; body.vy = sp * na + ay * nr;
+  body.w = fric(body.w, 9) * (1 - Math.min(1, 3 * dt));
+  body.x += body.vx * dt; body.y += body.vy * dt; body.psi += body.w * dt;
+  body.sigma -= (body.vx * ax + body.vy * ay) * dt / body.R;
+  // края экрана: торцы и бока рулона отскакивают
+  const ex = Math.abs(cp) * width / 2 + body.R, ey = Math.abs(sp) * width / 2 + body.R;
+  if (body.x < ex) { body.x = ex; body.vx = Math.abs(body.vx) * 0.35; }
+  if (body.x > W - ex) { body.x = W - ex; body.vx = -Math.abs(body.vx) * 0.35; }
+  if (body.y < ey) { body.y = ey; body.vy = Math.abs(body.vy) * 0.35; }
+  if (body.y > H - ey) { body.y = H - ey; body.vy = -Math.abs(body.vy) * 0.35; }
+  placeBody();
+  return bodyGrab ? 1 : Math.abs(body.vx) + Math.abs(body.vy) + Math.abs(body.w) * width;
+}
+
+function toggleRoll() { if (mode === 'cloth') startRoll(); else if (mode === 'roll') startUnroll(); }
 
 // ---------- цикл ----------
 let last = performance.now(), acc = 0;
@@ -722,10 +941,14 @@ function frame(now) {
     const steps = Math.min(3, Math.floor(acc / DT));
     acc -= steps * DT;
     let maxv = 0;
-    for (let s = 0; s < steps; s++) maxv = Math.max(maxv, step(DT, (s + 1) / steps));
+    for (let s = 0; s < steps; s++) {
+      if (mode === 'cloth') maxv = Math.max(maxv, step(DT, (s + 1) / steps));
+      else if (mode === 'roll') maxv = Math.max(maxv, bodyStep(DT) * DT);
+      else { animStep(DT); maxv = 1; }
+    }
     if (grab >= 0) { prevMX = grabTX; prevMY = grabTY; }
     if (steps) {
-      calm = grab < 0 && maxv < 0.015 ? calm + steps : 0;
+      calm = grab < 0 && !bodyGrab && maxv < 0.015 ? calm + steps : 0;
       if (calm > 90) { sleeping = true; saveState(); }
       project(); updateHover(); needDraw = true;
     }
@@ -739,10 +962,11 @@ function wake() { sleeping = false; calm = 0; acc = 0; needDraw = true; }
 function onMove(x, y) {
   mouseX = x; mouseY = y;
   if (grab >= 0) { grabTX = x; grabTY = y; wake(); }
+  else if (bodyGrab) wake();
   else if (sleeping) updateHover();
 }
 
-api.onCursor((p) => { if (grab < 0) onMove(p.x, p.y); });
+api.onCursor((p) => { if (grab < 0 && !bodyGrab) onMove(p.x, p.y); });
 
 canvas.addEventListener('pointermove', (e) => onMove(e.clientX, e.clientY));
 canvas.addEventListener('pointerdown', (e) => {
@@ -751,6 +975,15 @@ canvas.addEventListener('pointerdown', (e) => {
   project();
   const h = hitTest(e.clientX, e.clientY);
   if (!h) return;
+  if (mode === 'roll') {
+    const cp = Math.cos(body.psi), sp = Math.sin(body.psi);
+    bodyGrab = { u: clamp((px[h.k] - body.x) * cp + (py[h.k] - body.y) * sp, -width / 2, width / 2) };
+    canvas.setPointerCapture(e.pointerId);
+    document.body.classList.add('grab');
+    api.drag(true); wake();
+    return;
+  }
+  if (mode !== 'cloth') return;
   grab = h.k; inv[grab] = 0; setTethers(grab);
   grabZ = pz[grab]; liftH = Math.max(liftH, grabZ + 30);
   grabTX = prevMX = e.clientX; grabTY = prevMY = e.clientY;
@@ -759,6 +992,7 @@ canvas.addEventListener('pointerdown', (e) => {
   api.drag(true); wake();
 });
 function release() {
+  if (bodyGrab) { bodyGrab = null; document.body.classList.remove('grab'); api.drag(false); wake(); return; }
   if (grab < 0) return;
   inv[grab] = 1; grab = -1;
   document.body.classList.remove('grab');
@@ -779,7 +1013,7 @@ canvas.addEventListener('contextmenu', (e) => {
 canvas.addEventListener('dblclick', (e) => {
   project();
   if (!hitTest(e.clientX, e.clientY)) return;
-  shake(0.6);
+  if (mode === 'roll') startUnroll(); else if (mode === 'cloth') shake(0.6);
 });
 
 // ---------- убрать ковёр: удерживать Esc ~3 секунды ----------
@@ -838,43 +1072,85 @@ function crumple() {
   wake();
 }
 
-api.onCommand((cmd, arg) => {
-  if (cmd === 'flatten') flatten();
-  else if (cmd === 'shake') shake();
-  else if (cmd === 'crumple') crumple();
+api.onCommand((cmd) => {
+  if (cmd === 'flatten') { if (mode === 'roll') startUnroll(); else if (mode === 'cloth') flatten(); }
+  else if (cmd === 'shake') { if (mode === 'cloth') shake(); }
+  else if (cmd === 'crumple') { if (mode === 'cloth') crumple(); }
+  else if (cmd === 'roll') toggleRoll();
   else if (cmd === 'remove') remove();
-  else if (cmd === 'reset') { release(); setSize(sizeName, false); }
-  else if (cmd === 'size') { sizeName = arg; release(); setSize(arg, true); }
+  else if (cmd === 'reset') { snapCloth(); setSize(false); }
 });
 
+// из любого режима сразу в обычную ткань (перед сменой формы или размера)
+function snapCloth() {
+  release();
+  if (mode !== 'cloth') { anim = null; mode = 'cloth'; }
+  for (let q = 0; q < N; q++) inv[q] = act[q];
+}
+
+// настройки из окна «Настройки»: форма, размер, прозрачность, картинка
+function imageUrl(name) { return name ? 'kovyor://user/' + encodeURIComponent(name) : 'assets/carpet.png'; }
+function applySettings(st, first) {
+  const w = st.width || SIZES[st.size] || SIZES.medium;
+  const sh = st.shape in SHAPE_ASPECT ? st.shape : 'rect';
+  opacity = clamp(st.opacity == null ? 1 : st.opacity, 0.1, 1);
+  needDraw = true;
+  const geomChanged = w !== width || sh !== shape;
+  const img = st.image || '';
+  const reshape = () => { const wasRoll = mode !== 'cloth'; snapCloth(); setSize(true); if (wasRoll) setTimeout(startRoll, 500); };
+  if (img !== imageKey || first) {
+    imageKey = img;
+    loadImage(imageUrl(img), (ok) => {
+      if (!ok && img) { imageKey = ''; loadImage(imageUrl(''), () => { width = w; shape = sh; if (!first) reshape(); }); return; }
+      width = w; shape = sh;
+      if (first) startFromState(); else reshape();
+    });
+  } else if (geomChanged) { width = w; shape = sh; reshape(); }
+  else wake();
+}
+api.onSettings?.((st) => applySettings(st, false));
+
 function saveState() {
+  if (mode === 'rolling' || mode === 'unrolling') return;
   const pos = new Array(N * 3);
   for (let k = 0; k < N; k++) {
     pos[k * 3] = Math.round(px[k] * 10) / 10; pos[k * 3 + 1] = Math.round(py[k] * 10) / 10; pos[k * 3 + 2] = Math.round(pz[k] * 10) / 10;
   }
-  api.saveState({ v: 1, NX, NY, size: sizeName, W, H, pos });
+  const b = mode === 'roll' ? { x: body.x, y: body.y, psi: body.psi, sigma: body.sigma } : null;
+  api.saveState({ v: 2, NX, NY, width, shape, image: imageKey, W, H, pos, roll: b });
 }
 
 // ---------- старт ----------
-let sizeName = 'medium';
+let saved = null;
+function startFromState() {
+  rebuildGeometry();
+  const st = saved;
+  const ok = st && st.v === 2 && st.NX === NX && st.NY === NY && st.width === width && st.shape === shape &&
+    st.image === imageKey && Array.isArray(st.pos) && st.pos.length === N * 3;
+  if (ok && st.roll) {
+    // рулон: скатываем «мгновенно» в сохранённом месте
+    anim = { t: 0, dur: 1, from: new Float32Array(N * 3), frame: { cx: 0, cy: 0, ang: st.roll.psi } };
+    finishRoll();
+    body.x = clamp(st.roll.x, 0, W); body.y = clamp(st.roll.y, 0, H); body.sigma = st.roll.sigma || 0;
+    for (let q = 0; q < N; q++) inv[q] = 0;
+    placeBody(); wake();
+  } else if (ok) {
+    for (let k = 0; k < N; k++) {
+      px[k] = ox[k] = clamp(st.pos[k * 3], 0, W);
+      py[k] = oy[k] = clamp(st.pos[k * 3 + 1], 0, H);
+      pz[k] = oz[k] = st.pos[k * 3 + 2] + 25;      // лёгкое «приземление» при запуске
+    }
+    wake();
+  } else setSize(false);
+  if (!started) { started = true; requestAnimationFrame(frame); }
+}
+let started = false;
 buildConstraints();
 addEventListener('resize', resize);
 resize();
 
 api.init().then(({ settings, state }) => {
-  sizeName = settings.size in SIZES ? settings.size : 'medium';
-  width = SIZES[sizeName]; setRest();
-  const ok = state && state.v === 1 && state.NX === NX && state.NY === NY && state.size === sizeName &&
-    Array.isArray(state.pos) && state.pos.length === N * 3;
-  if (ok) {
-    for (let k = 0; k < N; k++) {
-      px[k] = ox[k] = clamp(state.pos[k * 3], 0, W);
-      py[k] = oy[k] = clamp(state.pos[k * 3 + 1], 0, H);
-      pz[k] = oz[k] = state.pos[k * 3 + 2];
-    }
-    for (let k = 0; k < N; k++) pz[k] = oz[k] = pz[k] + 25; // лёгкое «приземление» при запуске
-    wake();
-  } else setSize(sizeName, false);
-  if (new URLSearchParams(location.search).has('demo')) window.__kovyor = { step, project, hitTest, shake, crumple, flatten, px, py, pz, inv, idx, NX, NY };
-  requestAnimationFrame(frame);
+  saved = state;
+  if (new URLSearchParams(location.search).has('demo')) window.__kovyor = { step, project, hitTest, shake, crumple, flatten, toggleRoll, applySettings, body, get mode() { return mode; }, px, py, pz, inv, act, idx, NX, NY };
+  applySettings(settings, true);
 });

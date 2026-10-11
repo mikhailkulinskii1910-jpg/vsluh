@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' kovyor: data:; style-src 'self' 'unsafe-inline'">
+<title>Ковёр — настройки</title>
+<style>
+  :root {
+    --bg: #17161a; --panel: #211f25; --line: #34313a; --text: #ece7de; --muted: #9a948b;
+    --accent: #d9b77a; --accent-ink: #1b1710;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.4 "Segoe UI", system-ui, sans-serif; user-select: none; }
+  main { padding: 14px 18px 16px; display: grid; gap: 10px; }
+  h1 { font-size: 17px; font-weight: 600; margin: 0 0 2px; letter-spacing: .2px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+  .label { display: flex; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .6px; }
+  .label b { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 13px; }
+  .shapes { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .shapes button { aspect-ratio: 1; border-radius: 8px; border: 1px solid var(--line); background: #1a191d; display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .shapes button svg { width: 60%; height: 60%; fill: none; stroke: var(--muted); stroke-width: 2; }
+  .shapes button[aria-pressed="true"] { border-color: var(--accent); background: #2a251c; }
+  .shapes button[aria-pressed="true"] svg { stroke: var(--accent); fill: rgba(217,183,122,.15); }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .thumb { width: 64px; height: 64px; border-radius: 8px; border: 1px solid var(--line); background: #0d0c0e center/cover no-repeat; flex: none; }
+  button.btn { border: 1px solid var(--line); background: #2a282e; color: var(--text); border-radius: 8px; padding: 7px 12px; font: inherit; cursor: pointer; }
+  button.btn:hover { border-color: #4a4650; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  .key { flex: 1; text-align: center; padding: 8px 10px; border-radius: 8px; border: 1px dashed #4a4650; background: #1a191d; cursor: pointer; font-weight: 600; letter-spacing: .3px; }
+  .key.wait { border-color: var(--accent); color: var(--accent); }
+  .hint { color: var(--muted); font-size: 12.5px; }
+  .err { color: #e48a7a; font-size: 12.5px; min-height: 1em; }
+  label.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  label.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Настройки ковра</h1>
+
+  <section>
+    <div class="label">Форма <b id="shapeName"></b></div>
+    <div class="shapes" id="shapes"></div>
+  </section>
+
+  <section>
+    <div class="label">Размер <b id="widthVal"></b></div>
+    <input type="range" id="width" min="140" max="900" step="10">
+  </section>
+
+  <section>
+    <div class="label">Прозрачность <b id="opVal"></b></div>
+    <input type="range" id="opacity" min="10" max="100" step="1">
+  </section>
+
+  <section>
+    <div class="label">Картинка</div>
+    <div class="row">
+      <div class="thumb" id="thumb"></div>
+      <div style="display:grid; gap:6px">
+        <button class="btn" id="pick">Выбрать свою…</button>
+        <button class="btn" id="std">Стандартный ковёр</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Свернуть в рулон</div>
+    <div class="row">
+      <div class="key" id="key" tabindex="0" title="Нажмите и задайте сочетание клавиш"></div>
+      <button class="btn primary" id="roll">Свернуть / развернуть</button>
+    </div>
+    <div class="hint">Щёлкните по полю и нажмите сочетание. Работает из любой программы.</div>
+    <div class="err" id="err"></div>
+  </section>
+
+  <section>
+    <label class="check"><input type="checkbox" id="onTop"> Поверх всех окон</label>
+    <label class="check"><input type="checkbox" id="auto"> Запускать при входе в систему</label>
+    <div class="hint">Убрать ковёр — удерживать Esc 3 секунды над ковром.</div>
+  </section>
+</main>
+<script src="settings.js"></script>
+</body>
+</html>

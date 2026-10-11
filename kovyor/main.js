@@ -1,6 +1,6 @@
 // Ковёр на рабочем столе: прозрачное окно во весь экран, сквозь которое
 // проходят клики везде, кроме самого ковра.
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, protocol, net, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, protocol, net, globalShortcut, dialog } = require('electron');
 const { pathToFileURL } = require('url');
 const path = require('path');
 const fs = require('fs');
@@ -18,11 +18,18 @@ if (process.platform === 'linux') {
 const statePath = () => path.join(app.getPath('userData'), 'state.json');
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
-let settings = { size: 'medium', onTop: false };
-try { Object.assign(settings, JSON.parse(fs.readFileSync(settingsPath(), 'utf8'))); } catch (_) {}
+const DEFAULTS = { width: 320, shape: 'rect', opacity: 1, image: '', rollKey: 'Ctrl+Alt+R', onTop: false };
+const OLD_SIZES = { small: 220, medium: 320, large: 440 };
+let settings = { ...DEFAULTS };
+try {
+  const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+  if (s.size && !s.width) s.width = OLD_SIZES[s.size];
+  delete s.size;
+  Object.assign(settings, s);
+} catch (_) {}
 const saveSettings = () => { try { fs.writeFileSync(settingsPath(), JSON.stringify(settings)); } catch (_) {} };
 
-let win, tray, ignoring = null, dragging = false, cursorTimer;
+let win, tray, settingsWin, ignoring = null, dragging = false, cursorTimer, rollKeyOk = true;
 
 function setIgnore(ignore) {
   if (!win || ignoring === ignore) return;
@@ -64,41 +71,80 @@ function createWindow() {
 
 function buildMenu() {
   const send = (cmd, arg) => win && win.webContents.send('command', cmd, arg);
-  const sizes = [['small', 'Маленький'], ['medium', 'Средний'], ['large', 'Большой']];
   return Menu.buildFromTemplate([
+    { label: 'Настройки…', click: openSettings },
+    { label: 'Свернуть в рулон / развернуть', accelerator: rollKeyOk ? settings.rollKey : undefined, registerAccelerator: false, click: () => send('roll') },
+    { type: 'separator' },
     { label: 'Расстелить ровно', click: () => send('flatten') },
     { label: 'Встряхнуть', click: () => send('shake') },
     { label: 'Скомкать', click: () => send('crumple') },
     { label: 'Вернуть в центр', click: () => send('reset') },
     { type: 'separator' },
-    { label: 'Размер', submenu: sizes.map(([id, label]) => ({
-      label, type: 'radio', checked: settings.size === id,
-      click: () => { settings.size = id; saveSettings(); send('size', id); refreshMenus(); },
-    })) },
-    { label: 'Поверх всех окон', type: 'checkbox', checked: settings.onTop, click: (it) => {
-      settings.onTop = it.checked; saveSettings();
-      win && win.setAlwaysOnTop(settings.onTop, 'floating'); refreshMenus();
-    } },
-    { label: 'Запускать при входе в систему', type: 'checkbox',
-      checked: app.getLoginItemSettings().openAtLogin,
-      click: (it) => { app.setLoginItemSettings({ openAtLogin: it.checked }); refreshMenus(); } },
-    { type: 'separator' },
     { label: 'Убрать ковёр (или удерживать Esc 3 с)', click: () => win ? win.webContents.send('command', 'remove') : app.quit() },
   ]);
+}
+
+function openSettings() {
+  if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
+  settingsWin = new BrowserWindow({
+    width: 440, height: 730, useContentSize: true, resizable: false, maximizable: false, minimizable: true, fullscreenable: false,
+    title: 'Ковёр — настройки', backgroundColor: '#17161a', autoHideMenuBar: true, show: false,
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    webPreferences: { preload: path.join(__dirname, 'settings-preload.js') },
+  });
+  settingsWin.setMenu(null);
+  settingsWin.loadURL('kovyor://app/settings.html');
+  settingsWin.once('ready-to-show', () => settingsWin.show());
+  settingsWin.on('closed', () => { settingsWin = null; });
+}
+
+// клавиша сворачивания в рулон работает из любого окна
+function registerRollKey() {
+  for (const k of registeredRoll) { try { globalShortcut.unregister(k); } catch (_) {} }
+  registeredRoll = [];
+  rollKeyOk = false;
+  if (!settings.rollKey) return true;
+  try { rollKeyOk = globalShortcut.register(settings.rollKey, () => win && win.webContents.send('command', 'roll')); } catch (_) { rollKeyOk = false; }
+  if (rollKeyOk) registeredRoll.push(settings.rollKey);
+  return rollKeyOk;
+}
+let registeredRoll = [];
+
+function applySettings(patch) {
+  const prevKey = settings.rollKey;
+  Object.assign(settings, patch);
+  let keyError = '';
+  if ('rollKey' in patch && patch.rollKey !== prevKey) {
+    if (!registerRollKey()) {
+      keyError = 'Эту комбинацию занял Windows или другая программа — выберите другую.';
+      settings.rollKey = prevKey; registerRollKey();
+    }
+  }
+  if ('onTop' in patch && win) win.setAlwaysOnTop(!!settings.onTop, 'floating');
+  saveSettings();
+  win && win.webContents.send('settings', settings);
+  refreshMenus();
+  return { settings, keyError, autostart: app.getLoginItemSettings().openAtLogin };
 }
 
 function refreshMenus() { tray && tray.setContextMenu(buildMenu()); }
 
 app.whenReady().then(() => {
   protocol.handle('kovyor', (req) => {
-    const file = path.normalize(path.join(__dirname, decodeURIComponent(new URL(req.url).pathname)));
-    if (!file.startsWith(__dirname + path.sep)) return new Response('', { status: 403 });
+    const u = new URL(req.url);
+    // kovyor://app/… — файлы программы, kovyor://user/… — своя картинка ковра из папки настроек
+    const root = u.host === 'user' ? app.getPath('userData') : __dirname;
+    const file = path.normalize(path.join(root, decodeURIComponent(u.pathname)));
+    if (!file.startsWith(root + path.sep)) return new Response('', { status: 403 });
     return net.fetch(pathToFileURL(file).toString());
   });
+  registerRollKey();
+  if (process.argv.includes('--settings')) setTimeout(openSettings, 300);
   createWindow();
   const img = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 16, height: 16 });
   tray = new Tray(img);
   tray.setToolTip('Ковёр — тащите мышью, колесо меняет высоту подъёма, Esc 3 секунды — убрать');
+  tray.on('double-click', openSettings);
   refreshMenus();
 
   screen.on('display-metrics-changed', () => {
@@ -108,7 +154,8 @@ app.whenReady().then(() => {
   });
 });
 
-app.on('second-instance', () => win && win.webContents.send('command', 'shake'));
+// повторный запуск ярлыка, когда ковёр уже лежит, открывает настройки
+app.on('second-instance', () => openSettings());
 app.on('window-all-closed', () => app.quit());
 
 ipcMain.on('hover', (_e, over) => { if (!dragging) setIgnore(!over); escWhileHover(over); });
@@ -147,3 +194,22 @@ ipcMain.handle('init', () => {
   return { settings, state };
 });
 ipcMain.on('save-state', (_e, s) => { try { fs.writeFileSync(statePath(), JSON.stringify(s)); } catch (_) {} });
+
+// ---------- окно настроек ----------
+ipcMain.handle('settings:get', () => ({ settings, autostart: app.getLoginItemSettings().openAtLogin, rollKeyOk }));
+ipcMain.handle('settings:set', (_e, patch) => applySettings(patch || {}));
+ipcMain.handle('settings:autostart', (_e, on) => { app.setLoginItemSettings({ openAtLogin: !!on }); return app.getLoginItemSettings().openAtLogin; });
+ipcMain.handle('settings:roll', () => { win && win.webContents.send('command', 'roll'); });
+ipcMain.handle('settings:pick-image', async () => {
+  const r = await dialog.showOpenDialog(settingsWin || win, {
+    title: 'Картинка для ковра', properties: ['openFile'],
+    filters: [{ name: 'Картинки', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] }],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const src = r.filePaths[0], name = 'carpet-' + Date.now() + path.extname(src).toLowerCase();
+  const dir = app.getPath('userData');
+  fs.copyFileSync(src, path.join(dir, name));
+  // старые свои картинки больше не нужны
+  for (const f of fs.readdirSync(dir)) if (/^carpet-\d+\./.test(f) && f !== name) { try { fs.unlinkSync(path.join(dir, f)); } catch (_) {} }
+  return applySettings({ image: name });
+});

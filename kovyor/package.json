@@ -1,7 +1,7 @@
 {
   "name": "kovyor",
   "productName": "Kovyor",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Физический ковёр на рабочем столе",
   "main": "main.js",
   "author": "vsluh",
@@ -20,6 +20,9 @@
       "preload.js",
       "index.html",
       "renderer.js",
+      "settings.html",
+      "settings.js",
+      "settings-preload.js",
       "assets/**"
     ],
     "win": {
