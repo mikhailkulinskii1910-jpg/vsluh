@@ -18,7 +18,7 @@ if (process.platform === 'linux') {
 const statePath = () => path.join(app.getPath('userData'), 'state.json');
 const settingsPath = () => path.join(app.getPath('userData'), 'settings.json');
 
-const DEFAULTS = { width: 320, shape: 'rect', opacity: 1, image: '', rollKey: 'Ctrl+Alt+R', onTop: false };
+const DEFAULTS = { width: 320, shape: 'rect', opacity: 1, image: '', rollKey: 'Ctrl+Alt+R', fold: 'roll', onTop: false };
 const OLD_SIZES = { small: 220, medium: 320, large: 440 };
 let settings = { ...DEFAULTS };
 try {
@@ -73,7 +73,7 @@ function buildMenu() {
   const send = (cmd, arg) => win && win.webContents.send('command', cmd, arg);
   return Menu.buildFromTemplate([
     { label: 'Настройки…', click: openSettings },
-    { label: 'Свернуть в рулон / развернуть', accelerator: rollKeyOk ? settings.rollKey : undefined, registerAccelerator: false, click: () => send('roll') },
+    { label: 'Свернуть / развернуть', accelerator: rollKeyOk ? settings.rollKey : undefined, registerAccelerator: false, click: () => send('roll') },
     { type: 'separator' },
     { label: 'Расстелить ровно', click: () => send('flatten') },
     { label: 'Встряхнуть', click: () => send('shake') },
@@ -87,7 +87,7 @@ function buildMenu() {
 function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
-    width: 440, height: 730, useContentSize: true, resizable: false, maximizable: false, minimizable: true, fullscreenable: false,
+    width: 780, height: 650, useContentSize: true, resizable: false, maximizable: false, minimizable: true, fullscreenable: false,
     title: 'Ковёр — настройки', backgroundColor: '#17161a', autoHideMenuBar: true, show: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'settings-preload.js') },

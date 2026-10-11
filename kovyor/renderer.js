@@ -558,7 +558,7 @@ const CLOTH_FS = `#version 300 es
 precision highp float;
 in vec2 vUV; in vec3 vN; in float vZ; in vec2 vGrid;
 uniform sampler2D uTex; uniform vec3 uLight; uniform vec2 uShadow;
-uniform int uShape; uniform vec2 uDim; uniform float uAlpha;
+uniform int uShape; uniform vec2 uDim; uniform float uAlpha; uniform float uFront;
 out vec4 o;
 // расстояние до края формы (как shapeDist в JS); vGrid — координаты на ковре 0..1
 float shapeDist(vec2 g) {
@@ -579,7 +579,7 @@ void main() {
   if (!gl_FrontFacing) {           // изнанка: тот же узор, но блёклый и светлее
     n = -n;
     float l = dot(col, vec3(0.3, 0.59, 0.11));
-    col = mix(vec3(l), vec3(0.42, 0.40, 0.37), 0.5) * 0.85 + 0.06;
+    col = mix(mix(vec3(l), vec3(0.42, 0.40, 0.37), 0.5) * 0.85 + 0.06, col, uFront);
   }
   float diff = max(dot(n, uLight), 0.0) / uLight.z;
   vec3 h = normalize(uLight + vec3(0.0, 0.0, 1.0));
@@ -754,6 +754,7 @@ function draw() {
   gl.uniform1i(clothProg.u.uShape, SHAPE_ID[shape] || 0);
   gl.uniform2f(clothProg.u.uDim, width, carpetH);
   gl.uniform1f(clothProg.u.uAlpha, opacity);
+  gl.uniform1f(clothProg.u.uFront, frontK);
   gl.drawElements(gl.TRIANGLES, idxCount, gl.UNSIGNED_SHORT, 0);
   gl.blendEquation(gl.FUNC_ADD); gl.disable(gl.BLEND);
 
@@ -854,7 +855,7 @@ function finishRoll() {
     const phi = -Math.PI / 2 - (th(Lr) - tk);
     rollU[k] = restX[k]; rollC[k] = r * Math.cos(phi); rollS[k] = r * Math.sin(phi);
   }
-  mode = 'roll'; anim = null; placeBody();
+  mode = 'roll'; anim = null; frontK = 1; placeBody();
 }
 
 // поставить частицы по положению твёрдого рулона
@@ -888,6 +889,7 @@ function animStep(dt) {
   const p = mode === 'rolling' ? e : 1 - e;
   rollTarget(anim.frame, p);
   const blend = ease(Math.min(1, anim.t / 0.35));  // плавно выходим из любой позы
+  frontK = p;
   const f = anim.from;
   for (let q = 0; q < N; q++) {
     px[q] = ox[q] = f[q] + (tx[q] - f[q]) * blend;
@@ -896,7 +898,7 @@ function animStep(dt) {
   }
   if (k < 1) return;
   if (mode === 'rolling') finishRoll();
-  else { mode = 'cloth'; anim = null; for (let q = 0; q < N; q++) inv[q] = act[q]; saveState(); }
+  else { mode = 'cloth'; anim = null; frontK = 0; for (let q = 0; q < N; q++) inv[q] = act[q]; saveState(); }
 }
 
 // твёрдый рулон: пружина от курсора, качение поперёк оси, трение вдоль
@@ -931,6 +933,151 @@ function bodyStep(dt) {
 
 function toggleRoll() { if (mode === 'cloth') startRoll(); else if (mode === 'roll') startUnroll(); }
 
+// ---------- шар, куб, пластина ----------
+// Ковёр «перетекает» в твёрдое тело того же объёма (ткань ~5 px толщиной) и дальше живёт как
+// одно целое: шар катается во все стороны, куб и пластина тяжело скользят и поворачиваются.
+let foldKind = 'roll';               // roll | ball | cube | plate
+const solid = { kind: 'ball', x: 0, y: 0, zc: 0, M: [1, 0, 0, 0, 1, 0, 0, 0, 1], vx: 0, vy: 0, w: 0, R: 30, rb: 30 };
+const sLx = new Float32Array(N), sLy = new Float32Array(N), sLz = new Float32Array(N);
+const MORPH_DUR = 1.1;
+
+function solidLocal(kind) {
+  let n = 0;
+  for (let k = 0; k < N; k++) n += act[k];
+  const area = n * spX * spY, vol = area * 5;
+  let zc = 0, rb = 0, R = 0;
+  if (kind === 'plate') {
+    const sc = 0.38; zc = 5;
+    for (let k = 0; k < N; k++) { sLx[k] = restX[k] * sc; sLy[k] = restY[k] * sc; sLz[k] = 0; }
+  } else {
+    R = kind === 'ball' ? Math.cbrt(3 * vol / (4 * Math.PI)) : Math.cbrt(vol) / 2;
+    zc = R;
+    for (let k = 0; k < N; k++) {
+      // сетка ковра натягивается на тело: середина ковра — сверху, края сходятся снизу
+      const lon = (gridData[k * 2] - 0.5) * 2 * Math.PI * 0.985, lat = (gridData[k * 2 + 1] - 0.5) * Math.PI * 0.97;
+      let dx = Math.sin(lon) * Math.cos(lat), dy = Math.sin(lat), dz = Math.cos(lon) * Math.cos(lat);
+      if (kind === 'cube') { const m = Math.max(Math.abs(dx), Math.abs(dy), Math.abs(dz)); dx /= m; dy /= m; dz /= m; }
+      sLx[k] = dx * R; sLy[k] = dy * R; sLz[k] = dz * R;
+    }
+  }
+  for (let k = 0; k < N; k++) if (act[k]) rb = Math.max(rb, Math.hypot(sLx[k], sLy[k]));
+  solid.kind = kind; solid.zc = zc; solid.R = R || rb; solid.rb = rb;
+}
+
+const rotZ = (a) => { const c = Math.cos(a), s = Math.sin(a); return [c, -s, 0, s, c, 0, 0, 0, 1]; };
+function mul3(A, B) {
+  const C = new Array(9);
+  for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) C[i * 3 + j] = A[i * 3] * B[j] + A[i * 3 + 1] * B[3 + j] + A[i * 3 + 2] * B[6 + j];
+  return C;
+}
+function axisAngle(x, y, z, a) {
+  const c = Math.cos(a), s = Math.sin(a), t = 1 - c;
+  return [t * x * x + c, t * x * y - s * z, t * x * z + s * y, t * x * y + s * z, t * y * y + c, t * y * z - s * x, t * x * z - s * y, t * y * z + s * x, t * z * z + c];
+}
+function orthonormalize(M) { // против накопления ошибок поворота
+  let [ax, ay, az] = [M[0], M[3], M[6]], l = Math.hypot(ax, ay, az); ax /= l; ay /= l; az /= l;
+  let [bx, by, bz] = [M[1], M[4], M[7]]; const d = ax * bx + ay * by + az * bz;
+  bx -= d * ax; by -= d * ay; bz -= d * az; l = Math.hypot(bx, by, bz); bx /= l; by /= l; bz /= l;
+  const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+  M[0] = ax; M[3] = ay; M[6] = az; M[1] = bx; M[4] = by; M[7] = bz; M[2] = cx; M[5] = cy; M[8] = cz;
+}
+
+// положение частиц твёрдого тела при центре (x, y) и повороте M — в tx/ty/tz или прямо в частицы
+function solidPose(x, y, M, out) {
+  for (let k = 0; k < N; k++) {
+    const lx = sLx[k], ly = sLy[k], lz = sLz[k];
+    const wx = x + M[0] * lx + M[1] * ly + M[2] * lz;
+    const wy = y + M[3] * lx + M[4] * ly + M[5] * lz;
+    const wz = Math.max(0, solid.zc + M[6] * lx + M[7] * ly + M[8] * lz);
+    if (out) { tx[k] = wx; ty[k] = wy; tz[k] = wz; } else { px[k] = ox[k] = wx; py[k] = oy[k] = wy; pz[k] = oz[k] = wz; }
+  }
+}
+
+function startMorph() {
+  if (mode !== 'cloth') return;
+  release();
+  const fr = pose();
+  solidLocal(foldKind);
+  solid.x = clamp(fr.cx, solid.rb, W - solid.rb); solid.y = clamp(fr.cy, solid.rb, H - solid.rb);
+  solid.M = rotZ(fr.ang); solid.vx = solid.vy = solid.w = 0;
+  anim = { t: 0, dur: MORPH_DUR, from: Float32Array.from([...px, ...py, ...pz]) };
+  mode = 'morphing'; inv.fill(0); wake();
+}
+
+function startUnmorph() {
+  if (mode !== 'solid') return;
+  bodyGrab = null; api.drag(false);
+  const ang = Math.atan2(solid.M[3], solid.M[0]);
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const rx = Math.abs(ca) * width / 2 + Math.abs(sa) * carpetH / 2, ry = Math.abs(sa) * width / 2 + Math.abs(ca) * carpetH / 2;
+  const cx = clamp(solid.x, Math.min(rx, W / 2), Math.max(W - rx, W / 2)), cy = clamp(solid.y, Math.min(ry, H / 2), Math.max(H - ry, H / 2));
+  for (let k = 0; k < N; k++) { tx[k] = cx + restX[k] * ca - restY[k] * sa; ty[k] = cy + restX[k] * sa + restY[k] * ca; tz[k] = 0; }
+  anim = { t: 0, dur: MORPH_DUR, from: Float32Array.from([...px, ...py, ...pz]), to: Float32Array.from([...tx, ...ty, ...tz]) };
+  mode = 'unmorphing'; wake();
+}
+
+function morphStep(dt) {
+  anim.t += dt;
+  const k = Math.min(1, anim.t / anim.dur), e = ease(k), f = anim.from;
+  if (mode === 'morphing') solidPose(solid.x, solid.y, solid.M, true);
+  else { const to = anim.to; for (let q = 0; q < N; q++) { tx[q] = to[q]; ty[q] = to[N + q]; tz[q] = to[2 * N + q]; } }
+  const lift = Math.sin(Math.PI * k) * 22;      // ткань слегка взлетает, складываясь
+  for (let q = 0; q < N; q++) {
+    px[q] = ox[q] = f[q] + (tx[q] - f[q]) * e;
+    py[q] = oy[q] = f[N + q] + (ty[q] - f[N + q]) * e;
+    pz[q] = oz[q] = f[2 * N + q] + (tz[q] - f[2 * N + q]) * e + lift;
+  }
+  frontK = mode === 'morphing' ? e : 1 - e;
+  if (k < 1) return;
+  anim = null;
+  if (mode === 'morphing') { mode = 'solid'; solidPose(solid.x, solid.y, solid.M); }
+  else { mode = 'cloth'; frontK = 0; for (let q = 0; q < N; q++) inv[q] = act[q]; saveState(); }
+}
+
+function solidStep(dt) {
+  const ball = solid.kind === 'ball', M = solid.M;
+  let fx = 0, fy = 0, tq = 0, ofx = 0, ofy = 0;
+  if (bodyGrab) {
+    if (!ball) { // точка захвата поворачивается вместе с телом
+      const lx = bodyGrab.lx, ly = bodyGrab.ly;
+      ofx = M[0] * lx + M[1] * ly; ofy = M[3] * lx + M[4] * ly;
+    }
+    const gx = solid.x + ofx, gy = solid.y + ofy;
+    const vgx = solid.vx - solid.w * ofy, vgy = solid.vy + solid.w * ofx;
+    fx = 90 * (mouseX - gx) - 14 * vgx; fy = 90 * (mouseY - gy) - 14 * vgy;
+    tq = ofx * fy - ofy * fx;
+  }
+  solid.vx += fx * dt; solid.vy += fy * dt;
+  const sp = Math.hypot(solid.vx, solid.vy), dec = (ball ? 150 : 1500) * dt;
+  const k = sp > dec ? (sp - dec) / sp : 0;
+  solid.vx *= k; solid.vy *= k;
+  if (!ball) {
+    const I = solid.rb * solid.rb / 3;
+    solid.w += tq / I * dt;
+    solid.w = Math.sign(solid.w) * Math.max(0, Math.abs(solid.w) - 6 * dt) * (1 - Math.min(1, 3 * dt));
+  }
+  solid.x += solid.vx * dt; solid.y += solid.vy * dt;
+  if (ball) { // качение без проскальзывания: ось поворота — поперёк скорости
+    const v = Math.hypot(solid.vx, solid.vy);
+    if (v > 1e-3) solid.M = mul3(axisAngle(-solid.vy / v, solid.vx / v, 0, v * dt / solid.R), M);
+  } else if (solid.w) solid.M = mul3(rotZ(solid.w * dt), M);
+  orthonormalize(solid.M);
+  const r = solid.rb;
+  if (solid.x < r) { solid.x = r; solid.vx = Math.abs(solid.vx) * 0.45; }
+  if (solid.x > W - r) { solid.x = W - r; solid.vx = -Math.abs(solid.vx) * 0.45; }
+  if (solid.y < r) { solid.y = r; solid.vy = Math.abs(solid.vy) * 0.45; }
+  if (solid.y > H - r) { solid.y = H - r; solid.vy = -Math.abs(solid.vy) * 0.45; }
+  solidPose(solid.x, solid.y, solid.M);
+  return bodyGrab ? 1 : Math.hypot(solid.vx, solid.vy) + Math.abs(solid.w) * r;
+}
+
+let frontK = 0;   // 0 — изнанка как изнанка, 1 — на свёрнутом ковре везде видна лицевая текстура
+function toggleFold() {
+  if (mode === 'cloth') { if (foldKind === 'roll') startRoll(); else startMorph(); }
+  else if (mode === 'roll') startUnroll();
+  else if (mode === 'solid') startUnmorph();
+}
+
 // ---------- цикл ----------
 let last = performance.now(), acc = 0;
 function frame(now) {
@@ -944,6 +1091,8 @@ function frame(now) {
     for (let s = 0; s < steps; s++) {
       if (mode === 'cloth') maxv = Math.max(maxv, step(DT, (s + 1) / steps));
       else if (mode === 'roll') maxv = Math.max(maxv, bodyStep(DT) * DT);
+      else if (mode === 'solid') maxv = Math.max(maxv, solidStep(DT) * DT);
+      else if (mode === 'morphing' || mode === 'unmorphing') { morphStep(DT); maxv = 1; }
       else { animStep(DT); maxv = 1; }
     }
     if (grab >= 0) { prevMX = grabTX; prevMY = grabTY; }
@@ -983,6 +1132,15 @@ canvas.addEventListener('pointerdown', (e) => {
     api.drag(true); wake();
     return;
   }
+  if (mode === 'solid') {
+    // точка захвата в осях тела (для шара не важна — тянем за центр)
+    const dx = px[h.k] - solid.x, dy = py[h.k] - solid.y, M = solid.M;
+    bodyGrab = { lx: M[0] * dx + M[3] * dy, ly: M[1] * dx + M[4] * dy };
+    canvas.setPointerCapture(e.pointerId);
+    document.body.classList.add('grab');
+    api.drag(true); wake();
+    return;
+  }
   if (mode !== 'cloth') return;
   grab = h.k; inv[grab] = 0; setTethers(grab);
   grabZ = pz[grab]; liftH = Math.max(liftH, grabZ + 30);
@@ -1013,7 +1171,7 @@ canvas.addEventListener('contextmenu', (e) => {
 canvas.addEventListener('dblclick', (e) => {
   project();
   if (!hitTest(e.clientX, e.clientY)) return;
-  if (mode === 'roll') startUnroll(); else if (mode === 'cloth') shake(0.6);
+  if (mode === 'roll' || mode === 'solid') toggleFold(); else if (mode === 'cloth') shake(0.6);
 });
 
 // ---------- убрать ковёр: удерживать Esc ~3 секунды ----------
@@ -1073,10 +1231,10 @@ function crumple() {
 }
 
 api.onCommand((cmd) => {
-  if (cmd === 'flatten') { if (mode === 'roll') startUnroll(); else if (mode === 'cloth') flatten(); }
+  if (cmd === 'flatten') { if (mode === 'roll' || mode === 'solid') toggleFold(); else if (mode === 'cloth') flatten(); }
   else if (cmd === 'shake') { if (mode === 'cloth') shake(); }
   else if (cmd === 'crumple') { if (mode === 'cloth') crumple(); }
-  else if (cmd === 'roll') toggleRoll();
+  else if (cmd === 'roll') toggleFold();
   else if (cmd === 'remove') remove();
   else if (cmd === 'reset') { snapCloth(); setSize(false); }
 });
@@ -1084,12 +1242,16 @@ api.onCommand((cmd) => {
 // из любого режима сразу в обычную ткань (перед сменой формы или размера)
 function snapCloth() {
   release();
-  if (mode !== 'cloth') { anim = null; mode = 'cloth'; }
+  if (mode !== 'cloth') { anim = null; mode = 'cloth'; frontK = 0; bodyGrab = null; }
   for (let q = 0; q < N; q++) inv[q] = act[q];
 }
 
 // настройки из окна «Настройки»: форма, размер, прозрачность, картинка
-function imageUrl(name) { return name ? 'kovyor://user/' + encodeURIComponent(name) : 'assets/carpet.png'; }
+function imageUrl(name) {
+  if (!name) return 'assets/carpet.png';
+  if (name.startsWith('builtin:')) return 'assets/carpets/' + name.slice(8).replace(/[^0-9]/g, '') + '.jpg';
+  return 'kovyor://user/' + encodeURIComponent(name);
+}
 function applySettings(st, first) {
   const w = st.width || SIZES[st.size] || SIZES.medium;
   const sh = st.shape in SHAPE_ASPECT ? st.shape : 'rect';
@@ -1097,7 +1259,12 @@ function applySettings(st, first) {
   needDraw = true;
   const geomChanged = w !== width || sh !== shape;
   const img = st.image || '';
-  const reshape = () => { const wasRoll = mode !== 'cloth'; snapCloth(); setSize(true); if (wasRoll) setTimeout(startRoll, 500); };
+  if (st.fold in { roll: 1, ball: 1, cube: 1, plate: 1 } && st.fold !== foldKind) {
+    foldKind = st.fold;
+    // ковёр уже свёрнут — разворачиваем и сворачиваем в новую форму
+    if (!first && (mode === 'roll' || mode === 'solid')) { toggleFold(); setTimeout(() => { if (mode === 'cloth') toggleFold(); }, 1700); }
+  }
+  const reshape = () => { const was = mode !== 'cloth'; snapCloth(); setSize(true); if (was) setTimeout(toggleFold, 500); };
   if (img !== imageKey || first) {
     imageKey = img;
     loadImage(imageUrl(img), (ok) => {
@@ -1111,13 +1278,14 @@ function applySettings(st, first) {
 api.onSettings?.((st) => applySettings(st, false));
 
 function saveState() {
-  if (mode === 'rolling' || mode === 'unrolling') return;
+  if (mode !== 'cloth' && mode !== 'roll' && mode !== 'solid') return;
   const pos = new Array(N * 3);
   for (let k = 0; k < N; k++) {
     pos[k * 3] = Math.round(px[k] * 10) / 10; pos[k * 3 + 1] = Math.round(py[k] * 10) / 10; pos[k * 3 + 2] = Math.round(pz[k] * 10) / 10;
   }
   const b = mode === 'roll' ? { x: body.x, y: body.y, psi: body.psi, sigma: body.sigma } : null;
-  api.saveState({ v: 2, NX, NY, width, shape, image: imageKey, W, H, pos, roll: b });
+  const so = mode === 'solid' ? { kind: solid.kind, x: solid.x, y: solid.y, M: solid.M } : null;
+  api.saveState({ v: 2, NX, NY, width, shape, image: imageKey, W, H, pos, roll: b, solid: so });
 }
 
 // ---------- старт ----------
@@ -1127,13 +1295,18 @@ function startFromState() {
   const st = saved;
   const ok = st && st.v === 2 && st.NX === NX && st.NY === NY && st.width === width && st.shape === shape &&
     st.image === imageKey && Array.isArray(st.pos) && st.pos.length === N * 3;
-  if (ok && st.roll) {
+  if (ok && st.solid && Array.isArray(st.solid.M)) {
+    solidLocal(st.solid.kind); solid.M = st.solid.M.slice(0, 9); orthonormalize(solid.M);
+    solid.x = clamp(st.solid.x, solid.rb, W - solid.rb); solid.y = clamp(st.solid.y, solid.rb, H - solid.rb);
+    solid.vx = solid.vy = solid.w = 0;
+    inv.fill(0); mode = 'solid'; frontK = 1; solidPose(solid.x, solid.y, solid.M); wake();
+  } else if (ok && st.roll) {
     // рулон: скатываем «мгновенно» в сохранённом месте
     anim = { t: 0, dur: 1, from: new Float32Array(N * 3), frame: { cx: 0, cy: 0, ang: st.roll.psi } };
     finishRoll();
     body.x = clamp(st.roll.x, 0, W); body.y = clamp(st.roll.y, 0, H); body.sigma = st.roll.sigma || 0;
     for (let q = 0; q < N; q++) inv[q] = 0;
-    placeBody(); wake();
+    frontK = 1; placeBody(); wake();
   } else if (ok) {
     for (let k = 0; k < N; k++) {
       px[k] = ox[k] = clamp(st.pos[k * 3], 0, W);
@@ -1151,6 +1324,6 @@ resize();
 
 api.init().then(({ settings, state }) => {
   saved = state;
-  if (new URLSearchParams(location.search).has('demo')) window.__kovyor = { step, project, hitTest, shake, crumple, flatten, toggleRoll, applySettings, body, get mode() { return mode; }, px, py, pz, inv, act, idx, NX, NY };
+  if (new URLSearchParams(location.search).has('demo')) window.__kovyor = { step, project, hitTest, shake, crumple, flatten, toggleRoll, toggleFold, applySettings, solid, body, get mode() { return mode; }, px, py, pz, inv, act, idx, NX, NY };
   applySettings(settings, true);
 });
