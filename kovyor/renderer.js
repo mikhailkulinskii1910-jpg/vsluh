@@ -4,7 +4,7 @@
 
 const api = window.desk || { // заглушка, чтобы страницу можно было открыть в браузере
   init: async () => ({ settings: { size: 'medium' }, state: null }),
-  hover() {}, drag() {}, menu() {}, saveState() {}, onCursor() {}, onCommand() {},
+  hover() {}, drag() {}, menu() {}, saveState() {}, onCursor() {}, onCommand() {}, onEsc() {}, quit() {},
 };
 
 // ---------- параметры ----------
@@ -14,7 +14,7 @@ const SIZES = { small: 220, medium: 320, large: 440 };
 const DT = 1 / 120;
 const GRAVITY = -2600;          // px/с², вниз к столу
 const FRICTION = 0.55;          // коэффициент трения ковра о стол
-const ITER = 10;
+const ITER = 12;
 const BEND = 0.32;              // жёсткость на изгиб (ковёр плотнее простыни)
 const DAMP = 0.996;
 const CAM = 1800;               // высота «глаза» над столом, px
@@ -139,6 +139,137 @@ function selfCollide() {
   }
 }
 
+// ---------- столкновения точка — треугольник ----------
+// Каждая частица помнит, с какой стороны чужого треугольника она была в начале шага,
+// и не может оказаться по другую сторону: слои ковра не проходят друг сквозь друга.
+const TRI = (NX - 1) * (NY - 1) * 2;
+const triV = new Int32Array(TRI * 3), triI = new Int32Array(TRI), triJ = new Int32Array(TRI);
+{
+  let t = 0;
+  for (let j = 0; j < NY - 1; j++) for (let i = 0; i < NX - 1; i++) {
+    const a = idx(i, j), b = a + 1, c = a + NX, d = c + 1;
+    triV.set([a, b, c], t * 3); triI[t] = i; triJ[t] = j; t++;
+    triV.set([b, d, c], t * 3); triI[t] = i; triJ[t] = j; t++;
+  }
+}
+const MAXE = TRI * 24;
+const eTri = new Int32Array(MAXE), eNext = new Int32Array(MAXE);
+let tHead = new Int32Array(1), tCols = 1, tRows = 1;
+
+const wOf = (k) => pz[k] < 0.5 ? inv[k] * 0.15 : inv[k]; // лежащее на столе почти не продавить вниз
+
+function triCollide() {
+  const h = spacing * 0.55, C = spacing * 1.5, iC = 1 / C;
+  const cols = Math.ceil(W * iC) + 3, rows = Math.ceil(H * iC) + 3;
+  if (cols * rows !== tHead.length) { tCols = cols; tRows = rows; tHead = new Int32Array(cols * rows); }
+  tHead.fill(-1);
+  let ne = 0;
+  for (let t = 0; t < TRI; t++) {
+    const a = triV[t * 3], b = triV[t * 3 + 1], c = triV[t * 3 + 2];
+    const x0 = Math.max(0, ((Math.min(px[a], px[b], px[c], ox[a], ox[b], ox[c]) - h) * iC | 0) + 1);
+    const x1 = Math.min(tCols - 1, ((Math.max(px[a], px[b], px[c], ox[a], ox[b], ox[c]) + h) * iC | 0) + 1);
+    const y0 = Math.max(0, ((Math.min(py[a], py[b], py[c], oy[a], oy[b], oy[c]) - h) * iC | 0) + 1);
+    const y1 = Math.min(tRows - 1, ((Math.max(py[a], py[b], py[c], oy[a], oy[b], oy[c]) + h) * iC | 0) + 1);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 16) continue; // сильно растянутый треугольник не ловим
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (ne >= MAXE) break;
+      const cell = y * tCols + x;
+      eTri[ne] = t; eNext[ne] = tHead[cell]; tHead[cell] = ne++;
+    }
+  }
+  for (let p = 0; p < N; p++) {
+    if (inv[p] === 0) continue;
+    const pi = p % NX, pj = (p / NX) | 0;
+    const cx = (px[p] * iC | 0) + 1, cy = (py[p] * iC | 0) + 1;
+    if (cx < 0 || cy < 0 || cx >= tCols || cy >= tRows) continue;
+    const motion = Math.abs(pz[p] - oz[p]) + Math.abs(px[p] - ox[p]) + Math.abs(py[p] - oy[p]);
+    for (let e = tHead[cy * tCols + cx]; e !== -1; e = eNext[e]) {
+      const t = eTri[e], ti = triI[t], tj = triJ[t];
+      if (pi >= ti - 1 && pi <= ti + 2 && pj >= tj - 1 && pj <= tj + 2) continue; // свои соседи
+      const a = triV[t * 3], b = triV[t * 3 + 1], c = triV[t * 3 + 2];
+      const zmin = Math.min(pz[a], pz[b], pz[c]), zmax = Math.max(pz[a], pz[b], pz[c]);
+      const m = h + motion + 1;
+      if (pz[p] > zmax + m || pz[p] < zmin - m) continue;
+      // текущая плоскость
+      const ux = px[b] - px[a], uy = py[b] - py[a], uz = pz[b] - pz[a];
+      const vx = px[c] - px[a], vy = py[c] - py[a], vz = pz[c] - pz[a];
+      let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      const nl = Math.hypot(nx, ny, nz); if (nl < 1e-6) continue;
+      nx /= nl; ny /= nl; nz /= nl;
+      const wx = px[p] - px[a], wy = py[p] - py[a], wz = pz[p] - pz[a];
+      const d = wx * nx + wy * ny + wz * nz;
+      if (d > h + motion + 1 || d < -h - motion - 1) continue;
+      // проекция внутрь треугольника?
+      const uu = ux * ux + uy * uy + uz * uz, vv = vx * vx + vy * vy + vz * vz, uv = ux * vx + uy * vy + uz * vz;
+      const wu = wx * ux + wy * uy + wz * uz, wv = wx * vx + wy * vy + wz * vz;
+      const den = uv * uv - uu * vv; if (Math.abs(den) < 1e-9) continue;
+      const bb = (uv * wv - vv * wu) / den, bc = (uv * wu - uu * wv) / den, ba = 1 - bb - bc;
+      if (bb < -0.05 || bc < -0.05 || ba < -0.05) continue;
+      // с какой стороны частица была в начале шага
+      const oux = ox[b] - ox[a], ouy = oy[b] - oy[a], ouz = oz[b] - oz[a];
+      const ovx = ox[c] - ox[a], ovy = oy[c] - oy[a], ovz = oz[c] - oz[a];
+      const onx = ouy * ovz - ouz * ovy, ony = ouz * ovx - oux * ovz, onz = oux * ovy - ouy * ovx;
+      const owx = ox[p] - ox[a], owy = oy[p] - oy[a], owz = oz[p] - oz[a];
+      const d0 = owx * onx + owy * ony + owz * onz;
+      { // в начале шага частица тоже должна была быть над/под этим треугольником
+        const ouu = oux * oux + ouy * ouy + ouz * ouz, ovv = ovx * ovx + ovy * ovy + ovz * ovz;
+        const ouv = oux * ovx + ouy * ovy + ouz * ovz;
+        const owu = owx * oux + owy * ouy + owz * ouz, owv = owx * ovx + owy * ovy + owz * ovz;
+        const oden = ouv * ouv - ouu * ovv; if (Math.abs(oden) < 1e-9) continue;
+        const ob = (ouv * owv - ovv * owu) / oden, oc = (ouv * owu - ouu * owv) / oden;
+        if (ob < -0.15 || oc < -0.15 || 1 - ob - oc < -0.15) continue;
+      }
+      const side = Math.abs(d0) > 1e-4 * Math.hypot(onx, ony, onz) ? Math.sign(d0) : (d >= 0 ? 1 : -1);
+      let pen = h - d * side;
+      if (pen <= 0) continue;
+      if (pen > h * 3) pen = h * 3; // не выстреливать частицу через полэкрана
+      const wp = wOf(p), wa = wOf(a), wb = wOf(b), wc = wOf(c);
+      const wsum = wp + wa * ba * ba + wb * bb * bb + wc * bc * bc;
+      if (wsum < 1e-6) continue;
+      const s = pen / wsum, fx = nx * side * s, fy = ny * side * s, fz = nz * side * s;
+      px[p] += fx * wp; py[p] += fy * wp; pz[p] += fz * wp;
+      px[a] -= fx * wa * ba; py[a] -= fy * wa * ba; pz[a] -= fz * wa * ba;
+      px[b] -= fx * wb * bb; py[b] -= fy * wb * bb; pz[b] -= fz * wb * bb;
+      px[c] -= fx * wc * bc; py[c] -= fy * wc * bc; pz[c] -= fz * wc * bc;
+    }
+  }
+}
+
+// ---------- ограничение растяжения от точки захвата ----------
+// Ни одна точка ковра не может оказаться дальше от схваченной, чем позволяет сама ткань.
+const lraRest = new Float32Array(N);
+function setTethers(g) {
+  const gi = g % NX, gj = (g / NX) | 0;
+  for (let k = 0; k < N; k++) lraRest[k] = Math.hypot(k % NX - gi, ((k / NX) | 0) - gj) * spacing * 1.01;
+}
+function tethers() {
+  if (grab < 0) return;
+  const gx = px[grab], gy = py[grab], gz = pz[grab];
+  for (let k = 0; k < N; k++) {
+    if (inv[k] === 0) continue;
+    const ex = px[k] - gx, ey = py[k] - gy, ez = pz[k] - gz;
+    const d = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    if (d <= lraRest[k]) continue;
+    const s = (d - lraRest[k]) / d;
+    px[k] -= ex * s; py[k] -= ey * s; pz[k] -= ez * s;
+  }
+}
+
+// жёсткий предел растяжения основных нитей
+function strainLimit(maxRatio) {
+  for (let n = 0; n < cCount; n++) {
+    if (cK[n] < 1) continue;
+    const a = cA[n], b = cB[n], wa = inv[a], wb = inv[b], ws = wa + wb;
+    if (ws === 0) continue;
+    const ex = px[b] - px[a], ey = py[b] - py[a], ez = pz[b] - pz[a];
+    const d = Math.sqrt(ex * ex + ey * ey + ez * ez), max = cRest[n] * maxRatio;
+    if (d <= max) continue;
+    const sc = (d - max) / d / ws;
+    px[a] += ex * sc * wa; py[a] += ey * sc * wa; pz[a] += ez * sc * wa;
+    px[b] -= ex * sc * wb; py[b] -= ey * sc * wb; pz[b] -= ez * sc * wb;
+  }
+}
+
 // ---------- шаг физики ----------
 function step(dt, t) {
   const g = GRAVITY * dt * dt;
@@ -156,8 +287,11 @@ function step(dt, t) {
     const mx = prevMX + (grabTX - prevMX) * t, my = prevMY + (grabTY - prevMY) * t;
     const s = (CAM - grabZ) / CAM;
     ox[grab] = px[grab]; oy[grab] = py[grab]; oz[grab] = pz[grab];
-    px[grab] = clamp(W / 2 + (mx - W / 2) * s, 0, W);
-    py[grab] = clamp(H / 2 + (my - H / 2) * s, 0, H);
+    // тяжёлый ковёр не успевает за резким рывком мыши: точка захвата догоняет курсор
+    const tx = clamp(W / 2 + (mx - W / 2) * s, 0, W), ty = clamp(H / 2 + (my - H / 2) * s, 0, H);
+    const dx = tx - px[grab], dy = ty - py[grab], dl = Math.hypot(dx, dy), lim = spacing * 0.6;
+    const f = dl > lim ? lim / dl : 1;
+    px[grab] += dx * f; py[grab] += dy * f;
     pz[grab] = grabZ;
   }
 
@@ -175,8 +309,22 @@ function step(dt, t) {
       px[a] += ex * s * wa; py[a] += ey * s * wa; pz[a] += ez * s * wa;
       px[b] -= ex * s * wb; py[b] -= ey * s * wb; pz[b] -= ez * s * wb;
     }
-    if (it === 4 || it === ITER - 1) selfCollide();
+    tethers();
+    if (it === 3 || it === ITER - 1) selfCollide();
     bounds();
+  }
+
+  strainLimit(1.05); strainLimit(1.05);
+
+  // ковёр, улетевший за край экрана, сам выползает обратно (без жёстких стен — о них слои слипаются)
+  if (grab < 0) {
+    let cx = 0, cy = 0;
+    for (let k = 0; k < N; k++) { cx += px[k]; cy += py[k]; }
+    cx /= N; cy /= N;
+    const mx = Math.min(width * 0.3, W / 2), my = Math.min(width * 0.45, H / 2);
+    const sx = cx < mx ? Math.min(1.5, mx - cx) : cx > W - mx ? -Math.min(1.5, cx - W + mx) : 0;
+    const sy = cy < my ? Math.min(1.5, my - cy) : cy > H - my ? -Math.min(1.5, cy - H + my) : 0;
+    if (sx || sy) for (let k = 0; k < N; k++) { px[k] += sx; ox[k] += sx; py[k] += sy; oy[k] += sy; }
   }
 
   // трение о стол: кинетическое и покоя
@@ -188,6 +336,12 @@ function step(dt, t) {
       if (d <= lim) { px[k] = ox[k]; py[k] = oy[k]; }
       else { px[k] -= dx / d * lim; py[k] -= dy / d * lim; }
     }
+  }
+  // последним — непроницаемость: что бы ни сделали трение и нити, слои не пересекаются
+  triCollide();
+  strainLimit(1.08);
+  bounds();
+  for (let k = 0; k < N; k++) {
     const v = Math.abs(px[k] - ox[k]) + Math.abs(py[k] - oy[k]) + Math.abs(pz[k] - oz[k]);
     if (v > maxv) maxv = v;
   }
@@ -198,8 +352,6 @@ function bounds() {
   for (let k = 0; k < N; k++) {
     if (pz[k] < 0) pz[k] = 0;
     else if (pz[k] > 700) pz[k] = 700;
-    if (px[k] < 0) px[k] = 0; else if (px[k] > W) px[k] = W;
-    if (py[k] < 0) py[k] = 0; else if (py[k] > H) py[k] = H;
   }
 }
 
@@ -541,7 +693,7 @@ canvas.addEventListener('pointerdown', (e) => {
   project();
   const h = hitTest(e.clientX, e.clientY);
   if (!h) return;
-  grab = h.k; inv[grab] = 0;
+  grab = h.k; inv[grab] = 0; setTethers(grab);
   grabZ = pz[grab]; liftH = Math.max(liftH, grabZ + 30);
   grabTX = prevMX = e.clientX; grabTY = prevMY = e.clientY;
   canvas.setPointerCapture(e.pointerId);
@@ -572,6 +724,42 @@ canvas.addEventListener('dblclick', (e) => {
   shake(0.6);
 });
 
+// ---------- убрать ковёр: удерживать Esc ~3 секунды ----------
+const ESC_HOLD = 3000;
+const escEl = document.getElementById('esc');
+let escDown = 0, escRaf = 0, removing = false;
+function showEsc(k) {
+  if (!escEl) return;
+  escEl.style.setProperty('--k', k);
+  escEl.style.opacity = k > 0 ? 1 : 0;
+  let x = mouseX, y = mouseY;
+  if (x < 0) { const p = pose(); x = p.cx; y = p.cy; }
+  escEl.style.left = x + 'px'; escEl.style.top = y + 'px';
+  if (k >= 1) remove();
+}
+function remove() {
+  if (removing) return;
+  removing = true; saveState();
+  document.body.classList.add('gone');
+  setTimeout(() => api.quit(), 380);
+}
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || escDown) return;
+  escDown = performance.now();
+  const tick = () => {
+    if (!escDown) return;
+    showEsc(Math.min(1, (performance.now() - escDown) / ESC_HOLD));
+    escRaf = requestAnimationFrame(tick);
+  };
+  tick();
+});
+addEventListener('keyup', (e) => {
+  if (e.key !== 'Escape') return;
+  escDown = 0; cancelAnimationFrame(escRaf); showEsc(0);
+});
+addEventListener('blur', () => { if (escDown) { escDown = 0; showEsc(0); } });
+api.onEsc((k) => { if (!escDown) showEsc(k); });
+
 // ---------- команды ----------
 function flatten() { release(); const p = pose(); layFlat(p.cx, p.cy, p.ang, 45); }
 function shake(power = 1) { // волна по ковру от ближнего края
@@ -585,7 +773,7 @@ function shake(power = 1) { // волна по ковру от ближнего 
 function crumple() {
   const p = pose();
   for (let k = 0; k < N; k++) {
-    ox[k] = px[k] - (p.cx - px[k]) * 0.06 + (Math.random() - 0.5) * 2;
+    ox[k] = px[k] - (p.cx - px[k]) * 0.035 + (Math.random() - 0.5) * 2;
     oy[k] = py[k] - (p.cy - py[k]) * 0.06 + (Math.random() - 0.5) * 2;
     oz[k] = pz[k] - (2 + Math.random() * 8);
   }
@@ -596,6 +784,7 @@ api.onCommand((cmd, arg) => {
   if (cmd === 'flatten') flatten();
   else if (cmd === 'shake') shake();
   else if (cmd === 'crumple') crumple();
+  else if (cmd === 'remove') remove();
   else if (cmd === 'reset') { release(); setSize(sizeName, false); }
   else if (cmd === 'size') { sizeName = arg; release(); setSize(arg, true); }
 });

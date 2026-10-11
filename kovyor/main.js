@@ -1,6 +1,6 @@
 // Ковёр на рабочем столе: прозрачное окно во весь экран, сквозь которое
 // проходят клики везде, кроме самого ковра.
-const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, protocol, net } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, Tray, Menu, nativeImage, protocol, net, globalShortcut } = require('electron');
 const { pathToFileURL } = require('url');
 const path = require('path');
 const fs = require('fs');
@@ -83,7 +83,7 @@ function buildMenu() {
       checked: app.getLoginItemSettings().openAtLogin,
       click: (it) => { app.setLoginItemSettings({ openAtLogin: it.checked }); refreshMenus(); } },
     { type: 'separator' },
-    { label: 'Убрать ковёр (выход)', click: () => app.quit() },
+    { label: 'Убрать ковёр (или удерживать Esc 3 с)', click: () => win ? win.webContents.send('command', 'remove') : app.quit() },
   ]);
 }
 
@@ -98,7 +98,7 @@ app.whenReady().then(() => {
   createWindow();
   const img = nativeImage.createFromPath(path.join(__dirname, 'assets', 'icon.png')).resize({ width: 16, height: 16 });
   tray = new Tray(img);
-  tray.setToolTip('Ковёр — тащите мышью, колесо меняет высоту подъёма');
+  tray.setToolTip('Ковёр — тащите мышью, колесо меняет высоту подъёма, Esc 3 секунды — убрать');
   refreshMenus();
 
   screen.on('display-metrics-changed', () => {
@@ -111,7 +111,34 @@ app.whenReady().then(() => {
 app.on('second-instance', () => win && win.webContents.send('command', 'shake'));
 app.on('window-all-closed', () => app.quit());
 
-ipcMain.on('hover', (_e, over) => { if (!dragging) setIgnore(!over); });
+ipcMain.on('hover', (_e, over) => { if (!dragging) setIgnore(!over); escWhileHover(over); });
+
+// Убрать ковёр: удерживать Esc ~3 секунды. Пока курсор над ковром, Esc ловится и без фокуса
+// (по автоповтору клавиши), а когда окно в фокусе — renderer сам видит нажатие и отпускание.
+const ESC_HOLD = 3000;
+let escFirst = 0, escLast = 0, escTimer = null;
+function escWhileHover(over) {
+  if (over && !globalShortcut.isRegistered('Escape')) globalShortcut.register('Escape', onEscRepeat);
+  else if (!over && globalShortcut.isRegistered('Escape')) { globalShortcut.unregister('Escape'); escReset(); }
+}
+function escReset() {
+  escFirst = 0; clearInterval(escTimer); escTimer = null;
+  win && win.webContents.send('esc', 0);
+}
+function onEscRepeat() {
+  const now = Date.now();
+  if (!escFirst || now - escLast > 700) escFirst = now;
+  escLast = now;
+  if (!escTimer) escTimer = setInterval(() => {
+    const t = Date.now();
+    if (t - escLast > 700) return escReset();          // клавишу отпустили
+    const k = (t - escFirst) / ESC_HOLD;
+    win && win.webContents.send('esc', Math.min(1, k));
+    if (k >= 1) { clearInterval(escTimer); escTimer = null; }
+  }, 30);
+}
+ipcMain.on('quit', () => app.quit());
+app.on('will-quit', () => globalShortcut.unregisterAll());
 ipcMain.on('drag', (_e, on) => { dragging = on; if (on) setIgnore(false); });
 ipcMain.on('menu', () => win && buildMenu().popup({ window: win }));
 ipcMain.handle('init', () => {

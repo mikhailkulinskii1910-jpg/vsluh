@@ -9,10 +9,18 @@
   canvas { display: block; width: 100vw; height: 100vh; }
   body.grab canvas { cursor: grabbing; }
   body.over canvas { cursor: grab; }
+  #esc { position: fixed; left: 0; top: 0; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
+         pointer-events: none; opacity: 0; transition: opacity .15s; display: grid; place-items: center;
+         background: conic-gradient(#e8e2d6 calc(var(--k, 0) * 360deg), rgba(20,20,20,.55) 0); }
+  #esc::after { content: 'Esc'; width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
+         background: rgba(15,15,15,.85); color: #e8e2d6; font: 600 13px system-ui, sans-serif; }
+  canvas { transition: opacity .35s; }
+  body.gone canvas { opacity: 0; }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="esc"></div>
 <script src="renderer.js"></script>
 </body>
 </html>

@@ -7,5 +7,7 @@ contextBridge.exposeInMainWorld('desk', {
   menu: () => ipcRenderer.send('menu'),
   saveState: (s) => ipcRenderer.send('save-state', s),
   onCursor: (fn) => ipcRenderer.on('cursor', (_e, p) => fn(p)),
+  quit: () => ipcRenderer.send('quit'),
+  onEsc: (fn) => ipcRenderer.on('esc', (_e, k) => fn(k)),
   onCommand: (fn) => ipcRenderer.on('command', (_e, cmd, arg) => fn(cmd, arg)),
 });
