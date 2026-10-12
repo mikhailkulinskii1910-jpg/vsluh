@@ -1,0 +1,25 @@
+REM =====================================================
+REM  EvilDuck_S3 payload  |  target: MosTech.OS (Linux)
+REM  Открывает текстовый редактор и печатает сообщение
+REM =====================================================
+
+REM Раскладка ХОСТА. На MosTech.OS обычно US/RU; текст латиницей,
+REM поэтому держим US (при проблемах см. комментарий про LOCALE RU)
+LOCALE US
+
+REM Ждём, пока ОС распознает устройство как клавиатуру
+DELAY 1500
+
+REM Задержка после каждой команды — стабильнее на медленном старте
+DEFAULT_DELAY 150
+
+REM Открываем терминал (Ctrl+Alt+T — стандарт в MATE/GNOME/Cinnamon/XFCE)
+CTRL ALT t
+DELAY 1500
+
+REM Запускаем первый доступный графический редактор ("аналог Блокнота")
+STRINGLN for e in pluma gedit mousepad xed gnome-text-editor kate kwrite; do command -v "$e" >/dev/null 2>&1 && exec "$e"; done
+DELAY 2500
+
+REM Печатаем текст уже в окне редактора
+STRING hello from evil goose
