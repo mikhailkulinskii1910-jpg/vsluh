@@ -359,6 +359,17 @@ html:not([data-theme]) .gear.tab.ctab,[data-theme=thermal] .gear.tab.ctab{displa
 #cpanel{display:none;position:relative;z-index:12;padding-bottom:6px}
 body.ctab #grid,body.ctab .status{display:none}
 body.ctab #cpanel{display:block}
+/* PROJ: чипы марок проектора в стиле вкладок + подсказка */
+#proj{display:none}
+body.proj #proj{display:block}
+.brands{display:flex;gap:6px;margin:0 0 6px}
+.gear.tab.chip{height:36px;font-size:19px}
+[data-theme=prism] .gear.tab.chip{font-size:14px;border-radius:13px}
+[data-theme=blueprint] .gear.tab.chip{font-size:12px}
+.projnote{margin:0 2px 12px;font:13px/1.4 var(--ru);color:var(--dim)}
+/* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
+html:not([data-theme]) body.proj .id,[data-theme=thermal] body.proj .id{font-size:17px;white-space:nowrap}
+[data-theme=thermal] .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
 .cp h3{margin:16px 2px 8px;font:24px var(--mono);color:var(--fg)}
 .cp h3:first-child{margin-top:2px}
 .cp p{margin:-2px 2px 10px;font-size:12px;line-height:1.45;color:var(--dim)}
@@ -501,7 +512,9 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button><button class="gear tab ctab" data-r="color">Цвет</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button><button class="gear tab" data-r="proj">PROJ</button><button class="gear tab ctab" data-r="color">Цвет</button></nav>
+  <div id="proj"><div class="brands" id="brands" aria-label="Марка проектора"></div>
+    <p class="projnote">Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.</p></div>
   <main class="grid" id="grid"></main>
   <section class="cp" id="cpanel" aria-label="Цвет"></section>
   <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -534,7 +547,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
 
     <h3>Коды пульта (NEC, 38 кГц)</h3>
-    <p class="note">Из базы IrCode Finder: IRBIS → «Promethean Interactive Board», №500202. Нажмите на строку, чтобы скопировать код Pronto для другого приложения.</p>
+    <p class="note">Из базы IrCode Finder: IRBIS → «Promethean Interactive Board», №500202; MocTec — MOSTEH №500275; проекторы — NEC №1803, Epson №1779, InFocus №1818, BenQ №1759 (у Epson и BenQ — NEC2: при удержании повторяется весь кадр). Нажмите на строку, чтобы скопировать код Pronto для другого приложения.</p>
     <table id="codes"></table>
 
     <p class="note" style="margin-top:16px">Встроенный ИК-порт телефона браузер использовать не может — для него нет веб-интерфейса. Поэтому нужен внешний излучатель: в разъём наушников или по Wi-Fi.</p>
@@ -564,9 +577,24 @@ const MOC_KEYS = [
   ['J LEFT', '04FB926D'], ['J RIGHT', '04FBD22D'],
   ['HOME', '04FB12ED'], ['BACK', '04FB50AF'],
 ];
-const REMOTES = { irbis: { keys: KEYS, id: '#500202 :: IRBIS :: NEC 38kHz' }, moc: { keys: MOC_KEYS, id: 'MocTec :: NEC 04FB' } };
+/* Проекторы (вкладка PROJ): пульты из облачной базы IrCode Finder, тот же формат — 32 бита, старший бит первым.
+   У Epson и BenQ протокол NEC2: при удержании повторяется весь кадр, а не короткий код повтора. */
+const PROJ = [
+  { name: 'NEC', id: '#1803', nec2: false, keys: [['POWER', '189710EF'], ['OFF', '189728D7'], ['INPUT', '18978F70'], ['PIC-MUTE', '1897E21D'],
+    ['MENU', '1897629D'], ['ENTER', '1897E817'], ['UP', '18977A85'], ['DOWN', '1897FA05'], ['LEFT', '1897BA45'], ['RIGHT', '18973AC5'], ['VOL-', '1897926D'], ['VOL+', '189712ED']] },
+  { name: 'Epson', id: '#1779', nec2: true, keys: [['POWER', 'C1AA09F6'], ['ESC', 'C1AA21DE'], ['SOURCE', 'C1AA31CE'], ['A/V MUTE', 'C1AAC936'],
+    ['MENU', 'C1AA59A6'], ['ENTER', 'C1AAA15E'], ['UP', 'C1AA0DF2'], ['DOWN', 'C1AA4DB2'], ['LEFT', 'C1AACD32'], ['RIGHT', 'C1AA8D72'], ['VOL-', 'C1AA9966'], ['VOL+', 'C1AA19E6']] },
+  { name: 'InFocus', id: '#1818', nec2: false, keys: [['POWER', 'E172E817'], ['BLANK', 'E1728C73'], ['SOURCE', 'E17208F7'], ['MUTE', 'E172946B'],
+    ['MENU', 'E17240BF'], ['SELECT', 'E1724CB3'], ['UP', 'E172C837'], ['DOWN', 'E17228D7'], ['LEFT', 'E1728877'], ['RIGHT', 'E17248B7'], ['VOL-', 'E17220DF'], ['VOL+', 'E17210EF']] },
+  { name: 'BenQ', id: '#1759', nec2: true, keys: [['POWER', '000C40BF'], ['OFF', '000C728D'], ['SOURCE', '000C20DF'], ['ECO BLANK', '000CE01F'],
+    ['MENU', '000CF00F'], ['ENTER', '000C08F7'], ['UP', '000CD02F'], ['DOWN', '000C30CF'], ['LEFT', '000CB04F'], ['RIGHT', '000C708F'], ['VOL-', '000CC13E'], ['VOL+', '000C41BE']] },
+];
+let projBrand = 0;
+try { const i = parseInt(localStorage.getItem('krisa-proj'), 10); if (i >= 0 && i < PROJ.length) projBrand = i; } catch {}
+const REMOTES = { irbis: { keys: KEYS, id: '#500202 :: IRBIS :: NEC 38kHz' }, moc: { keys: MOC_KEYS, id: 'MocTec :: NEC 04FB' },
+  get proj() { const b = PROJ[projBrand]; return { keys: b.keys, id: 'проектор :: ' + b.name + ' :: ' + b.id, nec2: b.nec2 }; } };
 // При удержании этих кнопок пульт шлёт NEC-повтор, как настоящий.
-const REPEATABLE = new Set(['VOL-', 'VOL+', 'J DOWN', 'J LEFT', 'J RIGHT', 'J UP']);
+const REPEATABLE = new Set(['VOL-', 'VOL+', 'J DOWN', 'J LEFT', 'J RIGHT', 'J UP', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
 
 /* ---------- NEC: код → длительности импульсов (мкс), [метка, пауза, метка, ...] ---------- */
 const T = 562.5;
@@ -672,17 +700,18 @@ function scramble(el, text, ms, done) {
 }
 
 /* ---------- Кнопки ---------- */
-function transmit(label, hex, isRepeat) {
+// full — повтор целым кадром (NEC2: Epson, BenQ), без новой строки состояния
+function transmit(label, hex, isRepeat, full) {
   const tx = settings.mode === 'http' ? httpTx : audioTx;
   try {
-    const p = isRepeat ? tx.repeat(hex) : tx.send(hex);
+    const p = isRepeat ? (full ? tx.send(hex) : tx.repeat(hex)) : tx.send(hex);
     if (!isRepeat) status('> tx ' + label.padEnd(11) + ' 0x' + hex + ' [sent]');
     if (p && p.catch) p.catch(e => status(e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message, 'err'));
   } catch (e) { status(e.message, 'err'); }
 }
 
 const grid = $('grid');
-function makeKey([label, hex]) {
+function makeKey([label, hex], nec2) {
   const b = document.createElement('button');
   b.className = 'key' + (label === 'POWER' ? ' inv' : '');
   b.setAttribute('aria-label', label);
@@ -706,7 +735,7 @@ function makeKey([label, hex]) {
     if (REPEATABLE.has(label)) {
       // Как у настоящего пульта: после кадра — повторы каждые 108 мс, пока кнопка нажата.
       const period = settings.mode === 'http' ? 250 : FRAME_PERIOD / 1000;
-      hold = setTimeout(() => { hold = setInterval(() => transmit(label, hex, true), period); }, 400);
+      hold = setTimeout(() => { hold = setInterval(() => transmit(label, hex, true, nec2 === true), period); }, 400);
     }
   });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => b.addEventListener(t, stop));
@@ -956,18 +985,34 @@ function renderPanel() {
   });
 }
 
-/* Вкладки IRBIS / MocTec меняют набор кнопок (выбор запоминается), «Цвет» — показывает панель цвета вместо кнопок. */
+/* Вкладки IRBIS / MocTec / PROJ меняют набор кнопок (выбор запоминается), «Цвет» — показывает панель цвета вместо кнопок.
+   В PROJ над кнопками — чипы марок проектора NEC / Epson / InFocus / BenQ. */
 let remote = 'irbis', tab = 'irbis';
-try { if (localStorage.getItem('krisa-remote') === 'moc') remote = tab = 'moc'; } catch {}
+try { const r = localStorage.getItem('krisa-remote'); if (r === 'moc' || r === 'proj') remote = tab = r; } catch {}
+const brands = $('brands');
+PROJ.forEach((b, i) => {
+  const c = document.createElement('button');
+  c.className = 'gear tab chip'; c.textContent = b.name;
+  c.addEventListener('click', () => {
+    if (projBrand === i) return;
+    projBrand = i;
+    try { localStorage.setItem('krisa-proj', String(i)); } catch {}
+    buildGrid(true);
+  });
+  brands.appendChild(c);
+});
 function syncTabs() {
   // «Цвет» есть в «Терминале», «Тепловизоре» и «Чертеже»
   if (tab === 'color' && theme() === 'prism') tab = remote;
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
   document.body.classList.toggle('ctab', tab === 'color');
+  document.body.classList.toggle('proj', tab === 'proj');
+  [...brands.children].forEach((c, i) => c.classList.toggle('on', i === projBrand));
 }
 function buildGrid(reveal) {
   grid.textContent = '';
-  REMOTES[remote].keys.forEach(makeKey);
+  const R = REMOTES[remote];
+  R.keys.forEach(k => makeKey(k, R.nec2));
   document.querySelector('.id').textContent = REMOTES[remote].id;
   tab = remote; syncTabs();
   if (reveal) showRemote();
@@ -1010,7 +1055,7 @@ $('host').addEventListener('input', e => { settings.host = e.target.value; save(
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
 const codes = $('codes');
-[...KEYS, ...MOC_KEYS.map(([l, h]) => ['MOC ' + l, h])].forEach(([label, hex]) => {
+[...KEYS, ...MOC_KEYS.map(([l, h]) => ['MOC ' + l, h]), ...PROJ.flatMap(b => b.keys.map(([l, h]) => [b.name.toUpperCase() + ' ' + l, h]))].forEach(([label, hex]) => {
   const tr = codes.insertRow(), pronto = prontoOf(hex);
   tr.insertCell().textContent = label;
   const td = tr.insertCell();
@@ -1370,7 +1415,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa ir-remote v1.20', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa ir-remote v1.21', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
