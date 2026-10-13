@@ -43,7 +43,7 @@ struct SplashView: View {
             // «Чертёж»: размерные линии вокруг улёгшейся крысы
             if Term.blueprint && t > 1500 { dimsLayer(t: t, rw: rw, rh: rh).position(x: w / 2, y: h * 0.5) }
             // 3. надпись
-            if t > 1500 { wordLayer(Term.scramble("krisa", min((t - 1500) / 450, 1))).position(x: w / 2, y: h * 0.5 + rh * 0.5 + 70) }
+            if t > 1500 { wordLayer(Term.scramble("krisa37™", min((t - 1500) / 450, 1))).position(x: w / 2, y: h * 0.5 + rh * 0.5 + 70) }
             // тепловизор «захватил» крысу: рамка обнаружения с подписью (мигает при появлении)
             if Term.thermal && f > 0.62 && !(t < 1700 && Int(t / 70) % 2 == 0) { detectionBox(rw: rw, rh: rh).position(x: w / 2, y: h * 0.5 - 2) }
             // подпись в правом нижнем углу «расписывается» слева направо

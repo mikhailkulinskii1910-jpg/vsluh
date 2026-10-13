@@ -248,12 +248,12 @@ class MainActivity : Activity() {
         if (Term.blueprint) {
             // заголовок как на чертеже «F-16C»: широкий Unbounded, без свечения
             title.typeface = resources.getFont(R.font.unbounded)
-            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
             title.setShadowLayer(0f, 0f, 0f, 0)
         }
         if (Term.prism) {
             // заголовок залит радугой, перелив медленно «плывёт»
-            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 32f)
             val shift = android.graphics.Matrix()
             val flow = object : Runnable {
                 override fun run() {
@@ -360,14 +360,14 @@ class MainActivity : Activity() {
         frame.addView(ScrollView(this).apply { isFillViewport = true; addView(root) }, FrameLayout.LayoutParams(-1, -1))
 
         val showUi: () -> Unit = {
-            title.type("krisa")
+            title.type("krisa37™")
             keyViews.forEachIndexed { i, k -> k.reveal(60L * i) }
             (status as TypeLine).type("> ready. ${KEYS.size} keys loaded")
             ui.postDelayed({ checkIrPort() }, 900)
         }
         if (withSplash) {
             val boot = listOf(
-                "krisa ir-remote v$versionName",
+                "krisa37™ ir-remote v$versionName",
                 "loading nec table ........ [ok]",
                 "consumer_ir .............. [" + (if (builtin.available) "ok" else "--") + "]",
                 "usb ir ................... [" + (if (usb.deviceList.values.any { UsbIr.supports(it) }) "ok" else "--") + "]",

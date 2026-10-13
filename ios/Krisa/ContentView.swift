@@ -202,7 +202,7 @@ struct ContentView: View {
 
     private var splashLayer: some View {
         SplashView(boot: [
-            "krisa ir-remote ios",
+            "krisa37™ ir-remote ios",
             "loading nec table ........ [ok]",
             "audio out ................ [" + (AudioIr.adapterConnected ? "ok" : "--") + "]",
             "decoding rat.png ......... [ok]",
@@ -490,14 +490,14 @@ extension ContentView {
     /// Заголовок «krisa» в текущей теме.
     @ViewBuilder func titleView() -> some View {
         if Term.prism {
-            IrisText(text: ready ? "krisa" : " ", font: Prism.display(40))
+            IrisText(text: ready ? "krisa37™" : " ", font: Prism.display(32))
         } else if Term.thermal {
-            HeatText(text: ready ? "krisa_" : " ", font: Term.mono(60))
+            HeatText(text: ready ? "krisa37™_" : " ", font: Term.mono(60))
         } else if Term.blueprint {
-            Text(ready ? "krisa" : " ").font(Prism.display(38)).foregroundColor(Blueprint.ink)
+            Text(ready ? "krisa37™" : " ").font(Prism.display(30)).foregroundColor(Blueprint.ink)
                 .padding(.vertical, 6)
         } else {
-            TypeLine(text: ready ? "krisa" : "", font: Term.mono(60))
+            TypeLine(text: ready ? "krisa37™" : "", font: Term.mono(60))
                 .shadow(color: Term.fg.opacity(0.9), radius: 8)
         }
     }

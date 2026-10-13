@@ -136,7 +136,7 @@ object Blueprint {
         for (k in 1..2) canvas.drawLine(l, tp + rh * k, l + bw, tp + rh * k, stamp)
         canvas.drawLine(l + 58 * d, tp, l + 58 * d, tp + bh, stamp)
         stampText.textSize = 8.5f * d; stampText.alpha = 150; stampText.letterSpacing = 0.08f
-        val rows = listOf("MODEL" to "KRISA IR-REMOTE", "DRAWN BY" to "krisa", "SCALE" to "1:1      REV. A")
+        val rows = listOf("MODEL" to "KRISA IR-REMOTE", "DRAWN BY" to "krisa37™", "SCALE" to "1:1      REV. A")
         rows.forEachIndexed { k, (a, b) ->
             val by = tp + rh * k + rh / 2 + 3 * d
             canvas.drawText(a, l + 5 * d, by, stampText)

@@ -217,7 +217,7 @@ struct BlueprintStamp: View {
         VStack(spacing: 0) {
             row("MODEL", "KRISA IR-REMOTE")
             hRule
-            row("DRAWN BY", "krisa")
+            row("DRAWN BY", "krisa37™")
             hRule
             HStack(spacing: 0) {
                 cell("SCALE 1:1")

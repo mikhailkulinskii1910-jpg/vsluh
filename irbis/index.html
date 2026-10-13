@@ -10,8 +10,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="krisa">
-<title>krisa</title>
+<meta name="apple-mobile-web-app-title" content="krisa37™">
+<title>krisa37™</title>
 <script>
 // Тема применяется до первой отрисовки, чтобы не мигала старая. «terminal» (по умолчанию), «prism», «thermal» или «blueprint».
 // Палитра тепловизора (krisa-heat) — тоже сразу: ironbow (по умолчанию), white, rainbow, arctic.
@@ -180,7 +180,7 @@ html[data-theme=prism]{
 /* во второй теме крыс нет */
 [data-theme=prism] #rats{display:none}
 [data-theme=prism] #log,[data-theme=prism] body::after{display:none}
-[data-theme=prism] h1{font:600 46px/1 var(--mono);letter-spacing:-.5px;text-shadow:none;
+[data-theme=prism] h1{font:600 36px/1 var(--mono);letter-spacing:-.5px;text-shadow:none;
   background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0) 52%),linear-gradient(90deg,var(--iris));background-size:100% 100%,200% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:.6px rgba(255,255,255,.35);
   animation:flow 6s linear infinite;filter:drop-shadow(0 2px 2px rgba(20,10,50,.6)) drop-shadow(0 0 12px color-mix(in srgb,var(--i1) 53%,transparent))}
@@ -442,7 +442,7 @@ html[data-theme=blueprint]{
 .bpc{display:none}
 [data-theme=blueprint] .bpc{display:block;position:fixed;inset:0;z-index:0;width:100%;height:100%;pointer-events:none}
 [data-theme=blueprint] #log,[data-theme=blueprint] #rats,[data-theme=blueprint] body::after{display:none}
-[data-theme=blueprint] h1{font:600 40px/1.1 Unbounded,var(--mono);letter-spacing:-.5px;text-shadow:none}
+[data-theme=blueprint] h1{font:600 32px/1.1 Unbounded,var(--mono);letter-spacing:-.5px;text-shadow:none}
 [data-theme=blueprint] h1::after{content:none}
 [data-theme=blueprint] .id{font:600 11px var(--ru);letter-spacing:.08em;margin-top:10px}
 [data-theme=blueprint] .mode{font:500 13px var(--ru);margin-top:5px}
@@ -539,7 +539,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
 <div class="wrap">
   <header>
     <div>
-      <h1>krisa</h1>
+      <h1>krisa37™</h1>
       <div class="id">#500202 :: IRBIS :: NEC 38kHz</div>
       <div class="mode" id="modeLine"></div>
     </div>
@@ -1501,7 +1501,7 @@ prismBurst();
     x.fillText('MODEL', bx + 5, by + rh / 2 + 1); x.fillText('DRAWN BY', bx + 5, by + rh * 1.5 + 1);
     x.fillText('SCALE 1:1', bx + 5, by + rh * 2.5 + 1); x.fillText('REV. A', bx + 98, by + rh * 2.5 + 1);
     x.fillStyle = rgba(ink, .85); x.font = '600 10px Manrope, sans-serif';
-    x.fillText('KRISA IR-REMOTE', bx + col + 5, by + rh / 2 + 1); x.fillText('krisa', bx + col + 5, by + rh * 1.5 + 1);
+    x.fillText('KRISA IR-REMOTE', bx + col + 5, by + rh / 2 + 1); x.fillText('krisa37™', bx + col + 5, by + rh * 1.5 + 1);
     x.restore();
   }
   function draw(now) {
@@ -1580,11 +1580,11 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa ir-remote v1.21', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.22', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
-  setTimeout(() => scramble($('splashName'), 'krisa', 450), 1500);
+  setTimeout(() => scramble($('splashName'), 'krisa37™', 450), 1500);
   setTimeout(finish, 2600);
 })();
 
