@@ -90,6 +90,12 @@ jobs:
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote moc
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-moc.png"
+          # вкладка PROJ, пульт проектора Epson
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote proj
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa projBrand -int 1
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-proj.png"
           # «Терминал» с RGB-переливом Rainbow: пульт и вкладка «Цвет»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote irbis

@@ -24,6 +24,8 @@ struct ContentView: View {
     @AppStorage("rgb") private var rgb = ""
     @AppStorage("heat") private var heat = "ironbow"
     @AppStorage("bpShade") private var bpShade = 0.5
+    /// Марка проектора во вкладке PROJ: 0 NEC, 1 Epson, 2 InFocus, 3 BenQ.
+    @AppStorage("projBrand") private var projBrand = 0
     /// Где на экране область пульта — туда кладётся панель «Цвет» (поверх RGB-перелива).
     @State private var panelFrame: CGRect = .zero
 
@@ -71,6 +73,8 @@ struct ContentView: View {
                 remoteTabs().padding(.top, 12)
                 if colorTab {
                     panelSlot.padding(.top, 12)
+                } else if remote == "proj" {
+                    projArea.padding(.top, 12)
                 } else {
                     keyGrid.padding(.top, 12)
                 }
@@ -93,7 +97,7 @@ struct ContentView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 2) {
                 titleView()
-                Text(remoteSubtitle).font(Term.prism ? Prism.body(13) : Term.mono(20)).foregroundColor(Term.dim)
+                Text(remoteSubtitle).font(subtitleFont).foregroundColor(Term.dim)
                 Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
                     .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
             }
@@ -121,8 +125,36 @@ struct ContentView: View {
                     }
                 }
             }
-            .id(remote)   // другой пульт — кнопки создаются заново и снова «расшифровываются»
+            .id(gridKey)   // другой пульт — кнопки создаются заново и снова «расшифровываются»
         }
+    }
+
+    /// Пульт на экране (для проекторов — вместе с маркой).
+    private var gridKey: String { remote == "proj" ? "proj" + String(projIndex) : remote }
+
+    /// Выбранная марка проектора (индекс с защитой от мусора в настройках).
+    var projIndex: Int { min(max(projBrand, 0), PROJ_BRANDS.count - 1) }
+
+    /// Вкладка PROJ: чипы марок, подсказка про выключение, сетка 12 кнопок.
+    private var projArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            brandChips
+            Text("Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.")
+                .font(Term.ru(13)).foregroundColor(Term.dim)
+                .lineLimit(2).minimumScaleFactor(0.8)
+            keyGrid
+        }
+    }
+
+    private var brandChips: some View {
+        HStack(spacing: 6) {
+            ForEach(PROJ_BRANDS.indices, id: \.self) { i in brandChip(i) }
+        }
+    }
+
+    private func brandChip(_ i: Int) -> some View {
+        let on: Bool = i == projIndex
+        return Button { projBrand = i } label: { tabLabel(PROJ_BRANDS[i].name, on: on, height: 36) }
     }
 
     /// Пустое место под панель «Цвет»: только сообщает свою рамку.
@@ -307,14 +339,30 @@ struct SettingsView: View {
 }
 
 extension ContentView {
-    var currentKeys: [(label: String, code: UInt32)] { remote == "moc" ? MOC_KEYS : KEYS }
-    var remoteSubtitle: String { remote == "moc" ? "MocTec :: NEC 04FB" : "#500202 :: IRBIS :: NEC 38kHz" }
+    var currentKeys: [(label: String, code: UInt32)] {
+        if remote == "proj" { return PROJ_BRANDS[projIndex].keys }
+        return remote == "moc" ? MOC_KEYS : KEYS
+    }
+    var remoteSubtitle: String {
+        if remote == "proj" {
+            let b: ProjBrand = PROJ_BRANDS[projIndex]
+            return "проектор :: " + b.name + " :: " + b.remoteNo
+        }
+        return remote == "moc" ? "MocTec :: NEC 04FB" : "#500202 :: IRBIS :: NEC 38kHz"
+    }
+    /// Шрифт подзаголовка: для проекторов он русский — в VT323 кириллицы нет.
+    var subtitleFont: Font {
+        if Term.prism { return Prism.body(13) }
+        if remote == "proj" && (Term.terminal || Term.thermal) { return Term.ru(14) }
+        return Term.mono(20)
+    }
 
     /// Вкладки IRBIS / MocTec (и «Цвет» в «Терминале» и «Тепловизоре») над кнопками.
     func remoteTabs() -> some View {
         HStack(spacing: 8) {
             remoteTab("irbis", "IRBIS")
             remoteTab("moc", "MocTec")
+            remoteTab("proj", "PROJ")
             if hasColorTab { remoteTab("color", "Цвет") }
         }
     }
@@ -333,24 +381,24 @@ extension ContentView {
         return Term.mono(22)
     }
 
-    @ViewBuilder private func tabLabel(_ title: String, on: Bool) -> some View {
+    @ViewBuilder private func tabLabel(_ title: String, on: Bool, height: CGFloat = 40) -> some View {
         if Term.prism {
             Text(title).font(Prism.display(15)).foregroundColor(on ? Prism.ink : Term.fg)
-                .frame(maxWidth: .infinity).frame(height: 40)
+                .frame(maxWidth: .infinity).frame(height: height)
                 .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
         } else if Term.thermal {
             Text(title).font(tabFont(title)).foregroundColor(on ? Heat.ink : Term.fg)
-                .frame(maxWidth: .infinity).frame(height: 40)
+                .frame(maxWidth: .infinity).frame(height: height)
                 .background(thermalTabFill(on))
                 .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
         } else if Term.blueprint {
             Blueprint.caps(title, 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
-                .frame(maxWidth: .infinity).frame(height: 40)
+                .frame(maxWidth: .infinity).frame(height: height)
                 .background(on ? Blueprint.ink : Blueprint.bg.opacity(0.78))
                 .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
         } else {
             Text(title).font(tabFont(title)).foregroundColor(on ? Color.black : Term.fg)
-                .frame(maxWidth: .infinity).frame(height: 40)
+                .frame(maxWidth: .infinity).frame(height: height)
                 .background(on ? Term.fg : Color.black)
                 .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
         }
