@@ -184,7 +184,8 @@ class MainActivity : Activity() {
     private fun press(label: String, code: Long) {
         val tx = current() ?: return say(noTxMessage(), err = true)
         val frame = Nec.withGap(Nec.frame(code))
-        val repeat = Nec.withGap(Nec.REPEAT)
+        // NEC2 (Epson, BenQ): при удержании — весь кадр заново; NEC — короткий код повтора
+        val repeat = if (((code ushr 16).toInt() and 0xFFFF) in NEC2_ADDR) frame else Nec.withGap(Nec.REPEAT)
         val id = pressSeq.incrementAndGet()
         held = id
         say("> tx %-11s 0x%08X [sent]".format(label, code))
@@ -318,11 +319,12 @@ class MainActivity : Activity() {
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         tabIrbis = tabButton("IRBIS") { showTab(TAB_IRBIS) }
         tabMoc = tabButton("MocTec") { showTab(TAB_MOC) }
+        tabProj = tabButton("PROJ") { showTab(TAB_PROJ) }
         // русские подписи — другим шрифтом (в VT323 нет кириллицы) и чуть мельче, чтобы четыре вкладки поместились
         tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!clean) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
         // «Цвет»: в «Терминале» — цвет и переливы, в «Тепловизоре» — палитры
         val colorTab = !Term.prism
-        val tabList = mutableListOf(tabIrbis, tabMoc, tabRoulette)
+        val tabList = mutableListOf(tabIrbis, tabMoc, tabProj, tabRoulette)
         if (colorTab) tabList += tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }.also { tabColor = it }
         tabList.forEachIndexed { i, t ->
             tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), 1f).apply { if (i > 0) leftMargin = dp(6) })
@@ -333,6 +335,8 @@ class MainActivity : Activity() {
         root.addView(irbisGrid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         mocGrid = keyGrid(MOC_KEYS)
         root.addView(mocGrid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        projPanel = buildProjPanel()
+        root.addView(projPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         if (colorTab) {
@@ -439,6 +443,8 @@ class MainActivity : Activity() {
     private fun showTab(tab: String) {
         if (tab != TAB_ROULETTE) mocRun = false
         styleTab(tabIrbis, tab == TAB_IRBIS); styleTab(tabMoc, tab == TAB_MOC); styleTab(tabRoulette, tab == TAB_ROULETTE)
+        styleTab(tabProj, tab == TAB_PROJ)
+        projPanel.visibility = if (tab == TAB_PROJ) View.VISIBLE else View.GONE
         tabColor?.let { styleTab(it, tab == TAB_COLOR) }
         irbisGrid.visibility = if (tab == TAB_IRBIS) View.VISIBLE else View.GONE
         mocGrid.visibility = if (tab == TAB_MOC) View.VISIBLE else View.GONE
@@ -447,6 +453,7 @@ class MainActivity : Activity() {
         subtitle.text = when (tab) {
             TAB_MOC -> "MocTec :: MOSTEH :: NEC 04FB"
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
+            TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${it.source}" }
             TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else "terminal :: phosphor color"
             else -> "#500202 :: IRBIS :: NEC 38kHz"
         }
@@ -454,6 +461,39 @@ class MainActivity : Activity() {
     }
 
     private var tabColor: TextView? = null
+    private lateinit var tabProj: TextView
+    private lateinit var projPanel: View
+    private var projIdx = 0
+
+    /**
+     * Вкладка PROJ: пульты проекторов NEC, Epson, InFocus, BenQ. Сверху — выбор марки, ниже — 12 кнопок её пульта.
+     * Выключение проекторы спрашивают подтверждением — POWER нажимается дважды.
+     */
+    private fun buildProjPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        projIdx = getPreferences(MODE_PRIVATE).getInt(PREF_PROJ, 0).coerceIn(0, PROJECTORS.size - 1)
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
+        val grids = PROJECTORS.map { keyGrid(it.keys) }
+        val chipViews = ArrayList<TextView>()
+        fun select(i: Int) {
+            projIdx = i
+            chipViews.forEachIndexed { k, c -> styleTab(c, k == i) }
+            grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE }
+            subtitle.text = PROJECTORS[i].let { "проектор :: ${it.brand} :: ${it.source}" }
+            getPreferences(MODE_PRIVATE).edit().putInt(PREF_PROJ, i).apply()
+        }
+        PROJECTORS.forEachIndexed { i, pr ->
+            val c = tabButton(pr.brand) { select(i) }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 18f) }
+            chipViews += c
+            chips.addView(c, LinearLayout.LayoutParams(0, dp(36), 1f).apply { if (i > 0) leftMargin = dp(6) })
+        }
+        p.addView(chips, LinearLayout.LayoutParams(-1, -2))
+        p.addView(text("Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.", 13f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(dp(2), dp(8), 0, 0) })
+        grids.forEach { p.addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) }) }
+        select(projIdx)
+        return p
+    }
     private var colorPanel: View? = null
 
     /**
@@ -991,6 +1031,8 @@ class MainActivity : Activity() {
         private const val TAB_MOC = "moc"
         private const val TAB_ROULETTE = "roulette"
         private const val TAB_COLOR = "color"
+        private const val TAB_PROJ = "proj"
+        private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
     }
 }

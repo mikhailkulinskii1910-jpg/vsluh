@@ -53,6 +53,15 @@ class ScreenshotTest {
             root.draw(Canvas(bmp))
             File(out, "moctec.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
+        findText(root, "PROJ")!!.performClick()
+        for (b in listOf("NEC", "Epson", "InFocus", "BenQ")) {
+            findText(root, b)!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+            Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp))
+                File(out, "proj-$b.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
         findText(root, "Рулетка")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
         Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
