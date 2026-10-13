@@ -185,9 +185,13 @@ function selfCollide() {
 const TRI = (NX - 1) * (NY - 1) * 2;
 const triV = new Int32Array(TRI * 3), triI = new Int32Array(TRI), triJ = new Int32Array(TRI);
 let triCount = 0, sCount = 0;
-const MAXE = TRI * 24;
+const MAXE = TRI * 40;
 const eTri = new Int32Array(MAXE), eNext = new Int32Array(MAXE);
-let tHead = new Int32Array(1), tCols = 1, tRows = 1;
+// объёмная хеш-сетка: слои, лежащие друг на друге, попадают в разные ячейки по высоте,
+// поэтому скомканный ковёр не проверяет каждую точку против всех слоёв сразу
+const HBITS = 15, HMASK = (1 << HBITS) - 1, tHead = new Int32Array(1 << HBITS);
+const tVisit = new Int32Array(TRI);
+const cellKey = (x, y, z) => ((x * 73856093) ^ (y * 19349663) ^ (z * 83492791)) & HMASK;
 
 const wOf = (k) => pz[k] < 0.5 ? inv[k] * 0.15 : inv[k]; // лежащее на столе почти не продавить вниз
 
@@ -223,20 +227,20 @@ const bX = new Float32Array(N), bY = new Float32Array(N), bZ = new Float32Array(
 const push = (k, x, y, z, w) => { cX[k] += x; cY[k] += y; cZ[k] += z; cW[k] += w; };
 
 function triCollide() {
-  const h = spacing * 0.6, C = spacing * 1.5, iC = 1 / C;
-  const cols = Math.ceil(W * iC) + 3, rows = Math.ceil(H * iC) + 3;
-  if (cols * rows !== tHead.length) { tCols = cols; tRows = rows; tHead = new Int32Array(cols * rows); }
-  tHead.fill(-1);
+  const h = spacing * 0.6, C = spacing * 1.0, iC = 1 / C;
+  tHead.fill(-1); tVisit.fill(-1);
   cX.fill(0); cY.fill(0); cZ.fill(0); cW.fill(0);
   let ne = 0, hits = 0;
   for (let t = 0; t < triCount; t++) {
     const a = triV[t * 3], b = triV[t * 3 + 1], c = triV[t * 3 + 2];
-    const x0 = Math.max(0, ((Math.min(px[a], px[b], px[c], ox[a], ox[b], ox[c]) - h) * iC | 0) + 1);
-    const x1 = Math.min(tCols - 1, ((Math.max(px[a], px[b], px[c], ox[a], ox[b], ox[c]) + h) * iC | 0) + 1);
-    const y0 = Math.max(0, ((Math.min(py[a], py[b], py[c], oy[a], oy[b], oy[c]) - h) * iC | 0) + 1);
-    const y1 = Math.min(tRows - 1, ((Math.max(py[a], py[b], py[c], oy[a], oy[b], oy[c]) + h) * iC | 0) + 1);
+    const x0 = Math.floor((Math.min(px[a], px[b], px[c], ox[a], ox[b], ox[c]) - h) * iC);
+    const x1 = Math.floor((Math.max(px[a], px[b], px[c], ox[a], ox[b], ox[c]) + h) * iC);
+    const y0 = Math.floor((Math.min(py[a], py[b], py[c], oy[a], oy[b], oy[c]) - h) * iC);
+    const y1 = Math.floor((Math.max(py[a], py[b], py[c], oy[a], oy[b], oy[c]) + h) * iC);
+    const z0 = Math.floor((Math.min(pz[a], pz[b], pz[c], oz[a], oz[b], oz[c]) - h) * iC);
+    const z1 = Math.floor((Math.max(pz[a], pz[b], pz[c], oz[a], oz[b], oz[c]) + h) * iC);
     tOk[t] = 0;
-    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) continue; // разорванный треугольник — не ловим
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) * (z1 - z0 + 1) > 96) continue; // разорванный треугольник — не ловим
     const ux = px[b] - px[a], uy = py[b] - py[a], uz = pz[b] - pz[a];
     const vx = px[c] - px[a], vy = py[c] - py[a], vz = pz[c] - pz[a];
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
@@ -254,9 +258,9 @@ function triCollide() {
     tO[t * 4] = onx; tO[t * 4 + 1] = ony; tO[t * 4 + 2] = onz; tO[t * 4 + 3] = 1e-4 * Math.hypot(onx, ony, onz);
     tB[t * 4] = ouu; tB[t * 4 + 1] = ovv; tB[t * 4 + 2] = ouv; tB[t * 4 + 3] = oden;
     tZ[t * 2] = Math.min(pz[a], pz[b], pz[c]); tZ[t * 2 + 1] = Math.max(pz[a], pz[b], pz[c]);
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       if (ne >= MAXE) break;
-      const cell = y * tCols + x;
+      const cell = cellKey(x, y, z);
       eTri[ne] = t; eNext[ne] = tHead[cell]; tHead[cell] = ne++;
     }
   }
@@ -273,12 +277,17 @@ function triCollide() {
     }
     const ai = pa % NX, aj = (pa / NX) | 0;
     const bi = pb < 0 ? ai : pb % NX, bj = pb < 0 ? aj : (pb / NX) | 0;
-    const cx = (qx * iC | 0) + 1, cy = (qy * iC | 0) + 1;
-    if (cx < 0 || cy < 0 || cx >= tCols || cy >= tRows) continue;
+    // по высоте смотрим все ячейки, через которые точка прошла за шаг — иначе быстрый провал сквозь слой не поймать
+    const gx = Math.floor(qx * iC), gy = Math.floor(qy * iC);
+    const zq0 = Math.floor(Math.min(qz, qoz) * iC), zq1 = Math.floor(Math.max(qz, qoz) * iC);
+    for (let gz = zq0; gz <= zq1; gz++) {
+    const cell = cellKey(gx, gy, gz);
     const motion = Math.abs(qz - qoz) + Math.abs(qx - qox) + Math.abs(qy - qoy);
     const m = h + motion + 1;
-    for (let e = tHead[cy * tCols + cx]; e !== -1; e = eNext[e]) {
+    for (let e = tHead[cell]; e !== -1; e = eNext[e]) {
       const t = eTri[e], ti = triI[t], tj = triJ[t];
+      if (tVisit[t] === q) continue; // треугольник мог попасть в ячейку дважды (совпадение хеша)
+      tVisit[t] = q;
       if (ai >= ti - 1 && ai <= ti + 2 && aj >= tj - 1 && aj <= tj + 2) continue; // свои соседи
       if (bi >= ti - 1 && bi <= ti + 2 && bj >= tj - 1 && bj <= tj + 2) continue;
       if (!tOk[t] || qz > tZ[t * 2 + 1] + m || qz < tZ[t * 2] - m) continue;
@@ -323,6 +332,7 @@ function triCollide() {
       push(a, -fx * wa * ba, -fy * wa * ba, -fz * wa * ba, ba);
       push(b, -fx * wb * bb, -fy * wb * bb, -fz * wb * bb, bb);
       push(c, -fx * wc * bc, -fy * wc * bc, -fz * wc * bc, bc);
+    }
     }
   }
   // применяем усреднённые толчки
@@ -369,16 +379,24 @@ function strainLimit(maxRatio) {
 }
 
 // ---------- шаг физики ----------
+const sX = new Float32Array(N), sY = new Float32Array(N), sZ = new Float32Array(N);
+let settle = 0;   // сколько шагов ковёр почти неподвижен: затухание растёт, пока он не замрёт
 function step(dt, t) {
   const g = GRAVITY * dt * dt;
+  sX.set(px); sY.set(py); sZ.set(pz);
+  const damp = grab >= 0 ? DAMP : DAMP * (1 - Math.min(0.6, settle / 200));
   for (let k = 0; k < N; k++) {
     if (inv[k] === 0) continue;
-    let vx = (px[k] - ox[k]) * DAMP, vy = (py[k] - oy[k]) * DAMP, vz = (pz[k] - oz[k]) * DAMP;
+    let vx = (px[k] - ox[k]) * damp, vy = (py[k] - oy[k]) * damp, vz = (pz[k] - oz[k]) * damp;
     const v = Math.hypot(vx, vy, vz);
-    if (v > 40) { vx *= 40 / v; vy *= 40 / v; vz *= 40 / v; }
+    // не быстрее полклетки за шаг: так ни одна точка не проскочит сквозь слой между проверками
+    const vmax = spacing * 0.5;
+    if (v > vmax) { vx *= vmax / v; vy *= vmax / v; vz *= vmax / v; }
     ox[k] = px[k]; oy[k] = py[k]; oz[k] = pz[k];
     px[k] += vx; py[k] += vy; pz[k] += vz + g;
   }
+
+  if (crumpleT > 0) crumpleStep(dt);
 
   if (grab >= 0) { // захваченная точка ведётся курсором (интерполяция между кадрами)
     grabZ += (liftH - grabZ) * Math.min(1, dt * 9);
@@ -438,18 +456,32 @@ function step(dt, t) {
   // последним — непроницаемость: что бы ни сделали трение и нити, слои не пересекаются
   strainLimit(1.08);
   bX.set(px); bY.set(py); bZ.set(pz);
-  // до четырёх проходов, пока слои ещё давят друг на друга (ровный ковёр — один проход)
-  for (let pass = 0; pass < 4; pass++) if (!triCollide()) break;
+  // до двух проходов, пока слои ещё давят друг на друга (ровный ковёр — один проход)
+  for (let pass = 0; pass < 2; pass++) if (!triCollide()) break;
   // касание без отскока: толчок от столкновений почти не превращается в скорость
   for (let k = 0; k < N; k++) {
-    ox[k] += (px[k] - bX[k]) * 0.7; oy[k] += (py[k] - bY[k]) * 0.7; oz[k] += (pz[k] - bZ[k]) * 0.7;
+    const cx = px[k] - bX[k], cy = py[k] - bY[k], cz = pz[k] - bZ[k];
+    ox[k] += cx * 0.7; oy[k] += cy * 0.7; oz[k] += cz * 0.7;
+    // слои, которые давят друг на друга, цепляются ворсом: дрожь между ними быстро гаснет
+    if (cx * cx + cy * cy + cz * cz > 1e-6) {
+      const vx = px[k] - ox[k], vy = py[k] - oy[k], vz = pz[k] - oz[k];
+      if (vx * vx + vy * vy + vz * vz < 0.09) { ox[k] = px[k]; oy[k] = py[k]; oz[k] = pz[k]; } // трение покоя
+      else { ox[k] += vx * 0.3; oy[k] += vy * 0.3; oz[k] += vz * 0.3; }
+    }
   }
   bounds();
+  // «покой» меряем по настоящему смещению за шаг: почти всё стоит, отдельные точки чуть ползут
+  let sum = 0, n = 0;
   for (let k = 0; k < N; k++) {
-    const v = Math.abs(px[k] - ox[k]) + Math.abs(py[k] - oy[k]) + Math.abs(pz[k] - oz[k]);
+    if (!act[k]) continue;
+    const v = Math.abs(px[k] - sX[k]) + Math.abs(py[k] - sY[k]) + Math.abs(pz[k] - sZ[k]);
     if (v > maxv) maxv = v;
+    sum += v; n++;
   }
-  return maxv;
+  const avg = sum / n;
+  settle = grab < 0 && avg < 0.08 ? settle + 1 : 0;
+  // уже 2 с почти неподвижен — замирает, даже если где-то в складке подрагивает одна точка
+  return grab < 0 && ((maxv < 0.5 && avg < 0.01) || settle > 240) ? 0 : maxv;
 }
 
 function bounds() {
@@ -1079,14 +1111,19 @@ function toggleFold() {
 }
 
 // ---------- цикл ----------
-let last = performance.now(), acc = 0;
+let last = performance.now(), acc = 0, stepCost = 2;
 function frame(now) {
   requestAnimationFrame(frame);
   const elapsed = Math.min(0.05, (now - last) / 1000); last = now;
   if (!sleeping) {
     acc += elapsed;
-    const steps = Math.min(3, Math.floor(acc / DT));
+    // сколько шагов физики успеваем за кадр: если ковёр тяжёлый (много слоёв), лучше
+    // замедлиться, чем подвесить компьютер
+    const budget = Math.max(1, Math.min(3, Math.floor(10 / Math.max(0.5, stepCost))));
+    const steps = Math.min(budget, Math.floor(acc / DT));
     acc -= steps * DT;
+    if (acc > DT * 2) acc = DT * 2;                  // не копить долг — иначе догонялки без конца
+    const t0 = performance.now();
     let maxv = 0;
     for (let s = 0; s < steps; s++) {
       if (mode === 'cloth') maxv = Math.max(maxv, step(DT, (s + 1) / steps));
@@ -1095,6 +1132,7 @@ function frame(now) {
       else if (mode === 'morphing' || mode === 'unmorphing') { morphStep(DT); maxv = 1; }
       else { animStep(DT); maxv = 1; }
     }
+    if (steps) stepCost = stepCost * 0.8 + (performance.now() - t0) / steps * 0.2;
     if (grab >= 0) { prevMX = grabTX; prevMY = grabTY; }
     if (steps) {
       calm = grab < 0 && !bodyGrab && maxv < 0.015 ? calm + steps : 0;
@@ -1105,7 +1143,7 @@ function frame(now) {
   if (needDraw) { draw(); needDraw = false; }
 }
 
-function wake() { sleeping = false; calm = 0; acc = 0; needDraw = true; }
+function wake() { sleeping = false; calm = 0; acc = 0; settle = 0; needDraw = true; }
 
 // ---------- мышь ----------
 function onMove(x, y) {
@@ -1220,14 +1258,36 @@ function shake(power = 1) { // волна по ковру от ближнего 
   }
   wake();
 }
+// скомкать: полсекунды ковёр стягивается к середине с подбросом — плавно, без рывка сквозь слои
+let crumpleT = 0, crumpleC = null;
+const crumpleF = new Float32Array(N), crumpleG = new Array(N);
 function crumple() {
-  const p = pose();
+  crumpleT = 1.0; crumpleC = pose();
+  const r = Math.min(width, carpetH) * 0.18, pts = [0, 1, 2].map(() => [crumpleC.cx + (Math.random() - 0.5) * 2 * r, crumpleC.cy + (Math.random() - 0.5) * 2 * r]);
   for (let k = 0; k < N; k++) {
-    ox[k] = px[k] - (p.cx - px[k]) * 0.035 + (Math.random() - 0.5) * 2;
-    oy[k] = py[k] - (p.cy - py[k]) * 0.06 + (Math.random() - 0.5) * 2;
-    oz[k] = pz[k] - (2 + Math.random() * 8);
+    let best = pts[0], bd = Infinity;
+    for (const q of pts) { const d = (px[k] - q[0]) ** 2 + (py[k] - q[1]) ** 2; if (d < bd) { bd = d; best = q; } }
+    crumpleG[k] = best;
+  }
+  // случайные бугры: ковёр сминается сразу во многих местах, а не складывается пополам
+  const a = Math.random() * 6, b = Math.random() * 6, c = Math.random() * 6, d = Math.random() * 6;
+  for (let k = 0; k < N; k++) {
+    const i = k % NX, j = (k / NX) | 0;
+    crumpleF[k] = Math.max(0, Math.sin(i * 0.55 + a) * Math.sin(j * 0.5 + b) + 0.5 * Math.sin(i * 0.9 + j * 0.7 + c) + 0.2 * Math.sin(j * 1.3 + d));
   }
   wake();
+}
+function crumpleStep(dt) {
+  crumpleT -= dt;
+  const c = crumpleC;
+  for (let k = 0; k < N; k++) {
+    if (inv[k] === 0) continue;
+    // каждую часть тянет к своей «горсти» — так получаются складки в разные стороны
+    const g = crumpleG[k];
+    px[k] += (g[0] - px[k]) * 0.009 + (Math.random() - 0.5) * 0.25;
+    py[k] += (g[1] - py[k]) * 0.009 + (Math.random() - 0.5) * 0.25;
+    if (crumpleT > 0.8) pz[k] += 0.1 + crumpleF[k] * 0.7;  // подброс только в начале
+  }
 }
 
 api.onCommand((cmd) => {
