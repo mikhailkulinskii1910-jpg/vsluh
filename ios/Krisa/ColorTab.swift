@@ -466,3 +466,118 @@ struct PanelFrameKey: PreferenceKey {
         if n != .zero { value = n }
     }
 }
+
+/// Описание ползунка «Призмы».
+struct PrismSliderSpec {
+    let title: String
+    let mark: Double
+    let markColor: Color
+    let track: [Color]
+    let left: String
+    let right: String
+}
+
+/// Вкладка «Цвет» темы «Призма»: яркость, прозрачность стекла, сдвиг радуги, цвет фона.
+/// Значения применяются при отпускании ползунка — экран перестраивается.
+struct PrismPanel: View {
+    @AppStorage("prBright") private var prBright = 0.5
+    @AppStorage("prFrost") private var prFrost = 0.5
+    @AppStorage("prHue") private var prHue = 0.0
+    @AppStorage("prBg") private var prBg = 0.0
+    /// Значения, пока палец на ползунке.
+    @State private var live: [Double?] = [nil, nil, nil, nil]
+
+    private static let defaults: [Double] = [0.5, 0.5, 0, 0]
+
+    // дорожки ползунков: тёмная→яркая радуга, прозрачное→матовое, радуга по кругу, чёрный→тёмные цвета
+    private static let brightTrack: [Color] = [Color(hex: 0x15131F)] + Prism.irisBase.map { h in Color(hex: h) }
+    private static let frostTrack: [Color] = [Color(hex: 0x202028), Color(hex: 0xD8D8E0)]
+    private static let hueTrack: [Color] = (0...12).map { i in Color(hex: hsvToHex(Double(i) * 30, 0.6, 1)) }
+    private static let bgTrack: [Color] = [Color(hex: 0x07060B)] + (1...12).map { i in Color(hex: hsvToHex(Double(i) * 30, 0.75, 0.22)) }
+
+    private static let specs: [PrismSliderSpec] = [
+        PrismSliderSpec(title: "Яркость", mark: 0.5, markColor: Color(hex: 0x8B6CFF),
+                        track: brightTrack,
+                        left: "тусклее", right: "ярче"),
+        PrismSliderSpec(title: "Прозрачность", mark: 0.5, markColor: Color(hex: 0x7C7C84),
+                        track: frostTrack,
+                        left: "прозрачнее", right: "матовее"),
+        PrismSliderSpec(title: "Цвета", mark: 0, markColor: Color(hex: 0x8B6CFF),
+                        track: hueTrack,
+                        left: "сдвиг радуги", right: ""),
+        PrismSliderSpec(title: "Цвет фона", mark: 0, markColor: Color(hex: 0x07060B),
+                        track: bgTrack,
+                        left: "чёрный", right: "цветной"),
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("> стекло и свет").font(Prism.display(15)).foregroundColor(Term.fg)
+                Text("Яркость переливов, прозрачность стекла, цвета радуги и цвет фона.")
+                    .font(Prism.body(13)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                row(0)
+                row(1)
+                row(2)
+                row(3)
+                resetButton.padding(.top, 4)
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func stored(_ i: Int) -> Double {
+        switch i {
+        case 0: return prBright
+        case 1: return prFrost
+        case 2: return prHue
+        default: return prBg
+        }
+    }
+
+    /// Отпустили ползунок: значение — в «Призму» и в настройки (экран перестроится).
+    private func commit(_ i: Int, _ v: Double) {
+        live[i] = nil
+        switch i {
+        case 0:
+            Prism.bright = v
+            prBright = v
+        case 1:
+            Prism.frost = v
+            prFrost = v
+        case 2:
+            Prism.hueShift = v
+            prHue = v
+        default:
+            Prism.bgShade = v
+            prBg = v
+        }
+    }
+
+    private func row(_ i: Int) -> some View {
+        let spec: PrismSliderSpec = PrismPanel.specs[i]
+        let v: Double = live[i] ?? stored(i)
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(spec.title).font(Prism.body(14)).foregroundColor(Term.fg)
+            TrackSlider(value: v, mark: spec.mark, markColor: spec.markColor, track: spec.track,
+                        leftText: spec.left, rightText: spec.right,
+                        onDrag: { x in live[i] = x }, onDone: { x in commit(i, x) })
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(GlassBox(radius: 18, seed: Double(i) + 1))
+    }
+
+    private var resetButton: some View {
+        Button { reset() } label: {
+            Text("по умолчанию").font(Prism.display(13)).foregroundColor(Term.fg)
+                .frame(maxWidth: .infinity).frame(height: 44)
+                .background(GlassBox(radius: 16, seed: 7))
+        }
+    }
+
+    private func reset() {
+        for i in 0..<4 { commit(i, PrismPanel.defaults[i]) }
+    }
+}

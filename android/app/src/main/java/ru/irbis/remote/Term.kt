@@ -44,9 +44,16 @@ object Term {
     const val NOISE = "#$%&@01<>/\\|=+*:;░▒▓"
 
     /** Радужные цвета «Призмы»: фиолетовый → бирюзовый → мятный → жёлтый → коралловый → розовый. */
-    val IRIS = intArrayOf(
+    private val IRIS0 = intArrayOf(
         Color.parseColor("#8B6CFF"), Color.parseColor("#3FE0FF"), Color.parseColor("#62FFB8"),
         Color.parseColor("#FFE66B"), Color.parseColor("#FF8A5C"), Color.parseColor("#FF5FD8"), Color.parseColor("#8B6CFF"))
+    /** Радуга «Призмы» с учётом ползунка «Цвета» (поворот оттенка). */
+    var IRIS = IRIS0; private set
+    /** Ползунки «Призмы»: множитель свечения фона (яркость) и матовости стекла (прозрачность). */
+    var glow = 1f; private set
+    var frost = 1f; private set
+    /** Альфа a, умноженная на k, в пределах 0…255. */
+    fun al(a: Int, k: Float) = (a * k).toInt().coerceIn(0, 255)
 
     /** Заголовки и кнопки. */
     lateinit var mono: Typeface
@@ -113,11 +120,14 @@ object Term {
     /** Включённый перелив (null — один цвет). */
     var rgb: Pair<String, IntArray>? = null; private set
 
+    /** Фон «Призмы» по ползунку: 0 — почти чёрный, дальше — тёмные цвета по кругу. */
+    fun prismBg(v: Float): Int = if (v <= 0.001f) Color.parseColor("#07060B") else Color.HSVToColor(floatArrayOf(v * 360f, 0.75f, 0.10f + 0.12f * v))
+
     /** Цвет, умноженный на k (k < 1 — темнее). */
     fun shade(c: Int, k: Float) = Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
 
     fun init(c: Context, theme: String, termColor: Int = DEFAULT_COLOR, matrixOn: Boolean = false, rgbName: String? = null, heat: String? = null,
-             bpShade: Float = 0.5f) {
+             bpShade: Float = 0.5f, bpHue: Float = Blueprint.HUE, prismSet: FloatArray = floatArrayOf(0.5f, 0.5f, 0f, 0f)) {
         prism = theme == "prism"
         thermal = theme == "thermal"
         blueprint = theme == "blueprint"
@@ -131,12 +141,16 @@ object Term {
             LINE = p.accent; FAINT = shade(p.pal[2], 0.25f)
             mono = c.resources.getFont(R.font.vt323); ru = Typeface.MONOSPACE
         } else if (blueprint) {
-            Blueprint.setShade(bpShade)
+            Blueprint.setShade(bpShade, bpHue)
             BG = Blueprint.BG; FG = Blueprint.INK; DIM = Blueprint.mix(BG, FG, 0.72f)
             LINE = Blueprint.mix(BG, FG, 0.6f); FAINT = Blueprint.mix(BG, FG, 0.12f)
             mono = c.resources.getFont(R.font.manrope_semibold); ru = c.resources.getFont(R.font.manrope)
         } else if (prism) {
-            BG = Color.parseColor("#07060B"); FG = Color.parseColor("#F4F1FF"); DIM = Color.parseColor("#A79FC6")
+            // ползунки: яркость, прозрачность, сдвиг радуги, цвет фона
+            glow = 0.25f + 1.5f * prismSet[0]; frost = 2f * prismSet[1]
+            IRIS = IRIS0.map { Blueprint.withHue(it, FloatArray(3).also { h -> Color.colorToHSV(it, h) }[0] + prismSet[2] * 360f) }.toIntArray()
+            PrismScene.reset()
+            BG = prismBg(prismSet[3]); FG = Color.parseColor("#F4F1FF"); DIM = Color.parseColor("#A79FC6")
             LINE = Color.parseColor("#4B4270"); FAINT = Color.parseColor("#1A1726")
             mono = c.resources.getFont(R.font.unbounded); ru = c.resources.getFont(R.font.manrope)
         } else {
@@ -461,12 +475,16 @@ object PrismScene {
 
     private fun a(c: Int, alpha: Int) = Color.argb(alpha, Color.red(c), Color.green(c), Color.blue(c))
 
+    /** Сбросить кэш градиентов: после смены настроек «Призмы» они создаются заново. */
+    fun reset() { w = 0f; h = 0f }
+
     fun resize(width: Int, height: Int) {
         if (width <= 0 || height <= 0 || (width.toFloat() == w && height.toFloat() == h)) return
+        val g = Term.glow
         w = width.toFloat(); h = height.toFloat()
         val r = max(w, h) * 0.42f
         blobs = Term.IRIS.take(5).map { c ->
-            android.graphics.RadialGradient(0f, 0f, r, intArrayOf(a(c, 58), a(c, 14), Color.TRANSPARENT),
+            android.graphics.RadialGradient(0f, 0f, r, intArrayOf(a(c, Term.al(58, g)), a(c, Term.al(14, g)), Color.TRANSPARENT),
                 floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
         }
         // веер лучей: узкие цветные полосы через тёмные промежутки
@@ -475,8 +493,8 @@ object PrismScene {
         for (i in 0 until n) {
             val c = Term.IRIS[i % 6]; val b = i.toFloat() / n; val st = 1f / n
             cols[i * 4] = Color.TRANSPARENT; pos[i * 4] = b
-            cols[i * 4 + 1] = a(c, 34); pos[i * 4 + 1] = b + st * 0.18f
-            cols[i * 4 + 2] = a(Term.IRIS[(i + 1) % 6], 22); pos[i * 4 + 2] = b + st * 0.32f
+            cols[i * 4 + 1] = a(c, Term.al(34, g)); pos[i * 4 + 1] = b + st * 0.18f
+            cols[i * 4 + 2] = a(Term.IRIS[(i + 1) % 6], Term.al(22, g)); pos[i * 4 + 2] = b + st * 0.32f
             cols[i * 4 + 3] = Color.TRANSPARENT; pos[i * 4 + 3] = b + st * 0.5f
         }
         cols[n * 4] = Color.TRANSPARENT; pos[n * 4] = 1f
@@ -484,8 +502,8 @@ object PrismScene {
         // радужный отблеск — широкая диагональная полоса
         val band = max(w, h) * 0.55f
         sheen = android.graphics.LinearGradient(0f, 0f, band, band * 0.6f,
-            intArrayOf(Color.TRANSPARENT, a(Term.IRIS[0], 30), a(Term.IRIS[1], 46), a(Term.IRIS[2], 40), a(Term.IRIS[3], 34),
-                a(Term.IRIS[4], 30), a(Term.IRIS[5], 26), Color.TRANSPARENT),
+            intArrayOf(Color.TRANSPARENT, a(Term.IRIS[0], Term.al(30, g)), a(Term.IRIS[1], Term.al(46, g)), a(Term.IRIS[2], Term.al(40, g)),
+                a(Term.IRIS[3], Term.al(34, g)), a(Term.IRIS[4], Term.al(30, g)), a(Term.IRIS[5], Term.al(26, g)), Color.TRANSPARENT),
             null, android.graphics.Shader.TileMode.CLAMP)
         // узор призмы рисуется заметное время — в фоновом потоке, чтобы не задерживать запуск
         val side = (min(w, h) * 1.05f).toInt().coerceAtMost(1400)
@@ -524,7 +542,7 @@ object PrismScene {
         // вращающаяся стеклянная призма в центре
         burst?.let { b ->
             val cx = w / 2; val cy = h * 0.48f; val half = b.width / 2f
-            burstP.alpha = burstAlpha
+            burstP.alpha = Term.al(burstAlpha, Term.glow)
             canvas.save(); canvas.rotate(t * 6f, cx, cy)
             canvas.drawBitmap(b, null, RectF(cx - half, cy - half, cx + half, cy + half), burstP)
             canvas.restore()
@@ -644,8 +662,8 @@ class GlassDrawable(c: Context, private val on: Boolean) : android.graphics.draw
         path.reset(); path.addRoundRect(box, r, r, android.graphics.Path.Direction.CW)
         holo = android.graphics.LinearGradient(0f, 0f, max(1f, w), max(1f, h), Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR)
         frost = android.graphics.LinearGradient(0f, box.top, 0f, box.bottom,
-            intArrayOf(Color.argb(56, 255, 255, 255), Color.argb(12, 255, 255, 255), Color.argb(40, 120, 220, 255)), floatArrayOf(0f, 0.55f, 1f), sh)
-        spot = android.graphics.RadialGradient(box.left + w * 0.2f, box.top, max(1f, max(w, h) * 0.6f), Color.argb(70, 255, 255, 255), Color.TRANSPARENT, sh)
+            intArrayOf(Color.argb(Term.al(56, Term.frost), 255, 255, 255), Color.argb(Term.al(12, Term.frost), 255, 255, 255), Color.argb(Term.al(40, Term.frost), 120, 220, 255)), floatArrayOf(0f, 0.55f, 1f), sh)
+        spot = android.graphics.RadialGradient(box.left + w * 0.2f, box.top, max(1f, max(w, h) * 0.6f), Color.argb(Term.al(70, Term.frost), 255, 255, 255), Color.TRANSPARENT, sh)
         edge = android.graphics.LinearGradient(0f, box.top, 0f, box.bottom,
             intArrayOf(Color.argb(220, 255, 255, 255), Color.argb(50, 255, 255, 255), Color.argb(120, 190, 170, 255)), floatArrayOf(0f, 0.5f, 1f), sh)
     }
@@ -782,10 +800,10 @@ class KeyView(c: Context, val label: String, private val index: Int, code: Long,
     private class GlassShaders(w: Float, h: Float, d: Float, box: RectF) {
         private val cl = android.graphics.Shader.TileMode.CLAMP
         val holo = android.graphics.LinearGradient(0f, 0f, w, h, Term.IRIS, null, android.graphics.Shader.TileMode.MIRROR)
-        val frost = android.graphics.LinearGradient(0f, 0f, 0f, h, Color.argb(40, 255, 255, 255), Color.argb(8, 230, 220, 255), cl)
-        val frostDown = android.graphics.LinearGradient(0f, 0f, 0f, h, Color.argb(64, 255, 255, 255), Color.argb(26, 230, 220, 255), cl)
+        val frost = android.graphics.LinearGradient(0f, 0f, 0f, h, Color.argb(Term.al(40, Term.frost), 255, 255, 255), Color.argb(Term.al(8, Term.frost), 230, 220, 255), cl)
+        val frostDown = android.graphics.LinearGradient(0f, 0f, 0f, h, Color.argb(Term.al(64, Term.frost), 255, 255, 255), Color.argb(Term.al(26, Term.frost), 230, 220, 255), cl)
         val spot = android.graphics.RadialGradient(w * 0.22f, h * 0.05f, max(w, h) * 0.55f,
-            intArrayOf(Color.argb(78, 255, 255, 255), Color.argb(18, 255, 255, 255), Color.TRANSPARENT), floatArrayOf(0f, 0.45f, 1f), cl)
+            intArrayOf(Color.argb(Term.al(78, Term.frost), 255, 255, 255), Color.argb(Term.al(18, Term.frost), 255, 255, 255), Color.TRANSPARENT), floatArrayOf(0f, 0.45f, 1f), cl)
         val arc = android.graphics.LinearGradient(0f, box.top, 0f, box.top + h * 0.3f, Color.argb(64, 255, 255, 255), Color.TRANSPARENT, cl)
         val bottom = android.graphics.LinearGradient(0f, h * 0.6f, 0f, h, Color.TRANSPARENT, Color.argb(54, 120, 220, 255), cl)
         val edge = android.graphics.LinearGradient(0f, 0f, 0f, h,
@@ -1105,8 +1123,8 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         if (Term.prism) {
             txt.typeface = Term.ru; txt.textSize = 14 * d
             big.typeface = Term.mono; big.textSize = 52 * d
-            big.setShadowLayer(18 * d, 0f, 0f, Color.parseColor("#8B6CFF"))
-            glowP.colorFilter = PorterDuffColorFilter(Color.parseColor("#8B6CFF"), PorterDuff.Mode.SRC_IN)
+            big.setShadowLayer(18 * d, 0f, 0f, Term.IRIS[0])
+            glowP.colorFilter = PorterDuffColorFilter(Term.IRIS[0], PorterDuff.Mode.SRC_IN)
             wordEdge.strokeWidth = 1.3f * d
         }
         if (Term.blueprint) {

@@ -34,8 +34,29 @@ enum Blueprint {
     static let lightHex: UInt32 = 0xF2F5FA
     static let midHex: UInt32 = 0x1A4A9E
     static let darkHex: UInt32 = 0x05070D
-    /// Чернила на светлой бумаге — синие линии, как на светокопии.
-    static let inkDarkHex: UInt32 = 0x0E2A66
+    /// Насыщенность и яркость «синего» #1A4A9E и тёмных чернил #0E2A66 — оттенок берётся с ползунка.
+    static let blueS: Double = 0.8354
+    static let blueV: Double = 0.6196
+    static let inkS: Double = 0.8627
+    static let inkV: Double = 0.4
+    static let defaultHue: Double = 218
+
+    /// Оттенок чертежа в градусах (ключ "bpHue"), по умолчанию синий 218°.
+    static var hue: Double = Blueprint.loadHue()
+
+    private static func loadHue() -> Double {
+        let n: NSNumber? = UserDefaults.standard.object(forKey: "bpHue") as? NSNumber
+        let v: Double = n?.doubleValue ?? defaultHue
+        return min(360, max(0, v))
+    }
+
+    /// «Синий» выбранного оттенка.
+    static func blue(_ h: Double) -> RGB { RGB(hex: hsvToHex(h, blueS, blueV)) }
+    static var blueRGB: RGB { blue(hue) }
+    /// Белая бумага с лёгким оттенком.
+    static var paperLight: RGB { RGB(hex: lightHex).mix(blueRGB, 0.04) }
+    /// Ночной лист.
+    static var night: RGB { RGB(hex: darkHex).mix(blueRGB, 0.06) }
 
     /// Светлота чертежа (ключ "bpShade"): 0 — белая бумага, 0.5 — синий, 1 — почти чёрный.
     /// Пока тянут ползунок, меняется сразу — фон перерисовывается каждый кадр.
@@ -48,13 +69,15 @@ enum Blueprint {
     }
 
     static func paper(_ v: Double) -> RGB {
-        if v < 0.5 { return RGB(hex: lightHex).mix(RGB(hex: midHex), v / 0.5) }
-        return RGB(hex: midHex).mix(RGB(hex: darkHex), (v - 0.5) / 0.5)
+        let b: RGB = blueRGB
+        if v < 0.5 { return paperLight.mix(b, v / 0.5) }
+        return b.mix(night, (v - 0.5) / 0.5)
     }
     static var paperRGB: RGB { paper(shade) }
     /// Светлая бумага: чернила синие, иначе белые.
     static var light: Bool { paperRGB.luminance > 0.5 }
-    static var inkRGB: RGB { light ? RGB(hex: inkDarkHex) : RGB(1, 1, 1) }
+    /// Тёмные чернила для светлой бумаги — того же оттенка, s и v как у #0E2A66.
+    static var inkRGB: RGB { light ? RGB(hex: hsvToHex(hue, inkS, inkV)) : RGB(1, 1, 1) }
 
     static var bg: Color { paperRGB.color() }
     /// «Чернила»: линии, текст, рамки, схема, сетка, штамп, контур крысы.
@@ -410,75 +433,59 @@ struct BlueprintDims: View {
     }
 }
 
-/// Ползунок светлоты чертежа: ⬜ — дорожка-градиент с меткой 🟦 посередине и бегунком «|» — ⬛.
+/// Ползунок светлоты чертежа: ⬜ — дорожка бумага→синий→ночь с меткой 🟦 посередине и бегунком «|» — ⬛.
 struct BlueprintShadeSlider: View {
     let value: Double
     let onDrag: (Double) -> Void
     let onDone: (Double) -> Void
 
     private static let rim = Color(hex: 0x7F8899)
-    private static let colors: [Color] = [Color(hex: Blueprint.lightHex), Color(hex: Blueprint.midHex), Color(hex: Blueprint.darkHex)]
 
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 10) {
-                swatch(Blueprint.lightHex)
-                GeometryReader { g in track(width: g.size.width) }
-                    .frame(height: 64)
-                swatch(Blueprint.darkHex)
-            }
-            HStack {
-                Text("светлее")
-                Spacer()
-                Text("темнее")
-            }
-            .font(Prism.body(12))
-            .foregroundColor(Term.dim)
-            .padding(.horizontal, 32)
+        HStack(alignment: .top, spacing: 10) {
+            swatch(Blueprint.paperLight.color())
+            TrackSlider(value: value, mark: 0.5, markColor: Blueprint.blueRGB.color(), track: trackColors,
+                        leftText: "светлее", rightText: "темнее", onDrag: onDrag, onDone: onDone)
+            swatch(Blueprint.night.color())
         }
     }
 
-    private func swatch(_ hex: UInt32) -> some View {
-        Rectangle().fill(Color(hex: hex))
+    private var trackColors: [Color] {
+        [Blueprint.paperLight.color(), Blueprint.blueRGB.color(), Blueprint.night.color()]
+    }
+
+    private func swatch(_ c: Color) -> some View {
+        Rectangle().fill(c)
             .frame(width: 22, height: 22)
             .overlay(Rectangle().strokeBorder(BlueprintShadeSlider.rim, lineWidth: 1))
-            .offset(y: 4)
-    }
-
-    private static func clamp(_ x: CGFloat, _ width: CGFloat) -> Double {
-        if width <= 0 { return 0.5 }
-        let k: CGFloat = x / width
-        return Double(min(1, max(0, k)))
-    }
-
-    private func track(width: CGFloat) -> some View {
-        let x: CGFloat = CGFloat(value) * width
-        return ZStack {
-            // метка «по умолчанию» (синий) над серединой
-            Rectangle().fill(Color(hex: Blueprint.midHex)).frame(width: 10, height: 10)
-                .overlay(Rectangle().strokeBorder(BlueprintShadeSlider.rim, lineWidth: 1))
-                .position(x: width / 2, y: 7)
-            LinearGradient(colors: BlueprintShadeSlider.colors, startPoint: .leading, endPoint: .trailing)
-                .frame(width: width, height: 28)
-                .overlay(Rectangle().strokeBorder(BlueprintShadeSlider.rim, lineWidth: 1))
-                .position(x: width / 2, y: 36)
-            Rectangle().fill(Color.white).frame(width: 4, height: 44)
-                .overlay(Rectangle().stroke(Color(hex: Blueprint.darkHex), lineWidth: 1))
-                .position(x: x, y: 36)
-        }
-        .frame(width: width, height: 64)
-        .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { v in onDrag(BlueprintShadeSlider.clamp(v.location.x, width)) }
-            .onEnded { v in onDone(BlueprintShadeSlider.clamp(v.location.x, width)) })
+            .padding(.top, 25)
     }
 }
 
-/// Вкладка «Цвет» темы «Чертёж»: светлота листа.
+/// Ползунок оттенка чертежа: радуга с насыщенностью и яркостью «синего», метка — синий 218°.
+struct BlueprintHueSlider: View {
+    let value: Double
+    let onDrag: (Double) -> Void
+    let onDone: (Double) -> Void
+
+    private static let rainbow: [Color] = (0...12).map { i in
+        Color(hex: hsvToHex(Double(i) * 30, Blueprint.blueS, Blueprint.blueV))
+    }
+
+    var body: some View {
+        TrackSlider(value: value, mark: Blueprint.defaultHue / 360, markColor: Blueprint.blue(Blueprint.defaultHue).color(),
+                    track: BlueprintHueSlider.rainbow, leftText: "оттенок", rightText: "",
+                    onDrag: onDrag, onDone: onDone)
+    }
+}
+
+/// Вкладка «Цвет» темы «Чертёж»: светлота и оттенок листа.
 struct BlueprintPanel: View {
     @AppStorage("bpShade") private var bpShade = 0.5
-    /// Значение, пока палец на ползунке.
+    @AppStorage("bpHue") private var bpHue = 218.0
+    /// Значения, пока палец на ползунке.
     @State private var live: Double?
+    @State private var liveHue: Double?
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -489,6 +496,8 @@ struct BlueprintPanel: View {
                     .fixedSize(horizontal: false, vertical: true)
                 BlueprintShadeSlider(value: live ?? Blueprint.shade, onDrag: { v in drag(v) }, onDone: { v in done(v) })
                     .padding(.top, 6)
+                Blueprint.caps("> цвет чертежа", 15).foregroundColor(Term.fg).padding(.top, 8)
+                BlueprintHueSlider(value: hueValue, onDrag: { v in dragHue(v * 360) }, onDone: { v in doneHue(v * 360) })
                 resetButton.padding(.top, 8)
             }
             .padding(12)
@@ -497,8 +506,13 @@ struct BlueprintPanel: View {
         }
     }
 
+    private var hueValue: Double {
+        let h: Double = liveHue ?? Blueprint.hue
+        return h / 360
+    }
+
     private var resetButton: some View {
-        Button { done(0.5) } label: {
+        Button { reset() } label: {
             Blueprint.caps("по умолчанию", 13).foregroundColor(Term.fg)
                 .frame(maxWidth: .infinity).frame(height: 40)
                 .background(Blueprint.bg.opacity(0.78))
@@ -517,5 +531,26 @@ struct BlueprintPanel: View {
         Blueprint.shade = v
         live = nil
         bpShade = v
+    }
+
+    private func dragHue(_ h: Double) {
+        liveHue = h
+        Blueprint.hue = h
+    }
+
+    private func doneHue(_ h: Double) {
+        Blueprint.hue = h
+        liveHue = nil
+        bpHue = h
+    }
+
+    /// Вернуть синий: светлота 0.5 и оттенок 218°.
+    private func reset() {
+        Blueprint.shade = 0.5
+        Blueprint.hue = Blueprint.defaultHue
+        live = nil
+        liveHue = nil
+        bpShade = 0.5
+        bpHue = Blueprint.defaultHue
     }
 }

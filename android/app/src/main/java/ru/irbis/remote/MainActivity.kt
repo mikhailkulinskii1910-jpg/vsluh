@@ -86,7 +86,7 @@ class MainActivity : Activity() {
         mode = runCatching { Mode.valueOf(getPreferences(MODE_PRIVATE).getString(PREF_MODE, null)!!) }.getOrDefault(Mode.BUILTIN)
         setContentView(buildUi(withSplash = savedInstanceState == null))
         hideNavBar()
-        if (Term.blueprint) paintBars()   // окно уже создано — можно менять цвет строки состояния
+        if (Term.blueprint || Term.prism) paintBars()   // окно уже создано — можно менять цвет строки состояния
 
         val f = IntentFilter().apply { addAction(ACTION_PERMISSION); addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED); addAction(UsbManager.ACTION_USB_DEVICE_DETACHED) }
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(usbReceiver, f, RECEIVER_NOT_EXPORTED) else registerReceiver(usbReceiver, f)
@@ -223,7 +223,8 @@ class MainActivity : Activity() {
     private fun buildUi(withSplash: Boolean): View {
         getPreferences(MODE_PRIVATE).let {
             Term.init(this, themeId, it.getInt(PREF_COLOR, Term.DEFAULT_COLOR), it.getBoolean(PREF_MATRIX, false),
-                it.getString(PREF_RGB, null), it.getString(PREF_HEAT, null), it.getFloat(PREF_BP, 0.5f))
+                it.getString(PREF_RGB, null), it.getString(PREF_HEAT, null), it.getFloat(PREF_BP, 0.5f), it.getFloat(PREF_BP_HUE, Blueprint.HUE),
+                floatArrayOf(it.getFloat(PREF_PR[0], 0.5f), it.getFloat(PREF_PR[1], 0.5f), it.getFloat(PREF_PR[2], 0f), it.getFloat(PREF_PR[3], 0f)))
         }
         // RGB-перелив: весь экран рисуется белым и умножается на текущий перелив
         val frame = Term.rgb?.let { RgbFrame(this, it.second).also { f -> rgbFrame = f } } ?: FrameLayout(this)
@@ -241,7 +242,7 @@ class MainActivity : Activity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 54f)
             typeface = Term.mono
             setTextColor(Term.FG)
-            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Color.parseColor("#8B6CFF") else if (Term.thermal) Heat.GLOW else Term.FG)
+            setShadowLayer(dp(10).toFloat(), 0f, 0f, if (Term.prism) Term.IRIS[0] else if (Term.thermal) Heat.GLOW else Term.FG)
             includeFontPadding = false
         }
         if (Term.blueprint) {
@@ -319,15 +320,16 @@ class MainActivity : Activity() {
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
         tabIrbis = tabButton("IRBIS") { showTab(TAB_IRBIS) }
         tabMoc = tabButton("MocTec") { showTab(TAB_MOC) }
-        tabProj = tabButton("PROJ") { showTab(TAB_PROJ) }
+        tabProj = tabButton("Проекторы") { showTab(TAB_PROJ) }.apply { if (!clean) typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 11.5f else 13f) }
         // русские подписи — другим шрифтом (в VT323 нет кириллицы) и чуть мельче, чтобы четыре вкладки поместились
         tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!clean) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
         // «Цвет»: в «Терминале» — цвет и переливы, в «Тепловизоре» — палитры
-        val colorTab = !Term.prism
+        val colorTab = true
         val tabList = mutableListOf(tabIrbis, tabMoc, tabProj, tabRoulette)
         if (colorTab) tabList += tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }.also { tabColor = it }
+        // ширина вкладки — по длине подписи: «Проекторы» шире остальных
         tabList.forEachIndexed { i, t ->
-            tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), 1f).apply { if (i > 0) leftMargin = dp(6) })
+            tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), if (t === tabProj) 1.5f else 1f).apply { if (i > 0) leftMargin = dp(5) })
         }
         root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
 
@@ -340,7 +342,7 @@ class MainActivity : Activity() {
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         if (colorTab) {
-            colorPanel = if (Term.thermal) buildHeatPanel() else if (Term.blueprint) buildShadePanel() else buildColorPanel()
+            colorPanel = if (Term.thermal) buildHeatPanel() else if (Term.blueprint) buildShadePanel() else if (Term.prism) buildPrismPanel() else buildColorPanel()
             root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         }
         val prefs = getPreferences(MODE_PRIVATE)
@@ -381,15 +383,15 @@ class MainActivity : Activity() {
     private val versionName get() = packageManager.getPackageInfo(packageName, 0).versionName
 
     /** Сетка кнопок пульта (12 штук на один экран, как в IrCode Finder). */
-    private fun keyGrid(keys: List<Pair<String, Long>>): GridLayout {
-        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = false }
-        val gap = dp(5)
-        val rowH = ((resources.configuration.screenHeightDp - 300) / 6 - 10).coerceIn(60, 110)
+    private fun keyGrid(keys: List<Pair<String, Long>>, cols: Int = 2): GridLayout {
+        val grid = GridLayout(this).apply { columnCount = cols; useDefaultMargins = false }
+        val gap = dp(if (cols > 2) 3 else 5)
+        val rowH = if (cols > 2) 64 else ((resources.configuration.screenHeightDp - 300) / 6 - 10).coerceIn(60, 110)
         keys.forEachIndexed { i, (label, code) ->
             val k = KeyView(this, label, i, code, inverted = label == "POWER")
             k.setOnTouchListener { v, e -> onKeyTouch(v as KeyView, e, label, code) }
             keyViews += k
-            grid.addView(k, GridLayout.LayoutParams(GridLayout.spec(i / 2), GridLayout.spec(i % 2, 1f)).apply {
+            grid.addView(k, GridLayout.LayoutParams(GridLayout.spec(i / cols), GridLayout.spec(i % cols, 1f)).apply {
                 width = 0; height = dp(rowH)
                 setMargins(gap, gap, gap, gap)
             })
@@ -430,7 +432,7 @@ class MainActivity : Activity() {
         typeface = Term.mono
         isSingleLine = true
         includeFontPadding = false
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 20f)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 11.5f else if (clean) 13f else 20f)   // пять вкладок в ряд
         gravity = Gravity.CENTER
         setOnClickListener { glitch(it); onClick() }
     }
@@ -453,8 +455,8 @@ class MainActivity : Activity() {
         subtitle.text = when (tab) {
             TAB_MOC -> "MocTec :: MOSTEH :: NEC 04FB"
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
-            TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${it.source}" }
-            TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else "terminal :: phosphor color"
+            TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
+            TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else if (Term.prism) "призма :: стекло и свет" else "terminal :: phosphor color"
             else -> "#500202 :: IRBIS :: NEC 38kHz"
         }
         getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
@@ -469,17 +471,20 @@ class MainActivity : Activity() {
      * Вкладка PROJ: пульты проекторов NEC, Epson, InFocus, BenQ. Сверху — выбор марки, ниже — 12 кнопок её пульта.
      * Выключение проекторы спрашивают подтверждением — POWER нажимается дважды.
      */
+    /** Номера пультов коротко: «#1803 +3». */
+    private fun projSource(p: Projector) = p.source.split(", ").let { if (it.size > 1) "${it[0]} +${it.size - 1}" else it[0] }
+
     private fun buildProjPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         projIdx = getPreferences(MODE_PRIVATE).getInt(PREF_PROJ, 0).coerceIn(0, PROJECTORS.size - 1)
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
-        val grids = PROJECTORS.map { keyGrid(it.keys) }
+        val grids = PROJECTORS.map { keyGrid(it.keys, cols = 3) }
         val chipViews = ArrayList<TextView>()
         fun select(i: Int) {
             projIdx = i
             chipViews.forEachIndexed { k, c -> styleTab(c, k == i) }
             grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE }
-            subtitle.text = PROJECTORS[i].let { "проектор :: ${it.brand} :: ${it.source}" }
+            subtitle.text = PROJECTORS[i].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
             getPreferences(MODE_PRIVATE).edit().putInt(PREF_PROJ, i).apply()
         }
         PROJECTORS.forEachIndexed { i, pr ->
@@ -618,7 +623,7 @@ class MainActivity : Activity() {
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(Term.BG))
         @Suppress("DEPRECATION")
         window.statusBarColor = Term.BG
-        val light = Term.FG != Color.WHITE
+        val light = Term.blueprint && Term.FG != Color.WHITE
         if (Build.VERSION.SDK_INT >= 30) window.insetsController?.setSystemBarsAppearance(
             if (light) android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0,
             android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
@@ -634,29 +639,73 @@ class MainActivity : Activity() {
      */
     private fun buildShadePanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val prefs = getPreferences(MODE_PRIVATE)
         p.addView(text("> оттенок чертежа", 22f, Term.FG).apply { typeface = Term.ru })
-        p.addView(text("Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж.", 13f, Term.DIM)
+        p.addView(text("Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж. Ниже — цвет чертежа.", 13f, Term.DIM)
             .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(14)) })
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; background = Term.boxBg(this@MainActivity); setPadding(dp(12), dp(16), dp(12), dp(10))
+        val shade = GradientSlider(this, Blueprint.shadeTrack(), Blueprint.shade, 0.5f, Blueprint.withHue(Color.parseColor("#2F6BD8"), Blueprint.hue),
+            Color.WHITE to Color.BLACK) { v, final ->
+            if (final) { prefs.edit().putFloat(PREF_BP, v).putString(PREF_TAB, TAB_COLOR).commit(); recreate() }
+            else Blueprint.setShade(v)       // фон меняется сразу, кнопки — после отпускания
         }
-        box.addView(ShadeSlider(this, Blueprint.shade) { v, final ->
-            if (final) {
-                getPreferences(MODE_PRIVATE).edit().putFloat(PREF_BP, v).putString(PREF_TAB, TAB_COLOR).commit()
-                recreate()
-            } else Blueprint.setShade(v)       // фон меняется сразу, кнопки — после отпускания
-        }, LinearLayout.LayoutParams(-1, dp(64)))
-        val labels = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        labels.addView(text("светлее", 13f, Term.DIM).apply { typeface = Term.ru }, LinearLayout.LayoutParams(0, -2, 1f))
-        labels.addView(text("темнее", 13f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.END }, LinearLayout.LayoutParams(0, -2, 1f))
-        box.addView(labels)
-        p.addView(box, LinearLayout.LayoutParams(-1, -2))
+        p.addView(sliderBox(shade, "светлее", "темнее"), LinearLayout.LayoutParams(-1, -2))
+        p.addView(text("> цвет чертежа", 22f, Term.FG).apply { typeface = Term.ru; setPadding(0, dp(16), 0, dp(8)) })
+        val hue = GradientSlider(this, Blueprint.hueTrack(), Blueprint.hue / 360f, Blueprint.HUE / 360f, Color.parseColor("#2F6BD8")) { v, final ->
+            if (final) { prefs.edit().putFloat(PREF_BP_HUE, v * 360f).putString(PREF_TAB, TAB_COLOR).commit(); recreate() }
+            else { Blueprint.setShade(Blueprint.shade, v * 360f); shade.setTrack(Blueprint.shadeTrack()) }
+        }
+        p.addView(sliderBox(hue, "оттенок", ""), LinearLayout.LayoutParams(-1, -2))
         p.addView(mocButton("[по умолчанию — синий]") {
-            getPreferences(MODE_PRIVATE).edit().putFloat(PREF_BP, 0.5f).putString(PREF_TAB, TAB_COLOR).commit()
+            prefs.edit().putFloat(PREF_BP, 0.5f).putFloat(PREF_BP_HUE, Blueprint.HUE).putString(PREF_TAB, TAB_COLOR).commit()
             recreate()
         }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(12) })
         return p
     }
+
+    /** Плашка с ползунком и подписями под ним (слева и справа). */
+    private fun sliderBox(slider: View, left: String, right: String): View {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; background = Term.boxBg(this@MainActivity); setPadding(dp(12), dp(14), dp(12), dp(8))
+        }
+        box.addView(slider, LinearLayout.LayoutParams(-1, dp(60)))
+        val labels = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        labels.addView(text(left, 13f, Term.DIM).apply { typeface = Term.ru }, LinearLayout.LayoutParams(0, -2, 1f))
+        labels.addView(text(right, 13f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.END }, LinearLayout.LayoutParams(0, -2, 1f))
+        box.addView(labels)
+        return box
+    }
+
+    /** Вкладка «Цвет» в «Призме»: яркость переливов, прозрачность стекла, сдвиг радуги и цвет фона. Применяется при отпускании. */
+    private fun buildPrismPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val prefs = getPreferences(MODE_PRIVATE)
+        p.addView(text("стекло и свет", 22f, Term.FG).apply { typeface = Term.mono; setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f) })
+        p.addView(text("Яркость переливов, прозрачность стекла, цвета радуги и цвет фона.", 13f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(0, dp(4), 0, dp(8)) })
+        val defaults = floatArrayOf(0.5f, 0.5f, 0f, 0f)
+        val iris0 = intArrayOf(Color.parseColor("#8B6CFF"), Color.parseColor("#3FE0FF"), Color.parseColor("#62FFB8"),
+            Color.parseColor("#FFE66B"), Color.parseColor("#FF8A5C"), Color.parseColor("#FF5FD8"))
+        val tracks = listOf(
+            intArrayOf(Color.parseColor("#141020")) + Term.IRIS.take(6),
+            intArrayOf(Color.parseColor("#202028"), Color.parseColor("#D8D8E0")),
+            IntArray(13) { Color.HSVToColor(floatArrayOf(it * 30f % 360f, 0.6f, 1f)) },
+            intArrayOf(Color.parseColor("#07060B")) + IntArray(12) { Color.HSVToColor(floatArrayOf(it * 30f + 30f, 0.75f, 0.22f)) })
+        val titles = listOf("яркость" to ("тусклее" to "ярче"), "прозрачность" to ("прозрачнее" to "матовее"),
+            "цвета" to ("сдвиг радуги" to ""), "цвет фона" to ("чёрный" to "цветной"))
+        titles.forEachIndexed { i, (title, lr) ->
+            p.addView(text(title, 16f, Term.FG).apply { typeface = Term.ru; setPadding(dp(2), dp(10), 0, dp(6)) })
+            val sl = GradientSlider(this, tracks[i], prefs.getFloat(PREF_PR[i], defaults[i]), defaults[i], iris0[i]) { v, final ->
+                if (final) { prefs.edit().putFloat(PREF_PR[i], v).putString(PREF_TAB, TAB_COLOR).commit(); recreate() }
+            }
+            p.addView(sliderBox(sl, lr.first, lr.second), LinearLayout.LayoutParams(-1, -2))
+        }
+        p.addView(mocButton("[по умолчанию]") {
+            val e = prefs.edit(); PREF_PR.forEachIndexed { i, k -> e.putFloat(k, defaults[i]) }
+            e.putString(PREF_TAB, TAB_COLOR).commit(); recreate()
+        }, LinearLayout.LayoutParams(-1, dp(54)).apply { topMargin = dp(12) })
+        return p
+    }
+
 
     /** Вкладка «Цвет» в «Тепловизоре»: четыре популярные палитры, своего цвета нет. */
     private fun buildHeatPanel(): View {
@@ -1026,6 +1075,9 @@ class MainActivity : Activity() {
         private const val PREF_RGB_OPEN = "rgb_open"
         private const val PREF_HEAT = "heat"
         private const val PREF_BP = "bp_shade"
+        private const val PREF_BP_HUE = "bp_hue"
+        /** Ползунки «Призмы»: яркость, прозрачность, сдвиг радуги, цвет фона. */
+        private val PREF_PR = arrayOf("pr_bright", "pr_frost", "pr_hue", "pr_bg")
         private const val PREF_TAB = "tab"
         private const val TAB_IRBIS = "irbis"
         private const val TAB_MOC = "moc"

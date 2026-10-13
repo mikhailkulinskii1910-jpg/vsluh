@@ -18,10 +18,26 @@ import kotlin.math.sin
  * которую медленно «сканирует» светлая полоса, и штамп чертежа в углу.
  */
 object Blueprint {
-    private val PAPER = Color.parseColor("#F2F5FA")
-    private val BLUE = Color.parseColor("#1A4A9E")
-    private val NIGHT = Color.parseColor("#05070D")
-    private val NAVY_INK = Color.parseColor("#0E2A66")
+    private val PAPER0 = Color.parseColor("#F2F5FA")
+    private val BLUE0 = Color.parseColor("#1A4A9E")
+    private val NIGHT0 = Color.parseColor("#05070D")
+    private val NAVY0 = Color.parseColor("#0E2A66")
+    /** Оттенок синего по умолчанию, градусы. */
+    const val HUE = 218f
+    /** Оттенок чертежа (ползунок «цвет чертежа»): от него строятся синий, бумага, ночь и тёмные чернила. */
+    var hue = HUE; private set
+    private var BLUE = BLUE0; private var PAPER = PAPER0; private var NIGHT = NIGHT0; private var NAVY_INK = NAVY0
+
+    /** Цвет c с оттенком h (насыщенность и яркость сохраняются). */
+    fun withHue(c: Int, h: Float): Int {
+        val hsv = FloatArray(3).also { Color.colorToHSV(c, it) }
+        hsv[0] = ((h % 360f) + 360f) % 360f
+        return Color.HSVToColor(hsv)
+    }
+    /** Дорожка ползунка светлоты при текущем оттенке: бумага → синий → ночь. */
+    fun shadeTrack() = intArrayOf(PAPER, BLUE, NIGHT)
+    /** Дорожка ползунка оттенка: «синие» всех оттенков по кругу. */
+    fun hueTrack() = IntArray(13) { withHue(BLUE0, it * 30f) }
 
     /** Светлота чертежа с ползунка: 0 — светокопия (белая бумага, синие линии), 0.5 — синий, 1 — ночной. */
     var shade = 0.5f; private set
@@ -38,8 +54,11 @@ object Blueprint {
         (Color.green(a) + (Color.green(b) - Color.green(a)) * k).toInt(),
         (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * k).toInt())
 
-    fun setShade(v: Float) {
+    fun setShade(v: Float, h: Float = hue) {
         shade = v.coerceIn(0f, 1f)
+        hue = h
+        BLUE = withHue(BLUE0, h); NAVY_INK = withHue(NAVY0, h)
+        PAPER = mix(PAPER0, BLUE, 0.04f); NIGHT = mix(NIGHT0, BLUE, 0.06f)
         BG = if (shade < 0.5f) mix(PAPER, BLUE, shade / 0.5f) else mix(BLUE, NIGHT, (shade - 0.5f) / 0.5f)
         val lum = (0.2126f * Color.red(BG) + 0.7152f * Color.green(BG) + 0.0722f * Color.blue(BG)) / 255f
         INK = if (lum > 0.5f) NAVY_INK else Color.WHITE
@@ -127,44 +146,51 @@ object Blueprint {
 }
 
 /**
- * Ползунок светлоты чертежа: ⬜ ——|—🟦——— ⬛. Дорожка — градиент бумага → синий → ночь,
- * синяя метка — значение по умолчанию, бегунок — вертикальная черта.
- * [onPick]: при перетаскивании final = false, при отпускании — true.
+ * Ползунок с дорожкой-градиентом: бегунок «|», над дорожкой — квадратик-метка значения по умолчанию,
+ * по краям (если заданы) — квадратики ⬜ ⬛. [onPick]: при перетаскивании final = false, при отпускании — true.
  */
-class ShadeSlider(c: android.content.Context, initial: Float, private val onPick: (Float, Boolean) -> Unit) : android.view.View(c) {
+class GradientSlider(
+    c: android.content.Context, private var colors: IntArray, initial: Float,
+    private val defaultAt: Float?, private val defaultColor: Int, private val ends: Pair<Int, Int>? = null,
+    private val onPick: (Float, Boolean) -> Unit,
+) : android.view.View(c) {
     private val d = c.resources.displayMetrics.density
     private var v = initial
     private val track = Paint(Paint.ANTI_ALIAS_FLAG)
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val box = RectF()
-    private val sq = 20f   // сторона квадратиков ⬜ ⬛, dp
-    private fun left() = (sq + 10) * d
-    private fun right() = width - (sq + 10) * d
+    private val sq = 20f   // сторона квадратиков по краям, dp
+    private fun left() = if (ends != null) (sq + 10) * d else 6 * d
+    private fun right() = width - left()
+
+    fun setTrack(cols: IntArray) { colors = cols; onSizeChanged(width, height, width, height); invalidate() }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        track.shader = LinearGradient(left(), 0f, right(), 0f,
-            intArrayOf(Color.parseColor("#F2F5FA"), Color.parseColor("#1A4A9E"), Color.parseColor("#05070D")), null, Shader.TileMode.CLAMP)
+        track.shader = LinearGradient(left(), 0f, right(), 0f, colors, null, Shader.TileMode.CLAMP)
     }
 
     override fun onDraw(canvas: Canvas) {
         val cy = height / 2f + 6 * d; val th = 26 * d
-        // ⬜ и ⬛ по краям
-        val s = sq * d
-        p.style = Paint.Style.FILL; p.color = Color.WHITE
-        canvas.drawRect(0f, cy - s / 2, s, cy + s / 2, p)
-        p.color = Color.BLACK; canvas.drawRect(width - s, cy - s / 2, width.toFloat(), cy + s / 2, p)
-        p.style = Paint.Style.STROKE; p.strokeWidth = d; p.color = Term.FG
-        canvas.drawRect(0f, cy - s / 2, s, cy + s / 2, p); canvas.drawRect(width - s, cy - s / 2, width.toFloat(), cy + s / 2, p)
+        p.strokeWidth = d
+        ends?.let { (a, b) ->
+            val s = sq * d
+            p.style = Paint.Style.FILL; p.color = a; canvas.drawRect(0f, cy - s / 2, s, cy + s / 2, p)
+            p.color = b; canvas.drawRect(width - s, cy - s / 2, width.toFloat(), cy + s / 2, p)
+            p.style = Paint.Style.STROKE; p.color = Term.FG
+            canvas.drawRect(0f, cy - s / 2, s, cy + s / 2, p); canvas.drawRect(width - s, cy - s / 2, width.toFloat(), cy + s / 2, p)
+        }
         // дорожка
         box.set(left(), cy - th / 2, right(), cy + th / 2)
         canvas.drawRect(box, track)
-        canvas.drawRect(box, p)
-        // 🟦 — синий по умолчанию, над серединой
-        val mx = (left() + right()) / 2; val ms = 11 * d
-        p.style = Paint.Style.FILL; p.color = Color.parseColor("#2F6BD8")
-        canvas.drawRect(mx - ms / 2, box.top - ms - 4 * d, mx + ms / 2, box.top - 4 * d, p)
-        p.style = Paint.Style.STROKE; p.color = Color.WHITE
-        canvas.drawRect(mx - ms / 2, box.top - ms - 4 * d, mx + ms / 2, box.top - 4 * d, p)
+        p.style = Paint.Style.STROKE; p.color = Term.FG; canvas.drawRect(box, p)
+        // метка значения по умолчанию (🟦 у «Чертежа»)
+        defaultAt?.let { at ->
+            val mx = left() + (right() - left()) * at; val ms = 11 * d
+            p.style = Paint.Style.FILL; p.color = defaultColor
+            canvas.drawRect(mx - ms / 2, box.top - ms - 4 * d, mx + ms / 2, box.top - 4 * d, p)
+            p.style = Paint.Style.STROKE; p.color = Color.WHITE
+            canvas.drawRect(mx - ms / 2, box.top - ms - 4 * d, mx + ms / 2, box.top - 4 * d, p)
+        }
         // бегунок «|»
         val x = left() + (right() - left()) * v
         p.style = Paint.Style.FILL
@@ -174,7 +200,7 @@ class ShadeSlider(c: android.content.Context, initial: Float, private val onPick
 
     override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
         v = ((e.x - left()) / (right() - left())).coerceIn(0f, 1f)
-        if (kotlin.math.abs(v - 0.5f) < 0.025f) v = 0.5f          // «прилипает» к синему
+        defaultAt?.let { if (kotlin.math.abs(v - it) < 0.025f) v = it }      // «прилипает» к значению по умолчанию
         invalidate()
         parent?.requestDisallowInterceptTouchEvent(true)
         when (e.actionMasked) {

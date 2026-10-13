@@ -39,7 +39,7 @@ enum Term {
     }
 
     static var bg: Color {
-        if prism { return Color(hex: 0x07060B) }
+        if prism { return Color(hex: Prism.bgHex) }
         if thermal { return Color(hex: Heat.cur.bg) }
         if blueprint { return Blueprint.bg }
         return .black
@@ -345,6 +345,8 @@ struct KeyView: View {
     let revealDelay: Double
     let onDown: () -> Void
     let onUp: () -> Void
+    /// Кнопка в прокручиваемой сетке («Проекторы»): нажатие через ButtonStyle, чтобы не мешать прокрутке.
+    var scrollable = false
 
     @State private var down = false
     @State private var shown = ""
@@ -353,25 +355,60 @@ struct KeyView: View {
     @State private var beam: CGFloat = 0
     @State private var beamOn = false
     @State private var pressedAt = Date.distantPast
+    /// В прокручиваемой сетке: нажатие уже пришло через isPressed.
+    @State private var sawPress = false
 
     var body: some View {
+        interactive
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
+            .onAppear { reveal() }
+    }
+
+    private var face: some View {
         Group {
             if Term.prism { prismFace } else if Term.thermal { thermalFace } else if Term.blueprint { blueprintFace } else { terminalFace }
         }
         .scaleEffect(down ? 0.97 : 1)
         .opacity(visible ? 1 : 0)
         .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
-            .onChanged { v in
-                if !down {
-                    RatSim.shared.scare(at: v.startLocation)   // крысы убегают от пальца
-                    pressDown()
+    }
+
+    @ViewBuilder private var interactive: some View {
+        if scrollable {
+            Button(action: { tapped() }) { face }
+                .buttonStyle(PressReport(onPress: { p in scrollPress(p) }))
+        } else {
+            face.gesture(DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                .onChanged { v in
+                    if !down {
+                        RatSim.shared.scare(at: v.startLocation)   // крысы убегают от пальца
+                        pressDown()
+                    }
                 }
-            }
-            .onEnded { _ in down = false; onUp() })
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(.isButton)
-        .onAppear { reveal() }
+                .onEnded { _ in down = false; onUp() })
+        }
+    }
+
+    /// Нажатие/отпускание кнопки в прокручиваемой сетке.
+    private func scrollPress(_ pressed: Bool) {
+        if pressed {
+            sawPress = true
+            if !down { pressDown() }
+        } else if down {
+            down = false
+            onUp()
+        }
+    }
+
+    /// Очень быстрый тап может не показать isPressed — тогда передаём по действию кнопки.
+    private func tapped() {
+        if !sawPress {
+            pressDown()
+            down = false
+            onUp()
+        }
+        sawPress = false
     }
 
     /// «Призма»: жидкое стекло, стеклянный текст, после нажатия — перелив и расслоение текста на красный и бирюзовый.

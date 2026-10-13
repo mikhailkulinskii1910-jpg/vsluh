@@ -24,6 +24,12 @@ struct ContentView: View {
     @AppStorage("rgb") private var rgb = ""
     @AppStorage("heat") private var heat = "ironbow"
     @AppStorage("bpShade") private var bpShade = 0.5
+    @AppStorage("bpHue") private var bpHue = 218.0
+    // настройки «Призмы»: яркость, матовость стекла, сдвиг радуги, цвет фона
+    @AppStorage("prBright") private var prBright = 0.5
+    @AppStorage("prFrost") private var prFrost = 0.5
+    @AppStorage("prHue") private var prHue = 0.0
+    @AppStorage("prBg") private var prBg = 0.0
     /// Марка проектора во вкладке PROJ: 0 NEC, 1 Epson, 2 InFocus, 3 BenQ.
     @AppStorage("projBrand") private var projBrand = 0
     /// Где на экране область пульта — туда кладётся панель «Цвет» (поверх RGB-перелива).
@@ -58,7 +64,9 @@ struct ContentView: View {
 
     /// Ключ перестройки экрана: тема, цвет терминала, перелив, «Матрица», палитра тепловизора.
     private var screenKey: String {
-        let parts: [String] = [theme, String(termColor), rgb, matrix ? "m" : "-", heat, String(bpShade)]
+        let base: [String] = [theme, String(termColor), rgb, matrix ? "m" : "-", heat]
+        let tune: [Double] = [bpShade, bpHue, prBright, prFrost, prHue, prBg]
+        let parts: [String] = base + tune.map { String($0) }
         return parts.joined(separator: "|")
     }
 
@@ -98,6 +106,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 2) {
                 titleView()
                 Text(remoteSubtitle).font(subtitleFont).foregroundColor(Term.dim)
+                    .lineLimit(1).minimumScaleFactor(0.6)
                 Text(model.modeLine).font(Term.ru(14)).foregroundColor(model.routeOK || model.mode == .http ? Term.fg : Term.dim)
                     .lineLimit(1).minimumScaleFactor(0.7).padding(.top, 4)
             }
@@ -129,20 +138,45 @@ struct ContentView: View {
         }
     }
 
+    /// Все кнопки проектора: 3 колонки, сетка прокручивается.
+    private var projGrid: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10),
+                                GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                if ready {
+                    ForEach(Array(currentKeys.enumerated()), id: \.offset) { i, k in projKey(i, k.label, k.code) }
+                }
+            }
+            .padding(6)
+            .padding(.bottom, 12)
+            .id(gridKey)
+        }
+    }
+
+    private func projKey(_ i: Int, _ label: String, _ code: UInt32) -> some View {
+        let delay: Double = 0.04 * Double(min(i, 15))
+        return KeyView(index: i, label: label, code: code, inverted: label == "POWER",
+                       revealDelay: delay,
+                       onDown: { model.press(label, code) },
+                       onUp: { model.release() },
+                       scrollable: true)
+            .frame(height: 64)
+    }
+
     /// Пульт на экране (для проекторов — вместе с маркой).
     private var gridKey: String { remote == "proj" ? "proj" + String(projIndex) : remote }
 
     /// Выбранная марка проектора (индекс с защитой от мусора в настройках).
     var projIndex: Int { min(max(projBrand, 0), PROJ_BRANDS.count - 1) }
 
-    /// Вкладка PROJ: чипы марок, подсказка про выключение, сетка 12 кнопок.
+    /// Вкладка «Проекторы»: чипы марок, подсказка про выключение, все кнопки пульта.
     private var projArea: some View {
         VStack(alignment: .leading, spacing: 8) {
             brandChips
             Text("Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.")
                 .font(Term.ru(13)).foregroundColor(Term.dim)
                 .lineLimit(2).minimumScaleFactor(0.8)
-            keyGrid
+            projGrid
         }
     }
 
@@ -201,6 +235,8 @@ struct ContentView: View {
     @ViewBuilder private func colorPanel() -> some View {
         if Term.thermal {
             HeatPanel()
+        } else if Term.prism {
+            PrismPanel()
         } else if Term.blueprint {
             BlueprintPanel()
         } else {
@@ -209,7 +245,7 @@ struct ContentView: View {
     }
 
     /// Вкладка «Цвет» есть в «Терминале», «Тепловизоре» и «Чертеже» (не в «Призме»).
-    private var hasColorTab: Bool { theme != "prism" }
+    private var hasColorTab: Bool { true }
     private var colorTab: Bool { remote == "color" && hasColorTab }
     private var showPanel: Bool { colorTab && ready && !splash && panelFrame.width > 1 }
 }
@@ -359,12 +395,31 @@ extension ContentView {
 
     /// Вкладки IRBIS / MocTec (и «Цвет» в «Терминале» и «Тепловизоре») над кнопками.
     func remoteTabs() -> some View {
+        GeometryReader { g in tabRow(width: g.size.width) }
+            .frame(height: 40)
+    }
+
+    /// Вкладки: id, подпись и вес ширины («Проекторы» шире остальных).
+    private static let tabs: [(id: String, title: String, weight: CGFloat)] = [
+        ("irbis", "IRBIS", 1), ("moc", "MocTec", 1), ("proj", "Проекторы", 1.45), ("color", "Цвет", 1),
+    ]
+
+    private func tabRow(width: CGFloat) -> some View {
         HStack(spacing: 8) {
-            remoteTab("irbis", "IRBIS")
-            remoteTab("moc", "MocTec")
-            remoteTab("proj", "PROJ")
-            if hasColorTab { remoteTab("color", "Цвет") }
+            ForEach(ContentView.tabs.indices, id: \.self) { i in
+                remoteTab(ContentView.tabs[i].id, ContentView.tabs[i].title)
+                    .frame(width: tabWidth(i, total: width))
+            }
         }
+    }
+
+    /// Ширина вкладки пропорционально её весу.
+    private func tabWidth(_ i: Int, total: CGFloat) -> CGFloat {
+        var sum: CGFloat = 0
+        for t in ContentView.tabs { sum += t.weight }
+        let gaps: CGFloat = 8 * CGFloat(ContentView.tabs.count - 1)
+        let free: CGFloat = max(0, total - gaps)
+        return free * ContentView.tabs[i].weight / sum
     }
 
     /// Какая вкладка подсвечена: «Цвет» в теме без неё — значит пульт IRBIS.
@@ -375,15 +430,19 @@ extension ContentView {
         return Button { remote = id } label: { tabLabel(title, on: on) }
     }
 
-    /// Шрифт вкладки: в VT323 нет кириллицы — «Цвет» системным моноширинным.
+    /// Русская подпись вкладки — свой шрифт: в VT323 кириллицы нет.
+    private func isRu(_ title: String) -> Bool { title == "Цвет" || title == "Проекторы" }
+
+    /// Шрифт вкладки: русские подписи — системным моноширинным 13.
     private func tabFont(_ title: String) -> Font {
-        if title == "Цвет" && (Term.terminal || Term.thermal) { return Term.ru(16) }
+        if isRu(title) && (Term.terminal || Term.thermal) { return Term.ru(13) }
         return Term.mono(22)
     }
 
     @ViewBuilder private func tabLabel(_ title: String, on: Bool, height: CGFloat = 40) -> some View {
         if Term.prism {
-            Text(title).font(Prism.display(15)).foregroundColor(on ? Prism.ink : Term.fg)
+            Text(title).font(Prism.display(isRu(title) ? 11 : 15)).foregroundColor(on ? Prism.ink : Term.fg)
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity).frame(height: height)
                 .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
         } else if Term.thermal {
@@ -392,7 +451,8 @@ extension ContentView {
                 .background(thermalTabFill(on))
                 .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
         } else if Term.blueprint {
-            Blueprint.caps(title, 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
+            Blueprint.caps(title, isRu(title) ? 11 : 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
+                .lineLimit(1).minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity).frame(height: height)
                 .background(on ? Blueprint.ink : Blueprint.bg.opacity(0.78))
                 .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
