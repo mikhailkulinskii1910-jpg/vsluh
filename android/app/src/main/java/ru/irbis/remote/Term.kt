@@ -1239,7 +1239,7 @@ class SplashView(c: Context, private val bootLines: List<String>, private val on
         // 3. надпись
         if (t > 1500) {
             val p = ((t - 1500) / 450f).coerceIn(0f, 1f)
-            val word = Term.scramble("krisa", p, rnd)
+            val word = Term.scramble("krisa37™", p, rnd)
             val by = restY + rh * 0.5f + 80 * d
             if (Term.prism) {
                 // стеклянное слово: радужная тень-свечение, тело светлое сверху, сиреневое снизу, светлый контур
