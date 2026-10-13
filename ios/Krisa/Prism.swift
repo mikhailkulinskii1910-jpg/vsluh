@@ -14,8 +14,51 @@ extension Color {
  */
 enum Prism {
     /// Фиолетовый → бирюзовый → мятный → жёлтый → коралловый → розовый.
-    static let irisHex: [UInt32] = [0x8B6CFF, 0x3FE0FF, 0x62FFB8, 0xFFE66B, 0xFF8A5C, 0xFF5FD8, 0x8B6CFF]
-    static let iris: [Color] = irisHex.map { Color(hex: $0) }
+    static let irisBase: [UInt32] = [0x8B6CFF, 0x3FE0FF, 0x62FFB8, 0xFFE66B, 0xFF8A5C, 0xFF5FD8, 0x8B6CFF]
+
+    // Настройки вкладки «Цвет» (0…1): яркость переливов, матовость стекла, сдвиг радуги, цвет фона.
+    static var bright: Double = Prism.load("prBright", 0.5)
+    static var frost: Double = Prism.load("prFrost", 0.5)
+    static var hueShift: Double = Prism.load("prHue", 0)
+    static var bgShade: Double = Prism.load("prBg", 0)
+
+    private static func load(_ key: String, _ def: Double) -> Double {
+        let n: NSNumber? = UserDefaults.standard.object(forKey: key) as? NSNumber
+        let v: Double = n?.doubleValue ?? def
+        return min(1, max(0, v))
+    }
+
+    /// Множитель свечения фона: 0.25 … 1.75 (0.5 → 1).
+    static var glow: Double { 0.25 + 1.5 * bright }
+    /// Множитель матовости стекла: 0 … 2 (0.5 → 1).
+    static var frostK: Double { 2 * frost }
+    /// Альфа, умноженная на свечение (не больше 1).
+    static func lit(_ a: Double) -> Double { min(1, a * glow) }
+    /// Альфа, умноженная на матовость стекла (не больше 1).
+    static func frosted(_ a: Double) -> Double { min(1, a * frostK) }
+
+    /// Фон: почти чёрный или тёмный тон выбранного цвета.
+    static var bgHex: UInt32 {
+        if bgShade <= 0.001 { return 0x07060B }
+        return hsvToHex(bgShade * 360, 0.75, 0.10 + 0.12 * bgShade)
+    }
+
+    /// Радуга «Призмы», повёрнутая по оттенку на hueShift·360°.
+    private static var irisCache: (shift: Double, hex: [UInt32])?
+    static var irisHex: [UInt32] {
+        if let c = irisCache, c.shift == hueShift { return c.hex }
+        let out: [UInt32] = irisBase.map { rotateHue($0, hueShift * 360) }
+        irisCache = (hueShift, out)
+        return out
+    }
+
+    private static func rotateHue(_ hex: UInt32, _ deg: Double) -> UInt32 {
+        if deg == 0 { return hex }
+        let sv: (Double, Double) = satValOf(hex)
+        return hsvToHex(hueOf(hex) + deg, sv.0, sv.1)
+    }
+
+    static var iris: [Color] { irisHex.map { Color(hex: $0) } }
     static func iris(_ a: Double) -> [Color] { irisHex.map { Color(hex: $0, alpha: a) } }
     static let ink = Color(hex: 0x120E1F)
 
@@ -31,30 +74,46 @@ enum Prism {
         [(0.11, 0.07, 0, 1.3), (0.07, 0.13, 2, 0.4), (0.09, 0.05, 4, 2.2), (0.05, 0.1, 1, 3.1), (0.13, 0.09, 3, 5)]
 
     /// Веер лучей: узкие цветные полосы через тёмные промежутки.
-    private static let rays: Gradient = {
+    private static var rays: Gradient {
         var stops: [Gradient.Stop] = []
+        let hex: [UInt32] = irisHex
+        let a1: Double = lit(0.13)
+        let a2: Double = lit(0.085)
         let n = 14
         for i in 0..<n {
-            let b = Double(i) / Double(n), st = 1 / Double(n)
+            let b: CGFloat = CGFloat(i) / CGFloat(n)
+            let st: CGFloat = 1 / CGFloat(n)
             stops.append(.init(color: .clear, location: b))
-            stops.append(.init(color: Color(hex: irisHex[i % 6], alpha: 0.13), location: b + st * 0.18))
-            stops.append(.init(color: Color(hex: irisHex[(i + 1) % 6], alpha: 0.085), location: b + st * 0.32))
+            stops.append(.init(color: Color(hex: hex[i % 6], alpha: a1), location: b + st * 0.18))
+            stops.append(.init(color: Color(hex: hex[(i + 1) % 6], alpha: a2), location: b + st * 0.32))
             stops.append(.init(color: .clear, location: b + st * 0.5))
         }
         stops.append(.init(color: .clear, location: 1))
         return Gradient(stops: stops)
-    }()
+    }
 
-    private static let sheen = Gradient(colors: [.clear, Color(hex: irisHex[0], alpha: 0.12), Color(hex: irisHex[1], alpha: 0.18),
-                                                 Color(hex: irisHex[2], alpha: 0.16), Color(hex: irisHex[3], alpha: 0.13),
-                                                 Color(hex: irisHex[4], alpha: 0.12), Color(hex: irisHex[5], alpha: 0.1), .clear])
+    private static var sheen: Gradient {
+        let hex: [UInt32] = irisHex
+        let alphas: [Double] = [0.12, 0.18, 0.16, 0.13, 0.12, 0.1]
+        var colors: [Color] = [.clear]
+        for i in 0..<6 { colors.append(Color(hex: hex[i], alpha: lit(alphas[i]))) }
+        colors.append(.clear)
+        return Gradient(colors: colors)
+    }
 
     private static func ui(_ hex: UInt32, _ a: CGFloat) -> UIColor {
         UIColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: a)
     }
 
     /// Вращающаяся стеклянная призма: бруски-лучи вокруг тёмной сферы. Рисуется один раз, потом только вращается.
-    static let burstImage: UIImage = makeBurst(min(screen.width, screen.height) * 1.05)
+    /// Перерисовывается только при сдвиге радуги.
+    private static var burstCache: (shift: Double, image: UIImage)?
+    static var burstImage: UIImage {
+        if let c = burstCache, c.shift == hueShift { return c.image }
+        let img: UIImage = makeBurst(min(screen.width, screen.height) * 1.05)
+        burstCache = (hueShift, img)
+        return img
+    }
 
     /// Тот же детерминированный узор, что в Android и веб-версии.
     private static func makeBurst(_ side: CGFloat) -> UIImage {
@@ -63,6 +122,7 @@ enum Prism {
         return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: fmt).image { rc in
             let x = rc.cgContext
             let R = side / 2
+            let irisHex: [UInt32] = Prism.irisHex
             var seed: UInt64 = 20251009
             func rnd() -> CGFloat { seed = (seed &* 1103515245 &+ 12345) & 0x7fffffff; return CGFloat(seed) / 2147483648 }
             let cs = CGColorSpaceCreateDeviceRGB()
@@ -135,16 +195,19 @@ enum Prism {
     static func draw(_ ctx: GraphicsContext, size: CGSize, t: Double, burstAlpha: Double = 0.72) {
         let w = size.width, h = size.height
         let rect = Path(CGRect(origin: .zero, size: size))
-        ctx.fill(rect, with: .color(Color(hex: 0x07060B)))
+        ctx.fill(rect, with: .color(Color(hex: bgHex)))
+        let hex: [UInt32] = irisHex
+        let blobA: Double = lit(0.23)
+        let blobB: Double = lit(0.055)
         var add = ctx
         add.blendMode = .plusLighter
         let r = max(w, h) * 0.42
         for (i, m) in motion.enumerated() {
-            let c = irisHex[i]
+            let c = hex[i]
             let cx = w * (0.5 + 0.42 * CGFloat(sin(t * m.0 * 6.28 + m.2)))
             let cy = h * (0.5 + 0.45 * CGFloat(sin(t * m.1 * 6.28 + m.3)))
-            let g = Gradient(stops: [.init(color: Color(hex: c, alpha: 0.23), location: 0),
-                                     .init(color: Color(hex: c, alpha: 0.055), location: 0.55),
+            let g = Gradient(stops: [.init(color: Color(hex: c, alpha: blobA), location: 0),
+                                     .init(color: Color(hex: c, alpha: blobB), location: 0.55),
                                      .init(color: .clear, location: 1)])
             add.fill(Path(ellipseIn: CGRect(x: cx - r, y: cy - r, width: 2 * r, height: 2 * r)),
                      with: .radialGradient(g, center: CGPoint(x: cx, y: cy), startRadius: 0, endRadius: r))
@@ -159,7 +222,7 @@ enum Prism {
         add.fill(rect, with: .linearGradient(sheen, startPoint: CGPoint(x: sx, y: sy), endPoint: CGPoint(x: sx + band, y: sy + band * 0.6)))
         // вращающаяся стеклянная призма в центре
         var b = ctx
-        b.opacity = burstAlpha
+        b.opacity = lit(burstAlpha)
         let side = burstImage.size.width
         b.translateBy(x: w / 2, y: h * 0.48)
         b.rotate(by: .degrees(t * 6))
@@ -218,12 +281,8 @@ struct GlassBody: View {
                                startPoint: UnitPoint(x: -flow * 2, y: 0), endPoint: UnitPoint(x: 2 - flow * 2, y: 1))
                     .opacity(pressed ? 0.68 : 0.82)
             }
-            LinearGradient(stops: [.init(color: .white.opacity(pressed ? 0.25 : 0.16), location: 0),
-                                   .init(color: .white.opacity(pressed ? 0.1 : 0.03), location: 0.55),
-                                   .init(color: Color(hex: 0x78DCFF, alpha: 0.12), location: 1)],
-                           startPoint: .top, endPoint: .bottom)
-            EllipticalGradient(colors: [.white.opacity(0.3), .white.opacity(0.06), .clear],
-                               center: UnitPoint(x: 0.22, y: 0), startRadiusFraction: 0, endRadiusFraction: 0.75)
+            frostLayer
+            highlight
             if hot > 0 {
                 // перелив пробегает по кнопке после нажатия
                 let x = CGFloat(-0.5 + 2 * (1 - hot))
@@ -233,16 +292,45 @@ struct GlassBody: View {
             }
         }
         .clipShape(shape)
-        .overlay(shape.strokeBorder(LinearGradient(stops: [.init(color: .white.opacity(0.82), location: 0),
-                                                           .init(color: .white.opacity(0.16), location: 0.55),
-                                                           .init(color: Color(hex: 0xC8BEFF, alpha: 0.45), location: 1)],
-                                                   startPoint: .top, endPoint: .bottom), lineWidth: 1.2))
+        .overlay(shape.strokeBorder(edge, lineWidth: 1.2))
         .overlay(RoundedRectangle(cornerRadius: max(1, radius - 2.2), style: .continuous)
             .strokeBorder(AngularGradient(colors: Prism.iris, center: .center, angle: .degrees(seed * 37 + t * 24 + hot * 260)),
                           lineWidth: CGFloat(1.1 + 1.8 * hot))
             .opacity(on ? 0.43 : 0.47 + 0.53 * hot)
             .padding(2.2))
         .shadow(color: .black.opacity(0.45), radius: 12, x: 0, y: 8)
+    }
+}
+
+extension GlassBody {
+    /// Матовость стекла («иней»): альфы умножаются на настройку прозрачности.
+    var frostLayer: some View {
+        let a0: Double = Prism.frosted(pressed ? 0.25 : 0.16)
+        let a1: Double = Prism.frosted(pressed ? 0.1 : 0.03)
+        let a2: Double = Prism.frosted(0.12)
+        let stops: [Gradient.Stop] = [.init(color: Color.white.opacity(a0), location: 0),
+                                      .init(color: Color.white.opacity(a1), location: 0.55),
+                                      .init(color: Color(hex: 0x78DCFF, alpha: a2), location: 1)]
+        return LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
+    }
+
+    /// Блик сверху-слева.
+    var highlight: some View {
+        let a0: Double = Prism.frosted(0.3)
+        let a1: Double = Prism.frosted(0.06)
+        let colors: [Color] = [Color.white.opacity(a0), Color.white.opacity(a1), Color.clear]
+        return EllipticalGradient(colors: colors, center: UnitPoint(x: 0.22, y: 0), startRadiusFraction: 0, endRadiusFraction: 0.75)
+    }
+
+    /// Светлый край стекла.
+    var edge: LinearGradient {
+        let a0: Double = Prism.frosted(0.82)
+        let a1: Double = Prism.frosted(0.16)
+        let a2: Double = Prism.frosted(0.45)
+        let stops: [Gradient.Stop] = [.init(color: Color.white.opacity(a0), location: 0),
+                                      .init(color: Color.white.opacity(a1), location: 0.55),
+                                      .init(color: Color(hex: 0xC8BEFF, alpha: a2), location: 1)]
+        return LinearGradient(stops: stops, startPoint: .top, endPoint: .bottom)
     }
 }
 

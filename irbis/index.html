@@ -148,7 +148,9 @@ td code{color:var(--fg)}
 html[data-theme=prism]{
   --bg:#07060B; --fg:#F4F1FF; --dim:#A79FC6; --line:#4B4270; --faint:#1A1726;
   --mono:Unbounded,"Segoe UI",system-ui,sans-serif; --ru:Manrope,"Segoe UI",system-ui,sans-serif;
-  --iris:#8B6CFF,#3FE0FF,#62FFB8,#FFE66B,#FF8A5C,#FF5FD8,#8B6CFF;
+  --i1:var(--i1); --i2:var(--i2); --i3:var(--i3); --i4:var(--i4); --i5:var(--i5); --i6:var(--i6); --pg:1; --pf:1;
+  /* радужные цвета (--i1…--i6) поворачиваются ползунком «Цвета», --pg — яркость переливов, --pf — матовость стекла */
+  --iris:var(--i1),var(--i2),var(--i3),var(--i4),var(--i5),var(--i6),var(--i1);
   --ink:#120E1F;
 }
 /* фон: плывущие пятна света, веер лучей призмы и радужный отблеск, пробегающий по диагонали */
@@ -156,17 +158,17 @@ html[data-theme=prism]{
 [data-theme=prism] .sky{display:block;position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:var(--bg)}
 [data-theme=prism] .sky i{position:absolute;width:85vmax;height:85vmax;border-radius:50%;mix-blend-mode:screen;opacity:.5;
   animation:drift 38s ease-in-out infinite alternate}
-[data-theme=prism] .sky i:nth-child(1){background:radial-gradient(closest-side,#8B6CFF66,#8B6CFF1a 55%,transparent);left:-30vmax;top:-25vmax}
-[data-theme=prism] .sky i:nth-child(2){background:radial-gradient(closest-side,#3FE0FF55,#3FE0FF14 55%,transparent);right:-35vmax;top:5vmax;animation-duration:46s;animation-delay:-12s}
-[data-theme=prism] .sky i:nth-child(3){background:radial-gradient(closest-side,#FF5FD855,#FF5FD814 55%,transparent);left:-20vmax;bottom:-40vmax;animation-duration:52s;animation-delay:-20s}
-[data-theme=prism] .sky i:nth-child(4){background:radial-gradient(closest-side,#62FFB840,#62FFB810 55%,transparent);right:-30vmax;bottom:-30vmax;animation-duration:44s;animation-delay:-6s}
+[data-theme=prism] .sky i:nth-child(1){background:radial-gradient(closest-side,color-mix(in srgb,var(--i1) 40%,transparent),color-mix(in srgb,var(--i1) 10%,transparent) 55%,transparent);left:-30vmax;top:-25vmax}
+[data-theme=prism] .sky i:nth-child(2){background:radial-gradient(closest-side,color-mix(in srgb,var(--i2) 33%,transparent),color-mix(in srgb,var(--i2) 8%,transparent) 55%,transparent);right:-35vmax;top:5vmax;animation-duration:46s;animation-delay:-12s}
+[data-theme=prism] .sky i:nth-child(3){background:radial-gradient(closest-side,color-mix(in srgb,var(--i6) 33%,transparent),color-mix(in srgb,var(--i6) 8%,transparent) 55%,transparent);left:-20vmax;bottom:-40vmax;animation-duration:52s;animation-delay:-20s}
+[data-theme=prism] .sky i:nth-child(4){background:radial-gradient(closest-side,color-mix(in srgb,var(--i3) 25%,transparent),color-mix(in srgb,var(--i3) 6%,transparent) 55%,transparent);right:-30vmax;bottom:-30vmax;animation-duration:44s;animation-delay:-6s}
 [data-theme=prism] .sky .rays{position:absolute;left:50%;top:-10vh;width:220vmax;height:220vmax;margin:-110vmax 0 0 -110vmax;mix-blend-mode:screen;
-  background:repeating-conic-gradient(from 0deg,transparent 0 5deg,#8B6CFF38 6deg,#3FE0FF2c 7.5deg,transparent 9deg 14deg,#FF5FD82c 15deg,#FFE66B24 16.5deg,transparent 18deg 25.7deg);
+  background:repeating-conic-gradient(from 0deg,transparent 0 5deg,color-mix(in srgb,var(--i1) 22%,transparent) 6deg,color-mix(in srgb,var(--i2) 17%,transparent) 7.5deg,transparent 9deg 14deg,color-mix(in srgb,var(--i6) 17%,transparent) 15deg,color-mix(in srgb,var(--i4) 14%,transparent) 16.5deg,transparent 18deg 25.7deg);
   -webkit-mask:radial-gradient(closest-side,#000 8%,transparent 62%);mask:radial-gradient(closest-side,#000 8%,transparent 62%);
   animation:sway 26s ease-in-out infinite alternate}
 @keyframes sway{from{transform:rotate(-16deg)}to{transform:rotate(16deg)}}
 [data-theme=prism] .sky .sheen{position:absolute;inset:-60%;mix-blend-mode:screen;
-  background:linear-gradient(115deg,transparent 40%,#8B6CFF24 44%,#3FE0FF38 47%,#62FFB830 50%,#FFE66B28 53%,#FF5FD824 56%,transparent 60%);
+  background:linear-gradient(115deg,transparent 40%,color-mix(in srgb,var(--i1) 14%,transparent) 44%,color-mix(in srgb,var(--i2) 22%,transparent) 47%,color-mix(in srgb,var(--i3) 19%,transparent) 50%,color-mix(in srgb,var(--i4) 16%,transparent) 53%,color-mix(in srgb,var(--i6) 14%,transparent) 56%,transparent 60%);
   animation:sheen 9s linear infinite}
 @keyframes sheen{from{transform:translate(-40%,-18%)}to{transform:translate(40%,18%)}}
 /* вращающаяся стеклянная призма: бруски-лучи вокруг тёмной сферы (картинку рисует скрипт ниже) */
@@ -181,26 +183,26 @@ html[data-theme=prism]{
 [data-theme=prism] h1{font:600 46px/1 var(--mono);letter-spacing:-.5px;text-shadow:none;
   background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,0) 52%),linear-gradient(90deg,var(--iris));background-size:100% 100%,200% 100%;
   -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:.6px rgba(255,255,255,.35);
-  animation:flow 6s linear infinite;filter:drop-shadow(0 2px 2px rgba(20,10,50,.6)) drop-shadow(0 0 12px #8B6CFF88)}
-[data-theme=prism] h1::after{color:#FF5FD8;-webkit-text-fill-color:#FF5FD8}
+  animation:flow 6s linear infinite;filter:drop-shadow(0 2px 2px rgba(20,10,50,.6)) drop-shadow(0 0 12px color-mix(in srgb,var(--i1) 53%,transparent))}
+[data-theme=prism] h1::after{color:var(--i6);-webkit-text-fill-color:var(--i6)}
 @keyframes flow{to{background-position:0 0,200% 0}}
 [data-theme=prism] .id{font:500 13px var(--ru);letter-spacing:.06em;margin-top:8px}
 [data-theme=prism] .gear{border-radius:16px;border:0;font:600 17px var(--mono);
-  background:radial-gradient(120% 80% at 25% 0%,rgba(255,255,255,.3),transparent 55%),linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.03) 60%,rgba(120,220,255,.12));
+  background:radial-gradient(120% 80% at 25% 0%,rgba(255,255,255,calc(min(1, .3 * var(--pf)))),transparent 55%),linear-gradient(180deg,rgba(255,255,255,calc(min(1, .14 * var(--pf)))),rgba(255,255,255,calc(min(1, .03 * var(--pf)))) 60%,rgba(120,220,255,calc(min(1, .12 * var(--pf)))));
   -webkit-backdrop-filter:blur(4px) saturate(180%) brightness(1.15);backdrop-filter:blur(4px) saturate(180%) brightness(1.15);
-  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.75),inset 0 -1px 0 rgba(170,150,255,.5),inset 0 -10px 18px -10px rgba(90,220,255,.4),0 8px 22px -8px rgba(0,0,0,.6)}
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,calc(min(1, .75 * var(--pf)))),inset 0 -1px 0 rgba(170,150,255,calc(min(1, .5 * var(--pf)))),inset 0 -10px 18px -10px rgba(90,220,255,calc(min(1, .4 * var(--pf)))),0 8px 22px -8px rgba(0,0,0,.6)}
 [data-theme=prism] .gear:active{background:linear-gradient(135deg,var(--iris));color:var(--ink)}
 /* жидкое стекло: фон под кнопкой слегка размыт и ярче, по краю свет сверху и бирюзовый отсвет снизу, блик слева сверху */
 [data-theme=prism] .key{border:0;border-radius:22px;
-  background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.03) 55%,rgba(120,220,255,.1));
+  background:linear-gradient(180deg,rgba(255,255,255,calc(min(1, .16 * var(--pf)))),rgba(255,255,255,calc(min(1, .03 * var(--pf)))) 55%,rgba(120,220,255,calc(min(1, .1 * var(--pf)))));
   -webkit-backdrop-filter:blur(4px) saturate(180%) brightness(1.15) contrast(1.05);backdrop-filter:blur(4px) saturate(180%) brightness(1.15) contrast(1.05);
   font:600 clamp(15px,4.6vw,22px)/1.1 var(--mono);letter-spacing:-.3px;
-  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.7),inset 0 -1px 0 rgba(170,150,255,.45),inset 0 14px 22px -14px rgba(255,255,255,.4),
-    inset 0 -16px 24px -16px rgba(90,220,255,.4),0 12px 30px -10px rgba(0,0,0,.65)}
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,calc(min(1, .7 * var(--pf)))),inset 0 -1px 0 rgba(170,150,255,calc(min(1, .45 * var(--pf)))),inset 0 14px 22px -14px rgba(255,255,255,calc(min(1, .4 * var(--pf)))),
+    inset 0 -16px 24px -16px rgba(90,220,255,calc(min(1, .4 * var(--pf)))),0 12px 30px -10px rgba(0,0,0,.65)}
 [data-theme=prism] .key::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  background:radial-gradient(120% 75% at 22% 0%,rgba(255,255,255,.3),rgba(255,255,255,.05) 45%,transparent 62%)}
-[data-theme=prism] .key.on::after{background:radial-gradient(120% 75% at 22% 0%,rgba(255,255,255,.4),transparent 60%),
-  linear-gradient(115deg,transparent 25%,#8B6CFF55 40%,#3FE0FF66 50%,#FF5FD855 60%,transparent 75%) -100% 0/300% 100% no-repeat;
+  background:radial-gradient(120% 75% at 22% 0%,rgba(255,255,255,calc(min(1, .3 * var(--pf)))),rgba(255,255,255,calc(min(1, .05 * var(--pf)))) 45%,transparent 62%)}
+[data-theme=prism] .key.on::after{background:radial-gradient(120% 75% at 22% 0%,rgba(255,255,255,calc(min(1, .4 * var(--pf)))),transparent 60%),
+  linear-gradient(115deg,transparent 25%,color-mix(in srgb,var(--i1) 33%,transparent) 40%,color-mix(in srgb,var(--i2) 40%,transparent) 50%,color-mix(in srgb,var(--i6) 33%,transparent) 60%,transparent 75%) -100% 0/300% 100% no-repeat;
   animation:keysheen .5s ease-out 1 forwards}
 @keyframes keysheen{to{background-position:0 0,100% 0}}
 /* стеклянный текст: светлый сверху, сиреневый снизу, с объёмной тенью */
@@ -219,11 +221,11 @@ html[data-theme=prism]{
 [data-theme=prism] .key .n,[data-theme=prism] .key .h{font:500 12px var(--ru);color:var(--dim);top:9px;left:13px}
 [data-theme=prism] .key .h{top:auto;left:auto;bottom:8px;right:13px}
 [data-theme=prism] .key.inv{background:linear-gradient(135deg,var(--iris)) 0 0/200% 200%;color:var(--ink);animation:holo 8s ease-in-out infinite alternate;
-  box-shadow:inset 0 1.5px 0 rgba(255,255,255,.85),inset 0 -12px 20px -12px rgba(18,14,31,.35),0 0 28px #8B6CFF55,0 12px 30px -10px rgba(0,0,0,.65)}
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,calc(min(1, .85 * var(--pf)))),inset 0 -12px 20px -12px rgba(18,14,31,.35),0 0 28px color-mix(in srgb,var(--i1) 33%,transparent),0 12px 30px -10px rgba(0,0,0,.65)}
 @keyframes holo{to{background-position:100% 100%}}
 [data-theme=prism] .key.inv::before{opacity:.35}
 [data-theme=prism] .key.inv .n,[data-theme=prism] .key.inv .h{color:rgba(18,14,31,.65)}
-[data-theme=prism] .key.on{background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(255,255,255,.08) 60%,rgba(120,220,255,.18));color:var(--fg);border:0;
+[data-theme=prism] .key.on{background:linear-gradient(180deg,rgba(255,255,255,calc(min(1, .28 * var(--pf)))),rgba(255,255,255,calc(min(1, .08 * var(--pf)))) 60%,rgba(120,220,255,calc(min(1, .18 * var(--pf)))));color:var(--fg);border:0;
   -webkit-backdrop-filter:blur(2px) saturate(220%) brightness(1.35);backdrop-filter:blur(2px) saturate(220%) brightness(1.35)}
 [data-theme=prism] .key.on::before{opacity:1;padding:2.5px;animation-duration:1.2s}
 [data-theme=prism] .key.inv.on{background:linear-gradient(135deg,var(--iris)) 0 0/200% 200%;color:var(--ink);filter:brightness(.9)}
@@ -231,7 +233,7 @@ html[data-theme=prism]{
 /* хроматическая аберрация при нажатии вместо глитча */
 [data-theme=prism] .key.glitch .t{animation:ab .42s ease-out 1}
 @keyframes ab{0%{text-shadow:-4px 0 rgba(255,70,140,.85),4px 0 rgba(60,230,255,.85)}100%{text-shadow:0 0 transparent,0 0 transparent}}
-[data-theme=prism] .key .beam{height:3px;background:linear-gradient(90deg,var(--iris));box-shadow:0 0 18px #8B6CFFaa;opacity:.9}
+[data-theme=prism] .key .beam{height:3px;background:linear-gradient(90deg,var(--iris));box-shadow:0 0 18px color-mix(in srgb,var(--i1) 67%,transparent);opacity:.9}
 [data-theme=prism] .status{font:500 14px var(--ru)}
 [data-theme=prism] .mode{font:500 14px var(--ru)}
 [data-theme=prism] #splash{background:var(--bg)}
@@ -240,27 +242,29 @@ html[data-theme=prism]{
 [data-theme=prism] #splash img.rat{display:none}
 /* крыса из жидкого стекла: перелив + блик внутри силуэта, светлый край сверху-слева и бирюзовый снизу-справа */
 [data-theme=prism] #splash .ratw{display:block;aspect-ratio:605/358;
-  filter:drop-shadow(-1.5px -1.5px 0 rgba(255,255,255,.9)) drop-shadow(1.5px 1.5px 0 rgba(80,225,255,.85)) drop-shadow(0 0 22px #8B6CFF88)}
+  filter:drop-shadow(-1.5px -1.5px 0 rgba(255,255,255,.9)) drop-shadow(1.5px 1.5px 0 rgba(80,225,255,.85)) drop-shadow(0 0 22px color-mix(in srgb,var(--i1) 53%,transparent))}
 [data-theme=prism] #splash .ratp{position:absolute;inset:0;
   background:radial-gradient(70% 60% at 30% 20%,rgba(255,255,255,.7),rgba(255,255,255,.12) 50%,transparent 70%),
     linear-gradient(180deg,transparent 55%,rgba(90,230,255,.35)),
     repeating-conic-gradient(from 0deg at 50% -20%,transparent 0 6deg,#ffffff22 8deg,transparent 10deg 16deg),
-    linear-gradient(135deg,#8B6CFFbb,#3FE0FFaa,#62FFB8aa,#FFE66Baa,#FF8A5Caa,#FF5FD8bb,#8B6CFFbb) 0 0/220% 220%,#0E0B1A;
+    linear-gradient(135deg,color-mix(in srgb,var(--i1) 73%,transparent),color-mix(in srgb,var(--i2) 67%,transparent),color-mix(in srgb,var(--i3) 67%,transparent),color-mix(in srgb,var(--i4) 67%,transparent),color-mix(in srgb,var(--i5) 67%,transparent),color-mix(in srgb,var(--i6) 73%,transparent),color-mix(in srgb,var(--i1) 73%,transparent)) 0 0/220% 220%,#0E0B1A;
   -webkit-mask:url(rat.png) center/contain no-repeat;mask:url(rat.png) center/contain no-repeat;animation:holo 3s ease-in-out infinite alternate}
 [data-theme=prism] #splash .lines{background:repeating-linear-gradient(90deg,var(--iris));-webkit-mask:repeating-linear-gradient(#000 0 1px,transparent 1px 4px);mask:repeating-linear-gradient(#000 0 1px,transparent 1px 4px)}
 [data-theme=prism] #splash .name{font:600 48px var(--mono);text-shadow:none;
   background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,.1) 55%,transparent),linear-gradient(90deg,var(--iris));
   -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.45);
-  filter:drop-shadow(0 3px 2px rgba(20,10,50,.6)) drop-shadow(0 0 16px #8B6CFF)}
-[data-theme=prism] dialog{border-radius:24px;border:1px solid #5A4E8C;background:linear-gradient(160deg,#1A1528,#0D0B16)}
+  filter:drop-shadow(0 3px 2px rgba(20,10,50,.6)) drop-shadow(0 0 16px var(--i1))}
+[data-theme=prism] dialog{border-radius:24px;border:1px solid #5A4E8C;background:linear-gradient(160deg,color-mix(in srgb,var(--bg) 70%,#2A2440),color-mix(in srgb,var(--bg) 85%,#0D0B16))}
 [data-theme=prism] .sheet h2,[data-theme=prism] .sheet h3{font-family:var(--mono);font-weight:600;font-size:20px}
-[data-theme=prism] .opt{border-radius:16px;border-color:#4B4270;background:rgba(255,255,255,.04)}
+[data-theme=prism] .opt{border-radius:16px;border-color:#4B4270;background:rgba(255,255,255,calc(min(1, .04 * var(--pf))))}
 [data-theme=prism] .opt input{accent-color:#B49CFF}
 [data-theme=prism] .btn{border-radius:14px;font:600 15px var(--mono)}
 [data-theme=prism] .btn.primary{background:linear-gradient(135deg,var(--iris));color:var(--ink);border:0}
 [data-theme=prism] input[type=text]{border-radius:12px}
 @media (prefers-reduced-motion:reduce){[data-theme=prism] .sky *,[data-theme=prism] h1,[data-theme=prism] .key::before{animation:none}}
 
+/* яркость переливов фона (ползунок «Яркость») */
+[data-theme=prism] .sky > *{filter:brightness(var(--pg))}
 /* ================= Тема «Тепловизор» =================
    Кадр тепловизора: на чёрном вращается радужка, палитра ironbow (холод — фиолетовый, жар — жёлто-белый),
    жёлтые рамки обнаружения как PERSON_01XX, HUD (уголки, шкала температур, REC, дата) и зерно матрицы. */
@@ -354,11 +358,40 @@ html[data-theme=thermal][data-heat=arctic]{
 /* ================= Вкладка «Цвет» =================
    В «Терминале» — цвет люминофора (пресеты, «Матрица», круг цветов, RGB-переливы), в «Тепловизоре» — палитра.
    Панель поднята над RGB-переливом (z-index), чтобы показывать цвета как есть. */
-.gear.tab.ctab{display:none}
-html:not([data-theme]) .gear.tab.ctab,[data-theme=thermal] .gear.tab.ctab{display:block;font-size:18px}
+.gear.tab.ctab{display:block}
+/* русские вкладки («Проекторы», «Цвет»): шрифт мельче, «Проекторы» шире пропорционально подписи */
+.gear.tab.ru{font-size:18px}
+.gear.tab.wide{flex:1.45}
+[data-theme=prism] .gear.tab.ru{font-size:13px}
+[data-theme=blueprint] .gear.tab.ru{font-size:12px}
 #cpanel{display:none;position:relative;z-index:12;padding-bottom:6px}
 body.ctab #grid,body.ctab .status{display:none}
 body.ctab #cpanel{display:block}
+/* PROJ: чипы марок проектора в стиле вкладок + подсказка */
+#proj{display:none}
+body.proj #proj{display:block}
+.brands{display:flex;gap:6px;margin:0 0 6px}
+.gear.tab.chip{height:36px;font-size:19px}
+[data-theme=prism] .gear.tab.chip{font-size:14px;border-radius:13px}
+[data-theme=blueprint] .gear.tab.chip{font-size:12px}
+.projnote{margin:0 2px 12px;font:13px/1.4 var(--ru);color:var(--dim)}
+/* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
+html:not([data-theme]) body.proj .id,[data-theme=thermal] body.proj .id{font-size:17px}
+/* сетка проекторов — 3 колонки, низкие кнопки; подпись ужимается под ширину кнопки (--len — длина подписи, --cw — ширина буквы шрифта темы) */
+body.proj .grid{grid-template-columns:repeat(3,1fr);gap:8px}
+body.proj .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
+  font-size:min(26px,calc((100cqw - 10px) / (var(--len) * var(--cw))))}
+[data-theme=prism] body.proj .key{--cw:.98;border-radius:16px;font-size:min(16px,calc((100cqw - 12px) / (var(--len) * var(--cw))))}
+[data-theme=prism] body.proj .key::before{border-radius:14px}
+[data-theme=blueprint] body.proj .grid{gap:12px}
+[data-theme=blueprint] body.proj .key{--cw:.8;font-size:min(15px,calc((100cqw - 14px) / (var(--len) * var(--cw))))}
+html:not([data-theme]) body.proj .key .n,[data-theme=prism] body.proj .key .n,body.proj .key .h{font-size:11px}
+body.proj .key .n{top:3px;left:6px}body.proj .key .h{bottom:3px;right:6px}
+[data-theme=thermal] body.proj .key .n::after{font-size:10px}
+[data-theme=blueprint] body.proj .key .n{top:7px;left:8px}[data-theme=blueprint] body.proj .key .h{bottom:7px;right:8px;font-size:9px}
+[data-theme=blueprint] body.proj .key .n::after{font-size:9px}
+[data-theme=prism] body.proj .key .n{top:5px;left:9px}[data-theme=prism] body.proj .key .h{bottom:4px;right:9px;font-size:10px}
+[data-theme=thermal] .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
 .cp h3{margin:16px 2px 8px;font:24px var(--mono);color:var(--fg)}
 .cp h3:first-child{margin-top:2px}
 .cp p{margin:-2px 2px 10px;font-size:12px;line-height:1.45;color:var(--dim)}
@@ -469,16 +502,27 @@ html[data-theme=blueprint]{
 [data-theme=blueprint] td{border-top-color:var(--faint)}
 /* светлая «светокопия» (ползунок во вкладке «Цвет»): подпись-картинка белая — перекрашиваем в синие чернила */
 html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%) sepia(70%) saturate(2400%) hue-rotate(208deg) brightness(.9)}
-[data-theme=blueprint] .gear.tab.ctab{display:block}
 /* ползунок светлоты чертежа: ⬜ —|—🟦—— ⬛ */
 .cp .bps{display:flex;align-items:center;gap:10px;margin:26px 0 8px}
 .cp .bps .sq{flex:none;width:22px;height:22px;border:1px solid var(--line)}
-.cp .bps .sq.w{background:#F2F5FA}
-.cp .bps .sq.k{background:#05070D}
-.cp .trk{position:relative;flex:1;height:28px;border:1px solid var(--line);background:linear-gradient(90deg,#F2F5FA,#1A4A9E,#05070D);touch-action:none;cursor:pointer}
-.cp .trk .mark{position:absolute;left:50%;top:-21px;width:11px;height:11px;margin-left:-5.5px;background:#1A4A9E;border:1px solid var(--fg)}
+.cp .trk{position:relative;flex:1;height:28px;border:1px solid var(--line);touch-action:none;cursor:pointer}
+.cp .trk .mark{position:absolute;left:calc(var(--d) * 100%);top:-21px;width:11px;height:11px;margin-left:-5.5px;border:1px solid var(--fg)}
 .cp .trk .thumb{position:absolute;top:-9px;bottom:-9px;left:calc(var(--v) * 100%);width:4px;margin-left:-2px;background:#fff;box-shadow:0 0 0 1.5px #05070D}
-.cp .bpl{display:flex;justify-content:space-between;padding:0 32px;font:600 11px var(--ru);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.cp .bpl{display:flex;justify-content:space-between;font:600 11px var(--ru);letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.cp .sl.ends .bpl{padding:0 32px}
+/* «Призма»: ползунки в стеклянных плашках */
+.cp .plate{margin:0 0 10px;padding:12px 14px 10px;border-radius:18px;
+  background:linear-gradient(180deg,rgba(255,255,255,calc(min(1, .12 * var(--pf,1)))),rgba(255,255,255,calc(min(1, .03 * var(--pf,1)))));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,calc(min(1, .5 * var(--pf,1)))),inset 0 -1px 0 rgba(170,150,255,calc(min(1, .35 * var(--pf,1))));
+  -webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+.cp .plate .pt{display:block;font:600 14px var(--mono);color:var(--fg)}
+.cp .plate .bps{margin-top:22px}
+[data-theme=prism] .cp .bpl{font:500 11px var(--ru);letter-spacing:.02em;text-transform:none}
+[data-theme=prism] .cp .wide{border:0;border-radius:16px;font:600 14px var(--mono);color:var(--fg);
+  background:linear-gradient(180deg,rgba(255,255,255,calc(min(1, .16 * var(--pf,1)))),rgba(255,255,255,calc(min(1, .04 * var(--pf,1)))));
+  box-shadow:inset 0 1.5px 0 rgba(255,255,255,calc(min(1, .6 * var(--pf,1))))}
+[data-theme=prism] .cp h3{font:600 20px var(--mono)}
+[data-theme=prism] .cp p{font:500 13px/1.5 var(--ru)}
 [data-theme=blueprint] .cp .wide{margin-top:22px;background:var(--bga);font:600 13px var(--ru);letter-spacing:.08em;text-transform:uppercase}
 [data-theme=blueprint] .cp p{font:500 13px/1.5 var(--ru)}
 </style>
@@ -501,7 +545,9 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button><button class="gear tab ctab" data-r="color">Цвет</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button><button class="gear tab ru wide" data-r="proj">Проекторы</button><button class="gear tab ctab ru" data-r="color">Цвет</button></nav>
+  <div id="proj"><div class="brands" id="brands" aria-label="Марка проектора"></div>
+    <p class="projnote">Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.</p></div>
   <main class="grid" id="grid"></main>
   <section class="cp" id="cpanel" aria-label="Цвет"></section>
   <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -534,7 +580,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
 
     <h3>Коды пульта (NEC, 38 кГц)</h3>
-    <p class="note">Из базы IrCode Finder: IRBIS → «Promethean Interactive Board», №500202. Нажмите на строку, чтобы скопировать код Pronto для другого приложения.</p>
+    <p class="note">Из базы IrCode Finder: IRBIS → «Promethean Interactive Board», №500202; MocTec — MOSTEH №500275; проекторы — NEC №1803, Epson №1779, InFocus №1818, BenQ №1759 (у Epson и BenQ — NEC2: при удержании повторяется весь кадр). Нажмите на строку, чтобы скопировать код Pronto для другого приложения.</p>
     <table id="codes"></table>
 
     <p class="note" style="margin-top:16px">Встроенный ИК-порт телефона браузер использовать не может — для него нет веб-интерфейса. Поэтому нужен внешний излучатель: в разъём наушников или по Wi-Fi.</p>
@@ -564,9 +610,67 @@ const MOC_KEYS = [
   ['J LEFT', '04FB926D'], ['J RIGHT', '04FBD22D'],
   ['HOME', '04FB12ED'], ['BACK', '04FB50AF'],
 ];
-const REMOTES = { irbis: { keys: KEYS, id: '#500202 :: IRBIS :: NEC 38kHz' }, moc: { keys: MOC_KEYS, id: 'MocTec :: NEC 04FB' } };
+/* Проекторы (вкладка «Проекторы»): все кнопки пультов марки из облачной базы IrCode Finder (несколько пультов объединены, дубли кодов убраны),
+   тот же формат — 32 бита, старший бит первым. Сначала основные кнопки, потом остальные.
+   У Epson и BenQ протокол NEC2: при удержании повторяется весь кадр, а не короткий код повтора. */
+const PROJ = [
+  { name: 'NEC', id: '#1803, #1777, #1806, #1882', nec2: false, keys: [
+    ['POWER', '189710EF'], ['POWER OFF', '189728D7'], ['INPUT', '18978F70'], ['PIC-MUTE', '1897E21D'],
+    ['MENU', '1897629D'], ['ENTER', '1897E817'], ['EXIT', '1897A45B'], ['UP', '18977A85'],
+    ['DOWN', '1897FA05'], ['LEFT', '1897BA45'], ['RIGHT', '18973AC5'], ['VOL-', '1897926D'],
+    ['VOL+', '189712ED'], ['ASPECT', '189708F7'], ['AUTO ADJ.', '1897609F'], ['COMPUTER', '1897CA35'],
+    ['DOWN 2', '18973DC2'], ['FOCUS', '189745BA'], ['MAGNIFY-', '189751AE'], ['MAGNIFY+', '1897916E'],
+    ['FREEZE', '189732CD'], ['HELP', '1897728D'], ['INPUT PC1', '189720DF'], ['INPUT PC2', '1897A05F'],
+    ['INPUT VIEWER', '189731CE'], ['KEYSTONE UP', '1897D12E'], ['LAMP MODE', '18976897'], ['LEFT 2', '18977D82'],
+    ['LEFT CLICK', '189734CB'], ['NOISE RED.', '18973CC3'], ['PAGE DOWN', '1897D42B'], ['PAGE UP', '189754AB'],
+    ['PC CARD', '1897E41B'], ['PICTURE', '1897B04F'], ['RIGHT 2', '18975DA2'], ['RIGHT CLICK', '1897B44B'],
+    ['S-VIDEO', '1897639C'], ['TIMER', '1897BC43'], ['UP 2', '18971DE2'], ['VIDEO', '1897C03F'],
+    ['INPUT NEXT 2', '1897B24D'], ['FOLDER LIST', '18975FA0'], ['INPUT COMPUTER 3', '1897AA55'], ['INPUT LAN', '18976A95'],
+    ['PJ', '189749B6'], ['POINTER', '1897649B'], ['POS DOWN', '1897FB04'], ['POS DOWN LEFT', '189724DB'],
+    ['POS DOWN RIGHT', '1897C43B'], ['POS LEFT', '1897BB44'], ['POS RIGHT', '18973BC4'], ['POS UP', '18977B84'],
+    ['POS UP LEFT', '189744BB'], ['POS UP RIGHT', '1897847B'], ['SLIDE-', '189704FB'], ['SLIDE+', '1897D22D']] },
+  { name: 'Epson', id: '#1779, #1783', nec2: true, keys: [
+    ['POWER', 'C1AA09F6'], ['SOURCE SEARCH', 'C1AA31CE'], ['A/V MUTE', 'C1AAC936'], ['MENU', 'C1AA59A6'],
+    ['ENTER', 'C1AAA15E'], ['ESC', 'C1AA21DE'], ['UP', 'C1AA0DF2'], ['DOWN', 'C1AA4DB2'],
+    ['LEFT', 'C1AACD32'], ['RIGHT', 'C1AA8D72'], ['VOL-', 'C1AA9966'], ['VOL+', 'C1AA19E6'],
+    ['0 / PEN MODE', 'C1AA05FA'], ['1 / SCREEN FIT', 'C1AA857A'], ['2', 'C1AA45BA'], ['3 / 2D/3D', 'C1AAC53A'],
+    ['FOCUS LEFT', 'C1AA25DA'], ['FOCUS RIGHT', 'C1AAA55A'], ['6 / MHL', 'C1AA659A'], ['AUTO', 'C1AA7986'],
+    ['ASPECT', 'C1AA51AE'], ['COLOR MODE', 'C1AAF10E'], ['E-ZOOM -', 'C1AA916E'], ['E-ZOOM +', 'C1AA11EE'],
+    ['FREEZE', 'C1AA49B6'], ['HELP', 'C1AAA956'], ['ID', 'C1AA8C73'], ['INPUT COMPUTER', 'C1AA29D6'],
+    ['HDMI/VIDEO', 'C1AA0EF1'], ['INPUT LAN', 'C1AA2ED1'], ['INPUT USB', 'C1AA6E91'], ['PAGE DOWN', 'C1AAE11E'],
+    ['PAGE UP', 'C1AA619E'], ['POINTER', 'C1AAD926'], ['SPLIT', 'C1AA41BE'], ['USER', 'C1AAF906'],
+    ['INPUT HDMI', 'C1AACE31'], ['INPUT S-VIDEO', 'C1AA39C6'], ['POINTER 2', 'C1AA956A']] },
+  { name: 'InFocus', id: '#1818, #1940', nec2: false, keys: [
+    ['POWER', 'E172E817'], ['SOURCE', 'E17208F7'], ['MUTE', 'E172946B'], ['BLANK', 'E1728C73'],
+    ['MENU', 'E17240BF'], ['SELECT', 'E1724CB3'], ['ESC', 'E1720AF5'], ['UP', 'E172C837'],
+    ['DOWN', 'E17228D7'], ['LEFT', 'E1728877'], ['RIGHT', 'E17248B7'], ['VOL-', 'E17220DF'],
+    ['VOL+', 'E17210EF'], ['AUTO IMAGE', 'E172CC33'], ['CUSTOM', 'E172D42B'], ['FREEZE', 'E172708F'],
+    ['HELP', 'E17250AF'], ['INPUT SOURCE 1', 'E172B44B'], ['INPUT SOURCE 2', 'E172748B'], ['INPUT SOURCE 3', 'E172F40B'],
+    ['KEYSTONE DOWN', 'E172847B'], ['KEYSTONE UP', 'E17204FB'], ['PREVIOUS', 'E172A45B'], ['MAGNIFY-', 'E172CA35'],
+    ['MAGNIFY+', 'E1724AB5'], ['OVERSCAN', 'E172AC53'], ['PC', 'E1729867'], ['PRESET', 'E17234CB'],
+    ['RESIZE', 'E1722CD3'], ['NEXT', 'E17224DB'], ['VIDEO', 'E17258A7'], ['MOUSE LEFT CLICK', 'E17230CF'],
+    ['MOUSE RIGHT CLICK', 'E172D02F'], ['SOURCE 4', 'E1720CF3']] },
+  { name: 'BenQ', id: '#1759, #1764', nec2: true, keys: [
+    ['POWER', '000C40BF'], ['POWER ON', '000CF20D'], ['POWER OFF', '000C728D'], ['SOURCE', '000C20DF'],
+    ['MUTE', '000C28D7'], ['ECO BLANK', '000CE01F'], ['MENU', '000CF00F'], ['ENTER', '000C08F7'],
+    ['UP', '000CD02F'], ['DOWN', '000C30CF'], ['LEFT', '000CB04F'], ['RIGHT', '000C708F'],
+    ['VOL-', '000CC13E'], ['VOL+', '000C41BE'], ['3D', '000CB14E'], ['3D INVERT', '000CB946'],
+    ['ASPECT', '000CC837'], ['AUTO', '000C10EF'], ['BRIGHTNESS', '000C6897'], ['COLOR', '000C9E61'],
+    ['CONTRAST', '000C8877'], ['DIGITAL ZOOM -', '000C9867'], ['DIGITAL ZOOM +', '000C18E7'], ['FREEZE', '000CC03F'],
+    ['INFO', '000C00FF'], ['KEYSTON DOWN', '000C906F'], ['KEYSTON UP', '000C50AF'], ['PAGE DOWN', '000C609F'],
+    ['PAGE UP', '000CA05F'], ['SMART ECO', '000C0CF3'], ['TEST', '000C29D6'], ['TIMER ON', '000CA45B'],
+    ['TIMER SET UP', '000C649B'], ['TINT', '000C5EA1'], ['CAPTURE', '000C7887'], ['COLOR TEMP', '000CFA05'],
+    ['FINE TUNE', '000CBA45'], ['INPUT COMPONENT', '000C8A75'], ['INPUT COMPUTER 1', '000C827D'], ['INPUT COMPUTER 2', '000CA25D'],
+    ['INPUT HDMI', '000C1AE5'], ['INPUT HDMI 2', '000C9A65'], ['INPUT NETWORK', '000C629D'], ['INPUT S-VIDEO', '000CF807'],
+    ['INPUT VIDEO', '000C4AB5'], ['NETWORK SETTING', '000C817E'], ['PIP', '000CD827'], ['SHARP', '000C7E81'],
+    ['SRS', '000C9966'], ['USER1', '000CAE51'], ['USER2', '000C6E91'], ['USER3', '000CEE11']] },
+];
+let projBrand = 0;
+try { const i = parseInt(localStorage.getItem('krisa-proj'), 10); if (i >= 0 && i < PROJ.length) projBrand = i; } catch {}
+const REMOTES = { irbis: { keys: KEYS, id: '#500202 :: IRBIS :: NEC 38kHz' }, moc: { keys: MOC_KEYS, id: 'MocTec :: NEC 04FB' },
+  get proj() { const b = PROJ[projBrand]; return { keys: b.keys, id: 'проектор :: ' + b.name + ' :: ' + b.id, nec2: b.nec2 }; } };
 // При удержании этих кнопок пульт шлёт NEC-повтор, как настоящий.
-const REPEATABLE = new Set(['VOL-', 'VOL+', 'J DOWN', 'J LEFT', 'J RIGHT', 'J UP']);
+const REPEATABLE = new Set(['VOL-', 'VOL+', 'J DOWN', 'J LEFT', 'J RIGHT', 'J UP', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
 
 /* ---------- NEC: код → длительности импульсов (мкс), [метка, пауза, метка, ...] ---------- */
 const T = 562.5;
@@ -672,17 +776,26 @@ function scramble(el, text, ms, done) {
 }
 
 /* ---------- Кнопки ---------- */
-function transmit(label, hex, isRepeat) {
+// full — повтор целым кадром (NEC2: Epson, BenQ), без новой строки состояния
+function transmit(label, hex, isRepeat, full) {
   const tx = settings.mode === 'http' ? httpTx : audioTx;
   try {
-    const p = isRepeat ? tx.repeat(hex) : tx.send(hex);
+    const p = isRepeat ? (full ? tx.send(hex) : tx.repeat(hex)) : tx.send(hex);
     if (!isRepeat) status('> tx ' + label.padEnd(11) + ' 0x' + hex + ' [sent]');
     if (p && p.catch) p.catch(e => status(e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message, 'err'));
   } catch (e) { status(e.message, 'err'); }
 }
 
 const grid = $('grid');
-function makeKey([label, hex]) {
+/** Длина подписи для подбора шрифта в мелких кнопках «Проекторов»: длинные подписи переносятся на 2 строки,
+    поэтому берём самую длинную строку при лучшем разбиении слов на две строки. */
+function fitLen(label) {
+  const w = label.split(' ');
+  let best = label.length;
+  for (let i = 1; i < w.length; i++) best = Math.min(best, Math.max(w.slice(0, i).join(' ').length, w.slice(i).join(' ').length));
+  return Math.max(5, label.length <= 8 ? label.length : best);
+}
+function makeKey([label, hex], nec2) {
   const b = document.createElement('button');
   b.className = 'key' + (label === 'POWER' ? ' inv' : '');
   b.setAttribute('aria-label', label);
@@ -692,6 +805,7 @@ function makeKey([label, hex]) {
   b.querySelector('.n').dataset.f = 'FIG.' + String(grid.children.length + 1).padStart(2, '0');           // подпись в «Чертеже»
   b.querySelector('.h').textContent = '0x' + hex.slice(4, 6);
   b.querySelector('.t').textContent = label;
+  b.style.setProperty('--len', fitLen(label));
   let hold = null;
   const stop = () => { b.classList.remove('on'); clearTimeout(hold); clearInterval(hold); hold = null; };
   b.addEventListener('pointerdown', e => {
@@ -706,7 +820,7 @@ function makeKey([label, hex]) {
     if (REPEATABLE.has(label)) {
       // Как у настоящего пульта: после кадра — повторы каждые 108 мс, пока кнопка нажата.
       const period = settings.mode === 'http' ? 250 : FRAME_PERIOD / 1000;
-      hold = setTimeout(() => { hold = setInterval(() => transmit(label, hex, true), period); }, 400);
+      hold = setTimeout(() => { hold = setInterval(() => transmit(label, hex, true, nec2 === true), period); }, 400);
     }
   });
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(t => b.addEventListener(t, stop));
@@ -810,13 +924,20 @@ addEventListener('resize', () => rgbFlow());
 /** Применить цвет/палитру к странице: CSS-переменные, перелив, «Матрица», крысы. */
 function applyColor() {
   const root = document.documentElement, isTerm = theme() === 'terminal', fg = termFg();
-  ['--fg', '--dim', '--line', '--faint', '--bg', '--bga'].forEach(v => root.style.removeProperty(v));
+  ['--fg', '--dim', '--line', '--faint', '--bg', '--bga', '--pg', '--pf', '--i1', '--i2', '--i3', '--i4', '--i5', '--i6'].forEach(v => root.style.removeProperty(v));
   if (isTerm) {
     root.style.setProperty('--fg', fg); root.style.setProperty('--dim', mulHex(fg, 0.58));
     root.style.setProperty('--line', mulHex(fg, 0.39)); root.style.setProperty('--faint', mulHex(fg, 0.089));
   }
   // «Чертёж»: все цвета от положения ползунка светлоты
-  const bp = bpColors(bpShade);
+  const bp = bpColors(bpShade, bpHue);
+  // «Призма»: яркость переливов, матовость стекла, поворот радуги, цвет фона
+  if (theme() === 'prism') {
+    root.style.setProperty('--pg', (0.25 + 1.5 * pr.bright).toFixed(3)); root.style.setProperty('--pf', (2 * pr.frost).toFixed(3));
+    prIris().forEach((c, i) => root.style.setProperty('--i' + (i + 1), c));
+    root.style.setProperty('--bg', prBg());
+  }
+  window.prismBurst && prismBurst();
   if (theme() === 'blueprint') {
     root.style.setProperty('--bg', bp.bg); root.style.setProperty('--fg', bp.ink); root.style.setProperty('--dim', bp.dim);
     root.style.setProperty('--line', bp.line); root.style.setProperty('--faint', bp.faint);
@@ -830,19 +951,63 @@ function applyColor() {
   rgbFlow();
   window.ratColors && ratColors();
   const t = theme();
-  document.querySelector('meta[name=theme-color]').content = t === 'prism' ? '#07060B' : t === 'blueprint' ? bp.bg : t === 'thermal' ? HEATS[heatId].pal[0] : '#000000';
+  document.querySelector('meta[name=theme-color]').content = t === 'prism' ? prBg() : t === 'blueprint' ? bp.bg : t === 'thermal' ? HEATS[heatId].pal[0] : '#000000';
 }
 
-/* Светлота «Чертежа»: v ∈ [0, 1], 0.5 — синий по умолчанию. Светлее — светокопия (белая бумага, синие линии), темнее — ночной чертёж.
-   BG — между #F2F5FA, #1A4A9E и #05070D; «чернила» INK — синие на светлом фоне, иначе белые. */
-let bpShade = 0.5, bpLive = null;   // bpLive — значение, пока тянут ползунок (меняется только фон)
-try { const v = parseFloat(localStorage.getItem('krisa-bp')); if (v >= 0 && v <= 1) bpShade = v; } catch {}
+/* Светлота и оттенок «Чертежа». Светлота v ∈ [0, 1], 0.5 — синий: светлее — светокопия (бумага, тёмные линии), темнее — ночной чертёж.
+   Оттенок h (0…360°, по умолчанию 218° — синий #1A4A9E): BLUE(h) = HSV(h, s и v синего), бумага = #F2F5FA + 4 % BLUE, ночь = #05070D + 6 % BLUE.
+   «Чернила» INK — тёмные HSV(h, s и v от #0E2A66) на светлом фоне, иначе белые. */
+let bpShade = 0.5, bpLive = null, bpHue = 218, bpHueLive = null;   // *Live — значения, пока тянут ползунок (меняется только фон)
+try {
+  const v = parseFloat(localStorage.getItem('krisa-bp')); if (v >= 0 && v <= 1) bpShade = v;
+  const h = parseFloat(localStorage.getItem('krisa-bp-hue')); if (h >= 0 && h <= 360) bpHue = h;
+} catch {}
 function lerpHex(a, b, k) { const A = rgbOf(a), B = rgbOf(b); return hexOf(A.map((v, i) => v + (B[i] - v) * k)); }
-function bpColors(v) {
-  const bg = v < 0.5 ? lerpHex('#F2F5FA', '#1A4A9E', v / 0.5) : lerpHex('#1A4A9E', '#05070D', (v - 0.5) / 0.5);
-  const [r, g, b] = rgbOf(bg), light = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5, ink = light ? '#0E2A66' : '#FFFFFF';
+const hsvHex = (h, s, v) => hexOf(hsv2rgb(((h % 360) + 360) % 360, s, v));
+function bpTones(h) {
+  const blue = hsvHex(h, 132 / 158, 158 / 255);
+  return { blue, paper: lerpHex('#F2F5FA', blue, 0.04), night: lerpHex('#05070D', blue, 0.06), darkInk: hsvHex(h, 88 / 102, 102 / 255) };
+}
+function bpColors(v, h) {
+  const T = bpTones(h);
+  const bg = v < 0.5 ? lerpHex(T.paper, T.blue, v / 0.5) : lerpHex(T.blue, T.night, (v - 0.5) / 0.5);
+  const [r, g, b] = rgbOf(bg), light = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5, ink = light ? T.darkInk : '#FFFFFF';
   return { bg, ink, light, dim: lerpHex(bg, ink, 0.72), line: lerpHex(bg, ink, 0.6), faint: lerpHex(bg, ink, 0.12), edge: mulHex(bg, 0.7) };
 }
+
+/* «Призма»: 4 ползунка 0…1 — яркость переливов (0.5), прозрачность стекла (0.5), сдвиг радуги (0), цвет фона (0 — почти чёрный). */
+const PR_DEF = { bright: 0.5, frost: 0.5, hue: 0, bg: 0 };
+const pr = { ...PR_DEF };
+try { for (const k in PR_DEF) { const v = parseFloat(localStorage.getItem('krisa-pr-' + k)); if (v >= 0 && v <= 1) pr[k] = v; } } catch {}
+const PR_IRIS = ['#8B6CFF', '#3FE0FF', '#62FFB8', '#FFE66B', '#FF8A5C', '#FF5FD8'];
+/** Радужные цвета «Призмы», повёрнутые по оттенку на v·360°. */
+function prIris(v = pr.hue) {
+  return PR_IRIS.map(c => { const rgb = rgbOf(c), [h, sat] = rgb2hs(rgb); return hsvHex(h + v * 360, sat, Math.max(...rgb) / 255); });
+}
+function prBg(v = pr.bg) { return v > 0 ? hsvHex(v * 360, 0.75, 0.10 + 0.12 * v) : '#07060B'; }
+
+/** Рисованный ползунок: дорожка-градиент, бегунок «|», метка значения по умолчанию.
+    ends — цвета квадратиков по краям, labels — подписи под дорожкой; live — пока тянут, commit — при отпускании. */
+function makeSlider({ name, track, value, def, mark, ends, labels, live, commit }) {
+  const w = document.createElement('div'); w.className = 'sl';
+  w.innerHTML = '<div class="bps">' + (ends ? '<i class="sq"></i>' : '') + '<div class="trk" role="slider"><b class="mark"></b><b class="thumb"></b></div>'
+    + (ends ? '<i class="sq"></i>' : '') + '</div>' + (labels ? '<div class="bpl"><span></span><span></span></div>' : '');
+  const trk = w.querySelector('.trk');
+  trk.setAttribute('aria-label', name); trk.style.background = track;
+  trk.style.setProperty('--v', value); trk.style.setProperty('--d', def);
+  w.querySelector('.mark').style.background = mark;
+  if (ends) w.querySelectorAll('.sq').forEach((q, i) => { q.style.background = ends[i]; });
+  if (labels) { w.classList.toggle('ends', !!ends); w.querySelectorAll('.bpl span').forEach((t, i) => { t.textContent = labels[i]; }); }
+  const at = e => { const r = trk.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
+  let drag = false, cur = value;
+  const move = e => { cur = at(e); trk.style.setProperty('--v', cur); live && live(cur); };
+  trk.addEventListener('pointerdown', e => { drag = true; trk.setPointerCapture?.(e.pointerId); move(e); });
+  trk.addEventListener('pointermove', e => { if (drag) move(e); });
+  trk.addEventListener('pointerup', e => { if (!drag) return; drag = false; move(e); commit(cur); });
+  trk.addEventListener('pointercancel', () => { if (!drag) return; drag = false; commit(cur); });
+  return w;
+}
+const rainbow = (s, v, n = 12) => 'linear-gradient(90deg,' + Array.from({ length: n + 1 }, (_, i) => hsvHex(i * 360 / n, s, v)).join(',') + ')';
 
 /* Круг цветов: по кругу — оттенок HSV, к центру — бледнее, V = 1. Картинка считается один раз. */
 let wheelImg = null, rgbOpen = false;
@@ -871,20 +1036,44 @@ function drawWheel(cv, hex) {
 const cpanel = $('cpanel');
 function renderPanel() {
   if (theme() === 'blueprint') {
-    cpanel.innerHTML = '<h3>&gt; оттенок чертежа</h3><p>Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж.</p>'
-      + '<div class="bps"><i class="sq w"></i><div class="trk" role="slider" aria-label="Светлота чертежа"><b class="mark"></b><b class="thumb"></b></div><i class="sq k"></i></div>'
-      + '<div class="bpl"><span>светлее</span><span>темнее</span></div><button class="wide">по умолчанию</button>';
-    const trk = cpanel.querySelector('.trk');
-    trk.style.setProperty('--v', bpShade);
     // пока тянешь — меняется только фон; при отпускании значение сохраняется и применяется ко всему
-    const at = e => { const r = trk.getBoundingClientRect(); return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)); };
-    const commit = v => { bpShade = v; bpLive = null; try { localStorage.setItem('krisa-bp', String(Math.round(v * 1000) / 1000)); } catch {} applyColor(); trk.style.setProperty('--v', v); };
-    let drag = false;
-    trk.addEventListener('pointerdown', e => { drag = true; trk.setPointerCapture?.(e.pointerId); bpLive = at(e); trk.style.setProperty('--v', bpLive); });
-    trk.addEventListener('pointermove', e => { if (!drag) return; bpLive = at(e); trk.style.setProperty('--v', bpLive); });
-    trk.addEventListener('pointerup', e => { if (!drag) return; drag = false; commit(at(e)); });
-    trk.addEventListener('pointercancel', () => { drag = false; if (bpLive !== null) commit(bpLive); });
-    cpanel.querySelector('.wide').addEventListener('click', () => commit(0.5));
+    const T = bpTones(bpHue), save = () => {
+      try { localStorage.setItem('krisa-bp', String(Math.round(bpShade * 1000) / 1000)); localStorage.setItem('krisa-bp-hue', String(Math.round(bpHue))); } catch {}
+      applyColor(); renderPanel();
+    };
+    cpanel.innerHTML = '<h3>&gt; оттенок чертежа</h3><p>Светлее — как светокопия: белая бумага и синие линии. Темнее — ночной чертёж.</p>';
+    cpanel.appendChild(makeSlider({ name: 'Светлота чертежа', track: 'linear-gradient(90deg,' + T.paper + ',' + T.blue + ',' + T.night + ')',
+      value: bpShade, def: 0.5, mark: T.blue, ends: [T.paper, T.night], labels: ['светлее', 'темнее'],
+      live: v => { bpLive = v; }, commit: v => { bpShade = v; bpLive = null; save(); } }));
+    cpanel.insertAdjacentHTML('beforeend', '<h3>&gt; цвет чертежа</h3>');
+    cpanel.appendChild(makeSlider({ name: 'Оттенок чертежа', track: rainbow(132 / 158, 158 / 255), value: bpHue / 360, def: 218 / 360,
+      mark: '#1A4A9E', labels: ['оттенок', ''], live: v => { bpHueLive = v * 360; }, commit: v => { bpHue = v * 360; bpHueLive = null; save(); } }));
+    const d = document.createElement('button'); d.className = 'wide'; d.textContent = 'по умолчанию';
+    d.addEventListener('click', () => { bpShade = 0.5; bpHue = 218; save(); });
+    cpanel.appendChild(d);
+    return;
+  }
+  if (theme() === 'prism') {
+    cpanel.innerHTML = '<h3>&gt; стекло и свет</h3><p>Яркость переливов, прозрачность стекла, цвета радуги и цвет фона.</p>';
+    const ir = prIris(0).join(',');
+    [['bright', 'Яркость', 'linear-gradient(90deg,rgba(7,6,11,.92),rgba(7,6,11,0)),linear-gradient(90deg,' + ir + ')', ['тусклее', 'ярче']],
+     ['frost', 'Прозрачность', 'linear-gradient(90deg,#202028,#D8D8E0)', ['прозрачнее', 'матовее']],
+     ['hue', 'Цвета', rainbow(0.75, 1), ['сдвиг радуги', '']],
+     ['bg', 'Цвет фона', 'linear-gradient(90deg,#07060B,' + Array.from({ length: 13 }, (_, i) => hsvHex(i * 30, 0.75, 0.22)).join(',') + ')', ['чёрный', 'цветной']],
+    ].forEach(([k, title, track, labels]) => {
+      const pl = document.createElement('div'); pl.className = 'plate';
+      pl.innerHTML = '<b class="pt"></b>'; pl.firstChild.textContent = title;
+      pl.appendChild(makeSlider({ name: title, track, value: pr[k], def: PR_DEF[k], mark: k === 'bg' ? '#07060B' : '#fff', labels,
+        commit: v => { pr[k] = v; try { localStorage.setItem('krisa-pr-' + k, String(Math.round(v * 1000) / 1000)); } catch {} applyColor(); } }));
+      cpanel.appendChild(pl);
+    });
+    const d = document.createElement('button'); d.className = 'wide'; d.textContent = 'по умолчанию';
+    d.addEventListener('click', () => {
+      Object.assign(pr, PR_DEF);
+      try { for (const k in PR_DEF) localStorage.removeItem('krisa-pr-' + k); } catch {}
+      applyColor(); renderPanel();
+    });
+    cpanel.appendChild(d);
     return;
   }
   if (theme() === 'thermal') {
@@ -956,18 +1145,33 @@ function renderPanel() {
   });
 }
 
-/* Вкладки IRBIS / MocTec меняют набор кнопок (выбор запоминается), «Цвет» — показывает панель цвета вместо кнопок. */
+/* Вкладки IRBIS / MocTec / «Проекторы» меняют набор кнопок (выбор запоминается), «Цвет» — показывает панель цвета вместо кнопок.
+   В «Проекторах» над кнопками — чипы марок проектора NEC / Epson / InFocus / BenQ. */
 let remote = 'irbis', tab = 'irbis';
-try { if (localStorage.getItem('krisa-remote') === 'moc') remote = tab = 'moc'; } catch {}
+try { const r = localStorage.getItem('krisa-remote'); if (r === 'moc' || r === 'proj') remote = tab = r; } catch {}
+const brands = $('brands');
+PROJ.forEach((b, i) => {
+  const c = document.createElement('button');
+  c.className = 'gear tab chip'; c.textContent = b.name;
+  c.addEventListener('click', () => {
+    if (projBrand === i) return;
+    projBrand = i;
+    try { localStorage.setItem('krisa-proj', String(i)); } catch {}
+    buildGrid(true);
+  });
+  brands.appendChild(c);
+});
 function syncTabs() {
-  // «Цвет» есть в «Терминале», «Тепловизоре» и «Чертеже»
-  if (tab === 'color' && theme() === 'prism') tab = remote;
+  // «Цвет» есть во всех темах
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
   document.body.classList.toggle('ctab', tab === 'color');
+  document.body.classList.toggle('proj', tab === 'proj');
+  [...brands.children].forEach((c, i) => c.classList.toggle('on', i === projBrand));
 }
 function buildGrid(reveal) {
   grid.textContent = '';
-  REMOTES[remote].keys.forEach(makeKey);
+  const R = REMOTES[remote];
+  R.keys.forEach(k => makeKey(k, R.nec2));
   document.querySelector('.id').textContent = REMOTES[remote].id;
   tab = remote; syncTabs();
   if (reveal) showRemote();
@@ -1010,7 +1214,7 @@ $('host').addEventListener('input', e => { settings.host = e.target.value; save(
 dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
 
 const codes = $('codes');
-[...KEYS, ...MOC_KEYS.map(([l, h]) => ['MOC ' + l, h])].forEach(([label, hex]) => {
+[...KEYS, ...MOC_KEYS.map(([l, h]) => ['MOC ' + l, h]), ...PROJ.flatMap(b => b.keys.map(([l, h]) => [b.name.toUpperCase() + ' ' + l, h]))].forEach(([label, hex]) => {
   const tr = codes.insertRow(), pronto = prontoOf(hex);
   tr.insertCell().textContent = label;
   const td = tr.insertCell();
@@ -1129,9 +1333,14 @@ renderMode();
 })();
 
 /* ---------- «Призма»: стеклянные бруски-лучи вокруг тёмной сферы ----------
-   Рисуется один раз (детерминированный «случайный» узор, как в Android), дальше вращается через CSS. */
-(function () {
-  const IRIS = ['#8B6CFF', '#3FE0FF', '#62FFB8', '#FFE66B', '#FF8A5C', '#FF5FD8'];
+   Рисуется один раз (детерминированный «случайный» узор, как в Android), дальше вращается через CSS.
+   Перерисовывается, только когда ползунок «Цвета» повернул радугу. */
+let burstHue = null;
+window.prismBurst = function () {
+  if (document.documentElement.dataset.theme !== 'prism' && burstHue !== null) return;
+  if (burstHue === pr.hue) return;
+  burstHue = pr.hue;
+  const IRIS = prIris();
   const size = Math.min(1400, Math.round(Math.min(innerWidth, innerHeight) * 1.05 * (devicePixelRatio || 1)));
   const c = document.createElement('canvas'); c.width = c.height = size;
   const x = c.getContext('2d'), R = size / 2;
@@ -1176,7 +1385,7 @@ renderMode();
   // тёмная сфера с голубым ободком и бликом
   const sr = R * 0.15;
   let g = x.createRadialGradient(R, R, 0, R, R, sr);
-  g.addColorStop(0, '#000'); g.addColorStop(.78, '#000'); g.addColorStop(.93, '#2C5BFF'); g.addColorStop(1, '#fff');
+  g.addColorStop(0, '#000'); g.addColorStop(.78, '#000'); g.addColorStop(.93, (() => { const c = rgbOf('#2C5BFF'), [h, sat] = rgb2hs(c); return hsvHex(h + pr.hue * 360, sat, Math.max(...c) / 255); })()); g.addColorStop(1, '#fff');
   x.fillStyle = g; x.beginPath(); x.arc(R, R, sr, 0, 7); x.fill();
   const hx = R - sr * 0.35, hy = R - sr * 0.4;
   g = x.createRadialGradient(hx, hy, 0, hx, hy, sr * 0.45);
@@ -1184,13 +1393,14 @@ renderMode();
   x.fillStyle = g; x.beginPath(); x.arc(hx, hy, sr * 0.45, 0, 7); x.fill();
   if (x.createConicGradient) {
     g = x.createConicGradient(0, R, R);
-    ['#8B6CFF', '#3FE0FF', '#FFFFFF', '#FF5FD8', '#8B6CFF'].forEach((col, j) => g.addColorStop(j / 4, col));
+    [IRIS[0], IRIS[1], '#FFFFFF', IRIS[5], IRIS[0]].forEach((col, j) => g.addColorStop(j / 4, col));
     x.strokeStyle = g;
-  } else x.strokeStyle = '#8B6CFF';
+  } else x.strokeStyle = IRIS[0];
   x.lineWidth = R * 0.012; x.beginPath(); x.arc(R, R, sr * 0.97, 0, 7); x.stroke();
   const url = 'url(' + c.toDataURL() + ')';
   document.querySelectorAll('.sky .burst').forEach(b => b.style.backgroundImage = url);
-})();
+};
+prismBurst();
 
 /* ---------- Фон «Матрица»: колонки падающих символов (только зелёный люминофор) ----------
    Клетка 17px, у каждой колонки своя скорость (6–22 клетки/с) и длина хвоста (8–30);
@@ -1298,7 +1508,7 @@ renderMode();
     requestAnimationFrame(draw);
     if (document.documentElement.dataset.theme !== 'blueprint') return;
     const dpr = Math.min(2, devicePixelRatio || 1), W = innerWidth, H = innerHeight, t = (now - t0) / 1000;
-    const P = bpColors(bpLive !== null ? bpLive : bpShade), ink = P.ink;
+    const P = bpColors(bpLive !== null ? bpLive : bpShade, bpHueLive !== null ? bpHueLive : bpHue), ink = P.ink;
     document.querySelectorAll('canvas.bpc').forEach(cv => {
       if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
       const x = cv.getContext('2d');
@@ -1331,7 +1541,7 @@ renderMode();
   const rat = new Image();
   let ratInk = '';
   window.bpApply = () => {
-    const ink = bpColors(bpShade).ink;
+    const ink = bpColors(bpShade, bpHue).ink;
     if (!rat.complete || !rat.naturalWidth || ink === ratInk || !$('ratbpImg')) return;
     ratInk = ink;
     const w = rat.naturalWidth, h = rat.naturalHeight, c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -1356,7 +1566,7 @@ function showRemote() {
   [...grid.children].forEach((b, i) => setTimeout(() => {
     b.classList.add('shown');
     scramble(b.querySelector('.t'), b.getAttribute('aria-label'), 480);
-  }, 60 * i));
+  }, Math.min(60, 1500 / grid.children.length) * i));
   status('> ready. ' + REMOTES[remote].keys.length + ' keys loaded');
 }
 
@@ -1370,7 +1580,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa ir-remote v1.20', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa ir-remote v1.21', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

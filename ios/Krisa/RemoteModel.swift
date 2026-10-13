@@ -56,6 +56,7 @@ final class RemoteModel: ObservableObject {
             guard let self else { return }
             do {
                 let repeats = REPEATABLE.contains(label)
+                let fullFrame = Nec.repeatsFullFrame(code)   // NEC2: повтор всего кадра
                 var next = Date().addingTimeInterval(0.4)
                 if mode == .http {
                     let tx = TasmotaIr(host: host)
@@ -64,7 +65,7 @@ final class RemoteModel: ObservableObject {
                     while repeats && self.isHeld(id) {
                         Thread.sleep(until: next)
                         if !self.isHeld(id) { break }
-                        try tx.sendNec(code, repeatFrame: true)
+                        try tx.sendNec(code, repeatFrame: !fullFrame)
                         next = max(next.addingTimeInterval(0.25), Date())
                     }
                 } else {
@@ -73,7 +74,7 @@ final class RemoteModel: ObservableObject {
                     while repeats && self.isHeld(id) {
                         Thread.sleep(until: next)
                         if !self.isHeld(id) { break }
-                        try audio.transmit(Nec.withGap(Nec.repeatCode))
+                        try audio.transmit(Nec.withGap(fullFrame ? Nec.frame(code) : Nec.repeatCode))
                         next = max(next.addingTimeInterval(Double(Nec.framePeriodMs) / 1000), Date())
                     }
                 }

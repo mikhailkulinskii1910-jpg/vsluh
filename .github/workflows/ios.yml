@@ -57,6 +57,15 @@ jobs:
           sleep 4; xcrun simctl io "$DEV" screenshot "out/splash-prism.png"
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-prism.png"
+          # «Призма» с настройками: сдвиг радуги и цветной фон
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa prHue -float 0.5
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa prBg -float 0.6
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-prism-tuned.png"
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa prHue -float 0
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa prBg -float 0
           # тема «Тепловизор»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme thermal
@@ -84,12 +93,25 @@ jobs:
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-blueprint-light.png"
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa bpShade -float 0.5
+          # «Чертёж», оттенок 120° (зелёный)
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa bpHue -float 120
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-blueprint-hue.png"
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa bpHue -float 218
           # пульт MocTec (тема «Терминал»)
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme terminal
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote moc
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-moc.png"
+          # вкладка PROJ, пульт проектора Epson
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote proj
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa projBrand -int 1
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-proj.png"
           # «Терминал» с RGB-переливом Rainbow: пульт и вкладка «Цвет»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote irbis

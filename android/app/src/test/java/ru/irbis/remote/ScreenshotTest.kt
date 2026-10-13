@@ -53,6 +53,15 @@ class ScreenshotTest {
             root.draw(Canvas(bmp))
             File(out, "moctec.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
+        findText(root, "Проекторы")!!.performClick()
+        for (b in listOf("NEC", "Epson", "InFocus", "BenQ")) {
+            findText(root, b)!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+            Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp))
+                File(out, "proj-$b.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
         findText(root, "Рулетка")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
         Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
@@ -117,6 +126,37 @@ class ScreenshotTest {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
             findText(root, "Цвет")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+            ctl.pause().stop().destroy()
+        }
+    }
+
+    /** «Призма» с ползунками (сдвиг радуги, цветной фон, ярче, прозрачнее) и «Чертёж» с зелёным оттенком. */
+    @Test
+    fun shotsTuned() {
+        val cases = listOf(
+            "prism-tuned" to mapOf("theme" to "prism", "pr_bright" to 0.9f, "pr_frost" to 0.15f, "pr_hue" to 0.5f, "pr_bg" to 0.6f),
+            "prism-dim" to mapOf("theme" to "prism", "pr_bright" to 0.1f, "pr_frost" to 1f, "pr_hue" to 0.25f, "pr_bg" to 0.15f),
+            "bp-green" to mapOf("theme" to "blueprint", "bp_hue" to 130f, "bp_shade" to 0.5f),
+            "bp-red-light" to mapOf("theme" to "blueprint", "bp_hue" to 350f, "bp_shade" to 0.15f))
+        for ((name, prefs) in cases) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", name).apply { mkdirs() }
+            val e = org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()
+            prefs.forEach { (k, v) -> if (v is String) e.putString(k, v) else e.putFloat(k, v as Float) }
+            e.putString("tab", "irbis").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            fun shot(n: String) = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp)); File(out, "$n.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
+            findText(root, "IRBIS")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
+            findText(root, "Цвет")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
+            findText(root, "Проекторы")!!.performClick()
+            findText(root, "BenQ")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("proj")
             ctl.pause().stop().destroy()
         }
     }
