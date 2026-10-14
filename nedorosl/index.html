@@ -321,6 +321,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .dialog .btn{color:var(--parch-ink);border-color:var(--umber)}
 .dialog .btn.primary{color:#f7ead2}
 
+.sign{position:absolute;right:16px;bottom:4px;z-index:20;font-family:var(--f-body);font-style:italic;font-weight:600;font-size:20px;letter-spacing:.08em;color:var(--ochre);opacity:.75;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.6)}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}
 }
@@ -455,6 +456,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
   </section>
 
   <div class="dialog" id="dialog"><div class="box paper"><h3>Начать новую игру?</h3><p>Счёт обнулится, все вопросы вернутся на табло.</p><div class="row"><button class="btn primary" id="dlgYes">Да, начать заново</button><button class="btn" id="dlgNo">Отмена</button></div></div></div>
+
+  <div class="sign" aria-label="Автор: K.M.">K.M.</div>
 
   <div id="curtain" class="closed"><div class="half l"></div><div class="half r"></div><div class="valance"></div></div>
 </div>
