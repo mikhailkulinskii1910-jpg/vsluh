@@ -6,7 +6,7 @@
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="krisa гид">
+<meta name="apple-mobile-web-app-title" content="krisa37™ гид">
 <style>
 /* Терминальная страница в одну колонку, как экран самого пульта: чёрный фон, пиксельные заголовки, моноширинный текст. */
 @font-face{font-family:VT323;src:url(vt323.ttf) format("truetype");font-display:swap}
@@ -57,7 +57,7 @@ ul{margin:0;padding-left:20px;display:grid;gap:4px}
 table{border-collapse:collapse;width:100%}
 td,th{padding:8px 10px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
 th{font-weight:400;color:var(--dim);border-top:0}
-td:first-child{font:400 22px/1.2 var(--pix);white-space:nowrap}
+td:first-child{font:400 22px/1.2 var(--pix);width:38%;overflow-wrap:break-word}
 .note{border-left:2px solid var(--fg);padding:6px 0 6px 12px;color:var(--fg)}
 .warn{border-left-color:var(--no)}
 a{color:var(--fg);text-decoration:underline;text-underline-offset:3px}
@@ -92,28 +92,29 @@ section{scroll-margin-top:16px}
 <div class="wrap">
   <header>
     <a class="back" id="back" href="../" hidden>[&lt;] к пульту</a>
-    <h1>krisa</h1>
-    <p class="sub">Гид по ИК-пульту для интерактивной доски IRBIS: скачать, установить, пользоваться</p>
+    <h1>krisa37™</h1>
+    <p class="sub">Гид по ИК-пульту для интерактивных досок, проекторов и кондиционеров: скачать, установить, подключить, пользоваться</p>
     <nav class="toc" aria-label="Разделы">
-      <a href="#download">скачать</a><a href="#android">android</a><a href="#iphone">iphone</a>
-      <a href="#board">доска</a><a href="#ports">ик-порты</a><a href="#distance">расстояние</a>
-      <a href="#start">запуск</a><a href="#keys">кнопки</a><a href="#trouble">не работает</a>
+      <a href="#download">скачать</a><a href="#android">android</a><a href="#iphone">iphone</a><a href="#tx">передатчики</a>
+      <a href="#start">запуск</a><a href="#tabs">вкладки</a><a href="#boards">доски</a><a href="#projectors">проекторы</a>
+      <a href="#ac">кондиционер</a><a href="#roulette">рулетка</a><a href="#themes">темы</a><a href="#distance">расстояние</a>
+      <a href="#trouble">не работает</a><a href="#faq">вопросы</a>
     </nav>
   </header>
 
   <section id="download">
     <h2><span class="n">&gt;</span> Скачать</h2>
     <div class="dl">
-      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa.apk" target="_blank" rel="noopener"><b>[apk] Android</b><span class="dim">Скачать krisa для Android-телефонов, около 260 КБ. Установка — ниже.</span></a>
-      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa.ipa" target="_blank" rel="noopener"><b>[ipa] iPhone</b><span class="dim">Скачать krisa для iPhone, около 1 МБ. Ставится через компьютер.</span></a>
-      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть в браузере</b><span class="dim">Пульт без установки — на Android и на iPhone. Работает со звуковым ИК-адаптером.</span></a>
+      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa37.apk" target="_blank" rel="noopener"><b>[apk] Android</b><span class="dim">krisa37™ для Android-телефонов, около 1,2 МБ. Установка — ниже.</span></a>
+      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть в браузере</b><span class="dim">Пульт без установки — на iPhone и Android. Можно добавить на экран «Домой».</span></a>
+      <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa37.ipa" target="_blank" rel="noopener"><b>[ipa] iPhone</b><span class="dim">Файл приложения для iPhone, около 1,8 МБ. Ставится через компьютер.</span></a>
     </div>
     <h3>QR-коды</h3>
     <p class="dim">Откройте гид на компьютере и наведите камеру телефона на нужный код — ссылка откроется на телефоне.</p>
     <div class="qrs">
-      <figure><img src="qr-apk.svg" alt="QR-код: скачать krisa для Android" width="164" height="164"><figcaption><b>[apk]</b> Android</figcaption></figure>
-      <figure><img src="qr-ipa.svg" alt="QR-код: скачать krisa для iPhone" width="164" height="164"><figcaption><b>[ipa]</b> iPhone</figcaption></figure>
+      <figure><img src="qr-apk.svg" alt="QR-код: скачать krisa37 для Android" width="164" height="164"><figcaption><b>[apk]</b> Android</figcaption></figure>
       <figure><img src="qr-web.svg" alt="QR-код: открыть веб-версию пульта" width="164" height="164"><figcaption><b>[web]</b> Пульт в браузере</figcaption></figure>
+      <figure><img src="qr-ipa.svg" alt="QR-код: скачать krisa37 для iPhone" width="164" height="164"><figcaption><b>[ipa]</b> iPhone</figcaption></figure>
       <figure><img src="qr-guide.svg" alt="QR-код: открыть этот гид" width="164" height="164"><figcaption><b>[?]</b> Этот гид</figcaption></figure>
     </div>
     <p class="dim" style="margin-top:10px">Если файл не скачивается, откройте этот гид на сайте: <a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/guide/" target="_blank" rel="noopener">mikhailkulinskii1910-jpg.github.io/vsluh/irbis/guide/</a></p>
@@ -121,94 +122,172 @@ section{scroll-margin-top:16px}
 
   <section id="android">
     <h2><span class="n">&gt;</span> Установка на Android</h2>
-    <div class="dl" style="margin-bottom:14px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa.apk" target="_blank" rel="noopener"><b>[apk] Скачать krisa.apk</b><span class="dim">Файл для Android, около 260 КБ</span></a></div>
+    <div class="dl" style="margin-bottom:14px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/irbis-remote.apk" download="krisa37.apk" target="_blank" rel="noopener"><b>[apk] Скачать krisa37.apk</b><span class="dim">Файл для Android, около 1,2 МБ</span></a></div>
     <ol class="steps">
-      <li><div>Скачайте <code>krisa.apk</code> кнопкой выше и откройте файл: из уведомления о загрузке или из папки «Загрузки».</div></li>
+      <li><div>Скачайте файл кнопкой выше и откройте его: из уведомления о загрузке или из папки «Загрузки».</div></li>
       <li><div>Если телефон спросит разрешение на установку из этого источника, нажмите «Настройки» и включите «Разрешить установку из этого источника» для браузера или файлового менеджера. Затем вернитесь назад.</div></li>
       <li><div>Появится плашка <b>«Google Play Защита: приложение заблокировано для защиты устройства»</b>. Нажмите <b>«Подробнее»</b>, затем <b>«Всё равно установить»</b>.</div></li>
       <li><div>На Xiaomi, Redmi и POCO может появиться ещё и проверка безопасности MIUI/HyperOS. Нажмите «Продолжить установку» или «Всё равно установить».</div></li>
     </ol>
     <div class="shots">
-      <figure><img src="protect-1.jpg" alt="Плашка Google Play Защиты: приложение krisa заблокировано, под текстом кнопка «Подробнее»" width="480" height="679"><figcaption>[1] Нажмите «Подробнее»</figcaption></figure>
+      <figure><img src="protect-1.jpg" alt="Плашка Google Play Защиты: приложение заблокировано, под текстом кнопка «Подробнее»" width="480" height="679"><figcaption>[1] Нажмите «Подробнее»</figcaption></figure>
       <figure><img src="protect-2.jpg" alt="Та же плашка раскрыта: внизу появилась ссылка «Все равно установить»" width="480" height="682"><figcaption>[2] Нажмите «Всё равно установить»</figcaption></figure>
     </div>
-    <p><b>Почему так.</b> krisa поставляется файлом, а не через Google Play, и подписана не магазином. Play Защита этого разработчика никогда не видела, поэтому предупреждает. Само приложение не просит доступа к интернету, контактам или файлам: оно использует только ИК-порт, USB-передатчик и звук.</p>
-    <p class="note warn">Если кнопки «Всё равно установить» нет: откройте Google Play → значок профиля → «Play Защита» → шестерёнка → выключите «Проверять приложения с помощью Play Защиты». Установите krisa и сразу включите проверку обратно.</p>
+    <p><b>Почему так.</b> krisa37™ поставляется файлом, а не через Google Play, и подписана не магазином. Play Защита этого разработчика никогда не видела, поэтому предупреждает. Приложение не просит доступа к контактам, файлам или камере: оно использует только ИК-порт, USB-передатчик и звук.</p>
+    <p><b>Обновление.</b> Новую версию скачивайте по той же ссылке и ставьте поверх старой — настройки, тема и состояние кондиционера сохранятся.</p>
+    <p class="note warn">Если кнопки «Всё равно установить» нет: откройте Google Play → значок профиля → «Play Защита» → шестерёнка → выключите «Проверять приложения с помощью Play Защиты». Установите krisa37™ и сразу включите проверку обратно.</p>
   </section>
 
   <section id="iphone">
     <h2><span class="n">&gt;</span> Установка на iPhone</h2>
-    <p>Встроенного ИК-порта у iPhone нет. Для управления доской нужен <b>звуковой ИК-адаптер</b>, который вставляется в разъём наушников (через переходник Lightning или USB-C на 3,5 мм) или сам подключается в USB-C.</p>
-    <h3>Проще всего: без установки</h3>
-    <p>Откройте веб-версию пульта в Safari, затем кнопка «Поделиться» → «На экран „Домой“». Пульт появится как приложение и будет работать со звуковым адаптером.</p>
-    <div class="dl" style="margin-bottom:6px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть веб-версию</b><span class="dim">Откроется в Safari, установка не нужна</span></a></div>
-    <h3>Приложение krisa.ipa</h3>
-    <p>Apple не разрешает ставить приложения файлом прямо на телефоне. Файл <code>krisa.ipa</code> подписывается вашим Apple ID на компьютере (Windows или Mac) с помощью бесплатной программы Sideloadly:</p>
-    <div class="dl" style="margin-bottom:14px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa.ipa" target="_blank" rel="noopener"><b>[ipa] Скачать krisa.ipa</b><span class="dim">Файл для iPhone, около 1 МБ — скачивайте на компьютер</span></a></div>
+    <p class="note warn">В iPhone нет встроенного ИК-передатчика — ни в одной модели. Чтобы управлять техникой с iPhone, нужен <b>звуковой ИК-адаптер</b> или <b>Wi-Fi ИК-передатчик</b> — см. <a href="#tx">передатчики</a>. В App Store krisa37™ нет: для этого нужен платный аккаунт разработчика Apple.</p>
+    <h3>[1] Лучший способ: веб-версия на экране «Домой»</h3>
+    <p>Не нужны ни компьютер, ни App Store. Умеет всё то же, что приложение: доски, проекторы, кондиционер, темы, звуковой адаптер и Wi-Fi передатчик. Обновляется сама.</p>
     <ol class="steps">
-      <li><div>Скачайте <code>krisa.ipa</code> на компьютер — кнопка выше.</div></li>
+      <li><div>Откройте веб-версию <b>в Safari</b> — кнопка ниже.</div></li>
+      <li><div>Нажмите «Поделиться» (квадрат со стрелкой вверх) → <b>«На экран „Домой“»</b> → «Добавить».</div></li>
+      <li><div>На экране появится иконка krisa37™. Она открывается на весь экран и работает без интернета.</div></li>
+    </ol>
+    <div class="dl" style="margin:10px 0 6px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/" target="_blank" rel="noopener"><b>[web] Открыть веб-версию</b><span class="dim">Откроется в Safari, установка не нужна</span></a></div>
+    <h3>[2] Приложение krisa37.ipa через компьютер</h3>
+    <p>Apple не разрешает ставить приложения файлом прямо на телефоне. Файл подписывается вашим Apple ID на компьютере (Windows или Mac) бесплатной программой Sideloadly:</p>
+    <div class="dl" style="margin-bottom:14px"><a href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/krisa.ipa" download="krisa37.ipa" target="_blank" rel="noopener"><b>[ipa] Скачать krisa37.ipa</b><span class="dim">Файл для iPhone, около 1,8 МБ — скачивайте на компьютер</span></a></div>
+    <ol class="steps">
+      <li><div>Скачайте <code>krisa37.ipa</code> на компьютер — кнопка выше.</div></li>
       <li><div>Установите Sideloadly с сайта <a href="https://sideloadly.io" target="_blank" rel="noopener">sideloadly.io</a>. На Windows нужны ещё iTunes и iCloud — версии с сайта Apple, не из Microsoft Store.</div></li>
       <li><div>Подключите iPhone кабелем, разблокируйте его и нажмите «Доверять этому компьютеру».</div></li>
-      <li><div>Перетащите <code>krisa.ipa</code> в окно Sideloadly, введите свой Apple ID и нажмите «Start». Sideloadly спросит пароль Apple ID и установит krisa.</div></li>
+      <li><div>Перетащите файл в окно Sideloadly, введите свой Apple ID и нажмите «Start».</div></li>
       <li><div>На iPhone: «Настройки» → «Основные» → «VPN и управление устройством» → ваш Apple ID → «Доверять».</div></li>
-      <li><div>На iOS 16 и новее: «Настройки» → «Конфиденциальность и безопасность» → «Режим разработчика» → включить. iPhone перезагрузится; после перезагрузки подтвердите включение.</div></li>
+      <li><div>На iOS 16 и новее: «Настройки» → «Конфиденциальность и безопасность» → «Режим разработчика» → включить, iPhone перезагрузится — подтвердите включение.</div></li>
     </ol>
-    <p class="note warn">С бесплатным Apple ID приложение работает 7 дней. Потом оно перестаёт открываться, и его нужно установить заново тем же способом, данные не пропадут. Так можно держать до 3 приложений одновременно. Вместо Sideloadly подойдёт AltStore (<a href="https://altstore.io" target="_blank" rel="noopener">altstore.io</a>): он сам продлевает подпись, когда компьютер и iPhone в одной Wi-Fi сети.</p>
+    <p class="note warn">С бесплатным Apple ID приложение работает 7 дней, потом его нужно поставить заново тем же способом (данные не пропадут). До 3 таких приложений одновременно. AltStore (<a href="https://altstore.io" target="_blank" rel="noopener">altstore.io</a>) продлевает подпись сам, когда компьютер и iPhone в одной Wi-Fi сети.</p>
+    <h3>[3] TrollStore — навсегда и без компьютера</h3>
+    <p>Бесплатная программа, которая ставит файл .ipa навсегда, но работает только на части версий iOS (примерно 14.0–16.6.1 и 17.0). Версию смотрите в «Настройки» → «Основные» → «Об этом устройстве». Сервисы-«подписыватели без компьютера» (ESign, Scarlet и подобные) не советуем: их сертификаты часто отзывают, и это риск для безопасности.</p>
   </section>
 
-  <section id="board">
-    <h2><span class="n">&gt;</span> Для какой доски</h2>
-    <p>Приложение посылает ИК-коды пульта <b>IRBIS #500202</b> (протокол NEC, 38 кГц). Оно работает <b>только с досками IRBIS</b>. Доски других марок, например MocTec, понимают другие коды и на krisa не отреагируют.</p>
+  <section id="tx">
+    <h2><span class="n">&gt;</span> Передатчики: чем посылать сигнал</h2>
+    <p>Выбор передатчика — кнопка <kbd>[tx]</kbd> в правом верхнем углу. Там же «Проверка» (что видит телефон) и «Тема».</p>
+    <div class="keys"><table>
+      <tr><th>Передатчик</th><th>Что это</th></tr>
+      <tr><td>Встроенный ИК-порт<br><span class="dim" style="font:13px var(--mono)">Android</span></td><td>Окошко на верхнем торце у многих Xiaomi, Redmi, POCO, части Huawei и Honor. Самый простой вариант — ничего покупать не нужно.</td></tr>
+      <tr><td>USB-C передатчик<br><span class="dim" style="font:13px var(--mono)">Android</span></td><td>Маленький «свисток» с тёмным прозрачным кончиком в разъём зарядки. На Xiaomi включите OTG.</td></tr>
+      <tr><td>Звуковой адаптер<br><span class="dim" style="font:13px var(--mono)">Android, iPhone, веб</span></td><td>ИК-светодиоды в разъёме наушников (на iPhone — через переходник Lightning или USB-C на 3,5 мм). Режимы «2 светодиода» и «1 светодиод». Громкость — на максимум.</td></tr>
+      <tr><td>Wi-Fi передатчик<br><span class="dim" style="font:13px var(--mono)">iPhone, веб</span></td><td>Плата ESP8266/ESP32 с ИК-светодиодом и прошивкой Tasmota в той же Wi-Fi сети. Телефон шлёт ей команды, она светит на технику. Удобнее всего для кондиционеров. В <kbd>[tx]</kbd> укажите адрес платы, например <code>192.168.1.50</code>.</td></tr>
+    </table></div>
+    <p class="dim" style="margin-top:10px">В веб-версии с Wi-Fi передатчиком: сайт открыт по https, а Tasmota отвечает по http — браузер может заблокировать запрос. Тогда используйте приложение или откройте пульт по http.</p>
+  </section>
+
+  <section id="start">
+    <h2><span class="n">&gt;</span> Первый запуск</h2>
+    <ol class="steps">
+      <li><div>Откройте krisa37™. После заставки с крысой приложение само проверит, есть ли ИК-порт, и подскажет, если его нет.</div></li>
+      <li><div>Посмотрите на строку под заголовком: там написан выбранный передатчик, например <code>&gt; Встроенный ИК-порт</code>. Если «не найден» — нажмите <kbd>[tx]</kbd> и выберите другой.</div></li>
+      <li><div>Выберите вкладку и подвкладку нужного устройства: например «Доски» → IRBIS.</div></li>
+      <li><div>Встаньте в 1–5 метрах и направьте телефон (верхний торец) на приёмник устройства.</div></li>
+      <li><div>Нажмите <code>POWER</code>. Внизу появится строка вида <code>&gt; tx POWER 0x807F18E7 [sent]</code> — команда отправлена.</div></li>
+    </ol>
+  </section>
+
+  <section id="tabs">
+    <h2><span class="n">&gt;</span> Вкладки</h2>
+    <div class="keys"><table>
+      <tr><th>Вкладка</th><th>Что внутри</th></tr>
+      <tr><td>Доски</td><td>Пульты интерактивных досок: <b>IRBIS</b> и <b>MocTec</b> (подвкладки сверху).</td></tr>
+      <tr><td>Проекторы</td><td><b>NEC, Epson, InFocus, BenQ</b> — все кнопки их пультов.</td></tr>
+      <tr><td>Кондиционеры</td><td><b>Haier</b> — термостат, режимы, скорость, жалюзи, таймер.</td></tr>
+      <tr><td>Рулетка</td><td>Только Android: перебор кодов для неизвестной техники.</td></tr>
+      <tr><td>Цвет</td><td>Настройки текущей темы оформления.</td></tr>
+    </table></div>
+  </section>
+
+  <section id="boards">
+    <h2><span class="n">&gt;</span> Доски: IRBIS и MocTec</h2>
     <div class="boards">
       <figure class="board" style="margin:0">
-        <img src="board-irbis.jpg" alt="Интерактивная доска IRBIS: широкая чёрная рамка, внизу слева кнопки, на экране часы и круг из иконок приложений" width="800" height="548">
-        <figcaption class="cap"><span class="tag ok">[ok] IRBIS</span><span class="dim">Подходит. Внизу слева на рамке — ряд кнопок, на экране — часы и круг из иконок.</span></figcaption>
+        <img src="board-irbis.jpg" alt="Интерактивная доска IRBIS: широкая чёрная рамка, внизу слева кнопки" width="800" height="548">
+        <figcaption class="cap"><span class="tag ok">IRBIS</span><span class="dim">Подвкладка IRBIS — пульт #500202, коды NEC 80 7F. Кнопки внизу слева на рамке.</span></figcaption>
       </figure>
-      <figure class="board no" style="margin:0">
-        <img src="board-moctex.jpg" alt="Интерактивная доска MocTec на стене: надпись MocTec по центру нижней рамки" width="800" height="561">
-        <figcaption class="cap"><span class="tag no">[x] MocTec</span><span class="dim">Не подходит. Название MocTec написано по центру нижней рамки.</span></figcaption>
+      <figure class="board" style="margin:0">
+        <img src="board-moctex.jpg" alt="Интерактивная доска MocTec: надпись MocTec по центру нижней рамки" width="800" height="561">
+        <figcaption class="cap"><span class="tag ok">MocTec</span><span class="dim">Подвкладка MocTec — пульт «Interactive Board RC 52 Key», коды NEC 04 FB.</span></figcaption>
       </figure>
     </div>
-    <p class="note" style="margin-top:14px">Как проверить: посмотрите на надпись на нижней рамке и на наклейку с моделью на задней стороне доски. Если там MocTec или другая марка, а не IRBIS, пульт работать не будет.</p>
+    <p style="margin-top:12px">Какая у вас доска — смотрите надпись на нижней рамке и наклейку на задней стороне. ИК-приёмник обычно в нижней рамке, рядом с кнопками и индикатором питания.</p>
+    <div class="keys"><table>
+      <tr><th>Кнопка</th><th>Что делает</th></tr>
+      <tr><td>POWER</td><td>Включает и выключает доску.</td></tr>
+      <tr><td>VOL- / VOL+</td><td>Тише и громче. Удерживайте, чтобы менять плавно.</td></tr>
+      <tr><td>MENU</td><td>Меню настроек доски (IRBIS).</td></tr>
+      <tr><td>EMPY SCREEN</td><td>Гасит изображение, звук остаётся. Ещё раз — вернуть картинку. Название с опечаткой, как в базе кодов.</td></tr>
+      <tr><td>FREEZE</td><td>Стоп-кадр (IRBIS).</td></tr>
+      <tr><td>INPUT</td><td>Выбор источника: встроенный Android, компьютер, HDMI.</td></tr>
+      <tr><td>J UP / DOWN<br>J LEFT / RIGHT</td><td>Стрелки по меню. Удерживайте, чтобы листать.</td></tr>
+      <tr><td>J OK</td><td>Подтвердить выбор.</td></tr>
+      <tr><td>HOME / BACK</td><td>Домой и назад (MocTec).</td></tr>
+    </table></div>
+    <p class="dim" style="margin-top:10px">Коды IRBIS — из базы IrCode Finder (пульт #500202), коды MocTec — из той же базы (#500275) и проверены расшифровкой файлов пульта МОСТЕХ. Коды MocTec на настоящей доске пока не проверены.</p>
   </section>
 
-  <section id="need">
-    <h2><span class="n">&gt;</span> Что нужно</h2>
-    <ul>
-      <li><b>Android-телефон со встроенным ИК-портом</b>: многие Xiaomi, Redmi и POCO, некоторые Huawei и Honor. Это основной и самый простой вариант. Как установить — <a href="#android">раздел Android</a>.</li>
-      <li>Или <b>USB-C ИК-передатчик</b> (маленький «свисток» с прозрачным тёмным кончиком), если в телефоне ИК-порта нет.</li>
-      <li>Или <b>звуковой ИК-адаптер</b> в разъём наушников. Только этот вариант подходит для iPhone: своего ИК-порта у iPhone нет. Подробнее — <a href="#iphone">раздел iPhone</a>.</li>
-    </ul>
+  <section id="projectors">
+    <h2><span class="n">&gt;</span> Проекторы</h2>
+    <p>Вкладка «Проекторы» → марка сверху. Кнопок много, они в три колонки: сначала основные (питание, источник, меню, стрелки, громкость), ниже — остальные.</p>
+    <div class="keys"><table>
+      <tr><th>Марка</th><th>Кнопок</th><th>Модели</th></tr>
+      <tr><td>NEC</td><td>56</td><td>LT, NP, VT, MT и похожие. Есть отдельная POWER OFF.</td></tr>
+      <tr><td>Epson</td><td>39</td><td>EB-…, BrightLink, PowerLite.</td></tr>
+      <tr><td>InFocus</td><td>34</td><td>Серия IN.</td></tr>
+      <tr><td>BenQ</td><td>52</td><td>MX, MS, MW и похожие. Две кнопки включения — POWER и POWER ON: разным моделям нужен разный код.</td></tr>
+    </table></div>
+    <p class="note" style="margin-top:10px"><b>Выключение:</b> проекторы спрашивают подтверждение — нажмите POWER <b>два раза</b> (с паузой около секунды).</p>
+    <p>Кнопки мыши (LEFT/RIGHT CLICK, PAGE UP/DOWN, POINTER) у NEC, Epson и InFocus обычно работают, только если проектор подключён к компьютеру USB-кабелем: тогда он передаёт компьютеру команды мыши и листание слайдов.</p>
+    <p class="dim">Коды — из базы IrCode Finder; пульты одной марки объединены, повторы убраны.</p>
   </section>
 
-  <section id="ports">
-    <h2><span class="n">&gt;</span> Где ИК-порты</h2>
-    <h3>На телефоне</h3>
-    <p>У Xiaomi, Redmi и POCO ИК-порт — маленькое тёмное глянцевое окошко <b>на верхнем торце</b> телефона, рядом с микрофоном. Держите телефон как обычный пульт: верхним торцом к доске, экраном к себе.</p>
-    <p>У USB-C передатчика сигнал выходит из <b>прозрачного тёмного кончика</b> — направляйте его на доску.</p>
-    <p class="note warn">Не закрывайте окошко пальцем или чехлом: толстый чехол с закрытым верхним торцом гасит сигнал.</p>
-    <h3>На доске</h3>
-    <p>ИК-приёмник у таких досок обычно в <b>нижней рамке, рядом с кнопками и индикатором питания</b> — у IRBIS это левая часть нижней рамки. Ищите небольшое тёмное окошко или светящийся индикатор. Если не нашли — целитесь в нижнюю левую часть рамки.</p>
+  <section id="ac">
+    <h2><span class="n">&gt;</span> Кондиционер Haier</h2>
+    <p>Вкладка «Кондиционеры» → Haier. Термостат: ведите пальцем по дуге (16…30°) или жмите <code>−</code> / <code>+</code>. Кнопки: питание, режим (охлаждение → обогрев → осушение → вентилятор → авто), скорость (авто, 1, 2, 3), авто поворот, направление жалюзи, сон, турбо, таймер выключения (1, 2, 4, 8 ч).</p>
+    <p class="note"><b>Вид пульта.</b> Пульты Haier бывают трёх видов. Если кондиционер не отвечает — переключите «1 · YR-W02» → «2 · V9014557» → «3 · HSU07» и нажмите питание ещё раз.</p>
+    <p><b>Важно:</b> пульт кондиционера при каждом нажатии передаёт всё сразу — режим, температуру, скорость. Поэтому приложение запоминает своё состояние. Если кондиционер включали другим пультом, сначала выставьте в приложении то же самое, иначе первое нажатие поменяет и остальные настройки.</p>
+    <p class="dim">Кадры Haier собраны по описанию протоколов библиотеки IRremoteESP8266 и проверены на её эталонных сообщениях; на настоящем кондиционере пока не проверены. Строка с HEX под кнопками — какие байты ушли.</p>
+  </section>
+
+  <section id="roulette">
+    <h2><span class="n">&gt;</span> Рулетка (Android)</h2>
+    <p>Для техники, кодов которой нет: по очереди шлёт 2560 команд NEC (10 адресов × 256), около 5 в секунду.</p>
+    <ol class="steps">
+      <li><div>Встаньте в 1–3 м, направьте телефон на приёмник, нажмите «старт».</div></li>
+      <li><div>Как только устройство отреагирует — «пауза». Кнопкой «◀» отправляйте последние коды по одному, пока снова не отреагирует.</div></li>
+      <li><div>«сработало» запомнит код.</div></li>
+    </ol>
+    <p class="note warn"><b>Результат непредсказуем:</b> устройство может сменить источник, громкость, открыть меню, заблокировать экран или кнопки, выключиться — или не отреагировать. Если доска заблокировалась, дойдите кнопками ◀ / ▶| до кода <code>04FB 3AC5</code> (№ 59) и отправьте его ещё раз — это переключатель блокировки.</p>
+  </section>
+
+  <section id="themes">
+    <h2><span class="n">&gt;</span> Темы оформления</h2>
+    <p>Тема — <kbd>[tx]</kbd> → «Тема» (в веб-версии и на iPhone — в настройках <kbd>[tx]</kbd>). Настройки темы — вкладка «Цвет».</p>
+    <div class="keys"><table>
+      <tr><th>Тема</th><th>Вкладка «Цвет»</th></tr>
+      <tr><td>Терминал</td><td>6 цветов, круг «свой цвет», <b>RGB</b> — 28 переливов цвета по экрану. У зелёного — фон <b>MATRIX</b> (бегущий код).</td></tr>
+      <tr><td>Призма</td><td>Ползунки: яркость, прозрачность стекла, цвета радуги, цвет фона.</td></tr>
+      <tr><td>Тепловизор</td><td>Палитры: Ironbow, White Hot, Rainbow HC, Arctic.</td></tr>
+      <tr><td>Чертёж</td><td>Светлота ⬜—🟦—⬛ (от светокопии до ночного) и цвет чертежа.</td></tr>
+    </table></div>
   </section>
 
   <section id="distance">
     <h2><span class="n">&gt;</span> Расстояние и препятствия</h2>
-    <div class="scheme" role="img" aria-label="Схема: телефон в 1–5 метрах от доски, луч направлен прямо на ИК-приёмник в нижней рамке, допустимое отклонение до 30 градусов">
+    <div class="scheme" role="img" aria-label="Схема: телефон в 1–5 метрах от устройства, луч направлен прямо на ИК-приёмник, допустимое отклонение до 30 градусов">
       <svg viewBox="0 0 400 190" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace" font-size="12">
-        <!-- допустимый конус ±30° от телефона -->
         <path d="M44 120 L352 50 L352 190 Z" fill="#e8e8e8" fill-opacity="0.07"/>
-        <!-- луч -->
         <line x1="44" y1="120" x2="352" y2="120" stroke="#e8e8e8" stroke-width="2" stroke-dasharray="7 5"/>
-        <!-- доска с приёмником -->
         <rect x="352" y="14" width="16" height="150" fill="#000" stroke="#e8e8e8" stroke-width="2"/>
         <rect x="355" y="115" width="10" height="10" fill="#e8e8e8"/>
-        <text x="342" y="10" fill="#e8e8e8" text-anchor="end">доска</text>
+        <text x="342" y="10" fill="#e8e8e8" text-anchor="end">устройство</text>
         <text x="342" y="146" fill="#e8e8e8" text-anchor="end">приёмник</text>
-        <!-- телефон -->
         <rect x="12" y="106" width="28" height="28" fill="#000" stroke="#e8e8e8" stroke-width="2"/>
         <rect x="38" y="115" width="6" height="10" fill="#e8e8e8"/>
         <text x="8" y="152" fill="#e8e8e8">телефон</text>
-        <!-- шкала от доски (x=352): 1 м = 61,6 px, телефон стоит на 5 м -->
         <line x1="44" y1="78" x2="352" y2="78" stroke="#3a3a3a"/>
         <g fill="#8c8c8c" stroke="#8c8c8c" text-anchor="middle">
           <line x1="44" y1="74" x2="44" y2="82"/><text x="44" y="70" stroke="none">5 м</text>
@@ -223,51 +302,36 @@ section{scroll-margin-top:16px}
       </svg>
     </div>
     <ul style="margin-top:12px">
-      <li><b>Расстояние:</b> лучше всего 1–5 метров. Встроенный ИК-порт телефона слабее заводского пульта, поэтому дальше 5–6 метров сигнал может не доходить. Звуковому адаптеру нужно подойти ближе, на 1–3 метра.</li>
-      <li><b>Направление:</b> целитесь прямо в ИК-приёмник. Сбоку под углом больше 30° доска может не принять сигнал.</li>
-      <li><b>Без препятствий:</b> между телефоном и доской не должно быть людей, рук, сумок, мебели и стекла. ИК-свет не проходит сквозь предметы и не огибает углы.</li>
-      <li><b>Яркий свет мешает:</b> прямое солнце или яркая лампа, бьющая в рамку доски, глушат приёмник. Подойдите ближе или закройте окно шторой.</li>
+      <li><b>Расстояние:</b> 1–5 м. Встроенный ИК-порт слабее заводского пульта; звуковому адаптеру нужно 1–3 м.</li>
+      <li><b>Куда целиться:</b> у досок — нижняя рамка рядом с кнопками; у проекторов — окошко спереди или сзади корпуса; у кондиционера — правый край внутреннего блока, где индикаторы.</li>
+      <li><b>Без препятствий:</b> ИК-свет не проходит сквозь людей, мебель и стекло и не огибает углы.</li>
+      <li><b>Яркий свет мешает:</b> солнце или лампа, бьющие в приёмник, глушат сигнал.</li>
+      <li><b>Окошко телефона не закрывайте</b> пальцем или толстым чехлом.</li>
     </ul>
-  </section>
-
-  <section id="start">
-    <h2><span class="n">&gt;</span> Первый запуск</h2>
-    <ol class="steps">
-      <li><div>Убедитесь, что перед вами доска <b>IRBIS</b>, а не MocTec или другая марка.</div></li>
-      <li><div>Откройте krisa. После заставки с крысой появятся 12 кнопок пульта, а приложение само проверит, есть ли в телефоне ИК-порт. Если порта нет, оно скажет об этом и предложит USB-C передатчик или звуковой адаптер.</div></li>
-      <li><div>Проверьте строку под заголовком. Там должно быть <code>&gt; Встроенный ИК-порт</code>. Если написано «не найден», нажмите <kbd>[tx]</kbd> и выберите USB-C передатчик или звуковой адаптер, а кнопка «Проверка» покажет, что видит телефон.</div></li>
-      <li><div>Встаньте в 1–5 метрах от доски и направьте верхний торец телефона на нижнюю левую часть рамки.</div></li>
-      <li><div>Нажмите <code>POWER</code>. Доска должна включиться или выключиться. Внизу экрана появится строка <code>&gt; tx POWER 0x807F18E7 [sent]</code>: команда отправлена.</div></li>
-    </ol>
-  </section>
-
-  <section id="keys">
-    <h2><span class="n">&gt;</span> Кнопки</h2>
-    <div class="keys">
-      <table>
-        <tr><th>Кнопка</th><th>Что делает</th></tr>
-        <tr><td>POWER</td><td>Включает и выключает доску.</td></tr>
-        <tr><td>VOL- / VOL+</td><td>Тише и громче. Удерживайте, чтобы менять громкость плавно.</td></tr>
-        <tr><td>MENU</td><td>Открывает меню настроек доски.</td></tr>
-        <tr><td>EMPY SCREEN</td><td>Гасит изображение, звук и доска остаются включены. Нажмите ещё раз, чтобы вернуть картинку. Название с опечаткой, как в базе кодов.</td></tr>
-        <tr><td>FREEZE</td><td>Останавливает картинку на экране (стоп-кадр).</td></tr>
-        <tr><td>INPUT</td><td>Выбор источника: встроенный Android, компьютер, HDMI.</td></tr>
-        <tr><td>J UP / J DOWN<br>J LEFT / J RIGHT</td><td>Стрелки для перемещения по меню. Удерживайте, чтобы листать.</td></tr>
-        <tr><td>J OK</td><td>Подтверждает выбор в меню.</td></tr>
-      </table>
-    </div>
-    <p class="dim" style="margin-top:10px">Названия кнопок и коды взяты из базы IrCode Finder для пульта IRBIS #500202. Точное поведение EMPY SCREEN и FREEZE зависит от прошивки доски.</p>
   </section>
 
   <section id="trouble">
-    <h2><span class="n">&gt;</span> Если доска не реагирует</h2>
+    <h2><span class="n">&gt;</span> Если не реагирует</h2>
     <ul>
-      <li>Внизу экрана нет строки <code>[sent]</code> → команда не ушла. Нажмите <kbd>[tx]</kbd> → «Проверка» и выберите передатчик, который телефон видит.</li>
-      <li>Строка <code>[sent]</code> есть, но доска молчит → подойдите ближе, уберите всё между телефоном и доской, целитесь в нижнюю левую часть рамки. Подробнее — <a href="#distance">расстояние и препятствия</a>.</li>
-      <li>USB-C передатчик не находится → на Xiaomi включите OTG: «Настройки» → «Дополнительные настройки» → OTG. Он сам выключается через 10 минут.</li>
-      <li>Звуковой адаптер не работает → громкость телефона на максимум, в настройках <kbd>[tx]</kbd> попробуйте режим на 1 и на 2 светодиода.</li>
-      <li>Всё сделано, а реакции нет → скорее всего, это не IRBIS. Проверьте надпись на рамке и наклейку на задней стороне доски — <a href="#board">как отличить</a>.</li>
+      <li>Внизу нет строки <code>[sent]</code> → команда не ушла. <kbd>[tx]</kbd> → «Проверка» и выберите передатчик, который телефон видит.</li>
+      <li><code>[sent]</code> есть, но тишина → подойдите ближе, уберите препятствия, целитесь в приёмник (<a href="#distance">куда</a>).</li>
+      <li>Не та подвкладка → проверьте марку на корпусе: IRBIS или MocTec, нужная марка проектора.</li>
+      <li>Кондиционер молчит → смените вид пульта Haier (1, 2, 3).</li>
+      <li>Проектор не выключается → POWER нужно нажать два раза.</li>
+      <li>USB-C передатчик не находится → на Xiaomi включите OTG: «Настройки» → «Дополнительные настройки» → OTG (сам выключается через 10 минут).</li>
+      <li>Звуковой адаптер не работает → громкость на максимум, попробуйте режим на 1 и на 2 светодиода, другой переходник.</li>
+      <li>Марки нет в приложении → попробуйте «Рулетку» (Android) и напишите разработчику найденный код.</li>
     </ul>
+  </section>
+
+  <section id="faq">
+    <h2><span class="n">&gt;</span> Вопросы</h2>
+    <h3>Есть ли в Google Play и App Store?</h3>
+    <p>Пока нет: для этого нужны аккаунты разработчика (Google — $25 один раз, Apple — $99 в год). Android-версию скачивайте файлом выше, на iPhone — веб-версия на экране «Домой».</p>
+    <h3>Можно ли управлять с iPhone без адаптера?</h3>
+    <p>Нет: ИК-передатчика в iPhone нет. Нужен звуковой адаптер или Wi-Fi передатчик.</p>
+    <h3>Можно ли сделать тачпад?</h3>
+    <p>По ИК — только «стрелками»: у проекторов NEC и Epson с подключённым по USB компьютером — почти как мышь, у досок — перемещение по меню. Настоящего плавного курсора ИК не даёт.</p>
   </section>
 </div>
 <script>
