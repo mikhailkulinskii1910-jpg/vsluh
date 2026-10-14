@@ -103,7 +103,8 @@ jobs:
           # пульт MocTec (тема «Терминал»)
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme terminal
-          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote moc
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote boards
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa boardBrand -int 1
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-moc.png"
           # вкладка PROJ, пульт проектора Epson
@@ -112,9 +113,14 @@ jobs:
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa projBrand -int 1
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-proj.png"
+          # вкладка «Кондиционеры», пульт Haier
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote ac
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-ac.png"
           # «Терминал» с RGB-переливом Rainbow: пульт и вкладка «Цвет»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
-          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote irbis
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote boards; xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa boardBrand -int 0
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa rgb Rainbow
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-rgb.png"
@@ -125,7 +131,7 @@ jobs:
           # «Терминал», зелёный + «Матрица»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa rgb ""
-          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote irbis
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote boards; xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa boardBrand -int 0
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa termColor -int 2096954
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa matrix -bool true
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa

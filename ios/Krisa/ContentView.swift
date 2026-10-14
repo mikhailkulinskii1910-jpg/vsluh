@@ -16,8 +16,13 @@ struct ContentView: View {
     @State private var help = false
     @State private var noIr = false
     @AppStorage("theme") private var theme = "terminal"
-    /// Какой пульт на экране: "irbis" или "moc" (MocTec); "color" — вкладка «Цвет».
-    @AppStorage("remote") private var remote = "irbis"
+    /// Открытая вкладка: "boards" (доски), "proj" (проекторы), "ac" (кондиционеры), "color" (цвет).
+    /// Старые значения "irbis" / "moc" — это «Доски» с соответствующим чипом.
+    @AppStorage("remote") private var remote = "boards"
+    /// Чип во вкладке «Доски»: 0 IRBIS, 1 MocTec.
+    @AppStorage("boardBrand") private var boardBrand = 0
+    /// Состояние кондиционера (для подзаголовка — номер пульта).
+    @AppStorage("acState") private var acState = ""
     // цвет «Терминала» и палитра «Тепловизора» (сами значения Term/Heat держат в статических полях)
     @AppStorage("termColor") private var termColor = 0xEDEDED
     @AppStorage("matrix") private var matrix = false
@@ -54,6 +59,7 @@ struct ContentView: View {
             Text("У iPhone нет встроенного ИК-порта. Вставьте звуковой ИК-адаптер в разъём наушников (через переходник) или в USB-C, либо выберите Wi-Fi передатчик кнопкой [tx].")
         }
         .onAppear {
+            migrateTab()
             // Для скриншота в CI: KRISA_OPEN_HELP=1 сразу открывает «Как пользоваться».
             if ProcessInfo.processInfo.environment["KRISA_OPEN_HELP"] != nil {
                 splash = false; ready = true
@@ -81,10 +87,12 @@ struct ContentView: View {
                 remoteTabs().padding(.top, 12)
                 if colorTab {
                     panelSlot.padding(.top, 12)
-                } else if remote == "proj" {
+                } else if tab == "proj" {
                     projArea.padding(.top, 12)
+                } else if tab == "ac" {
+                    AcPanel(model: model).padding(.top, 12)
                 } else {
-                    keyGrid.padding(.top, 12)
+                    boardsArea.padding(.top, 12)
                 }
                 TypeLine(text: model.status, font: Term.ru(14),
                          color: model.status.hasPrefix("!!") || model.status.contains("[sent]") ? Term.fg : Term.dim)
@@ -163,8 +171,47 @@ struct ContentView: View {
             .frame(height: 64)
     }
 
-    /// Пульт на экране (для проекторов — вместе с маркой).
-    private var gridKey: String { remote == "proj" ? "proj" + String(projIndex) : remote }
+    /// Пульт на экране (вместе с маркой).
+    private var gridKey: String {
+        if tab == "proj" { return "proj" + String(projIndex) }
+        return "boards" + String(boardIndex)
+    }
+
+    /// Открытая вкладка; старые "irbis" / "moc" — «Доски».
+    var tab: String {
+        if remote == "irbis" || remote == "moc" { return "boards" }
+        return remote
+    }
+
+    /// Выбранная доска: 0 IRBIS, 1 MocTec.
+    var boardIndex: Int { min(max(boardBrand, 0), 1) }
+
+    /// Перенос старой вкладки IRBIS / MocTec в «Доски» с нужным чипом.
+    private func migrateTab() {
+        if remote == "irbis" {
+            boardBrand = 0
+            remote = "boards"
+        } else if remote == "moc" {
+            boardBrand = 1
+            remote = "boards"
+        }
+    }
+
+    /// Вкладка «Доски»: чипы IRBIS / MocTec и сетка выбранного пульта.
+    private var boardsArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                boardChip(0, "IRBIS")
+                boardChip(1, "MocTec")
+            }
+            keyGrid
+        }
+    }
+
+    private func boardChip(_ i: Int, _ title: String) -> some View {
+        let on: Bool = i == boardIndex
+        return Button { boardBrand = i } label: { tabLabel(title, on: on, height: 36) }
+    }
 
     /// Выбранная марка проектора (индекс с защитой от мусора в настройках).
     var projIndex: Int { min(max(projBrand, 0), PROJ_BRANDS.count - 1) }
@@ -202,7 +249,7 @@ struct ContentView: View {
 
     private var splashLayer: some View {
         SplashView(boot: [
-            "krisa37™ ir-remote ios",
+            "krisa37™ ios",
             "loading nec table ........ [ok]",
             "audio out ................ [" + (AudioIr.adapterConnected ? "ok" : "--") + "]",
             "decoding rat.png ......... [ok]",
@@ -376,32 +423,36 @@ struct SettingsView: View {
 
 extension ContentView {
     var currentKeys: [(label: String, code: UInt32)] {
-        if remote == "proj" { return PROJ_BRANDS[projIndex].keys }
-        return remote == "moc" ? MOC_KEYS : KEYS
+        if tab == "proj" { return PROJ_BRANDS[projIndex].keys }
+        return boardIndex == 1 ? MOC_KEYS : KEYS
     }
     var remoteSubtitle: String {
-        if remote == "proj" {
+        if tab == "proj" {
             let b: ProjBrand = PROJ_BRANDS[projIndex]
             return "проектор :: " + b.name + " :: " + b.remoteNo
         }
-        return remote == "moc" ? "MocTec :: NEC 04FB" : "#500202 :: IRBIS :: NEC 38kHz"
+        if tab == "ac" {
+            let m: Int = AcState.decode(acState).model
+            return "кондиционер :: Haier :: " + Haier.models[m]
+        }
+        return boardIndex == 1 ? "доска :: MocTec :: NEC 04FB" : "доска :: IRBIS #500202 :: NEC 807F"
     }
-    /// Шрифт подзаголовка: для проекторов он русский — в VT323 кириллицы нет.
+    /// Шрифт подзаголовка: он русский — в VT323 кириллицы нет.
     var subtitleFont: Font {
         if Term.prism { return Prism.body(13) }
-        if remote == "proj" && (Term.terminal || Term.thermal) { return Term.ru(14) }
+        if Term.terminal || Term.thermal { return Term.ru(14) }
         return Term.mono(20)
     }
 
-    /// Вкладки IRBIS / MocTec (и «Цвет» в «Терминале» и «Тепловизоре») над кнопками.
+    /// Вкладки «Доски» / «Проекторы» / «Кондиционеры» / «Цвет» над пультом.
     func remoteTabs() -> some View {
         GeometryReader { g in tabRow(width: g.size.width) }
             .frame(height: 40)
     }
 
-    /// Вкладки: id, подпись и вес ширины («Проекторы» шире остальных).
+    /// Вкладки: id, подпись и вес ширины (длина подписи + 2.5).
     private static let tabs: [(id: String, title: String, weight: CGFloat)] = [
-        ("irbis", "IRBIS", 1), ("moc", "MocTec", 1), ("proj", "Проекторы", 1.45), ("color", "Цвет", 1),
+        ("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5), ("color", "Цвет", 6.5),
     ]
 
     private func tabRow(width: CGFloat) -> some View {
@@ -422,51 +473,16 @@ extension ContentView {
         return free * ContentView.tabs[i].weight / sum
     }
 
-    /// Какая вкладка подсвечена: «Цвет» в теме без неё — значит пульт IRBIS.
-    private var shownRemote: String { remote == "color" && !hasColorTab ? "irbis" : remote }
+    /// Какая вкладка подсвечена.
+    private var shownRemote: String { tab }
 
     private func remoteTab(_ id: String, _ title: String) -> some View {
         let on: Bool = shownRemote == id
         return Button { remote = id } label: { tabLabel(title, on: on) }
     }
 
-    /// Русская подпись вкладки — свой шрифт: в VT323 кириллицы нет.
-    private func isRu(_ title: String) -> Bool { title == "Цвет" || title == "Проекторы" }
-
-    /// Шрифт вкладки: русские подписи — системным моноширинным 13.
-    private func tabFont(_ title: String) -> Font {
-        if isRu(title) && (Term.terminal || Term.thermal) { return Term.ru(13) }
-        return Term.mono(22)
-    }
-
-    @ViewBuilder private func tabLabel(_ title: String, on: Bool, height: CGFloat = 40) -> some View {
-        if Term.prism {
-            Text(title).font(Prism.display(isRu(title) ? 11 : 15)).foregroundColor(on ? Prism.ink : Term.fg)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity).frame(height: height)
-                .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
-        } else if Term.thermal {
-            Text(title).font(tabFont(title)).foregroundColor(on ? Heat.ink : Term.fg)
-                .frame(maxWidth: .infinity).frame(height: height)
-                .background(thermalTabFill(on))
-                .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
-        } else if Term.blueprint {
-            Blueprint.caps(title, isRu(title) ? 11 : 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
-                .lineLimit(1).minimumScaleFactor(0.7)
-                .frame(maxWidth: .infinity).frame(height: height)
-                .background(on ? Blueprint.ink : Blueprint.bg.opacity(0.78))
-                .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
-        } else {
-            Text(title).font(tabFont(title)).foregroundColor(on ? Color.black : Term.fg)
-                .frame(maxWidth: .infinity).frame(height: height)
-                .background(on ? Term.fg : Color.black)
-                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
-        }
-    }
-
-    private func thermalTabFill(_ on: Bool) -> AnyView {
-        if on { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
-        return AnyView(Color.black.opacity(0.65))
+    private func tabLabel(_ title: String, on: Bool, height: CGFloat = 40) -> some View {
+        TabLabel(title: title, on: on, height: height, ruSize: 12.5)
     }
 
     /// Фон текущей темы. В «Призме» и «Чертеже» крыс нет, в «Тепловизоре» они — тёплые пятна в рамках.
@@ -582,4 +598,60 @@ struct HelpWeb: UIViewRepresentable {
         return web
     }
     func updateUIView(_ web: WKWebView, context: Context) {}
+}
+
+/// Плашка вкладки / чипа / кнопки пульта кондиционера в стиле текущей темы; on — включена (залита).
+struct TabLabel: View {
+    let title: String
+    let on: Bool
+    var height: CGFloat = 40
+    /// Кегль русских подписей (в VT323 кириллицы нет — у них свой шрифт).
+    var ruSize: CGFloat = 13
+
+    /// Есть ли в подписи кириллица.
+    private var isRu: Bool {
+        title.unicodeScalars.contains { u in u.value >= 0x400 && u.value <= 0x4FF }
+    }
+
+    private var font: Font {
+        if isRu && (Term.terminal || Term.thermal) { return Term.ru(ruSize) }
+        return Term.mono(22)
+    }
+
+    var body: some View {
+        if Term.prism {
+            prismLabel
+        } else if Term.thermal {
+            Text(title).font(font).foregroundColor(on ? Heat.ink : Term.fg)
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
+                .frame(maxWidth: .infinity).frame(height: height)
+                .background(thermalFill)
+                .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
+        } else if Term.blueprint {
+            Blueprint.caps(title, isRu ? ruSize * 0.88 : 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
+                .frame(maxWidth: .infinity).frame(height: height)
+                .background(on ? Blueprint.ink : Blueprint.bg.opacity(0.78))
+                .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
+        } else {
+            Text(title).font(font).foregroundColor(on ? Color.black : Term.fg)
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
+                .frame(maxWidth: .infinity).frame(height: height)
+                .background(on ? Term.fg : Color.black)
+                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+        }
+    }
+
+    private var prismLabel: some View {
+        let size: CGFloat = isRu ? ruSize * 0.76 : 15
+        return Text(title).font(Prism.display(size)).foregroundColor(on ? Prism.ink : Term.fg)
+            .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
+            .frame(maxWidth: .infinity).frame(height: height)
+            .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
+    }
+
+    private var thermalFill: AnyView {
+        if on { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
+        return AnyView(Color.black.opacity(0.65))
+    }
 }

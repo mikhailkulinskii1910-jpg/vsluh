@@ -116,6 +116,11 @@ final class TasmotaIr {
         if failure != nil { throw IrError(message: "Модуль не отвечает") }
     }
 
+    /// Любой протокол Tasmota (например кондиционеры Haier): Protocol, Bits и Data одной строкой hex.
+    func sendRaw(proto: String, bits: Int, data: String) throws {
+        try send("IRSend {\"Protocol\":\"\(proto)\",\"Bits\":\(bits),\"Data\":\"\(data)\"}")
+    }
+
     /// Tasmota кодирует NEC сама — отправляем готовый 32-битный код.
     func sendNec(_ code: UInt32, repeatFrame: Bool) throws {
         let data = String(format: "0x%08X", code)
