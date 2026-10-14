@@ -360,10 +360,31 @@ html[data-theme=thermal][data-heat=arctic]{
    Панель поднята над RGB-переливом (z-index), чтобы показывать цвета как есть. */
 .gear.tab.ctab{display:block}
 /* русские вкладки («Проекторы», «Цвет»): шрифт мельче, «Проекторы» шире пропорционально подписи */
-.gear.tab.ru{font-size:18px}
-.gear.tab.wide{flex:1.45}
-[data-theme=prism] .gear.tab.ru{font-size:13px}
-[data-theme=blueprint] .gear.tab.ru{font-size:12px}
+/* вкладки «Доски | Проекторы | Кондиционеры | Цвет»: все русские, ширина — по длине подписи (flex-grow из скрипта), шрифт мелкий */
+.gear.tab.ru{flex-basis:0;padding:0 2px;white-space:nowrap}
+html:not([data-theme]) .gear.tab.ru,[data-theme=thermal] .gear.tab.ru{font:14px var(--ru)}
+[data-theme=prism] .gear.tab.ru{font-size:11px;letter-spacing:-.2px}
+[data-theme=blueprint] .gear.tab.ru{font-size:11px}
+#boards{display:none}
+body.boards #boards{display:block}
+#boards .brands{margin-bottom:12px}
+/* «Кондиционеры»: пульт Haier — чипы, термостат, кнопки состояния */
+#ac{display:none}
+body.ac #ac{display:block}
+body.ac #grid{display:none}
+.acp .models .gear.tab.chip{font-size:15px}
+[data-theme=prism] .acp .models .gear.tab.chip{font-size:11px}
+[data-theme=blueprint] .acp .models .gear.tab.chip{font-size:10.5px}
+.acp canvas.dial{display:block;width:100%;height:260px;margin:6px 0 4px;touch-action:none;cursor:pointer}
+.acp .rows{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.gear.tab.acb{height:54px;margin:0;padding:0 6px;font:13px/1.15 var(--ru);white-space:normal}
+.gear.tab.acb.big{font-size:22px}
+[data-theme=prism] .gear.tab.acb{font:600 12px/1.2 var(--ru)}
+[data-theme=blueprint] .gear.tab.acb{font:600 11.5px/1.25 var(--ru);letter-spacing:.06em}
+[data-theme=prism] .gear.tab.acb.big,[data-theme=blueprint] .gear.tab.acb.big{font-size:22px}
+.acp .hex{margin:12px 2px 0;font:12px/1.4 var(--ru);color:var(--dim);word-break:break-all;min-height:17px}
+.acp .expl{margin:6px 2px 0;font:12px/1.45 var(--ru);color:var(--dim)}
+[data-theme=thermal] .acp .hex,[data-theme=thermal] .acp .expl,[data-theme=thermal] .acp .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
 #cpanel{display:none;position:relative;z-index:12;padding-bottom:6px}
 body.ctab #grid,body.ctab .status{display:none}
 body.ctab #cpanel{display:block}
@@ -376,7 +397,7 @@ body.proj #proj{display:block}
 [data-theme=blueprint] .gear.tab.chip{font-size:12px}
 .projnote{margin:0 2px 12px;font:13px/1.4 var(--ru);color:var(--dim)}
 /* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
-html:not([data-theme]) body.proj .id,[data-theme=thermal] body.proj .id{font-size:17px}
+html:not([data-theme]) body:is(.proj,.boards,.ac) .id,[data-theme=thermal] body:is(.proj,.boards,.ac) .id{font-size:17px}
 /* сетка проекторов — 3 колонки, низкие кнопки; подпись ужимается под ширину кнопки (--len — длина подписи, --cw — ширина буквы шрифта темы) */
 body.proj .grid{grid-template-columns:repeat(3,1fr);gap:8px}
 body.proj .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
@@ -545,10 +566,12 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab" data-r="irbis">IRBIS</button><button class="gear tab" data-r="moc">MocTec</button><button class="gear tab ru wide" data-r="proj">Проекторы</button><button class="gear tab ctab ru" data-r="color">Цвет</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab ru" data-r="boards">Доски</button><button class="gear tab ru" data-r="proj">Проекторы</button><button class="gear tab ru" data-r="ac">Кондиционеры</button><button class="gear tab ctab ru" data-r="color">Цвет</button></nav>
+  <div id="boards"><div class="brands" id="boardChips" aria-label="Доска"></div></div>
   <div id="proj"><div class="brands" id="brands" aria-label="Марка проектора"></div>
     <p class="projnote">Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.</p></div>
   <main class="grid" id="grid"></main>
+  <section class="acp" id="ac" aria-label="Кондиционер"></section>
   <section class="cp" id="cpanel" aria-label="Цвет"></section>
   <div class="status" id="status" role="status" aria-live="polite"></div>
 </div>
@@ -667,7 +690,7 @@ const PROJ = [
 ];
 let projBrand = 0;
 try { const i = parseInt(localStorage.getItem('krisa-proj'), 10); if (i >= 0 && i < PROJ.length) projBrand = i; } catch {}
-const REMOTES = { irbis: { keys: KEYS, id: '#500202 :: IRBIS :: NEC 38kHz' }, moc: { keys: MOC_KEYS, id: 'MocTec :: NEC 04FB' },
+const REMOTES = { irbis: { keys: KEYS, id: 'доска :: IRBIS #500202 :: NEC 807F' }, moc: { keys: MOC_KEYS, id: 'доска :: MocTec :: NEC 04FB' },
   get proj() { const b = PROJ[projBrand]; return { keys: b.keys, id: 'проектор :: ' + b.name + ' :: ' + b.id, nec2: b.nec2 }; } };
 // При удержании этих кнопок пульт шлёт NEC-повтор, как настоящий.
 const REPEATABLE = new Set(['VOL-', 'VOL+', 'J DOWN', 'J LEFT', 'J RIGHT', 'J UP', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
@@ -725,6 +748,8 @@ function playAt(buf, when) {
 }
 const audioTx = {
   send(hex) { const c = audioCtx(); playAt(irBuffer(hex, necFrame(hex)), c.currentTime + 0.02); },
+  /** Произвольный кадр (метки/паузы в мкс) — например, Haier. */
+  raw(key, durations) { const c = audioCtx(); playAt(irBuffer(key, durations), c.currentTime + 0.02); },
   repeat() { const c = audioCtx(); playAt(irBuffer('rep', NEC_REPEAT), c.currentTime + 0.005); },
 };
 
@@ -738,7 +763,81 @@ function tasmota(cmd) {
 const httpTx = {
   send(hex) { return tasmota('IRSend {"Protocol":"NEC","Bits":32,"Data":"0x' + hex + '"}'); },
   repeat(hex) { return tasmota('IRSend {"Protocol":"NEC","Bits":32,"Data":"0x' + hex + '","Repeat":1}'); },
+  /** Кадр другого протокола целиком: IRSend {"Protocol":…,"Bits":…,"Data":"0x…"}. */
+  proto(protocol, bits, hex) { return tasmota('IRSend {"Protocol":"' + protocol + '","Bits":' + bits + ',"Data":"0x' + hex + '"}'); },
 };
+
+/* ---------- Кондиционеры Haier (перенос 1:1 с Android Haier.kt) ----------
+   В отличие от NEC-пультов, пульт кондиционера при каждом нажатии шлёт всё состояние сразу:
+   режим, температуру, скорость, жалюзи, таймер и нажатую кнопку. Форматы — по IRremoteESP8266 (ir_Haier):
+   пульт 1 — YR-W02, 14 байт (HAIER_AC_YRW02); пульт 2 — V9014557, 22 байта (HAIER_AC176, те же 14 + второй блок);
+   пульт 3 — HSU07-HEA03, 9 байт (HAIER_AC). */
+/* HAIER-BEGIN */
+const Haier = {
+  // режимы по кругу, как кнопка «Режим»; скорость; положение жалюзи для «Направления» (когда авто поворот выключен)
+  MODES: ['охлаждение', 'обогрев', 'осушение', 'вентилятор', 'авто'],   // COOL, HEAT, DRY, FAN, AUTO
+  FANS: ['авто', '1', '2', '3'],                                        // AUTO, LOW, MED, HIGH
+  VANES: ['верх', 'середина', 'низ', 'стоп'],                           // TOP, MIDDLE, BOTTOM, STOP
+  MODELS: ['YR-W02', 'V9014557', 'HSU07'],
+  TASMOTA: [['HAIER_AC_YRW02', 112], ['HAIER_AC176', 176], ['HAIER_AC', 72]],
+  TIMERS: [0, 1, 2, 4, 8],
+  /** Состояние по умолчанию: вкл, охлаждение, 24°, скорость авто, авто поворот, жалюзи вверх, пульт 1. */
+  state() { return { model: 0, power: true, mode: 0, temp: 24, fan: 0, swing: true, vane: 0, sleep: false, turbo: false, timer: 0 }; },
+  sum(b, from, to) { let s = 0; for (let i = from; i < to; i++) s += b[i]; return s & 0xFF; },
+  /** Байты сообщения для выбранного пульта; btn — POWER, MODE, TEMP_UP, TEMP_DOWN, FAN, SWING, SLEEP, TURBO, TIMER. */
+  bytes(s, btn, now = new Date()) { return s.model === 2 ? this.hsu07(s, btn, now) : this.yrw02(s, btn, s.model === 1); },
+  yrw02(s, btn, long) {
+    const b = new Array(long ? 22 : 14).fill(0), heat = s.mode === 1;
+    const swingV = s.swing ? 0xC : s.vane === 0 ? 0x1 : s.vane === 1 ? (heat ? 0x3 : 0x2)
+      : s.vane === 2 ? (heat ? 0x3 : 0x2) : 0x0;                                    // «низ» есть только в обогреве
+    const fan = [5, 3, 2, 1][s.fan];                                                  // AUTO 5, LOW 3, MED 2, HIGH 1
+    const mode = [1, 4, 2, 6, 0][s.mode];                                             // COOL 1, HEAT 4, DRY 2, FAN 6, AUTO 0
+    const turbo = s.turbo && (s.mode === 0 || heat);
+    b[0] = 0xA6;
+    b[1] = ((Math.min(30, Math.max(16, s.temp)) - 16) << 4) | swingV;
+    b[3] = 0x02 | (s.timer > 0 ? 0x20 : 0);                                           // «здоровье» + таймер выключения
+    b[4] = s.power ? 0x40 : 0;
+    b[5] = (fan << 5) | s.timer;                                                      // часы таймера выключения
+    b[6] = turbo ? 0x40 : 0;
+    b[7] = mode << 5;
+    b[8] = s.sleep ? 0x80 : 0;
+    b[12] = { TEMP_UP: 0, TEMP_DOWN: 1, SWING: 2, FAN: 4, POWER: 5, MODE: 6, TURBO: 8, SLEEP: 11, TIMER: 16 }[btn];
+    b[13] = this.sum(b, 0, 13);
+    if (long) {
+      b[14] = 0xB7;
+      b[16] = (s.fan === 0 ? 0 : fan) << 6;
+      b[21] = this.sum(b, 14, 21);
+    }
+    return b;
+  },
+  hsu07(s, btn, now) {
+    const b = new Array(9).fill(0);
+    const cmd = !s.power ? 0 : { POWER: 1, MODE: 2, FAN: 3, TEMP_UP: 6, TEMP_DOWN: 7, SLEEP: 8, TIMER: s.timer > 0 ? 9 : 10, SWING: 13, TURBO: 1 }[btn];
+    const swingV = s.swing ? 3 : s.vane === 0 ? 1 : s.vane === 2 ? 2 : 0;
+    const fan = [0, 3, 2, 1][s.fan];                                                  // AUTO 0, LOW 3, MED 2, HIGH 1
+    const mode = [1, 3, 2, 4, 0][s.mode];                                             // COOL 1, HEAT 3, DRY 2, FAN 4, AUTO 0
+    b[0] = 0xA5;
+    b[1] = ((Math.min(30, Math.max(16, s.temp)) - 16) << 4) | cmd;
+    b[2] = (now.getHours() | 0x20 | (swingV << 6)) & 0xFF;
+    b[3] = now.getMinutes() | (s.timer > 0 ? 0x40 : 0);
+    b[4] = s.timer > 0 ? s.timer : 12;
+    b[5] = fan << 6;
+    b[6] = mode << 5;
+    b[7] = s.sleep ? 0x40 : 0;
+    b[8] = this.sum(b, 0, 8);
+    return b;
+  },
+  /** ИК-кадр в микросекундах (метка, пауза, …): 3000/3000/3000/4300, байты старшим битом вперёд, в конце метка 520 и пауза 20 мс. */
+  pattern(bytes) {
+    const d = [3000, 3000, 3000, 4300];
+    for (const v of bytes) for (let i = 7; i >= 0; i--) d.push(520, (v >> i) & 1 ? 1650 : 650);
+    d.push(520, 20000);
+    return d;
+  },
+  hex(bytes) { return bytes.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(' '); },
+};
+/* HAIER-END */
+
 
 /* ---------- Настройки ---------- */
 const settings = { mode: 'audio', host: '' };
@@ -938,6 +1037,7 @@ function applyColor() {
     root.style.setProperty('--bg', prBg());
   }
   window.prismBurst && prismBurst();
+  window.acDial && requestAnimationFrame(() => acDial());
   if (theme() === 'blueprint') {
     root.style.setProperty('--bg', bp.bg); root.style.setProperty('--fg', bp.ink); root.style.setProperty('--dim', bp.dim);
     root.style.setProperty('--line', bp.line); root.style.setProperty('--faint', bp.faint);
@@ -1145,44 +1245,174 @@ function renderPanel() {
   });
 }
 
-/* Вкладки IRBIS / MocTec / «Проекторы» меняют набор кнопок (выбор запоминается), «Цвет» — показывает панель цвета вместо кнопок.
-   В «Проекторах» над кнопками — чипы марок проектора NEC / Epson / InFocus / BenQ. */
-let remote = 'irbis', tab = 'irbis';
-try { const r = localStorage.getItem('krisa-remote'); if (r === 'moc' || r === 'proj') remote = tab = r; } catch {}
-const brands = $('brands');
-PROJ.forEach((b, i) => {
-  const c = document.createElement('button');
-  c.className = 'gear tab chip'; c.textContent = b.name;
-  c.addEventListener('click', () => {
-    if (projBrand === i) return;
-    projBrand = i;
-    try { localStorage.setItem('krisa-proj', String(i)); } catch {}
-    buildGrid(true);
+/* Вкладки «Доски | Проекторы | Кондиционеры | Цвет». У «Досок» подвкладки IRBIS / MocTec, у «Проекторов» — марки NEC / Epson / InFocus / BenQ,
+   у «Кондиционеров» — Haier. Выбор вкладки и подвкладок запоминается; старые сохранённые вкладки IRBIS / MocTec открывают «Доски». */
+let topTab = 'boards', boardIdx = 0, tab = 'boards';
+try {
+  const r = localStorage.getItem('krisa-remote');
+  if (r === 'proj' || r === 'ac') topTab = r;
+  const bi = localStorage.getItem('krisa-board');
+  boardIdx = bi === '1' || (bi === null && r === 'moc') ? 1 : 0;
+} catch {}
+tab = topTab;
+// remote — какой набор кнопок в сетке: irbis | moc | proj
+let remote = topTab === 'proj' ? 'proj' : boardIdx ? 'moc' : 'irbis';
+// ширина вкладки — по длине подписи
+document.querySelectorAll('#tabs .tab').forEach(t => { t.style.flexGrow = t.textContent.length + 2.5; });
+/** Ряд чипов-подвкладок в стиле вкладок. */
+function chipRow(box, labels, pick) {
+  labels.forEach((l, i) => {
+    const c = document.createElement('button');
+    c.className = 'gear tab chip'; c.textContent = l;
+    c.addEventListener('click', () => pick(i));
+    box.appendChild(c);
   });
-  brands.appendChild(c);
+}
+const brands = $('brands'), boardChips = $('boardChips');
+chipRow(brands, PROJ.map(b => b.name), i => {
+  if (projBrand === i) return;
+  projBrand = i;
+  try { localStorage.setItem('krisa-proj', String(i)); } catch {}
+  buildGrid(true);
+});
+chipRow(boardChips, ['IRBIS', 'MocTec'], i => {
+  if (boardIdx === i) return;
+  boardIdx = i; remote = i ? 'moc' : 'irbis';
+  try { localStorage.setItem('krisa-board', String(i)); } catch {}
+  buildGrid(true);
 });
 function syncTabs() {
   // «Цвет» есть во всех темах
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
+  ['boards', 'proj', 'ac'].forEach(k => document.body.classList.toggle(k, tab === k));
   document.body.classList.toggle('ctab', tab === 'color');
-  document.body.classList.toggle('proj', tab === 'proj');
   [...brands.children].forEach((c, i) => c.classList.toggle('on', i === projBrand));
+  [...boardChips.children].forEach((c, i) => c.classList.toggle('on', i === boardIdx));
+  if (tab === 'ac') { document.querySelector('.id').textContent = 'кондиционер :: Haier :: ' + Haier.MODELS[ac.model]; acRefresh(); }
+  else if (tab !== 'color') document.querySelector('.id').textContent = REMOTES[remote].id;
 }
 function buildGrid(reveal) {
   grid.textContent = '';
   const R = REMOTES[remote];
   R.keys.forEach(k => makeKey(k, R.nec2));
-  document.querySelector('.id').textContent = REMOTES[remote].id;
-  tab = remote; syncTabs();
+  tab = topTab; syncTabs();
   if (reveal) showRemote();
 }
 document.querySelectorAll('#tabs .tab').forEach(t => t.addEventListener('click', () => {
   if (tab === t.dataset.r) return;
   if (t.dataset.r === 'color') { tab = 'color'; renderPanel(); syncTabs(); return; }
-  remote = t.dataset.r;
-  try { localStorage.setItem('krisa-remote', remote); } catch {}
+  topTab = t.dataset.r;
+  try { localStorage.setItem('krisa-remote', topTab); } catch {}
+  if (topTab === 'ac') { tab = 'ac'; syncTabs(); return; }
+  remote = topTab === 'proj' ? 'proj' : boardIdx ? 'moc' : 'irbis';
   buildGrid(true);
 }));
+
+/* ---------- Вкладка «Кондиционеры»: пульт Haier ----------
+   Каждое нажатие: изменить состояние → сохранить → закодировать → отправить кадр целиком. Удержания и повторов нет. */
+const ac = Haier.state();
+try { const v = JSON.parse(localStorage.getItem('krisa-ac') || 'null'); if (v) for (const k in ac) if (typeof v[k] === typeof ac[k]) ac[k] = v[k]; } catch {}
+const acUpd = [];
+function acRefresh() { acUpd.forEach(f => f()); }
+function acSave() { try { localStorage.setItem('krisa-ac', JSON.stringify(ac)); } catch {} }
+function acSend(btn, change) {
+  change();
+  acSave(); acRefresh();
+  const bytes = Haier.bytes(ac, btn), hex = Haier.hex(bytes);
+  $('acHex').textContent = hex;
+  try {
+    let p;
+    if (settings.mode === 'http') { const [proto, bits] = Haier.TASMOTA[ac.model]; p = httpTx.proto(proto, bits, hex.replace(/ /g, '')); }
+    else audioTx.raw('haier ' + hex, Haier.pattern(bytes));
+    status('> tx haier ' + Haier.MODELS[ac.model] + ' ' + (ac.power ? Haier.MODES[ac.mode] : 'выкл') + ' ' + ac.temp + '° [sent]');
+    if (p && p.catch) p.catch(e => status(e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message, 'err'));
+  } catch (e) { status(e.message, 'err'); }
+}
+(function buildAc() {
+  const box = $('ac');
+  box.innerHTML = '<div class="brands haier"></div><p class="projnote">Пульт Haier бывает трёх видов. Если кондиционер не отвечает — выберите другой номер пульта.</p>'
+    + '<div class="brands models"></div><canvas class="dial" aria-label="Термостат"></canvas><div class="rows"></div>'
+    + '<p class="hex" id="acHex"></p><p class="expl">Пульт кондиционера при каждом нажатии передаёт всё сразу: режим, температуру, скорость. '
+    + 'Поэтому приложение запоминает состояние — если кондиционер включали другим пультом, сначала выставьте здесь то же самое.</p>';
+  chipRow(box.querySelector('.haier'), ['Haier'], () => {});
+  box.querySelector('.haier .chip').classList.add('on');
+  const models = box.querySelector('.models');
+  chipRow(models, Haier.MODELS.map((m, i) => (i + 1) + ' · ' + m), i => { ac.model = i; acSave(); syncTabs(); });
+  acUpd.push(() => [...models.children].forEach((c, i) => c.classList.toggle('on', i === ac.model)));
+  // термостат: дуга 270° от 135° (снизу слева) через верх до 405°; пока ведёте — меняется число, при отпускании — отправка
+  const cv = box.querySelector('.dial'), START = 135, SWEEP = 270;
+  let shown = ac.temp, drag = false;
+  function drawDial() {
+    if (tab !== 'ac') return;
+    const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+    if (!W) return;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+    const x = cv.getContext('2d'), css = getComputedStyle(document.documentElement), v = n => css.getPropertyValue(n).trim();
+    x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2 + 8, r = Math.min(W, H) / 2 - 30, f = (shown - 16) / 14, rad = d => d * Math.PI / 180;
+    x.lineCap = 'round'; x.lineWidth = 12;
+    // в «Тепловизоре» LINE — яркий акцент, поэтому трек приглушён, чтобы читалась заполненная часть
+    x.globalAlpha = theme() === 'thermal' ? 0.35 : 1;
+    x.strokeStyle = v('--line'); x.beginPath(); x.arc(cx, cy, r, rad(START), rad(START + SWEEP)); x.stroke();
+    x.globalAlpha = 1;
+    // заполненная часть: FG; в «Тепловизоре» — цвет палитры по температуре, в «Призме» — радуга
+    let fill = v('--fg');
+    if (theme() === 'thermal') { const P = HEATS[heatId].pal, k = (0.4 + 0.6 * f) * (P.length - 1), i = Math.min(P.length - 2, Math.floor(k)); fill = lerpHex(P[i], P[i + 1], k - i); }
+    else if (theme() === 'prism') fill = prIris()[Math.max(0, Math.min(5, Math.floor(f * 5)))];
+    if (f > 0) { x.strokeStyle = fill; x.beginPath(); x.arc(cx, cy, r, rad(START), rad(START + SWEEP * f)); x.stroke(); }
+    // подписи 16°, 18° … 30° снаружи дуги
+    const ru = v('--ru') || 'monospace', mono = v('--mono') || 'monospace';
+    x.fillStyle = v('--dim'); x.font = '12px ' + ru; x.textAlign = 'center'; x.textBaseline = 'middle';
+    for (let t = 16; t <= 30; t += 2) { const a = rad(START + SWEEP * (t - 16) / 14); x.fillText(t + '°', cx + (r + 18) * Math.cos(a), cy + (r + 18) * Math.sin(a)); }
+    // бегунок
+    const a = rad(START + SWEEP * f), kx = cx + r * Math.cos(a), ky = cy + r * Math.sin(a);
+    x.fillStyle = v('--bg') || '#000'; x.beginPath(); x.arc(kx, ky, 12, 0, 7); x.fill();
+    x.fillStyle = v('--fg'); x.beginPath(); x.arc(kx, ky, 9, 0, 7); x.fill();
+    // температура и режим
+    x.fillStyle = v('--fg'); x.font = (theme() === 'terminal' || theme() === 'thermal' ? '64px ' : '600 44px ') + mono;
+    x.fillText(shown + '°', cx, cy + 10);
+    x.fillStyle = v('--dim'); x.font = '14px ' + ru;
+    x.fillText(ac.power ? Haier.MODES[ac.mode] : 'выключен', cx, cy - 38);
+  }
+  window.acDial = drawDial;
+  acUpd.push(() => { if (!drag) shown = ac.temp; drawDial(); });
+  addEventListener('resize', drawDial);
+  const at = e => {
+    const b = cv.getBoundingClientRect(), cx = b.width / 2, cy = b.height / 2 + 8;
+    const ang = ((Math.atan2(e.clientY - b.top - cy, e.clientX - b.left - cx) * 180 / Math.PI - START) % 360 + 360) % 360;
+    if (ang <= SWEEP + 20) { shown = Math.max(16, Math.min(30, Math.round(16 + Math.min(ang, SWEEP) / SWEEP * 14))); drawDial(); }
+  };
+  cv.addEventListener('pointerdown', e => { drag = true; cv.setPointerCapture?.(e.pointerId); at(e); });
+  cv.addEventListener('pointermove', e => { if (drag) at(e); });
+  const up = () => {
+    if (!drag) return; drag = false;
+    if (shown !== ac.temp) { const t = shown; acSend(t > ac.temp ? 'TEMP_UP' : 'TEMP_DOWN', () => { ac.temp = t; }); }
+  };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  // кнопки, по две в ряд; включённые функции подсвечены как активная вкладка
+  const rows = box.querySelector('.rows');
+  const clean = () => theme() === 'prism' || theme() === 'blueprint';   // в «чистых» темах — без квадратных скобок
+  const btn = (label, on, click, big) => {
+    const b = document.createElement('button');
+    b.className = 'gear tab acb' + (big ? ' big' : '');
+    b.addEventListener('click', click);
+    acUpd.push(() => { const l = label(); b.textContent = clean() ? l.replace(/^\[ ?| ?\]$/g, '') : l; b.classList.toggle('on', on()); });
+    rows.appendChild(b);
+  };
+  const no = () => false;
+  btn(() => '[ − ]', no, () => acSend('TEMP_DOWN', () => { ac.temp = Math.max(16, ac.temp - 1); }), true);
+  btn(() => '[ + ]', no, () => acSend('TEMP_UP', () => { ac.temp = Math.min(30, ac.temp + 1); }), true);
+  btn(() => ac.power ? '[ питание: вкл ]' : '[ питание: выкл ]', () => ac.power, () => acSend('POWER', () => { ac.power = !ac.power; }));
+  btn(() => '[ режим: ' + Haier.MODES[ac.mode] + ' ]', no, () => acSend('MODE', () => { ac.mode = (ac.mode + 1) % 5; }));
+  btn(() => '[ скорость: ' + Haier.FANS[ac.fan] + ' ]', no, () => acSend('FAN', () => { ac.fan = (ac.fan + 1) % 4; }));
+  btn(() => '[ авто поворот ]', () => ac.swing, () => acSend('SWING', () => { ac.swing = !ac.swing; }));
+  btn(() => '[ направление: ' + Haier.VANES[ac.vane] + ' ]', no, () => acSend('SWING', () => { ac.swing = false; ac.vane = (ac.vane + 1) % 4; }));
+  btn(() => '[ сон ]', () => ac.sleep, () => acSend('SLEEP', () => { ac.sleep = !ac.sleep; }));
+  btn(() => '[ турбо ]', () => ac.turbo, () => acSend('TURBO', () => { ac.turbo = !ac.turbo; }));
+  btn(() => ac.timer ? '[ таймер выкл: ' + ac.timer + ' ч ]' : '[ таймер выкл: нет ]', () => ac.timer > 0,
+    () => acSend('TIMER', () => { ac.timer = Haier.TIMERS[(Haier.TIMERS.indexOf(ac.timer) + 1) % Haier.TIMERS.length]; }));
+})();
+
 buildGrid(false);
 applyColor();
 
@@ -1580,7 +1810,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.22', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.23', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

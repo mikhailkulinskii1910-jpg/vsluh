@@ -84,6 +84,25 @@ final class RemoteModel: ObservableObject {
         }
     }
 
+    /// Произвольный кадр (кондиционер): звуковому адаптеру — массив меток и пауз в мкс,
+    /// Tasmota — команда IRSend с протоколом, числом бит и данными. Без повторов.
+    func sendFrame(_ pattern: [Int], proto: String, bits: Int, data: String, status: String) {
+        say(status)
+        let mode = self.mode, host = self.host
+        let audio = mode == .audio1 ? audio1 : audio2
+        io.async { [weak self] in
+            do {
+                if mode == .http {
+                    try TasmotaIr(host: host).sendRaw(proto: proto, bits: bits, data: data)
+                } else {
+                    try audio.transmit(pattern)
+                }
+            } catch {
+                DispatchQueue.main.async { self?.say(error.localizedDescription, err: true) }
+            }
+        }
+    }
+
     func release() { lock.lock(); held = 0; lock.unlock() }
     private func isHeld(_ id: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return held == id }
 

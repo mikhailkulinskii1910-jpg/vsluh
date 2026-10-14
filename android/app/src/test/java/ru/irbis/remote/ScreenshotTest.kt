@@ -47,7 +47,7 @@ class ScreenshotTest {
         root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x, y, 0))
 
         // вкладка MocTec: подбор кода выключения
-        findText(root, "MocTec")!!.performClick()
+        findText(root, "Доски")!!.performClick(); findText(root, "MocTec")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
         Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
             root.draw(Canvas(bmp))
@@ -95,7 +95,7 @@ class ScreenshotTest {
         root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_DOWN, x, y, 0))
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(60)); shot("press")
         root.dispatchTouchEvent(MotionEvent.obtain(0, 0, MotionEvent.ACTION_UP, x, y, 0))
-        findText(root, "MocTec")!!.performClick()
+        findText(root, "Доски")!!.performClick(); findText(root, "MocTec")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("moctec")
         findText(root, "Рулетка")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("roulette")
@@ -122,7 +122,7 @@ class ScreenshotTest {
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800))
             findText(root, "Цвет")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
-            findText(root, "IRBIS")!!.performClick()
+            findText(root, "Доски")!!.performClick(); findText(root, "IRBIS")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
             findText(root, "Цвет")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
@@ -150,13 +150,35 @@ class ScreenshotTest {
                 root.draw(Canvas(bmp)); File(out, "$n.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
             }
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
-            findText(root, "IRBIS")!!.performClick()
+            findText(root, "Доски")!!.performClick(); findText(root, "IRBIS")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
             findText(root, "Цвет")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
             findText(root, "Проекторы")!!.performClick()
             findText(root, "BenQ")!!.performClick()
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("proj")
+            ctl.pause().stop().destroy()
+        }
+    }
+
+    /** Вкладка «Кондиционеры» во всех темах. */
+    @Test
+    fun shotsAc() {
+        for (theme in listOf("terminal", "prism", "thermal", "blueprint")) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", "ac").apply { mkdirs() }
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()
+                .putString("theme", theme).putString("tab", "ac").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
+            root.draw(Canvas(Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)))   // заставка доигрывает и уходит
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+            findText(root, "Кондиционеры")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+            Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp)); File(out, "$theme.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
             ctl.pause().stop().destroy()
         }
     }
@@ -217,7 +239,7 @@ class ScreenshotTest {
         }
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1900)); shot("splash")
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800))
-        findText(root, "IRBIS")!!.performClick()
+        findText(root, "Доски")!!.performClick(); findText(root, "IRBIS")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
         findText(root, "Цвет")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
@@ -238,7 +260,7 @@ class ScreenshotTest {
         }
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(1900)); shot("splash")
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(2800))
-        findText(root, "IRBIS")!!.performClick()
+        findText(root, "Доски")!!.performClick(); findText(root, "IRBIS")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("remote")
         findText(root, "Цвет")!!.performClick()
         shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300)); shot("tab")
