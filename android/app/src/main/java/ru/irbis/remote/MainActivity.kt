@@ -315,39 +315,42 @@ class MainActivity : Activity() {
         header.addView(gear, LinearLayout.LayoutParams(dp(64), dp(44)).apply { topMargin = dp(10) })
         root.addView(header)
 
-        // вкладки: IRBIS и MocTec (пульты), «Рулетка» (подбор кода), в «Терминале» ещё «Цвет».
+        // вкладки: «Доски» (IRBIS, MocTec), «Проекторы», «Кондиционеры», «Рулетка» (подбор кода), «Цвет».
         // Без выравнивания по базовой линии: у русских подписей другой шрифт, и вкладка уезжала вниз.
         val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
-        tabIrbis = tabButton("IRBIS") { showTab(TAB_IRBIS) }
-        tabMoc = tabButton("MocTec") { showTab(TAB_MOC) }
-        tabProj = tabButton("Проекторы") { showTab(TAB_PROJ) }.apply { if (!clean) typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 11.5f else 13f) }
-        // русские подписи — другим шрифтом (в VT323 нет кириллицы) и чуть мельче, чтобы четыре вкладки поместились
-        tabRoulette = tabButton("Рулетка") { showTab(TAB_ROULETTE) }.apply { if (!clean) { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) } }
-        // «Цвет»: в «Терминале» — цвет и переливы, в «Тепловизоре» — палитры
-        val colorTab = true
-        val tabList = mutableListOf(tabIrbis, tabMoc, tabProj, tabRoulette)
-        if (colorTab) tabList += tabButton("Цвет") { showTab(TAB_COLOR) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f) }.also { tabColor = it }
-        // ширина вкладки — по длине подписи: «Проекторы» шире остальных
+        // все подписи русские: в VT323 нет кириллицы — системный моноширинный; размер такой, чтобы пять вкладок поместились
+        val tabSp = if (Term.prism) 9.5f else if (clean) 12f else 12.5f
+        fun ruTab(label: String, tab: String) = tabButton(label) { showTab(tab) }.apply {
+            if (!clean) typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, tabSp)
+        }
+        tabBoards = ruTab("Доски", TAB_BOARDS)
+        tabProj = ruTab("Проекторы", TAB_PROJ)
+        tabAc = ruTab("Кондиционеры", TAB_AC)
+        tabRoulette = ruTab("Рулетка", TAB_ROULETTE)
+        tabColor = ruTab("Цвет", TAB_COLOR)
+        val tabList = listOf(tabBoards, tabProj, tabAc, tabRoulette, tabColor!!)
+        // ширина вкладки — по длине подписи
         tabList.forEachIndexed { i, t ->
-            tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), if (t === tabProj) 1.5f else 1f).apply { if (i > 0) leftMargin = dp(5) })
+            tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), t.text.length + 2.5f).apply { if (i > 0) leftMargin = dp(4) })
         }
         root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
 
-        irbisGrid = keyGrid(KEYS)
-        root.addView(irbisGrid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        mocGrid = keyGrid(MOC_KEYS)
-        root.addView(mocGrid, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        boardsPanel = buildBoardsPanel()
+        root.addView(boardsPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        acPanel = buildAcPanel()
+        root.addView(acPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         projPanel = buildProjPanel()
         root.addView(projPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         mocPanel = buildMocPanel()
         root.addView(mocPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        if (colorTab) {
-            colorPanel = if (Term.thermal) buildHeatPanel() else if (Term.blueprint) buildShadePanel() else if (Term.prism) buildPrismPanel() else buildColorPanel()
-            root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
-        }
+        colorPanel = if (Term.thermal) buildHeatPanel() else if (Term.blueprint) buildShadePanel() else if (Term.prism) buildPrismPanel() else buildColorPanel()
+        root.addView(colorPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
         val prefs = getPreferences(MODE_PRIVATE)
-        var start = prefs.getString(PREF_TAB, null) ?: TAB_IRBIS
-        if (start == TAB_COLOR && !colorTab) start = TAB_IRBIS
+        // старые вкладки IRBIS / MocTec теперь подвкладки «Досок»
+        val start = when (val t = prefs.getString(PREF_TAB, null)) {
+            null, TAB_IRBIS, TAB_MOC -> TAB_BOARDS
+            else -> t
+        }
         showTab(start)
 
         status = TypeLine(this).apply {
@@ -402,11 +405,11 @@ class MainActivity : Activity() {
     /* ---------- Вкладка «Рулетка»: подбор кода по очереди ---------- */
 
     private lateinit var subtitle: TextView
-    private lateinit var tabIrbis: TextView
-    private lateinit var tabMoc: TextView
+    private lateinit var tabBoards: TextView
+    private lateinit var tabAc: TextView
+    private lateinit var boardsPanel: View
+    private lateinit var acPanel: View
     private lateinit var tabRoulette: TextView
-    private lateinit var mocGrid: View
-    private lateinit var irbisGrid: View
     private lateinit var mocPanel: View
     private lateinit var mocCode: TextView
     private lateinit var mocInfo: TextView
@@ -444,20 +447,21 @@ class MainActivity : Activity() {
 
     private fun showTab(tab: String) {
         if (tab != TAB_ROULETTE) mocRun = false
-        styleTab(tabIrbis, tab == TAB_IRBIS); styleTab(tabMoc, tab == TAB_MOC); styleTab(tabRoulette, tab == TAB_ROULETTE)
+        styleTab(tabBoards, tab == TAB_BOARDS); styleTab(tabAc, tab == TAB_AC); styleTab(tabRoulette, tab == TAB_ROULETTE)
         styleTab(tabProj, tab == TAB_PROJ)
         projPanel.visibility = if (tab == TAB_PROJ) View.VISIBLE else View.GONE
         tabColor?.let { styleTab(it, tab == TAB_COLOR) }
-        irbisGrid.visibility = if (tab == TAB_IRBIS) View.VISIBLE else View.GONE
-        mocGrid.visibility = if (tab == TAB_MOC) View.VISIBLE else View.GONE
+        boardsPanel.visibility = if (tab == TAB_BOARDS) View.VISIBLE else View.GONE
+        acPanel.visibility = if (tab == TAB_AC) View.VISIBLE else View.GONE
         mocPanel.visibility = if (tab == TAB_ROULETTE) View.VISIBLE else View.GONE
         colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
         subtitle.text = when (tab) {
-            TAB_MOC -> "MocTec :: MOSTEH :: NEC 04FB"
+            TAB_BOARDS -> boardSubtitle()
+            TAB_AC -> acSubtitle()
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
             TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
             TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else if (Term.prism) "призма :: стекло и свет" else "terminal :: phosphor color"
-            else -> "#500202 :: IRBIS :: NEC 38kHz"
+            else -> boardSubtitle()
         }
         getPreferences(MODE_PRIVATE).edit().putString(PREF_TAB, tab).apply()
     }
@@ -471,6 +475,134 @@ class MainActivity : Activity() {
      * Вкладка PROJ: пульты проекторов NEC, Epson, InFocus, BenQ. Сверху — выбор марки, ниже — 12 кнопок её пульта.
      * Выключение проекторы спрашивают подтверждением — POWER нажимается дважды.
      */
+    private var boardIdx = 0
+    private fun boardSubtitle() = if (boardIdx == 1) "доска :: MocTec :: NEC 04FB" else "доска :: IRBIS #500202 :: NEC 807F"
+
+    /** Ряд «подвкладок» (марок) под вкладками; [select] вызывается при выборе и сразу для [initial]. */
+    private fun chipRow(labels: List<String>, initial: Int, select: (Int, List<TextView>) -> Unit): LinearLayout {
+        val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
+        val views = ArrayList<TextView>()
+        labels.forEachIndexed { i, l ->
+            val c = tabButton(l) { views.forEachIndexed { k, v -> styleTab(v, k == i) }; select(i, views) }
+                .apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 18f) }
+            views += c
+            chips.addView(c, LinearLayout.LayoutParams(0, dp(36), 1f).apply { if (i > 0) leftMargin = dp(6) })
+        }
+        views.forEachIndexed { k, v -> styleTab(v, k == initial) }
+        return chips
+    }
+
+    /** Вкладка «Доски»: подвкладки IRBIS и MocTec, у каждой — своя сетка кнопок. */
+    private fun buildBoardsPanel(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        boardIdx = getPreferences(MODE_PRIVATE).getInt(PREF_BOARD, if (getPreferences(MODE_PRIVATE).getString(PREF_TAB, null) == TAB_MOC) 1 else 0).coerceIn(0, 1)
+        val grids = listOf(keyGrid(KEYS), keyGrid(MOC_KEYS))
+        fun show(i: Int) { grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE } }
+        p.addView(chipRow(listOf("IRBIS", "MocTec"), boardIdx) { i, _ ->
+            boardIdx = i; show(i); subtitle.text = boardSubtitle()
+            getPreferences(MODE_PRIVATE).edit().putInt(PREF_BOARD, i).apply()
+        }, LinearLayout.LayoutParams(-1, -2))
+        grids.forEach { p.addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }) }
+        show(boardIdx)
+        return p
+    }
+
+    /* ---------- Вкладка «Кондиционеры» ---------- */
+
+    private val ac = Haier.State()
+    private lateinit var acInfo: TextView
+    private val acRefresh = ArrayList<() -> Unit>()
+    private fun acSubtitle() = "кондиционер :: Haier :: ${Haier.MODELS[ac.model]}"
+
+    private fun acLoad() {
+        val v = getPreferences(MODE_PRIVATE).getString(PREF_AC, null)?.split(",") ?: return
+        runCatching {
+            ac.model = v[0].toInt(); ac.power = v[1] == "1"; ac.mode = Haier.Mode.valueOf(v[2]); ac.temp = v[3].toInt()
+            ac.fan = Haier.Fan.valueOf(v[4]); ac.swing = v[5] == "1"; ac.vane = Haier.Vane.valueOf(v[6])
+            ac.sleep = v[7] == "1"; ac.turbo = v[8] == "1"; ac.timer = v[9].toInt()
+        }
+    }
+
+    private fun acSave() {
+        fun b(x: Boolean) = if (x) "1" else "0"
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_AC, listOf(ac.model, b(ac.power), ac.mode.name, ac.temp, ac.fan.name,
+            b(ac.swing), ac.vane.name, b(ac.sleep), b(ac.turbo), ac.timer).joinToString(",")).apply()
+    }
+
+    /** Изменить состояние кондиционера и сразу отправить его целиком, как настоящий пульт. */
+    private fun acSend(btn: Haier.Button, change: () -> Unit) {
+        change()
+        acSave()
+        acRefresh.forEach { it() }
+        val bytes = Haier.bytes(ac, btn)
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        say("> tx haier ${Haier.MODELS[ac.model]} ${if (ac.power) ac.mode.title else "выкл"} ${ac.temp}° [sent]")
+        acInfo.text = Haier.hex(bytes)
+        val frame = Haier.pattern(bytes)
+        io.execute { try { tx.transmit(frame) } catch (e: Exception) { ui.post { say(e.message ?: "Ошибка передачи", err = true) } } }
+    }
+
+    /**
+     * Пульт кондиционера Haier: термостат 16…30°, питание, режим, скорость, авто-поворот, направление,
+     * сон, турбо и таймер выключения. Вверху — выбор одного из трёх форматов пульта Haier.
+     */
+    private fun buildAcPanel(): View {
+        acLoad()
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(chipRow(listOf("Haier"), 0) { _, _ -> }, LinearLayout.LayoutParams(-1, -2))
+        p.addView(text("Пульт Haier бывает трёх видов. Если кондиционер не отвечает — выберите другой номер пульта.", 13f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(dp(2), dp(8), 0, dp(6)) })
+        p.addView(chipRow(Haier.MODELS.mapIndexed { i, m -> "${i + 1} · $m" }, ac.model) { i, _ ->
+            ac.model = i; acSave(); subtitle.text = acSubtitle()
+        }, LinearLayout.LayoutParams(-1, -2))
+
+        val dial = ThermoDial(this, ac.temp, { if (ac.power) ac.mode.title else "выключен" }) { t ->
+            if (t != ac.temp) acSend(if (t > ac.temp) Haier.Button.TEMP_UP else Haier.Button.TEMP_DOWN) { ac.temp = t }
+        }
+        acRefresh += { dial.set(ac.temp) }
+        p.addView(dial, LinearLayout.LayoutParams(-1, dp(260)).apply { topMargin = dp(6) })
+
+        fun row(vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(54), 1f).apply { if (i > 0) leftMargin = dp(8) }) }
+        }
+        /** Кнопка с подписью, которая обновляется вместе с состоянием; on — подсветка включённой функции. */
+        fun acButton(label: () -> String, on: () -> Boolean = { false }, click: () -> Unit) =
+            mocButton(label()) { click() }.apply {
+                typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 12f else 14f)
+                val upd = { text = btnLabel(label()); styleTab(this, on()) }
+                acRefresh += upd; upd()
+            }
+        p.addView(row(
+            acButton({ "[ − ]" }) { acSend(Haier.Button.TEMP_DOWN) { ac.temp = (ac.temp - 1).coerceAtLeast(16) } },
+            acButton({ "[ + ]" }) { acSend(Haier.Button.TEMP_UP) { ac.temp = (ac.temp + 1).coerceAtMost(30) } },
+        ), LinearLayout.LayoutParams(-1, -2))
+        p.addView(row(
+            acButton({ if (ac.power) "[ питание: вкл ]" else "[ питание: выкл ]" }, { ac.power }) { acSend(Haier.Button.POWER) { ac.power = !ac.power } },
+            acButton({ "[ режим: ${ac.mode.title} ]" }) { acSend(Haier.Button.MODE) { ac.mode = Haier.Mode.values()[(ac.mode.ordinal + 1) % 5] } },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(
+            acButton({ "[ скорость: ${ac.fan.title} ]" }) { acSend(Haier.Button.FAN) { ac.fan = Haier.Fan.values()[(ac.fan.ordinal + 1) % 4] } },
+            acButton({ "[ авто поворот ]" }, { ac.swing }) { acSend(Haier.Button.SWING) { ac.swing = !ac.swing } },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(
+            acButton({ "[ направление: ${ac.vane.title} ]" }) { acSend(Haier.Button.SWING) { ac.swing = false; ac.vane = Haier.Vane.values()[(ac.vane.ordinal + 1) % 4] } },
+            acButton({ "[ сон ]" }, { ac.sleep }) { acSend(Haier.Button.SLEEP) { ac.sleep = !ac.sleep } },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(
+            acButton({ "[ турбо ]" }, { ac.turbo }) { acSend(Haier.Button.TURBO) { ac.turbo = !ac.turbo } },
+            acButton({ if (ac.timer == 0) "[ таймер выкл: нет ]" else "[ таймер выкл: ${ac.timer} ч ]" }, { ac.timer > 0 }) {
+                acSend(Haier.Button.TIMER) { ac.timer = Haier.TIMERS[(Haier.TIMERS.indexOf(ac.timer) + 1) % Haier.TIMERS.size] }
+            },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        acInfo = text("", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(2), dp(10), 0, 0) }
+        p.addView(acInfo)
+        p.addView(text("Пульт кондиционера при каждом нажатии передаёт всё сразу: режим, температуру, скорость. " +
+            "Поэтому приложение запоминает состояние — если кондиционер включали другим пультом, сначала выставьте здесь то же самое.", 12f, Term.DIM)
+            .apply { typeface = Term.ru; setPadding(dp(2), dp(6), 0, 0) })
+        return p
+    }
+
     /** Номера пультов коротко: «#1803 +3». */
     private fun projSource(p: Projector) = p.source.split(", ").let { if (it.size > 1) "${it[0]} +${it.size - 1}" else it[0] }
 
@@ -1080,6 +1212,10 @@ class MainActivity : Activity() {
         private val PREF_PR = arrayOf("pr_bright", "pr_frost", "pr_hue", "pr_bg")
         private const val PREF_TAB = "tab"
         private const val TAB_IRBIS = "irbis"
+        private const val TAB_BOARDS = "boards"
+        private const val TAB_AC = "ac"
+        private const val PREF_BOARD = "board_brand"
+        private const val PREF_AC = "ac_state"
         private const val TAB_MOC = "moc"
         private const val TAB_ROULETTE = "roulette"
         private const val TAB_COLOR = "color"
