@@ -399,19 +399,19 @@ body.proj #proj{display:block}
 /* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
 html:not([data-theme]) body:is(.proj,.boards,.ac) .id,[data-theme=thermal] body:is(.proj,.boards,.ac) .id{font-size:17px}
 /* сетка проекторов — 3 колонки, низкие кнопки; подпись ужимается под ширину кнопки (--len — длина подписи, --cw — ширина буквы шрифта темы) */
-body.proj .grid{grid-template-columns:repeat(3,1fr);gap:8px}
-body.proj .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
+body.grid3 .grid{grid-template-columns:repeat(3,1fr);gap:8px}
+body.grid3 .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
   font-size:min(26px,calc((100cqw - 10px) / (var(--len) * var(--cw))))}
-[data-theme=prism] body.proj .key{--cw:.98;border-radius:16px;font-size:min(16px,calc((100cqw - 12px) / (var(--len) * var(--cw))))}
-[data-theme=prism] body.proj .key::before{border-radius:14px}
-[data-theme=blueprint] body.proj .grid{gap:12px}
-[data-theme=blueprint] body.proj .key{--cw:.8;font-size:min(15px,calc((100cqw - 14px) / (var(--len) * var(--cw))))}
-html:not([data-theme]) body.proj .key .n,[data-theme=prism] body.proj .key .n,body.proj .key .h{font-size:11px}
-body.proj .key .n{top:3px;left:6px}body.proj .key .h{bottom:3px;right:6px}
-[data-theme=thermal] body.proj .key .n::after{font-size:10px}
-[data-theme=blueprint] body.proj .key .n{top:7px;left:8px}[data-theme=blueprint] body.proj .key .h{bottom:7px;right:8px;font-size:9px}
-[data-theme=blueprint] body.proj .key .n::after{font-size:9px}
-[data-theme=prism] body.proj .key .n{top:5px;left:9px}[data-theme=prism] body.proj .key .h{bottom:4px;right:9px;font-size:10px}
+[data-theme=prism] body.grid3 .key{--cw:.98;border-radius:16px;font-size:min(16px,calc((100cqw - 12px) / (var(--len) * var(--cw))))}
+[data-theme=prism] body.grid3 .key::before{border-radius:14px}
+[data-theme=blueprint] body.grid3 .grid{gap:12px}
+[data-theme=blueprint] body.grid3 .key{--cw:.8;font-size:min(15px,calc((100cqw - 14px) / (var(--len) * var(--cw))))}
+html:not([data-theme]) body.grid3 .key .n,[data-theme=prism] body.grid3 .key .n,body.grid3 .key .h{font-size:11px}
+body.grid3 .key .n{top:3px;left:6px}body.grid3 .key .h{bottom:3px;right:6px}
+[data-theme=thermal] body.grid3 .key .n::after{font-size:10px}
+[data-theme=blueprint] body.grid3 .key .n{top:7px;left:8px}[data-theme=blueprint] body.grid3 .key .h{bottom:7px;right:8px;font-size:9px}
+[data-theme=blueprint] body.grid3 .key .n::after{font-size:9px}
+[data-theme=prism] body.grid3 .key .n{top:5px;left:9px}[data-theme=prism] body.grid3 .key .h{bottom:4px;right:9px;font-size:10px}
 [data-theme=thermal] .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
 .cp h3{margin:16px 2px 8px;font:24px var(--mono);color:var(--fg)}
 .cp h3:first-child{margin-top:2px}
@@ -624,14 +624,21 @@ const KEYS = [
   ['J RIGHT', '807FA857'], ['J UP', '807F629D'],
 ];
 /* Доски MocTec / «МОСТЕХ»: пульт «Interactive Board RC 52 Key» из облачной базы IrCode Finder
-   (бренд MOSTEH, #500275), NEC, адрес 04 FB. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ». */
+   (бренд MOSTEH, #500275), NEC, адрес 04 FB — все 52 кнопки (3 колонки). Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ». */
 const MOC_KEYS = [
-  ['POWER', '04FB4AB5'], ['J OK', '04FB52AD'],
-  ['VOL-', '04FB827D'], ['VOL+', '04FBC03F'],
-  ['EMPTY SCREEN', '04FB728D'], ['INPUT', '04FBE01F'],
-  ['J UP', '04FBE21D'], ['J DOWN', '04FBB24D'],
-  ['J LEFT', '04FB926D'], ['J RIGHT', '04FBD22D'],
-  ['HOME', '04FB12ED'], ['BACK', '04FB50AF'],
+  ['POWER', '04FB4AB5'], ['INPUT', '04FBE01F'], ['HOME', '04FB12ED'], ['BACK', '04FB50AF'],
+  ['MENU', '04FBB04F'], ['J OK', '04FB52AD'], ['J UP', '04FBE21D'], ['J DOWN', '04FBB24D'],
+  ['J LEFT', '04FB926D'], ['J RIGHT', '04FBD22D'], ['VOL-', '04FB827D'], ['VOL+', '04FBC03F'],
+  ['MUTE', '04FBCA35'], ['EMPTY SCREEN', '04FB728D'], ['PAGE UP', '04FB42BD'], ['PAGE DOWN', '04FBF00F'],
+  ['1', '04FB00FF'], ['2', '04FB08F7'], ['3', '04FB8877'], ['4', '04FBC837'],
+  ['5', '04FB28D7'], ['6', '04FBA857'], ['7', '04FBE817'], ['8', '04FB18E7'],
+  ['9', '04FB9867'], ['DISPLAY', '04FB38C7'], ['0', '04FBD827'], ['BACKSPACE', '04FB02FD'],
+  ['CH+', '04FB40BF'], ['CH-', '04FB906F'], ['NOTE', '04FB609F'], ['RED', '04FB3AC5'],
+  ['GREEN', '04FBBA45'], ['YELLOW', '04FB7A85'], ['BLUE', '04FBFA05'], ['SPACE', '04FB629D'],
+  ['WIN', '04FBD02F'], ['FN', '04FB32CD'], ['ALT+TAB', '04FBB847'], ['ALT+F4', '04FBF807'],
+  ['F1', '04FBA25D'], ['F2', '04FB48B7'], ['F3', '04FB8A75'], ['F4', '04FBDA25'],
+  ['F5', '04FB22DD'], ['F6', '04FB0AF5'], ['F7', '04FBC23D'], ['F8', '04FB58A7'],
+  ['F9', '04FB20DF'], ['F10', '04FB9A65'], ['F11', '04FBEA15'], ['F12', '04FB10EF'],
 ];
 /* Проекторы (вкладка «Проекторы»): все кнопки пультов марки из облачной базы IrCode Finder (несколько пультов объединены, дубли кодов убраны),
    тот же формат — 32 бита, старший бит первым. Сначала основные кнопки, потом остальные.
@@ -1285,6 +1292,8 @@ function syncTabs() {
   // «Цвет» есть во всех темах
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
   ['boards', 'proj', 'ac'].forEach(k => document.body.classList.toggle(k, tab === k));
+  // сетка в 3 колонки: у проекторов и у полного пульта MocTec
+  document.body.classList.toggle('grid3', tab === 'proj' || (tab === 'boards' && remote === 'moc'));
   document.body.classList.toggle('ctab', tab === 'color');
   [...brands.children].forEach((c, i) => c.classList.toggle('on', i === projBrand));
   [...boardChips.children].forEach((c, i) => c.classList.toggle('on', i === boardIdx));
@@ -1810,7 +1819,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.23', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.24', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

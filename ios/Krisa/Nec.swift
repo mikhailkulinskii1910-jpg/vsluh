@@ -11,14 +11,26 @@ let KEYS: [(label: String, code: UInt32)] = [
 ]
 
 /// Доски MocTec / «МОСТЕХ»: пульт «Interactive Board RC 52 Key» из облачной базы IrCode Finder
-/// (бренд MOSTEH, #500275), NEC, адрес 04 FB. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ».
+/// (бренд MOSTEH, #500275), NEC, адрес 04 FB — все 52 кнопки. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ».
 let MOC_KEYS: [(label: String, code: UInt32)] = [
-    ("POWER", 0x04FB4AB5), ("J OK", 0x04FB52AD),
-    ("VOL-", 0x04FB827D), ("VOL+", 0x04FBC03F),
-    ("EMPTY SCREEN", 0x04FB728D), ("INPUT", 0x04FBE01F),
-    ("J UP", 0x04FBE21D), ("J DOWN", 0x04FBB24D),
-    ("J LEFT", 0x04FB926D), ("J RIGHT", 0x04FBD22D),
-    ("HOME", 0x04FB12ED), ("BACK", 0x04FB50AF),
+    ("POWER", 0x04FB4AB5), ("INPUT", 0x04FBE01F), ("HOME", 0x04FB12ED),
+    ("BACK", 0x04FB50AF), ("MENU", 0x04FBB04F), ("J OK", 0x04FB52AD),
+    ("J UP", 0x04FBE21D), ("J DOWN", 0x04FBB24D), ("J LEFT", 0x04FB926D),
+    ("J RIGHT", 0x04FBD22D), ("VOL-", 0x04FB827D), ("VOL+", 0x04FBC03F),
+    ("MUTE", 0x04FBCA35), ("EMPTY SCREEN", 0x04FB728D), ("PAGE UP", 0x04FB42BD),
+    ("PAGE DOWN", 0x04FBF00F), ("1", 0x04FB00FF), ("2", 0x04FB08F7),
+    ("3", 0x04FB8877), ("4", 0x04FBC837), ("5", 0x04FB28D7),
+    ("6", 0x04FBA857), ("7", 0x04FBE817), ("8", 0x04FB18E7),
+    ("9", 0x04FB9867), ("DISPLAY", 0x04FB38C7), ("0", 0x04FBD827),
+    ("BACKSPACE", 0x04FB02FD), ("CH+", 0x04FB40BF), ("CH-", 0x04FB906F),
+    ("NOTE", 0x04FB609F), ("RED", 0x04FB3AC5), ("GREEN", 0x04FBBA45),
+    ("YELLOW", 0x04FB7A85), ("BLUE", 0x04FBFA05), ("SPACE", 0x04FB629D),
+    ("WIN", 0x04FBD02F), ("FN", 0x04FB32CD), ("ALT+TAB", 0x04FBB847),
+    ("ALT+F4", 0x04FBF807), ("F1", 0x04FBA25D), ("F2", 0x04FB48B7),
+    ("F3", 0x04FB8A75), ("F4", 0x04FBDA25), ("F5", 0x04FB22DD),
+    ("F6", 0x04FB0AF5), ("F7", 0x04FBC23D), ("F8", 0x04FB58A7),
+    ("F9", 0x04FB20DF), ("F10", 0x04FB9A65), ("F11", 0x04FBEA15),
+    ("F12", 0x04FB10EF),
 ]
 
 /// Пульт проектора из облачной базы IrCode Finder (NEC 38 кГц, 32 бита MSB-first).

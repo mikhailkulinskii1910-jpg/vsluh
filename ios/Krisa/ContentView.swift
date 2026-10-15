@@ -204,7 +204,8 @@ struct ContentView: View {
                 boardChip(0, "IRBIS")
                 boardChip(1, "MocTec")
             }
-            keyGrid
+            // у MocTec полный пульт (52 кнопки) — сетка в 3 колонки с прокруткой, как у проекторов
+            if boardIndex == 1 { projGrid } else { keyGrid }
         }
     }
 
