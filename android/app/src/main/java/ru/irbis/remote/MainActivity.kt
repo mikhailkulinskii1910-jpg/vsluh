@@ -496,7 +496,7 @@ class MainActivity : Activity() {
     private fun buildBoardsPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         boardIdx = getPreferences(MODE_PRIVATE).getInt(PREF_BOARD, if (getPreferences(MODE_PRIVATE).getString(PREF_TAB, null) == TAB_MOC) 1 else 0).coerceIn(0, 1)
-        val grids = listOf(keyGrid(KEYS), keyGrid(MOC_KEYS))
+        val grids = listOf(keyGrid(KEYS), keyGrid(MOC_KEYS, cols = 3))   // у MocTec полный пульт — 52 кнопки
         fun show(i: Int) { grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE } }
         p.addView(chipRow(listOf("IRBIS", "MocTec"), boardIdx) { i, _ ->
             boardIdx = i; show(i); subtitle.text = boardSubtitle()

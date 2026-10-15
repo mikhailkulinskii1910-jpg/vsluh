@@ -12,15 +12,28 @@ val KEYS = listOf(
 
 /**
  * Доски MocTec / «МОСТЕХ»: пульт «Interactive Board RC 52 Key» из облачной базы IrCode Finder
- * (бренд MOSTEH, #500275), NEC, адрес 04 FB. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ».
+ * (бренд MOSTEH, #500275), NEC, адрес 04 FB — все 52 кнопки. Те же коды дала расшифровка файлов Delly Changer «МОСТЕХ».
+ * RED (04FB 3AC5) — переключатель блокировки экрана и кнопок доски.
  */
 val MOC_KEYS = listOf(
-    "POWER" to 0x04FB4AB5L, "J OK" to 0x04FB52ADL,
-    "VOL-" to 0x04FB827DL, "VOL+" to 0x04FBC03FL,
-    "EMPTY SCREEN" to 0x04FB728DL, "INPUT" to 0x04FBE01FL,
-    "J UP" to 0x04FBE21DL, "J DOWN" to 0x04FBB24DL,
-    "J LEFT" to 0x04FB926DL, "J RIGHT" to 0x04FBD22DL,
-    "HOME" to 0x04FB12EDL, "BACK" to 0x04FB50AFL,
+    "POWER" to 0x04FB4AB5L, "INPUT" to 0x04FBE01FL, "HOME" to 0x04FB12EDL,
+    "BACK" to 0x04FB50AFL, "MENU" to 0x04FBB04FL, "J OK" to 0x04FB52ADL,
+    "J UP" to 0x04FBE21DL, "J DOWN" to 0x04FBB24DL, "J LEFT" to 0x04FB926DL,
+    "J RIGHT" to 0x04FBD22DL, "VOL-" to 0x04FB827DL, "VOL+" to 0x04FBC03FL,
+    "MUTE" to 0x04FBCA35L, "EMPTY SCREEN" to 0x04FB728DL, "PAGE UP" to 0x04FB42BDL,
+    "PAGE DOWN" to 0x04FBF00FL, "1" to 0x04FB00FFL, "2" to 0x04FB08F7L,
+    "3" to 0x04FB8877L, "4" to 0x04FBC837L, "5" to 0x04FB28D7L,
+    "6" to 0x04FBA857L, "7" to 0x04FBE817L, "8" to 0x04FB18E7L,
+    "9" to 0x04FB9867L, "DISPLAY" to 0x04FB38C7L, "0" to 0x04FBD827L,
+    "BACKSPACE" to 0x04FB02FDL, "CH+" to 0x04FB40BFL, "CH-" to 0x04FB906FL,
+    "NOTE" to 0x04FB609FL, "RED" to 0x04FB3AC5L, "GREEN" to 0x04FBBA45L,
+    "YELLOW" to 0x04FB7A85L, "BLUE" to 0x04FBFA05L, "SPACE" to 0x04FB629DL,
+    "WIN" to 0x04FBD02FL, "FN" to 0x04FB32CDL, "ALT+TAB" to 0x04FBB847L,
+    "ALT+F4" to 0x04FBF807L, "F1" to 0x04FBA25DL, "F2" to 0x04FB48B7L,
+    "F3" to 0x04FB8A75L, "F4" to 0x04FBDA25L, "F5" to 0x04FB22DDL,
+    "F6" to 0x04FB0AF5L, "F7" to 0x04FBC23DL, "F8" to 0x04FB58A7L,
+    "F9" to 0x04FB20DFL, "F10" to 0x04FB9A65L, "F11" to 0x04FBEA15L,
+    "F12" to 0x04FB10EFL
 )
 
 /**
