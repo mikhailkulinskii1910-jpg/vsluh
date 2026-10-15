@@ -386,12 +386,12 @@ class MainActivity : Activity() {
     private val versionName get() = packageManager.getPackageInfo(packageName, 0).versionName
 
     /** Сетка кнопок пульта (12 штук на один экран, как в IrCode Finder). */
-    private fun keyGrid(keys: List<Pair<String, Long>>, cols: Int = 2): GridLayout {
+    private fun keyGrid(keys: List<Pair<String, Long>>, cols: Int = 2, first: Int = 0): GridLayout {
         val grid = GridLayout(this).apply { columnCount = cols; useDefaultMargins = false }
         val gap = dp(if (cols > 2) 3 else 5)
         val rowH = if (cols > 2) 64 else ((resources.configuration.screenHeightDp - 300) / 6 - 10).coerceIn(60, 110)
         keys.forEachIndexed { i, (label, code) ->
-            val k = KeyView(this, label, i, code, inverted = label == "POWER")
+            val k = KeyView(this, label, first + i, code, inverted = label == "POWER")
             k.setOnTouchListener { v, e -> onKeyTouch(v as KeyView, e, label, code) }
             keyViews += k
             grid.addView(k, GridLayout.LayoutParams(GridLayout.spec(i / cols), GridLayout.spec(i % cols, 1f)).apply {
@@ -496,10 +496,10 @@ class MainActivity : Activity() {
     private fun buildBoardsPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         boardIdx = getPreferences(MODE_PRIVATE).getInt(PREF_BOARD, if (getPreferences(MODE_PRIVATE).getString(PREF_TAB, null) == TAB_MOC) 1 else 0).coerceIn(0, 1)
-        val grids = listOf(keyGrid(KEYS), keyGrid(MOC_KEYS, cols = 3))   // у MocTec полный пульт — 52 кнопки
+        val grids = listOf(keyGrid(KEYS), withExtras(MOC_KEYS, MOC_MAIN))   // у MocTec полный пульт: основные + «доп.»
         fun show(i: Int) { grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE } }
         p.addView(chipRow(listOf("IRBIS", "MocTec"), boardIdx) { i, _ ->
-            boardIdx = i; show(i); subtitle.text = boardSubtitle()
+            boardIdx = i; show(i); extraToggles.forEach { it() }; subtitle.text = boardSubtitle()
             getPreferences(MODE_PRIVATE).edit().putInt(PREF_BOARD, i).apply()
         }, LinearLayout.LayoutParams(-1, -2))
         grids.forEach { p.addView(it, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) }) }
@@ -603,6 +603,32 @@ class MainActivity : Activity() {
         return p
     }
 
+    private val extraToggles = ArrayList<() -> Unit>()
+
+    /**
+     * Основные кнопки пульта сеткой в 3 колонки, под ними — кнопка «доп.», которая раскрывает остальные.
+     * Нумерация сквозная. При смене марки или подвкладки меню сворачивается.
+     */
+    private fun withExtras(keys: List<Pair<String, Long>>, main: Int): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(keyGrid(keys.take(main), cols = 3))
+        val extra = keyGrid(keys.drop(main), cols = 3, first = main).apply { visibility = View.GONE }
+        lateinit var btn: TextView
+        fun set(open: Boolean) {
+            extra.visibility = if (open) View.VISIBLE else View.GONE
+            btn.text = btnLabel(if (open) "[ доп. ▴ ]" else "[ доп. ▾ ]")
+            styleTab(btn, open)
+        }
+        btn = mocButton("[ доп. ▾ ]") { set(extra.visibility != View.VISIBLE) }.apply {
+            typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 16f)
+        }
+        set(false)
+        extraToggles += { set(false) }
+        p.addView(btn, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(8) })
+        p.addView(extra, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        return p
+    }
+
     /** Номера пультов коротко: «#1803 +3». */
     private fun projSource(p: Projector) = p.source.split(", ").let { if (it.size > 1) "${it[0]} +${it.size - 1}" else it[0] }
 
@@ -610,10 +636,11 @@ class MainActivity : Activity() {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         projIdx = getPreferences(MODE_PRIVATE).getInt(PREF_PROJ, 0).coerceIn(0, PROJECTORS.size - 1)
         val chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
-        val grids = PROJECTORS.map { keyGrid(it.keys, cols = 3) }
+        val grids = PROJECTORS.map { withExtras(it.keys, it.main) }
         val chipViews = ArrayList<TextView>()
         fun select(i: Int) {
             projIdx = i
+            extraToggles.forEach { it() }      // другая марка — «доп.» свёрнуто
             chipViews.forEachIndexed { k, c -> styleTab(c, k == i) }
             grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE }
             subtitle.text = PROJECTORS[i].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
