@@ -37,6 +37,8 @@ struct ContentView: View {
     @AppStorage("prBg") private var prBg = 0.0
     /// Марка проектора во вкладке PROJ: 0 NEC, 1 Epson, 2 InFocus, 3 BenQ.
     @AppStorage("projBrand") private var projBrand = 0
+    /// Раскрыто ли меню «доп.» (сворачивается при смене марки и вкладки).
+    @State private var extraOpen = false
     /// Где на экране область пульта — туда кладётся панель «Цвет» (поверх RGB-перелива).
     @State private var panelFrame: CGRect = .zero
 
@@ -146,13 +148,16 @@ struct ContentView: View {
         }
     }
 
-    /// Все кнопки проектора: 3 колонки, сетка прокручивается.
+    /// Проектор или MocTec: основные кнопки (3 колонки), под ними «доп.» с остальными. Сетка прокручивается.
     private var projGrid: some View {
         ScrollView(showsIndicators: false) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10),
-                                GridItem(.flexible(), spacing: 10)], spacing: 10) {
+            VStack(spacing: 10) {
                 if ready {
-                    ForEach(Array(currentKeys.enumerated()), id: \.offset) { i, k in projKey(i, k.label, k.code) }
+                    keyBlock(from: 0, to: mainCount)
+                    if mainCount < currentKeys.count {
+                        moreButton
+                        if extraOpen { keyBlock(from: mainCount, to: currentKeys.count) }
+                    }
                 }
             }
             .padding(6)
@@ -161,8 +166,37 @@ struct ContentView: View {
         }
     }
 
-    private func projKey(_ i: Int, _ label: String, _ code: UInt32) -> some View {
-        let delay: Double = 0.04 * Double(min(i, 15))
+    private static let grid3: [GridItem] = [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10),
+                                            GridItem(.flexible(), spacing: 10)]
+
+    /// Кнопки с from по to (нумерация сквозная).
+    private func keyBlock(from: Int, to: Int) -> some View {
+        let keys: [(label: String, code: UInt32)] = currentKeys
+        let hi: Int = min(to, keys.count)
+        let lo: Int = min(from, hi)
+        return LazyVGrid(columns: ContentView.grid3, spacing: 10) {
+            ForEach(lo..<hi, id: \.self) { i in projKey(i, keys[i].label, keys[i].code, first: lo) }
+        }
+    }
+
+    /// Сколько основных кнопок на экране (остальные — в «доп.»).
+    private var mainCount: Int {
+        if tab == "proj" { return PROJ_BRANDS[projIndex].main }
+        return MOC_MAIN
+    }
+
+    /// Кнопка «доп.»: раскрывает и сворачивает остальные кнопки.
+    private var moreButton: some View {
+        let arrow: String = extraOpen ? "▴" : "▾"
+        let plain: Bool = Term.prism || Term.blueprint
+        let title: String = plain ? "доп. " + arrow : "[ доп. " + arrow + " ]"
+        return Button { extraOpen.toggle() } label: {
+            TabLabel(title: title, on: false, height: 48, ruSize: 14)
+        }
+    }
+
+    private func projKey(_ i: Int, _ label: String, _ code: UInt32, first: Int) -> some View {
+        let delay: Double = 0.04 * Double(min(i - first, 15))
         return KeyView(index: i, label: label, code: code, inverted: label == "POWER",
                        revealDelay: delay,
                        onDown: { model.press(label, code) },
@@ -211,7 +245,10 @@ struct ContentView: View {
 
     private func boardChip(_ i: Int, _ title: String) -> some View {
         let on: Bool = i == boardIndex
-        return Button { boardBrand = i } label: { tabLabel(title, on: on, height: 36) }
+        return Button {
+            boardBrand = i
+            extraOpen = false
+        } label: { tabLabel(title, on: on, height: 36) }
     }
 
     /// Выбранная марка проектора (индекс с защитой от мусора в настройках).
@@ -236,7 +273,10 @@ struct ContentView: View {
 
     private func brandChip(_ i: Int) -> some View {
         let on: Bool = i == projIndex
-        return Button { projBrand = i } label: { tabLabel(PROJ_BRANDS[i].name, on: on, height: 36) }
+        return Button {
+            projBrand = i
+            extraOpen = false
+        } label: { tabLabel(PROJ_BRANDS[i].name, on: on, height: 36) }
     }
 
     /// Пустое место под панель «Цвет»: только сообщает свою рамку.
@@ -479,7 +519,10 @@ extension ContentView {
 
     private func remoteTab(_ id: String, _ title: String) -> some View {
         let on: Bool = shownRemote == id
-        return Button { remote = id } label: { tabLabel(title, on: on) }
+        return Button {
+            remote = id
+            extraOpen = false
+        } label: { tabLabel(title, on: on) }
     }
 
     private func tabLabel(_ title: String, on: Bool, height: CGFloat = 40) -> some View {
