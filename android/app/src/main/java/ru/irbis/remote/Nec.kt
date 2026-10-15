@@ -20,7 +20,7 @@ val MOC_KEYS = listOf(
     "BACK" to 0x04FB50AFL, "MENU" to 0x04FBB04FL, "J OK" to 0x04FB52ADL,
     "J UP" to 0x04FBE21DL, "J DOWN" to 0x04FBB24DL, "J LEFT" to 0x04FB926DL,
     "J RIGHT" to 0x04FBD22DL, "VOL-" to 0x04FB827DL, "VOL+" to 0x04FBC03FL,
-    "MUTE" to 0x04FBCA35L, "EMPTY SCREEN" to 0x04FB728DL, "PAGE UP" to 0x04FB42BDL,
+    "MUTE" to 0x04FBCA35L, "EMPTY SCREEN" to 0x04FB728DL, "ALT+F4" to 0x04FBF807L, "PAGE UP" to 0x04FB42BDL,
     "PAGE DOWN" to 0x04FBF00FL, "1" to 0x04FB00FFL, "2" to 0x04FB08F7L,
     "3" to 0x04FB8877L, "4" to 0x04FBC837L, "5" to 0x04FB28D7L,
     "6" to 0x04FBA857L, "7" to 0x04FBE817L, "8" to 0x04FB18E7L,
@@ -29,7 +29,7 @@ val MOC_KEYS = listOf(
     "NOTE" to 0x04FB609FL, "RED" to 0x04FB3AC5L, "GREEN" to 0x04FBBA45L,
     "YELLOW" to 0x04FB7A85L, "BLUE" to 0x04FBFA05L, "SPACE" to 0x04FB629DL,
     "WIN" to 0x04FBD02FL, "FN" to 0x04FB32CDL, "ALT+TAB" to 0x04FBB847L,
-    "ALT+F4" to 0x04FBF807L, "F1" to 0x04FBA25DL, "F2" to 0x04FB48B7L,
+    "F1" to 0x04FBA25DL, "F2" to 0x04FB48B7L,
     "F3" to 0x04FB8A75L, "F4" to 0x04FBDA25L, "F5" to 0x04FB22DDL,
     "F6" to 0x04FB0AF5L, "F7" to 0x04FBC23DL, "F8" to 0x04FB58A7L,
     "F9" to 0x04FB20DFL, "F10" to 0x04FB9A65L, "F11" to 0x04FBEA15L,
@@ -45,7 +45,10 @@ val MOC_KEYS = listOf(
  *  - BenQ: #1759, #1764 (MX/MS/MW…), адрес 00 0C, протокол NEC2.
  * Выключение у проекторов — с подтверждением: POWER нужно нажать два раза.
  */
-class Projector(val brand: String, val source: String, val keys: List<Pair<String, Long>>)
+class Projector(val brand: String, val source: String, val keys: List<Pair<String, Long>>, val main: Int)
+
+/** Основные кнопки MocTec (первые 15, вместе с ALT+F4); остальные — в меню «доп.». */
+const val MOC_MAIN = 15
 
 val PROJECTORS = listOf(
     Projector("NEC", "#1803, #1777, #1806, #1882", listOf(
@@ -62,7 +65,7 @@ val PROJECTORS = listOf(
         "INPUT NEXT 2" to 0x1897B24DL, "FOLDER LIST" to 0x18975FA0L, "INPUT COMPUTER 3" to 0x1897AA55L, "INPUT LAN" to 0x18976A95L,
         "PJ" to 0x189749B6L, "POINTER" to 0x1897649BL, "POS DOWN" to 0x1897FB04L, "POS DOWN LEFT" to 0x189724DBL,
         "POS DOWN RIGHT" to 0x1897C43BL, "POS LEFT" to 0x1897BB44L, "POS RIGHT" to 0x18973BC4L, "POS UP" to 0x18977B84L,
-        "POS UP LEFT" to 0x189744BBL, "POS UP RIGHT" to 0x1897847BL, "SLIDE-" to 0x189704FBL, "SLIDE+" to 0x1897D22DL)),
+        "POS UP LEFT" to 0x189744BBL, "POS UP RIGHT" to 0x1897847BL, "SLIDE-" to 0x189704FBL, "SLIDE+" to 0x1897D22DL), main = 13),
     Projector("Epson", "#1779, #1783", listOf(
         "POWER" to 0xC1AA09F6L, "SOURCE SEARCH" to 0xC1AA31CEL, "A/V MUTE" to 0xC1AAC936L, "MENU" to 0xC1AA59A6L,
         "ENTER" to 0xC1AAA15EL, "ESC" to 0xC1AA21DEL, "UP" to 0xC1AA0DF2L, "DOWN" to 0xC1AA4DB2L,
@@ -73,7 +76,7 @@ val PROJECTORS = listOf(
         "FREEZE" to 0xC1AA49B6L, "HELP" to 0xC1AAA956L, "ID" to 0xC1AA8C73L, "INPUT COMPUTER" to 0xC1AA29D6L,
         "HDMI/VIDEO" to 0xC1AA0EF1L, "INPUT LAN" to 0xC1AA2ED1L, "INPUT USB" to 0xC1AA6E91L, "PAGE DOWN" to 0xC1AAE11EL,
         "PAGE UP" to 0xC1AA619EL, "POINTER" to 0xC1AAD926L, "SPLIT" to 0xC1AA41BEL, "USER" to 0xC1AAF906L,
-        "INPUT HDMI" to 0xC1AACE31L, "INPUT S-VIDEO" to 0xC1AA39C6L, "POINTER 2" to 0xC1AA956AL)),
+        "INPUT HDMI" to 0xC1AACE31L, "INPUT S-VIDEO" to 0xC1AA39C6L, "POINTER 2" to 0xC1AA956AL), main = 12),
     Projector("InFocus", "#1818, #1940", listOf(
         "POWER" to 0xE172E817L, "SOURCE" to 0xE17208F7L, "MUTE" to 0xE172946BL, "BLANK" to 0xE1728C73L,
         "MENU" to 0xE17240BFL, "SELECT" to 0xE1724CB3L, "ESC" to 0xE1720AF5L, "UP" to 0xE172C837L,
@@ -83,7 +86,7 @@ val PROJECTORS = listOf(
         "KEYSTONE DOWN" to 0xE172847BL, "KEYSTONE UP" to 0xE17204FBL, "PREVIOUS" to 0xE172A45BL, "MAGNIFY-" to 0xE172CA35L,
         "MAGNIFY+" to 0xE1724AB5L, "OVERSCAN" to 0xE172AC53L, "PC" to 0xE1729867L, "PRESET" to 0xE17234CBL,
         "RESIZE" to 0xE1722CD3L, "NEXT" to 0xE17224DBL, "VIDEO" to 0xE17258A7L, "MOUSE LEFT CLICK" to 0xE17230CFL,
-        "MOUSE RIGHT CLICK" to 0xE172D02FL, "SOURCE 4" to 0xE1720CF3L)),
+        "MOUSE RIGHT CLICK" to 0xE172D02FL, "SOURCE 4" to 0xE1720CF3L), main = 13),
     Projector("BenQ", "#1759, #1764", listOf(
         "POWER" to 0x000C40BFL, "POWER ON" to 0x000CF20DL, "POWER OFF" to 0x000C728DL, "SOURCE" to 0x000C20DFL,
         "MUTE" to 0x000C28D7L, "ECO BLANK" to 0x000CE01FL, "MENU" to 0x000CF00FL, "ENTER" to 0x000C08F7L,
@@ -97,7 +100,7 @@ val PROJECTORS = listOf(
         "FINE TUNE" to 0x000CBA45L, "INPUT COMPONENT" to 0x000C8A75L, "INPUT COMPUTER 1" to 0x000C827DL, "INPUT COMPUTER 2" to 0x000CA25DL,
         "INPUT HDMI" to 0x000C1AE5L, "INPUT HDMI 2" to 0x000C9A65L, "INPUT NETWORK" to 0x000C629DL, "INPUT S-VIDEO" to 0x000CF807L,
         "INPUT VIDEO" to 0x000C4AB5L, "NETWORK SETTING" to 0x000C817EL, "PIP" to 0x000CD827L, "SHARP" to 0x000C7E81L,
-        "SRS" to 0x000C9966L, "USER1" to 0x000CAE51L, "USER2" to 0x000C6E91L, "USER3" to 0x000CEE11L)),
+        "SRS" to 0x000C9966L, "USER1" to 0x000CAE51L, "USER2" to 0x000C6E91L, "USER3" to 0x000CEE11L), main = 14),
 )
 
 /** Адреса с протоколом NEC2 (Epson, BenQ): при удержании повторяется весь кадр, а не короткий код повтора. */
