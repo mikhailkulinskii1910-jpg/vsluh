@@ -160,6 +160,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .team input{background:transparent;border:0;border-bottom:1px dashed transparent;color:var(--text);font-family:var(--f-display);font-size:24px;width:100%;min-width:0;padding:2px 0}
 .team input:hover{border-bottom-color:var(--line)}
 .team .pts{font-family:var(--f-display);font-size:44px;color:var(--ochre-hi);font-variant-numeric:tabular-nums;transition:transform .3s}
+.team input.pts{flex:none;width:4.4ch;text-align:right;font-size:44px;color:var(--ochre-hi);border-bottom:1px dashed rgba(193,139,55,.25);cursor:text}
+.team input.pts:hover,.team input.pts:focus{border-bottom-color:var(--ochre)}
+.scores.many .team{padding:0 12px 0 14px;gap:6px}
+.scores.many .team input{font-size:19px}
+.scores.many .team input.pts{font-size:34px}
 .team .pts.bump{animation:bump .5s ease}
 @keyframes bump{40%{transform:scale(1.25);color:#fff}}
 .team .rm{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--muted);font-size:16px;opacity:.5}
@@ -189,7 +194,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .open .q-art .bignum{animation:fadeUp .7s .7s both}
 @keyframes pieceIn{from{opacity:0;transform:translateX(-60px) rotate(-8deg)}to{opacity:1;transform:rotate(-2deg)}}
 @keyframes circIn{from{transform:scale(0)}to{transform:scale(1)}}
-.q-main{display:flex;flex-direction:column;min-width:0}
+.q-wrap{grid-template-rows:minmax(0,1fr)}
+.q-main{display:flex;flex-direction:column;min-width:0;min-height:0}
 .q-head{display:flex;justify-content:space-between;align-items:flex-start;gap:30px}
 .q-theme{font-family:var(--f-display);font-size:30px;color:var(--text);margin-top:12px;line-height:1.15}
 .open .q-head,.open .q-text{animation:fadeUp .7s .55s both}
@@ -205,6 +211,8 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .rule{height:1px;background:linear-gradient(90deg,var(--ochre),transparent);margin:24px 0 0}
 .q-text{flex:1;display:flex;align-items:center;font-size:54px;line-height:1.22;font-weight:500;color:#f3e8d3;min-height:0;overflow:hidden;text-wrap:balance}
 .q-text .eq{display:block;font-family:var(--f-display);font-size:1.5em;color:var(--ochre-hi);margin-top:18px;letter-spacing:.03em}
+.q-text .qpart{display:block;margin-bottom:.35em}
+.q-text .qpart b{font-family:var(--f-display);font-weight:400;color:var(--ochre-hi);margin-right:.25em}
 .q-text .remark{display:block;font-size:.5em;font-style:italic;color:var(--ochre-hi);margin-top:22px;line-height:1.3}
 .q-text .eq i{font-family:var(--f-body);font-style:italic}
 .answer-zone{height:220px;position:relative;margin-top:10px}
@@ -225,6 +233,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .q-team span{font-family:var(--f-display);font-size:18px;margin-right:6px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .q-team em{font-style:normal;font-family:var(--f-ui);font-size:13px;color:var(--ochre-hi);margin-right:6px;font-variant-numeric:tabular-nums}
 .q-team button{border:1px solid var(--line);background:transparent;font-family:var(--f-ui);font-weight:600;font-size:13px;padding:8px 10px;min-width:58px}
+.many-q .q-nav{position:absolute;top:66px;right:190px}
+.many-q .q-score{width:100%;gap:8px 10px}
+.many-q .q-team{padding:4px 4px 4px 10px;gap:4px}
+.many-q .q-team span{font-size:16px;max-width:104px;margin-right:2px}
+.many-q .q-team em{font-size:12px;margin-right:2px}
+.many-q .q-team button{min-width:46px;padding:6px 5px;font-size:12px}
 .q-team .plus:hover{background:#3d5a2e;border-color:#7ea45b}
 .q-team .minus:hover{background:#5a2420;border-color:var(--crimson-hi)}
 .q-nav{display:flex;gap:10px}
@@ -285,6 +299,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 #results h2{font-family:var(--f-display);font-weight:400;font-size:96px;color:var(--crimson-hi);margin:18px 0 6px;line-height:1}
 #results .list{margin-top:36px;display:flex;flex-direction:column;gap:16px}
 .res-row{display:grid;grid-template-columns:60px 1fr 120px;align-items:center;gap:20px;opacity:0}
+#results .list.many{gap:8px;margin-top:24px}
+.list.many .nm{font-size:23px}
+.list.many .sc{font-size:32px}
+.list.many .place{font-size:28px}
+.list.many .bar{margin-top:6px}
+#results .list.many~blockquote{margin-top:28px;font-size:24px}
 .active#results .res-row{animation:fadeUp .7s forwards}
 .res-row .place{font-family:var(--f-display);font-size:38px;color:var(--ochre)}
 .res-row .nm{font-family:var(--f-display);font-size:30px}
@@ -453,7 +473,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
     <div class="f-wreath" id="fWreath"></div>
     <div class="f-num" id="fNum">0</div>
     <div class="f-title">ФИНАЛЬНЫЙ ВОПРОС</div>
-    <div class="f-sub">Оценку получает только команда, ответившая на вопрос.</div>
+    <div class="f-sub">Два вопроса в одном. Оценку получает только команда, ответившая на вопрос.</div>
     <button class="btn primary f-btn" id="finalGo">Показать вопрос</button>
   </section>
 
@@ -535,9 +555,11 @@ const CATS = [
  {q:"Решите квадратное уравнение", eq:"2<i>x</i>² − 7<i>x</i> + 3 = 0", a:"x₁ = 3,  x₂ = 0,5", n:"D = 49 − 24 = 25;  x = (7 ± 5) / 4"},
  {q:"Решите квадратное уравнение", eq:"3<i>x</i>² + 2<i>x</i> − 5 = 0", a:"x₁ = 1,  x₂ = −5/3", n:"D = 4 + 60 = 64;  x = (−2 ± 8) / 6"}
 ];
-const FINAL = {q:"Сколько слов произносит Правдин в полной версии комедии «Недоросль»? Ответ округлите до десятков.<span class=\"remark\">Оценку получает только команда, ответившая на вопрос.</span>", a:"1470 слов", n:"Оценку получает только команда, ответившая на вопрос."};
+const FINAL = {q:"<span class='qpart'><b>I.</b> Сколько слов произносит Правдин в полной версии комедии «Недоросль»? Ответ округлите до десятков.</span><span class='qpart'><b>II.</b> В каких произведениях русской литературы, кроме «Недоросля», говорится об обучении и воспитании детей дворян?</span><span class='remark'>Оценку получает только команда, ответившая на вопрос.</span>",
+ a:"I. 1470 слов.  II. Например: «Капитанская дочка», «Евгений Онегин», «Горе от ума», «Обломов», «Детство»",
+ n:"Оценку получает только команда, ответившая на вопрос. Ко II: Пушкин — воспитание Петруши Гринёва (француз Бопре, дядька Савельич) и Онегина («Мы все учились понемногу…»); Грибоедов — Фамусов об учителях-иностранцах; Гончаров — «Сон Обломова»; Л. Толстой — гувернёр Карл Иваныч."};
 const VALUES=[10,20,30,40,50,60,70,80,90,100];
-const ROMAN=["I","II","III","IV","V"];
+const ROMAN=["I","II","III","IV","V","VI"];
 
 /* ===================== ИЛЛЮСТРАЦИИ (SVG) ===================== */
 let uid=0;
@@ -661,11 +683,17 @@ function renderBoard(anim){const g=$("grid");g.innerHTML="";g.classList.toggle("
  renderScores()}
 function renderScores(){const box=$("scores");box.innerHTML="";
  S.teams.forEach((t,k)=>{const d=document.createElement("div");d.className="team";
-  d.innerHTML=`<input id="team-${k}" value="${t.name.replace(/"/g,"&quot;")}" aria-label="Название команды ${k+1}"><div class="pts" id="pts-${k}">${t.score}</div>${S.teams.length>2?`<button class="rm" title="Убрать команду" aria-label="Убрать команду">×</button>`:""}`;
+  d.innerHTML=`<input id="team-${k}" value="${t.name.replace(/"/g,"&quot;")}" aria-label="Название команды ${k+1}"><input class="pts" id="pts-${k}" value="${t.score}" inputmode="numeric" title="Нажмите, чтобы исправить счёт" aria-label="Счёт команды ${k+1}">${S.teams.length>2?`<button class="rm" title="Убрать команду" aria-label="Убрать команду">×</button>`:""}`;
   d.querySelector("input").oninput=e=>{t.name=e.target.value||("Команда "+(k+1));save()};
+  const pi=d.querySelector("input.pts");
+  pi.oninput=()=>{const v=parseInt(pi.value.replace(/[^\d-]/g,""),10);if(!isNaN(v)){t.score=v;save()}};
+  pi.onchange=pi.onblur=()=>{pi.value=t.score};
+  pi.onkeydown=e=>{if(e.key==="Enter")pi.blur()};
+  pi.onfocus=()=>pi.select();
   const rm=d.querySelector(".rm");if(rm)rm.onclick=()=>{S.teams.splice(k,1);save();renderScores()};
   box.appendChild(d)});
- if(S.teams.length<4){const a=document.createElement("button");a.className="addteam";a.textContent="+ КОМАНДА";a.onclick=()=>{S.teams.push({name:"Команда "+(S.teams.length+1),score:0});save();renderScores()};box.appendChild(a)}}
+ box.classList.toggle("many",S.teams.length>4);
+ if(S.teams.length<6){const a=document.createElement("button");a.className="addteam";a.textContent="+ КОМАНДА";a.onclick=()=>{S.teams.push({name:"Команда "+(S.teams.length+1),score:0});save();renderScores()};box.appendChild(a)}}
 
 /* ===================== ОТКРЫТИЕ ВОПРОСА ===================== */
 let Q=null;
@@ -693,7 +721,7 @@ function openQuestion(o){Q=o;const L=$("qlayer");
  else{$("timer").hidden=false;startTimer(o.time||30)}}
 function fitText(el,max,min){let s=max;el.style.fontSize=s+"px";const inner=el.firstElementChild;
  while(s>min&&inner.scrollHeight>el.clientHeight){s-=2;el.style.fontSize=s+"px"}}
-function renderQScore(){const box=$("qScore");box.innerHTML="";const v=Q.value;
+function renderQScore(){const box=$("qScore");box.innerHTML="";const v=Q.value;$("qlayer").classList.toggle("many-q",S.teams.length>3);
  S.teams.forEach((t,k)=>{const d=document.createElement("div");d.className="q-team";
   d.innerHTML=`<span>${t.name}</span><em id="qs-${k}">${t.score}</em><button class="plus" aria-label="Добавить ${v} баллов">+${v}</button><button class="minus" aria-label="Снять ${v} баллов">−${v}</button>`;
   d.querySelector(".plus").onclick=e=>award(k,v,e.currentTarget);d.querySelector(".minus").onclick=e=>award(k,-v,e.currentTarget);box.appendChild(d)})}
@@ -749,6 +777,7 @@ $("finalGo").onclick=()=>{const L=$("finallayer");L.classList.remove("open");L.q
 /* ===================== ИТОГИ ===================== */
 function renderResults(){$("resArt").innerHTML=ART.stage();torn($("resArt"),1.4);
  const arr=S.teams.map(t=>({...t})).sort((a,b)=>b.score-a.score);const max=Math.max(1,...arr.map(t=>Math.abs(t.score)));
+ $("resList").classList.toggle("many",arr.length>4);
  $("resList").innerHTML=arr.map((t,i)=>`<div class="res-row ${i===0&&t.score>0&&(arr.length<2||t.score>arr[1].score)?"win":""}" style="animation-delay:${.3+i*.2}s"><div class="place">${ROMAN[i]}</div><div><div class="nm">${t.name}</div><div class="bar"><i data-w="${Math.max(0,t.score)/max*100}"></i></div></div><div class="sc">${t.score}</div></div>`).join("");
  setTimeout(()=>document.querySelectorAll(".res-row .bar i").forEach(i=>i.style.width=i.dataset.w+"%"),100);
  setTimeout(()=>confetti($("results"),60),900)}
