@@ -355,12 +355,26 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
     <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#2b211a" stroke-width="1.1"/></pattern>
     <pattern id="hatchR" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#5e140e" stroke-width="1.4"/></pattern>
     <pattern id="xhatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(30)"><path d="M0 0V6M0 0H6" stroke="#2b211a" stroke-width=".9"/></pattern>
-    <pattern id="folds" width="44" height="10" patternUnits="userSpaceOnUse"><rect width="44" height="10" fill="#7a1b14"/><rect x="8" width="14" height="10" fill="#a3281e"/><rect x="14" width="5" height="10" fill="#c63a2b"/><rect x="30" width="6" height="10" fill="#4d0f0b"/></pattern>
+    <pattern id="folds" width="36" height="10" patternUnits="userSpaceOnUse"><rect width="36" height="10" fill="url(#foldG)"/></pattern>
     <linearGradient id="cone" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe2a8" stop-opacity=".75"/><stop offset="1" stop-color="#ffe2a8" stop-opacity="0"/></linearGradient>
     <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3d18b"/><stop offset=".5" stop-color="#c18b37"/><stop offset="1" stop-color="#8a5d1e"/></linearGradient>
     <radialGradient id="redball" cx=".35" cy=".35" r=".8"><stop offset="0" stop-color="#c63a2b"/><stop offset=".6" stop-color="#a3281e"/><stop offset="1" stop-color="#6e1912"/></radialGradient>
     <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".05" numOctaves="2" seed="3"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter>
     <symbol id="fleur" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2c1.6 2.2 2.4 4 2.4 5.6 0 1.6-1 2.6-2.4 3.4-1.4-.8-2.4-1.8-2.4-3.4C9.6 6 10.4 4.2 12 2zm-1 10.2V15H7.6c-1.8 0-3.6-1.2-3.6-3 0-1.4 1-2.4 2.3-2.4 1 0 1.6.6 1.6 1.3-1 0-1.4.5-1.4 1 0 .7.8 1.1 1.8 1.1 1.2 0 2-.6 2.7-.8zm2 0c.7.2 1.5.8 2.7.8 1 0 1.8-.4 1.8-1.1 0-.5-.4-1-1.4-1 0-.7.6-1.3 1.6-1.3 1.3 0 2.3 1 2.3 2.4 0 1.8-1.8 3-3.6 3H13zM9 16h6v1.4h-1.8l.8 4.6h-4l.8-4.6H9z"/></symbol>
+    <pattern id="hatchFine" width="3.5" height="3.5" patternUnits="userSpaceOnUse" patternTransform="rotate(-35)"><line x1="0" y1="0" x2="0" y2="3.5" stroke="#2b211a" stroke-width=".7"/></pattern>
+    <radialGradient id="bead" cx=".35" cy=".32" r=".75"><stop offset="0" stop-color="#fbe7b0"/><stop offset=".45" stop-color="#d9a24a"/><stop offset="1" stop-color="#6b4716"/></radialGradient>
+    <radialGradient id="beadR" cx=".35" cy=".32" r=".75"><stop offset="0" stop-color="#f08a72"/><stop offset=".45" stop-color="#b8321f"/><stop offset="1" stop-color="#4d0f0b"/></radialGradient>
+    <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a5434"/><stop offset=".5" stop-color="#5a3a22"/><stop offset="1" stop-color="#36210f"/></linearGradient>
+    <linearGradient id="glassInk" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2b3540"/><stop offset=".35" stop-color="#4a5a68"/><stop offset="1" stop-color="#11161b"/></linearGradient>
+    <radialGradient id="glow"><stop offset="0" stop-color="#ffd98a" stop-opacity=".75"/><stop offset=".5" stop-color="#ffc56b" stop-opacity=".22"/><stop offset="1" stop-color="#ffc56b" stop-opacity="0"/></radialGradient>
+    <radialGradient id="flame" cx=".5" cy=".7" r=".6"><stop offset="0" stop-color="#fff6d0"/><stop offset=".45" stop-color="#ffcf5a"/><stop offset="1" stop-color="#e0701e"/></radialGradient>
+    <radialGradient id="globeG" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#6b7f92"/><stop offset=".6" stop-color="#3d4c5e"/><stop offset="1" stop-color="#1c252f"/></radialGradient>
+    <linearGradient id="rollG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9dcc2"/><stop offset=".5" stop-color="#c9b593"/><stop offset="1" stop-color="#8a7660"/></linearGradient>
+    <linearGradient id="giltV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3d18b"/><stop offset=".45" stop-color="#c18b37"/><stop offset=".55" stop-color="#9c6c25"/><stop offset="1" stop-color="#e3b35e"/></linearGradient>
+    <pattern id="burlap" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#cdb48c"/><path d="M0,1.5 H6 M0,4.5 H6" stroke="#a88e66" stroke-width="1.1"/><path d="M1.5,0 V6 M4.5,0 V6" stroke="#b89e74" stroke-width=".9"/></pattern>
+    <radialGradient id="sackShade" cx=".38" cy=".35" r=".75"><stop offset="0" stop-color="#fff3d8" stop-opacity=".35"/><stop offset=".6" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#2b1a0c" stop-opacity=".5"/></radialGradient>
+    <radialGradient id="catEye" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#fff0b0"/><stop offset=".5" stop-color="#e3b35e"/><stop offset="1" stop-color="#9a6a18"/></radialGradient>
+    <linearGradient id="foldG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#4d0f0b"/><stop offset=".25" stop-color="#8e2219"/><stop offset=".45" stop-color="#c63a2b"/><stop offset=".6" stop-color="#a3281e"/><stop offset=".85" stop-color="#6a1711"/><stop offset="1" stop-color="#4d0f0b"/></linearGradient>
   </defs>
 </svg>
 
@@ -564,65 +578,185 @@ const ROMAN=["I","II","III","IV","V","VI"];
 /* ===================== ИЛЛЮСТРАЦИИ (SVG) ===================== */
 let uid=0;
 const svg=(vb,inner)=>`<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid slice">${inner}</svg>`;
-const MAN="M100,42 C125,40 135,55 132,72 L136,92 L150,112 L139,116 C141,122 137,126 138,130 C134,134 140,138 136,143 C138,152 132,160 124,162 L126,178 C140,190 160,200 172,240 L28,240 C34,214 50,196 76,186 L80,170 C62,160 56,140 60,118 C54,96 64,52 100,42 Z";
-const LADY="M96,70 C112,66 124,74 126,86 L130,100 L142,116 L131,119 C133,125 129,128 130,132 C126,136 131,140 127,145 C128,154 122,160 114,161 L116,176 C132,186 158,198 176,240 L24,240 C30,212 50,196 72,188 L74,170 C58,160 54,138 58,118 Z";
-function man(){return `<path d="${MAN}" fill="#17120f"/><circle cx="66" cy="128" r="14" fill="#17120f"/><circle cx="68" cy="153" r="13" fill="#17120f"/><path d="M60,160 l-22,10 l6,-16 l-8,-12 l24,6z" fill="#17120f"/><path d="M60,160 l-26,-6 l10,16z" fill="#a3281e"/><path d="M118,196 l14,14 l-10,30 l-8,-30z" fill="#efe3cb" opacity=".9"/>`}
-function lady(){let f="";for(let k=0;k<11;k++){const t=k/10,x=42+t*80,y=112-Math.sin(t*Math.PI*.9)*68-t*10;f+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="#17120f"/>`}
- return `<path d="${LADY}" fill="#17120f"/><ellipse cx="80" cy="76" rx="44" ry="40" fill="#17120f"/>${f}<path d="M44,92 l-26,-14 l6,22 z M44,96 l-22,14 l4,-22z" fill="#a3281e"/><path d="M70,240 C80,214 120,212 130,240z" fill="#efe3cb" opacity=".85"/>`}
-function quill(x,y,s,rot){return `<g transform="translate(${x},${y}) rotate(${rot}) scale(${s})"><path d="M0,0 C30,-40 60,-150 40,-260 C10,-180 -10,-80 0,0Z" fill="#efe3cb" stroke="#2b211a" stroke-width="2"/><path d="M0,0 C20,-90 34,-180 40,-260" stroke="#2b211a" stroke-width="2" fill="none"/>${Array.from({length:14},(_,i)=>{const t=i/14;const y1=-30-t*215;return `<path d="M${(6+t*32).toFixed(1)},${y1.toFixed(1)} l${(14-t*6).toFixed(1)},-10" stroke="#2b211a" stroke-width=".8"/>`}).join("")}<path d="M0,0 l-3,16" stroke="#2b211a" stroke-width="3"/></g>`}
-function pig(x,y,s){return `<g transform="translate(${x},${y}) scale(${s})" fill="#17120f"><ellipse cx="100" cy="60" rx="62" ry="36"/><circle cx="158" cy="52" r="26"/><ellipse cx="186" cy="56" rx="9" ry="12"/><path d="M148,30 l8,-24 l12,26z"/><rect x="58" y="80" width="12" height="28" rx="3"/><rect x="82" y="84" width="12" height="26" rx="3"/><rect x="118" y="82" width="12" height="28" rx="3"/><rect x="138" y="78" width="12" height="28" rx="3"/><path d="M40,50 c-14,-6 -20,8 -10,12 c8,4 10,-10 -2,-12" stroke="#17120f" stroke-width="4" fill="none"/><circle cx="168" cy="46" r="3" fill="#efe3cb"/></g>`}
-function frame(cx,cy,rx,ry,id,inner){return `<defs><clipPath id="${id}"><ellipse cx="${cx}" cy="${cy}" rx="${rx-10}" ry="${ry-10}"/></clipPath></defs>
- <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="#e9dcc2" stroke="url(#gold)" stroke-width="8"/>
- <g clip-path="url(#${id})"><ellipse cx="${cx}" cy="${cy+ry*.55}" rx="${rx}" ry="${ry*.6}" fill="url(#hatch)" opacity=".22"/>${inner}</g>
- <ellipse cx="${cx}" cy="${cy}" rx="${rx-10}" ry="${ry-10}" fill="none" stroke="#2b211a" stroke-width="1.2"/>`}
-function label(x,y,w,t){return `<g transform="translate(${x},${y})"><path d="M0,0 H${w} l-14,18 l14,18 H0 l14,-18z" fill="#a3281e"/><text x="${w/2}" y="23" text-anchor="middle" font-family="Montserrat,Arial" font-weight="600" font-size="13" letter-spacing="3" fill="#f3e3c8">${t}</text></g>`}
-function scriptLines(x,y,w,n,col){let s="";for(let i=0;i<n;i++){let d=`M${x},${y+i*18}`;for(let k=0;k<w;k+=16){d+=` q4,${(i+k)%3?-5:5} 8,0 q4,${(i*k)%2?4:-4} 8,0`}s+=`<path d="${d}" stroke="${col}" stroke-width="1.1" fill="none" opacity=".55"/>`}return s}
+const INK="#17120f",INK2="#2b211a",PAPER="#efe3cb",HI="#5d4b3b";
+const f1=n=>(+n).toFixed(1);
+/* ---------- мелкие помощники ---------- */
+// рамка-«экслибрис» с завитками по углам
+function plate(w,h,m=14){const c=(x,y,sx,sy)=>`<g transform="translate(${x},${y}) scale(${sx},${sy})" fill="none" stroke="${INK2}" stroke-width="1.1" opacity=".55"><path d="M0,22 C0,8 8,0 22,0"/><path d="M6,30 C4,14 14,4 30,6"/><path d="M22,0 c6,0 9,5 6,9 c-3,4 -8,1 -6,-2"/><path d="M0,22 c0,6 5,9 9,6 c4,-3 1,-8 -2,-6"/><circle cx="12" cy="12" r="2" fill="${INK2}"/></g>`;
+ return `<rect x="${m}" y="${m}" width="${w-2*m}" height="${h-2*m}" fill="none" stroke="${INK2}" stroke-width="1" opacity=".45"/><rect x="${m+4}" y="${m+4}" width="${w-2*m-8}" height="${h-2*m-8}" fill="none" stroke="${INK2}" stroke-width=".6" opacity=".35"/>`+
+  c(m+6,m+6,1,1)+c(w-m-6,m+6,-1,1)+c(m+6,h-m-6,1,-1)+c(w-m-6,h-m-6,-1,-1)}
+// рукописные строки
+function hand(x,y,lines,size,col,rot=0,op=.6,lh=1.35){return `<g transform="rotate(${rot} ${x} ${y})" font-family="Cormorant Garamond,Georgia,serif" font-style="italic" font-size="${size}" fill="${col}" opacity="${op}">${lines.map((t,i)=>`<text x="${x}" y="${y+i*size*lh}">${t}</text>`).join("")}</g>`}
+function scribble(x,y,w,n,col,op=.5,gap=13){let s="";for(let i=0;i<n;i++){let d=`M${x},${y+i*gap}`;const ww=w*(i===n-1?.6:1);for(let k=0;k<ww;k+=12)d+=` q3,${(i+k)%3?-4:4} 6,0 q3,${(i*k)%2?3:-3} 6,0`;s+=`<path d="${d}" stroke="${col}" stroke-width=".9" fill="none" opacity="${op}"/>`}return s}
+function splat(x,y,r,col){let s=`<circle cx="${x}" cy="${y}" r="${r}" fill="${col}"/>`;for(let k=0;k<9;k++){const a=k*0.7+0.3,d=r*(1.2+((k*37)%10)/8);s+=`<circle cx="${f1(x+Math.cos(a)*d)}" cy="${f1(y+Math.sin(a)*d)}" r="${f1(r*(.12+((k*13)%5)/22))}" fill="${col}"/>`}return s}
+// лавровая веточка
+function sprig(x,y,ang,len,col="url(#gold)",n=7,sz=1){let s=`<g transform="translate(${x},${y}) rotate(${ang})"><path d="M0,0 Q${len*.5},${-len*.08} ${len},0" stroke="#8a5d1e" stroke-width="${1.6*sz}" fill="none"/>`;
+ for(let k=0;k<n;k++){const t=(k+.6)/n,px=len*t,py=-len*.08*4*t*(1-t);for(const sd of[-1,1]){const r=sd*38;s+=`<g transform="translate(${f1(px)},${f1(py)}) rotate(${r})"><path d="M0,0 C${4*sz},${-5*sz} ${13*sz},${-5*sz} ${17*sz},0 C${13*sz},${5*sz} ${4*sz},${5*sz} 0,0Z" fill="${col}" stroke="#6b4716" stroke-width=".6"/><path d="M1,0 L${15*sz},0" stroke="#6b4716" stroke-width=".4"/></g>`}}
+ return s+`<path d="M${len},0 C${len+6*sz},${-4*sz} ${len+14*sz},${-4*sz} ${len+18*sz},0 C${len+14*sz},${4*sz} ${len+6*sz},${4*sz} ${len},0Z" fill="${col}" stroke="#6b4716" stroke-width=".6"/></g>`}
+// овальная рама с жемчугом, лентой и лавром
+function ovalFrame(cx,cy,rx,ry,id,inner,bow="#a3281e"){let beads="";const N=46;for(let k=0;k<N;k++){const a=k/N*Math.PI*2;beads+=`<circle cx="${f1(cx+Math.cos(a)*(rx-4))}" cy="${f1(cy+Math.sin(a)*(ry-4))}" r="2.6" fill="url(#bead)" stroke="#6b4716" stroke-width=".4"/>`}
+ return `<defs><clipPath id="${id}"><ellipse cx="${cx}" cy="${cy}" rx="${rx-11}" ry="${ry-11}"/></clipPath><radialGradient id="${id}g" cx=".45" cy=".4" r=".75"><stop offset="0" stop-color="#f4ead6"/><stop offset=".7" stop-color="#e2d2b2"/><stop offset="1" stop-color="#c8b28b"/></radialGradient></defs>
+ <ellipse cx="${cx+5}" cy="${cy+7}" rx="${rx+4}" ry="${ry+4}" fill="#2b211a" opacity=".25"/>
+ <ellipse cx="${cx}" cy="${cy}" rx="${rx+5}" ry="${ry+5}" fill="none" stroke="#8a5d1e" stroke-width="3"/>
+ <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="url(#${id}g)" stroke="url(#gold)" stroke-width="9"/>${beads}
+ <g clip-path="url(#${id})"><rect x="${cx-rx}" y="${cy-ry}" width="${2*rx}" height="${2*ry}" fill="url(#hatchFine)" opacity=".12"/><ellipse cx="${cx}" cy="${cy+ry*.7}" rx="${rx}" ry="${ry*.55}" fill="url(#hatch)" opacity=".25"/>${inner}</g>
+ <ellipse cx="${cx}" cy="${cy}" rx="${rx-11}" ry="${ry-11}" fill="none" stroke="${INK2}" stroke-width="1.4"/>
+ <g transform="translate(${cx},${cy-ry-4})"><path d="M0,0 C-14,-20 -38,-18 -34,-4 C-30,8 -10,4 0,0Z M0,0 C14,-20 38,-18 34,-4 C30,8 10,4 0,0Z" fill="${bow}" stroke="#5e140e" stroke-width="1"/><path d="M-26,-8 C-20,-12 -12,-8 -6,-3 M26,-8 C20,-12 12,-8 6,-3" stroke="#5e140e" stroke-width=".8" fill="none"/><path d="M-3,2 C-10,16 -16,26 -22,34 l6,2 C-8,26 -3,16 0,4Z M3,2 C10,16 16,26 22,34 l-6,2 C8,26 3,16 0,4Z" fill="${bow}" stroke="#5e140e" stroke-width=".8"/><circle r="5" fill="#c63a2b" stroke="#5e140e"/></g>
+ ${sprig(cx-6,cy+ry+2,198,rx*.75)}${sprig(cx+6,cy+ry+2,-18,rx*.75)}`}
+// лента-подпись с раздвоенными концами
+function ribbon(x,y,w,t){return `<g transform="translate(${x},${y})"><path d="M-14,8 H6 V34 H-14 l9,-13z" fill="#7a1b14"/><path d="M${w+14},8 H${w-6} V34 H${w+14} l-9,-13z" fill="#7a1b14"/><path d="M0,0 H${w} V28 H0z" fill="#a3281e"/><path d="M0,28 l6,6 V28z M${w},28 l-6,6 V28z" fill="#4d0f0b"/><path d="M0,3 H${w} M0,25 H${w}" stroke="#e3b35e" stroke-width=".8" opacity=".7"/><text x="${w/2}" y="19" text-anchor="middle" font-family="Montserrat,Arial" font-weight="600" font-size="12" letter-spacing="3" fill="#f3e3c8">${t}</text></g>`}
+// перо
+function quill(x,y,s,rot){let barbs="";for(let i=0;i<26;i++){const t=i/26,yy=-24-t*230,xx=4+t*34;barbs+=`<path d="M${f1(xx)},${f1(yy)} q${f1(8-t*3)},${f1(-4-t*2)} ${f1(16-t*7)},${f1(-10+t*2)}" stroke="${INK2}" stroke-width=".55" fill="none" opacity=".75"/><path d="M${f1(xx-1)},${f1(yy)} q${f1(-5)},${f1(-3)} ${f1(-9+t*3)},${f1(-8)}" stroke="${INK2}" stroke-width=".5" fill="none" opacity=".6"/>`}
+ return `<g transform="translate(${x},${y}) rotate(${rot}) scale(${s})"><path d="M0,0 C30,-40 62,-150 42,-262 C14,-200 -14,-120 -8,-30 Z" fill="#f6eedd" stroke="${INK2}" stroke-width="1.6"/><path d="M-8,-30 C-6,-90 6,-170 30,-236" stroke="#c9b593" stroke-width="10" fill="none" opacity=".35"/>${barbs}<path d="M0,0 C20,-90 34,-180 42,-262" stroke="${INK2}" stroke-width="1.8" fill="none"/><path d="M0,0 l-4,20 l3,-1z" fill="${INK}"/><path d="M-1,4 l-2,12" stroke="#c9b593" stroke-width=".8"/></g>`}
+function inkwell(x,y,s=1){return `<g transform="translate(${x},${y}) scale(${s})"><ellipse cx="0" cy="44" rx="42" ry="8" fill="${INK}" opacity=".25"/><path d="M-34,8 C-38,26 -36,40 -30,44 H30 C36,40 38,26 34,8 Z" fill="url(#glassInk)" stroke="${INK}" stroke-width="1.6"/><path d="M-26,14 C-29,26 -28,34 -24,38" stroke="#f6eedd" stroke-width="2.4" fill="none" opacity=".55"/><rect x="-16" y="-4" width="32" height="13" rx="2" fill="url(#gold)" stroke="#6b4716"/><ellipse cx="0" cy="-4" rx="16" ry="4" fill="#3a2e26" stroke="#6b4716"/><ellipse cx="0" cy="-4" rx="10" ry="2.4" fill="${INK}"/></g>`}
+function candle(x,y,s=1){return `<g transform="translate(${x},${y}) scale(${s})"><circle cx="0" cy="-58" r="38" fill="url(#glow)"/><ellipse cx="0" cy="34" rx="30" ry="7" fill="url(#gold)" stroke="#6b4716"/><path d="M-22,30 Q0,40 22,30 L18,24 Q0,32 -18,24Z" fill="#c18b37" stroke="#6b4716" stroke-width=".8"/><rect x="-9" y="-36" width="18" height="62" fill="#f3ead8" stroke="${INK2}" stroke-width="1.2"/><path d="M-9,-30 C-6,-26 -7,-18 -4,-14 C-3,-10 -6,-6 -5,0" stroke="#d8c6a3" stroke-width="2" fill="none"/><rect x="3" y="-36" width="4" height="62" fill="#d8c6a3" opacity=".6"/><path d="M0,-36 v-6" stroke="${INK}" stroke-width="1.4"/><path d="M0,-66 C8,-56 7,-46 0,-42 C-7,-46 -8,-56 0,-66Z" fill="url(#flame)"/><path d="M0,-58 C3,-52 3,-47 0,-45 C-3,-47 -3,-52 0,-58Z" fill="#fff8e0"/></g>`}
+/* ---------- силуэты ---------- */
+function man(){let curls="";[[84,116,19],[82,134,18],[84,151,16]].forEach(([x,y,r])=>{curls+=`<ellipse cx="${x}" cy="${y}" rx="${r}" ry="8.5" fill="${INK}"/><path d="M${x-r+3},${y-1} C${x-r/2},${y-7} ${x+r/2},${y-7} ${x+r-2},${y-1}" stroke="${HI}" stroke-width="1.1" fill="none"/><path d="M${x+r-5},${y+2} c4,0 5,4 1,6" stroke="${HI}" stroke-width=".9" fill="none"/>`});
+ let wigLines="";for(let k=0;k<7;k++){wigLines+=`<path d="M${70+k*6},${46+k*2} C${78+k*6},${60+k} ${86+k*5},${66+k} ${100+k*5},${66-k*.5}" stroke="${HI}" stroke-width=".8" fill="none" opacity=".8"/>`}
+ return `<path d="M62,122 C48,132 42,156 48,178 l12,1 C58,156 62,138 72,126 Z" fill="${INK}"/><rect x="40" y="148" width="22" height="26" rx="6" fill="${INK}"/><path d="M50,150 l-16,-8 l2,14 z M50,152 l-14,10 l13,4z" fill="#a3281e" stroke="#5e140e" stroke-width=".6"/><circle cx="50" cy="152" r="3.5" fill="#c63a2b"/>
+ <path d="M126,176 C142,182 170,198 184,250 L16,250 C20,220 40,196 70,186 L96,178 Z" fill="${INK}"/>
+ <path d="M70,186 C60,206 56,228 58,250" stroke="${HI}" stroke-width="1" fill="none"/><path d="M150,206 C158,220 162,236 164,250" stroke="${HI}" stroke-width="1.2" fill="none"/>
+ <circle cx="156" cy="222" r="3.4" fill="url(#gold)"/><circle cx="160" cy="238" r="3.4" fill="url(#gold)"/>
+ <path d="M112,40 C134,40 146,54 146,72 L150,84 C149,92 152,96 157,104 L161,112 C157,116 151,116 148,117 C150,121 149,124 147,126 C150,129 149,133 145,135 C147,141 145,147 140,150 C142,157 137,163 127,164 L125,180 L96,186 L92,150 C86,120 90,60 112,40 Z" fill="${INK}"/>
+ <path d="M104,36 C78,34 58,52 56,80 C54,100 60,114 66,124 L98,126 C92,110 94,92 104,82 C116,72 130,64 141,60 C138,46 124,34 104,36 Z" fill="${INK}"/>${wigLines}${curls}
+ <path d="M92,172 C100,182 118,184 128,176 L131,190 C116,198 98,196 88,186 Z" fill="#2a221c" stroke="${HI}" stroke-width=".8"/>
+ <path d="M126,178 C134,181 139,187 135,193 C143,197 143,205 137,209 C145,213 145,221 139,227 C131,232 122,228 120,220 C114,216 116,206 120,202 C114,196 116,186 126,178Z" fill="${PAPER}" stroke="#a8987d" stroke-width=".8"/>
+ <path d="M124,186 C130,188 132,192 130,196 M126,204 C134,206 136,210 132,214 M124,220 C130,222 132,224 130,226" stroke="#a8987d" stroke-width=".8" fill="none"/>`}
+function lady(){let frill="";const N=13;for(let k=0;k<N;k++){const t=k/(N-1),x=56+t*80,y=128-Math.sin(t*Math.PI*.92)*66-t*16;frill+=`<circle cx="${f1(x)}" cy="${f1(y)}" r="8" fill="${PAPER}" stroke="#8a7660" stroke-width=".8"/><circle cx="${f1(x)}" cy="${f1(y)}" r="3.4" fill="none" stroke="#b8a483" stroke-width=".6"/>`}
+ let pleats="";for(let k=0;k<9;k++){const a=-2.6+k*0.28;pleats+=`<path d="M80,84 L${f1(80+Math.cos(a)*46)},${f1(84+Math.sin(a)*40)}" stroke="#b8a483" stroke-width=".8"/>`}
+ return `<path d="M118,186 C142,194 168,208 180,250 L20,250 C24,224 44,204 70,194 L90,188 Z" fill="${INK}"/>
+ <path d="M104,70 C124,66 136,76 138,90 L142,100 C141,106 144,110 150,118 L153,124 C149,128 144,128 141,129 C143,133 142,136 140,138 C143,141 142,145 138,147 C140,153 137,158 131,160 C134,166 130,172 120,172 L118,188 L90,192 L86,150 C80,120 86,80 104,70 Z" fill="${INK}"/>
+ <path d="M90,190 C102,206 124,208 134,196 L150,222 C132,240 102,238 84,222 Z" fill="${PAPER}" stroke="#8a7660" stroke-width=".9"/><path d="M96,206 C108,214 124,214 136,206 M92,216 C108,226 128,226 142,216" stroke="#b8a483" stroke-width=".8" fill="none"/>
+ <circle cx="126" cy="214" r="6" fill="url(#redball)" stroke="#e3b35e" stroke-width="1.4"/>
+ <path d="M58,130 C30,110 34,52 80,38 C112,28 140,44 134,72 L132,86 C118,74 96,82 86,100 C78,114 66,124 58,130Z" fill="${PAPER}" stroke="#8a7660" stroke-width="1"/>${pleats}${frill}
+ <path d="M60,124 C80,100 104,84 132,80" stroke="#a3281e" stroke-width="5" fill="none"/>
+ <path d="M54,112 C34,98 26,118 44,122 C30,132 44,144 56,124Z" fill="#a3281e" stroke="#5e140e" stroke-width=".8"/><path d="M52,118 l-14,28 l6,-2 l2,6 l10,-30z" fill="#a3281e" stroke="#5e140e" stroke-width=".6"/>
+ <circle cx="96" cy="140" r="3.2" fill="${PAPER}"/>`}
+function pig(x,y,s){let bristle="";for(let k=0;k<10;k++)bristle+=`<path d="M${60+k*9},${34+Math.abs(k-5)*.6} l-2,-5" stroke="${HI}" stroke-width=".8"/>`;
+ return `<g transform="translate(${x},${y}) scale(${s})"><ellipse cx="104" cy="114" rx="70" ry="6" fill="${INK}" opacity=".25"/><g fill="${INK}"><ellipse cx="100" cy="62" rx="64" ry="38"/><circle cx="160" cy="54" r="27"/><path d="M178,44 C192,44 198,52 198,60 C198,68 192,72 182,70Z"/><path d="M148,30 l6,-26 l16,26z"/><path d="M60,88 h13 v24 h-13z M84,92 h12 v22 h-12z M118,90 h12 v24 h-12z M140,86 h12 v24 h-12z"/></g>
+ ${bristle}<path d="M150,12 l2,16" stroke="${HI}" stroke-width="1"/><ellipse cx="194" cy="58" rx="2" ry="3" fill="${HI}"/><ellipse cx="189" cy="59" rx="2" ry="3" fill="${HI}"/><circle cx="168" cy="46" r="3.2" fill="${PAPER}"/><circle cx="169" cy="46" r="1.4" fill="${INK}"/>
+ <path d="M60,92 v20 M84,96 v18 M118,94 v20 M140,90 v20" stroke="${HI}" stroke-width=".8"/><path d="M60,110 h13 M84,112 h12 M118,112 h12 M140,108 h12" stroke="${HI}" stroke-width="1.2"/>
+ <path d="M64,74 C80,90 120,94 146,80" stroke="${HI}" stroke-width="1" fill="none"/>
+ <path d="M38,52 c-14,-6 -20,8 -10,12 c8,4 12,-8 2,-12 c-6,-2 -8,4 -4,6" stroke="${INK}" stroke-width="4" fill="none" stroke-linecap="round"/></g>`}
+/* ---------- композиции ---------- */
 const ART={
- portrait(){const id="c"+(uid++);return svg("0 0 400 500",
-  `<circle cx="300" cy="400" r="95" fill="url(#redball)" opacity=".9"/>${scriptLines(30,40,120,5,"#2b211a")}`+
-  frame(200,235,140,175,id,`<g transform="translate(70,110) scale(1.3)">${man()}</g>`)+
-  quill(310,470,.85,28)+label(110,420,180,"Д. И. ФОНВИЗИН"))},
- lady(){const id="c"+(uid++);return svg("0 0 400 500",
-  `<circle cx="90" cy="410" r="100" fill="url(#redball)" opacity=".9"/>${scriptLines(240,40,120,5,"#2b211a")}`+
-  frame(205,225,140,175,id,`<g transform="translate(78,92) scale(1.3)">${lady()}</g>`)+
-  pig(30,395,.62)+label(170,425,200,"ПРОСТАКОВА"))},
- school(){let beads="";for(let r=0;r<8;r++){const y=118+r*24;beads+=`<line x1="78" y1="${y}" x2="322" y2="${y}" stroke="#2b211a" stroke-width="2"/>`;const shift=(r*37)%5;for(let b=0;b<10;b++){const x=(b<shift?96+b*22:150+b*22);beads+=`<ellipse cx="${x}" cy="${y}" rx="10" ry="9" fill="${b===4||b===5?'#a3281e':'#c18b37'}" stroke="#2b211a" stroke-width="1.2"/>`}}
-  return svg("0 0 400 500",`<circle cx="320" cy="90" r="80" fill="#3d4c5e" opacity=".85"/><g fill="none" stroke="#e9dcc2" stroke-width="1.3" opacity=".8"><circle cx="320" cy="90" r="70"/><ellipse cx="320" cy="90" rx="30" ry="70"/><ellipse cx="320" cy="90" rx="58" ry="70"/><line x1="250" y1="90" x2="390" y2="90"/><path d="M256,60 Q320,48 384,60 M256,120 Q320,132 384,120"/></g>
-  <rect x="60" y="90" width="280" height="222" rx="8" fill="#3a2e26" stroke="#17120f" stroke-width="5"/><rect x="70" y="100" width="260" height="202" fill="#e9dcc2"/>${beads}
-  <g transform="translate(200,400)"><path d="M-150,-30 Q-75,-55 0,-30 Q75,-55 150,-30 L150,50 Q75,25 0,50 Q-75,25 -150,50Z" fill="#efe3cb" stroke="#2b211a" stroke-width="2.5"/><line x1="0" y1="-30" x2="0" y2="50" stroke="#2b211a" stroke-width="2"/>${scriptLines(-135,-22,110,4,"#2b211a")}${scriptLines(15,-22,110,4,"#2b211a")}<path d="M-150,50 Q-75,25 0,50 Q75,25 150,50 L150,60 Q75,36 0,60 Q-75,36 -150,60Z" fill="#a3281e"/></g>
-  <text x="200" y="74" text-anchor="middle" font-family="Prata,serif" font-size="30" fill="#2b211a">2 × 150 = 300</text>`)},
- words(){return svg("0 0 400 500",`<circle cx="310" cy="120" r="90" fill="url(#redball)" opacity=".9"/><text x="20" y="190" font-family="Prata,serif" font-size="230" fill="#a3281e">«</text>
-  <g transform="translate(60,170) rotate(-4)"><rect x="20" y="0" width="240" height="250" fill="#efe3cb" stroke="#2b211a" stroke-width="2"/><rect x="0" y="-14" width="280" height="24" rx="12" fill="#c9b593" stroke="#2b211a" stroke-width="2"/><rect x="0" y="240" width="280" height="24" rx="12" fill="#c9b593" stroke="#2b211a" stroke-width="2"/>
-  <text x="140" y="56" text-anchor="middle" font-family="Cormorant Garamond,serif" font-style="italic" font-size="26" fill="#2b211a">Не хочу учиться,</text><text x="140" y="90" text-anchor="middle" font-family="Cormorant Garamond,serif" font-style="italic" font-size="26" fill="#2b211a">хочу жениться</text><line x1="70" y1="108" x2="210" y2="108" stroke="#a3281e" stroke-width="2"/>${scriptLines(40,135,190,5,"#2b211a")}</g>
-  ${quill(300,470,.8,20)}<g transform="translate(70,440)"><path d="M0,0 h70 l-6,40 h-58z" fill="#17120f"/><ellipse cx="35" cy="0" rx="35" ry="8" fill="#3a2e26"/></g>`)},
- stage(){return svg("0 0 400 500",`<rect width="400" height="500" fill="#1d1915"/><path d="M60,470 L340,470 L400,500 L0,500Z" fill="#3a2e26"/>
-  <polygon points="120,0 160,0 230,470 40,470" fill="url(#cone)" opacity=".55"/><polygon points="250,0 290,0 370,470 170,470" fill="url(#cone)" opacity=".45"/>
-  <rect x="0" y="0" width="120" height="480" fill="url(#folds)"/><rect x="280" y="0" width="120" height="480" fill="url(#folds)"/><path d="M120,0 C110,150 90,300 40,480 L0,480 L0,0Z" fill="url(#folds)"/><path d="M280,0 C290,150 310,300 360,480 L400,480 L400,0Z" fill="url(#folds)"/>
-  <path d="M0,0 H400 V70 Q370,100 340,70 Q310,100 280,70 Q250,100 220,70 Q190,100 160,70 Q130,100 100,70 Q70,100 40,70 Q20,100 0,70Z" fill="#7a1b14"/><path d="M0,70 Q20,100 40,70 Q70,100 100,70 Q130,100 160,70 Q190,100 220,70 Q250,100 280,70 Q310,100 340,70 Q370,100 400,70" stroke="#c18b37" stroke-width="3" fill="none"/>
-  <g transform="translate(110,300) scale(.62)">${man()}</g><g transform="translate(200,300) scale(.62)">${lady()}</g>
-  <rect x="0" y="470" width="400" height="4" fill="#c18b37"/>`)},
- cat(){return svg("0 0 400 500",`<circle cx="200" cy="270" r="160" fill="url(#redball)" opacity=".9"/>`+catSVG(0,40,1))},
- gold(){return svg("0 0 400 500",`<circle cx="200" cy="250" r="170" fill="#3a2e26"/>${wreath(200,250,150)}<text x="200" y="275" text-anchor="middle" font-family="Prata,serif" font-size="80" fill="#a3281e">1000</text>`)},
+ portrait(){const id="c"+(uid++);return svg("0 0 400 500",plate(400,500)+
+  `<circle cx="306" cy="398" r="92" fill="url(#redball)" opacity=".92"/><circle cx="306" cy="398" r="92" fill="url(#hatchR)" opacity=".25"/>
+  <g transform="rotate(-8 90 60)"><rect x="28" y="34" width="150" height="104" fill="#f3e9d4" stroke="#b8a483"/>${hand(38,56,["Недоросль.","Комедия","в пяти действиях."],13,INK2,0,.75,1.25)}${scribble(38,104,120,3,INK2,.45,10)}</g>`+
+  ovalFrame(200,232,132,166,id,`<g transform="translate(66,92) scale(1.36)">${man()}</g>`)+
+  inkwell(330,438,.7)+quill(318,470,.8,26)+ribbon(112,428,176,"Д. И. ФОНВИЗИН")+splat(64,452,4,INK2))},
+ lady(){const id="c"+(uid++);return svg("0 0 400 500",plate(400,500)+
+  `<circle cx="96" cy="404" r="104" fill="url(#redball)" opacity=".92"/><circle cx="96" cy="404" r="104" fill="url(#hatchR)" opacity=".25"/>
+  <g transform="rotate(7 300 60)"><rect x="240" y="30" width="132" height="92" fill="#f3e9d4" stroke="#b8a483"/>${hand(250,52,["«Ах, мать моя,","да на что ж..."],12,INK2,0,.7,1.3)}${scribble(250,90,108,3,INK2,.4,10)}</g>`+
+  ovalFrame(206,226,134,168,id,`<g transform="translate(70,86) scale(1.36)">${lady()}</g>`)+
+  pig(22,392,.66)+ribbon(176,430,190,"ПРОСТАКОВА"))},
+ school(){let beads="";for(let r=0;r<10;r++){const y=124+r*18.5;beads+=`<line x1="80" y1="${y}" x2="320" y2="${y}" stroke="#6b4716" stroke-width="1.6"/>`;const shift=(r*37)%6;
+   for(let b=0;b<10;b++){const x=(b<shift?98+b*19:166+b*14.6);const mid=b===4||b===5;beads+=`<ellipse cx="${f1(x)}" cy="${y}" rx="8.6" ry="7.4" fill="url(#${mid?'beadR':'bead'})" stroke="#3a2618" stroke-width=".7"/><ellipse cx="${f1(x-2.6)}" cy="${y-2.6}" rx="2.4" ry="1.4" fill="#fff6dc" opacity=".7"/>`}}
+  let grain="";for(let k=0;k<6;k++)grain+=`<path d="M${70+k*2},${104+k*2} C140,${100+k*3} 260,${108-k*2} ${330-k*2},${104+k*2}" stroke="#2a1a10" stroke-width=".7" fill="none" opacity=".5"/>`;
+  return svg("0 0 400 500",plate(400,500)+
+  `<g transform="translate(316,86)"><path d="M0,82 L-14,104 H14Z" fill="url(#wood)" stroke="#2a1a10"/><ellipse cx="0" cy="106" rx="30" ry="6" fill="url(#wood)" stroke="#2a1a10"/>
+   <circle r="64" fill="url(#globeG)" stroke="${INK2}" stroke-width="1.5"/>
+   <path d="M-40,-30 C-30,-44 -6,-46 4,-36 C14,-28 30,-30 36,-16 C40,-6 28,0 18,-4 C8,-8 4,6 -6,8 C-18,10 -20,-4 -30,-6 C-42,-8 -48,-20 -40,-30Z M-10,14 C0,10 10,16 8,28 C6,42 -4,52 -10,46 C-16,38 -20,20 -10,14Z M28,20 C36,18 44,24 40,32 C36,38 28,34 28,20Z" fill="#c9b593" opacity=".9" stroke="#8a7660" stroke-width=".6"/>
+   <g fill="none" stroke="#e9dcc2" stroke-width=".7" opacity=".55"><ellipse rx="26" ry="64"/><ellipse rx="50" ry="64"/><path d="M-64,0 H64"/><path d="M-58,-26 Q0,-36 58,-26 M-58,26 Q0,36 58,26"/></g>
+   <path d="M-56,-46 A72,72 0 0 1 56,46" fill="none" stroke="url(#gold)" stroke-width="5" transform="rotate(-20)"/><circle cx="-26" cy="-26" r="18" fill="#fff" opacity=".12"/></g>
+  <g transform="rotate(-6 120 50)"><rect x="30" y="18" width="172" height="80" rx="4" fill="#2e3a40" stroke="url(#wood)" stroke-width="8"/>${hand(44,46,["300 руб. : 3 = 100","2 × 150 = 300"],16,"#e9e4d6",0,.85,1.35)}</g>
+  <rect x="62" y="100" width="276" height="210" rx="8" fill="url(#wood)" stroke="#2a1a10" stroke-width="3"/>${grain}<rect x="78" y="116" width="244" height="178" fill="#ead9b8" stroke="#2a1a10" stroke-width="1.4"/>
+  <rect x="78" y="116" width="244" height="178" fill="url(#hatchFine)" opacity=".1"/>${beads}
+  <path d="M62,310 h276 l-10,10 h-256z" fill="#2a1a10" opacity=".6"/>
+  <g transform="translate(206,400)"><path d="M-162,-34 Q-80,-60 0,-34 Q80,-60 162,-34 L162,52 Q80,26 0,52 Q-80,26 -162,52Z" fill="#f6eedd" stroke="${INK2}" stroke-width="2"/>
+   <path d="M0,-34 V52" stroke="${INK2}" stroke-width="1.6"/><path d="M-6,-34 V52 M6,-34 V52" stroke="#c9b593" stroke-width="3" opacity=".6"/>
+   <text x="-146" y="4" font-family="Prata,serif" font-size="44" fill="#a3281e">Б</text>${scribble(-112,-16,92,1,INK2,.55)}${scribble(-112,-2,92,1,INK2,.55)}${scribble(-146,14,128,3,INK2,.55,11)}
+   ${hand(14,-14,["Часословъ"],15,"#a3281e",0,.85)}${scribble(14,2,128,4,INK2,.55,11)}
+   <path d="M-162,52 Q-80,26 0,52 Q80,26 162,52 L162,62 Q80,38 0,62 Q-80,38 -162,62Z" fill="#7a1b14"/><path d="M22,52 l0,40 l8,-8 l8,8 l0,-40" fill="#a3281e" stroke="#5e140e" stroke-width=".6"/></g>
+  ${candle(40,410,.8)}`)},
+ words(){return svg("0 0 400 500",plate(400,500)+
+  `<circle cx="316" cy="110" r="88" fill="url(#redball)" opacity=".92"/><circle cx="316" cy="110" r="88" fill="url(#hatchR)" opacity=".25"/>
+  <text x="18" y="184" font-family="Prata,serif" font-size="210" fill="#a3281e">«</text>
+  <g transform="translate(58,150) rotate(-4)"><rect x="18" y="0" width="262" height="270" fill="#f6eedd" stroke="${INK2}" stroke-width="1.8"/><rect x="18" y="0" width="262" height="270" fill="url(#hatchFine)" opacity=".06"/>
+   <rect x="0" y="-16" width="298" height="26" rx="13" fill="url(#rollG)" stroke="${INK2}" stroke-width="1.6"/><rect x="0" y="260" width="298" height="26" rx="13" fill="url(#rollG)" stroke="${INK2}" stroke-width="1.6"/>
+   <circle cx="0" cy="-3" r="9" fill="url(#gold)" stroke="#6b4716"/><circle cx="298" cy="-3" r="9" fill="url(#gold)" stroke="#6b4716"/><circle cx="0" cy="273" r="9" fill="url(#gold)" stroke="#6b4716"/><circle cx="298" cy="273" r="9" fill="url(#gold)" stroke="#6b4716"/>
+   <text x="149" y="34" text-anchor="middle" font-family="Montserrat,Arial" font-size="10" font-weight="600" letter-spacing="3" fill="#a3281e">КРЫЛАТЫЕ СЛОВА</text><path d="M96,42 H202" stroke="#a3281e" stroke-width=".8"/>
+   ${hand(149,72,["«Не хочу учиться,","хочу жениться»"],21,INK2,0,.92,1.2).replace(/<text /g,'<text text-anchor="middle" ')}
+   <path d="M120,122 c10,-6 20,6 29,0 c9,-6 19,6 29,0" stroke="#a3281e" stroke-width="1.2" fill="none"/>
+   ${hand(149,150,["«Вот злонравия","достойные плоды!»"],17,INK2,0,.85,1.25).replace(/<text /g,'<text text-anchor="middle" ')}
+   ${hand(149,206,["«Невежда без души — зверь»"],14,INK2,0,.8).replace(/<text /g,'<text text-anchor="middle" ')}${scribble(60,228,170,2,INK2,.4,12)}
+   <g transform="translate(242,232)"><circle r="20" fill="url(#redball)" stroke="#5e140e"/><circle r="14" fill="none" stroke="#e8a090" stroke-dasharray="2 2"/><use href="#fleur" x="-10" y="-11" width="20" height="20" style="color:#f1c5b4"/><path d="M-16,12 l-6,14 l8,-4 l4,8 l4,-14z" fill="#a3281e"/></g></g>
+  ${splat(54,448,7,INK)}${inkwell(86,428,.9)}${quill(300,474,.82,22)}`)},
+ stage(){let lights="",planks="",fringe="";for(let k=0;k<7;k++){const x=78+k*41;lights+=`<ellipse cx="${x}" cy="404" rx="18" ry="8" fill="url(#glow)"/><path d="M${x-7},410 h14 l-3,8 h-8z" fill="url(#gold)" stroke="#6b4716" stroke-width=".6"/><path d="M${x},400 C${x+4},405 ${x+3},409 ${x},410 C${x-3},409 ${x-4},405 ${x},400Z" fill="url(#flame)"/>`}
+  for(let k=0;k<9;k++)planks+=`<path d="M${200+(k-4)*18},392 L${200+(k-4)*48},470" stroke="#2a1a10" stroke-width=".8" opacity=".6"/>`;
+  for(let x=40;x<=360;x+=3)fringe+=`<path d="M${x},92 v${6+(x%9===0?3:0)}" stroke="#e3b35e" stroke-width=".9"/>`;
+  const fig=(t,x,y,s)=>`<g transform="translate(${x},${y}) scale(${s})">${t}</g>`;
+  return svg("0 0 400 500",`<rect width="400" height="500" fill="#1d1915"/>
+  <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a6a78"/><stop offset="1" stop-color="#c8b48c"/></linearGradient>
+  <rect x="40" y="80" width="320" height="312" fill="url(#skyG)"/>
+  <g opacity=".85"><ellipse cx="96" cy="250" rx="56" ry="46" fill="#4b5a3a"/><ellipse cx="318" cy="244" rx="60" ry="52" fill="#43512f"/><ellipse cx="70" cy="226" rx="34" ry="30" fill="#5c6038"/>
+   <rect x="128" y="196" width="148" height="96" fill="#e6d8bb" stroke="#8a7660"/><path d="M120,198 L202,160 L284,198Z" fill="#d8c6a3" stroke="#8a7660"/><circle cx="202" cy="184" r="8" fill="none" stroke="#8a7660"/>
+   ${[148,172,232,256].map(x=>`<rect x="${x}" y="206" width="9" height="86" fill="#f3ead8" stroke="#a8987d" stroke-width=".6"/>`).join("")}
+   ${[136,184,216,264].map(x=>`<rect x="${x}" y="226" width="12" height="20" fill="#3d4c5e" stroke="#8a7660" stroke-width=".6"/>`).join("")}<rect x="192" y="252" width="20" height="40" fill="#5c4a36"/></g>
+  <path d="M40,392 L360,392 L400,470 L0,470Z" fill="url(#wood)"/>${planks}
+  <polygon points="118,80 150,80 236,392 46,392" fill="url(#cone)" opacity=".45"/><polygon points="250,80 282,80 360,392 172,392" fill="url(#cone)" opacity=".38"/>
+  ${fig(man(),92,268,.5)}${fig(lady(),208,262,.52)}${fig(man(),168,300,.36)}
+  <ellipse cx="140" cy="392" rx="40" ry="5" fill="#000" opacity=".35"/><ellipse cx="258" cy="392" rx="44" ry="5" fill="#000" opacity=".35"/>
+  <path d="M40,80 C34,170 26,290 52,392 L40,392 L0,392 L0,60Z" fill="url(#folds)"/><path d="M360,80 C366,170 374,290 348,392 L360,392 L400,392 L400,60Z" fill="url(#folds)"/>
+  <path d="M0,60 C40,120 56,200 46,250 C60,300 40,340 30,392 H0Z" fill="url(#folds)"/><path d="M400,60 C360,120 344,200 354,250 C340,300 360,340 370,392 H400Z" fill="url(#folds)"/>
+  <g transform="translate(46,250)"><path d="M-10,0 C0,-6 10,-6 16,0 C10,6 0,6 -10,0Z" fill="url(#gold)" stroke="#6b4716"/><path d="M4,4 v20 M0,24 h8 l2,18 h-12z" stroke="#6b4716" fill="url(#gold)"/></g>
+  <g transform="translate(354,250) scale(-1,1)"><path d="M-10,0 C0,-6 10,-6 16,0 C10,6 0,6 -10,0Z" fill="url(#gold)" stroke="#6b4716"/><path d="M4,4 v20 M0,24 h8 l2,18 h-12z" stroke="#6b4716" fill="url(#gold)"/></g>
+  <path d="M0,0 H400 V78 Q380,104 360,78 Q340,104 320,78 Q300,104 280,78 Q260,104 240,78 Q220,104 200,78 Q180,104 160,78 Q140,104 120,78 Q100,104 80,78 Q60,104 40,78 Q20,104 0,78Z" fill="url(#folds)"/>
+  <path d="M0,78 Q20,104 40,78 Q60,104 80,78 Q100,104 120,78 Q140,104 160,78 Q180,104 200,78 Q220,104 240,78 Q260,104 280,78 Q300,104 320,78 Q340,104 360,78 Q380,104 400,78" stroke="#e3b35e" stroke-width="3" fill="none"/>${fringe}
+  <rect x="0" y="0" width="400" height="18" fill="url(#giltV)"/><path d="M0,18 H400" stroke="#6b4716"/>
+  <g transform="translate(200,24)"><path d="M-74,0 H74 C80,10 80,26 74,34 H-74 C-80,26 -80,10 -74,0Z" fill="url(#giltV)" stroke="#6b4716"/><text y="23" text-anchor="middle" font-family="Prata,serif" font-size="15" letter-spacing="3" fill="#4d0f0b">НЕДОРОСЛЬ</text><use href="#fleur" x="-9" y="-20" width="18" height="18" style="color:#e3b35e"/></g>
+  <rect x="0" y="392" width="400" height="6" fill="url(#giltV)"/>${lights}
+  <rect x="0" y="470" width="400" height="30" fill="#14110e"/><path d="M0,470 H400" stroke="#c18b37" stroke-width="2"/>`)},
+ cat(){return svg("0 0 400 500",plate(400,500)+`<circle cx="200" cy="270" r="160" fill="url(#redball)" opacity=".9"/><circle cx="200" cy="270" r="160" fill="url(#hatchR)" opacity=".2"/>
+  <text x="56" y="120" font-family="Prata,serif" font-size="46" fill="#a3281e" opacity=".8" transform="rotate(-14 56 120)">?</text><text x="320" y="150" font-family="Prata,serif" font-size="34" fill="#a3281e" opacity=".7" transform="rotate(12 320 150)">?</text>`+catSVG(50,40,1))},
+ gold(){let g="";for(let k=0;k<36;k++)g+=`<ellipse cx="200" cy="250" rx="118" ry="44" fill="none" stroke="#c18b37" stroke-width=".5" opacity=".35" transform="rotate(${k*5} 200 250)"/>`;
+  return svg("0 0 400 500",plate(400,500)+`<circle cx="200" cy="250" r="176" fill="#2a221c" stroke="url(#gold)" stroke-width="4"/><circle cx="200" cy="250" r="166" fill="none" stroke="#8a5d1e" stroke-width="1"/>${g}<circle cx="200" cy="250" r="96" fill="#2a221c" opacity=".85"/>
+  ${wreath(200,250,148)}<text x="200" y="272" text-anchor="middle" font-family="Prata,serif" font-size="74" fill="url(#gold)" stroke="#6b4716" stroke-width=".6">1000</text>
+  <text x="200" y="300" text-anchor="middle" font-family="Montserrat,Arial" font-size="11" font-weight="600" letter-spacing="5" fill="#e3b35e">БАЛЛОВ</text>
+  ${[[80,96],[330,120],[74,410],[332,404],[200,60]].map(([x,y])=>`<use href="#fleur" x="${x-8}" y="${y-8}" width="16" height="16" style="color:#c18b37"/>`).join("")}`)},
  curtain(){return ART.stage()}
 };
-function catSVG(x,y,s){return `<g transform="translate(${x},${y}) scale(${s})"><g class="sack-all"><g class="sack-g">
- <g class="cat-g"><path d="M150,150 C110,150 100,110 110,96 L104,52 L136,80 C146,76 154,76 164,80 L196,52 L190,96 C200,110 190,150 150,150Z" fill="#17120f"/>
- <ellipse class="eye" cx="133" cy="106" rx="9" ry="11" fill="#e3b35e"/><ellipse class="eye" cx="167" cy="106" rx="9" ry="11" fill="#e3b35e"/><ellipse class="eye" cx="133" cy="107" rx="2.5" ry="9" fill="#17120f"/><ellipse class="eye" cx="167" cy="107" rx="2.5" ry="9" fill="#17120f"/>
- <path d="M146,122 l4,4 l4,-4z" fill="#c63a2b"/><g stroke="#efe3cb" stroke-width="1.3" opacity=".8"><path d="M140,126 l-40,-4 M140,130 l-40,6 M160,126 l40,-4 M160,130 l40,6"/></g>
- <ellipse cx="124" cy="160" rx="16" ry="10" fill="#17120f"/><ellipse cx="176" cy="160" rx="16" ry="10" fill="#17120f"/></g>
- <path d="M96,170 C70,200 40,260 50,320 C60,380 110,400 150,400 C190,400 240,380 250,320 C260,260 230,200 204,170Z" fill="#c9b593" stroke="#2b211a" stroke-width="3"/>
- <path d="M70,250 C80,320 110,370 150,384 C120,340 110,290 120,220Z" fill="url(#hatch)" opacity=".5"/><path d="M230,240 C226,320 200,370 170,384 C200,330 206,280 196,220Z" fill="url(#hatch)" opacity=".35"/>
- <path d="M86,150 C110,140 190,140 214,150 L204,172 C180,164 120,164 96,172Z" fill="#dccbad" stroke="#2b211a" stroke-width="3"/>
- <path d="M96,176 C130,186 170,186 204,176" stroke="#a3281e" stroke-width="7" fill="none"/><path d="M200,178 c18,4 26,22 16,30 M200,178 c22,-6 36,6 30,16" stroke="#a3281e" stroke-width="5" fill="none"/>
- <path d="M120,230 l8,10 M160,300 l-6,12 M190,250 l8,4" stroke="#2b211a" stroke-width="2"/>
- <text x="150" y="300" text-anchor="middle" font-family="Prata,serif" font-size="40" fill="#2b211a" opacity=".8">?</text></g></g></g>`}
+/* ---------- кот в мешке (группы sack-all / sack-g / cat-g нужны для анимации) ---------- */
+function catSVG(x,y,s){
+ let fur="M150,152 ";const pts=[];for(let k=0;k<=36;k++){const a=Math.PI*(0.08+k/36*0.84);const r=(k%2?40:46);pts.push([150+Math.cos(Math.PI-a)*r*1.05,112-Math.sin(a)*r*.9])}
+ let head=`M110,150 `+pts.map(p=>`L${f1(p[0])},${f1(p[1])}`).join(" ")+` L190,150 Z`;
+ let stitch="";for(let k=0;k<14;k++)stitch+=`<path d="M${66+k*12},${284+Math.sin(k)*3} l6,4" stroke="#5c4a36" stroke-width="1.2"/>`;
+ let rope="";for(let k=0;k<12;k++)rope+=`<path d="M${98+k*9},${178+Math.sin(k/11*Math.PI)*8} l6,-5" stroke="#5e140e" stroke-width="1.4"/>`;
+ return `<g transform="translate(${x},${y}) scale(${s})"><g class="sack-all"><g class="sack-g">
+ <path d="M238,300 C268,296 286,312 278,334 C272,350 254,346 258,334 C262,322 274,326 270,332" stroke="${INK}" stroke-width="9" fill="none" stroke-linecap="round"/>
+ <g class="cat-g">
+  <path d="${head}" fill="${INK}"/>
+  <path d="M106,96 L100,46 L138,78 Z" fill="${INK}"/><path d="M194,96 L200,46 L162,78 Z" fill="${INK}"/>
+  <path d="M108,86 L106,58 L128,78 Z" fill="#7a1b14"/><path d="M192,86 L194,58 L172,78 Z" fill="#7a1b14"/>
+  <path d="M110,62 l-6,-8 M114,66 l-4,-10 M186,62 l6,-8 M190,66 l4,-10" stroke="${INK}" stroke-width="1.4"/>
+  <g class="eye"><ellipse cx="132" cy="108" rx="11" ry="12.5" fill="url(#catEye)"/><ellipse cx="132" cy="109" rx="2.8" ry="10" fill="${INK}"/><circle cx="128" cy="103" r="2.6" fill="#fff"/></g>
+  <g class="eye"><ellipse cx="168" cy="108" rx="11" ry="12.5" fill="url(#catEye)"/><ellipse cx="168" cy="109" rx="2.8" ry="10" fill="${INK}"/><circle cx="164" cy="103" r="2.6" fill="#fff"/></g>
+  <path d="M144,124 h12 l-6,7z" fill="#c63a2b"/><path d="M150,131 v5 M150,136 c-3,4 -8,4 -10,1 M150,136 c3,4 8,4 10,1" stroke="#5d4b3b" stroke-width="1.3" fill="none"/>
+  <g stroke="#efe3cb" stroke-width="1.1" opacity=".85" fill="none"><path d="M138,130 C120,126 106,124 90,126 M138,134 C118,134 104,138 90,142 M138,138 C122,142 110,148 98,156"/><path d="M162,130 C180,126 194,124 210,126 M162,134 C182,134 196,138 210,142 M162,138 C178,142 190,148 202,156"/></g>
+  <path d="M112,96 c6,-4 12,-2 16,2 M188,96 c-6,-4 -12,-2 -16,2" stroke="#5d4b3b" stroke-width="1" fill="none"/>
+  <g fill="${INK}"><ellipse cx="122" cy="162" rx="18" ry="11"/><ellipse cx="178" cy="162" rx="18" ry="11"/></g>
+  <path d="M114,164 v6 M122,166 v6 M130,164 v6 M170,164 v6 M178,166 v6 M186,164 v6" stroke="#5d4b3b" stroke-width="1.2"/>
+ </g>
+ <path d="M96,170 C70,200 40,260 50,320 C60,380 110,402 150,402 C190,402 240,380 250,320 C260,260 230,200 204,170Z" fill="url(#burlap)" stroke="${INK2}" stroke-width="3"/>
+ <path d="M96,170 C70,200 40,260 50,320 C60,380 110,402 150,402 C190,402 240,380 250,320 C260,260 230,200 204,170Z" fill="url(#sackShade)"/>
+ <path d="M80,230 C84,280 104,340 146,388 M222,232 C220,290 200,340 168,384 M150,190 C148,250 152,320 150,396" stroke="#8a7050" stroke-width="1.6" fill="none" opacity=".7"/>
+ <g transform="rotate(-8 186 300)"><rect x="166" y="282" width="40" height="36" fill="#b8a07a" stroke="${INK2}" stroke-width="1.2"/><rect x="166" y="282" width="40" height="36" fill="url(#burlap)" opacity=".5"/><path d="M170,286 h32 v28 h-32z" fill="none" stroke="#5c4a36" stroke-width="1" stroke-dasharray="3 3"/></g>
+ ${stitch}
+ <path d="M86,150 C110,140 190,140 214,150 L204,174 C180,166 120,166 96,174 Z" fill="#d8c3a0" stroke="${INK2}" stroke-width="3"/><path d="M104,150 l4,18 M126,146 l2,20 M150,145 v20 M174,146 l-2,20 M196,150 l-4,18" stroke="#8a7050" stroke-width="1.2"/>
+ <path d="M96,176 C128,188 172,188 204,176" stroke="#a3281e" stroke-width="8" fill="none"/>${rope}
+ <path d="M202,178 c22,2 30,24 18,34 M202,178 c26,-8 42,6 34,20" stroke="#a3281e" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="220" cy="214" r="5" fill="#a3281e"/><circle cx="236" cy="200" r="5" fill="#a3281e"/>
+ <text x="118" y="320" font-family="Prata,serif" font-size="44" fill="${INK2}" opacity=".55">?</text></g></g></g>`}
+/* ---------- лавровый венок с лентой ---------- */
 function wreath(cx,cy,r){let s="",stem="";const D=Math.PI/180;
- for(let k=0;k<14;k++){const a=(100+k*11.5)*D,px=cx+r*Math.cos(a),py=cy+r*Math.sin(a);const t=Math.atan2(Math.cos(a),-Math.sin(a))/D;const sz=1-k*.025;
-  stem+=`${k?"L":"M"}${px.toFixed(1)},${py.toFixed(1)} `;
-  for(const sd of[-1,1]){const rot=t+sd*38;const ox=px+13*sz*Math.cos(rot*D),oy=py+13*sz*Math.sin(rot*D);
-   for(const m of[0,1]){const x=m?2*cx-ox:ox,ro=m?180-rot:rot;s+=`<ellipse cx="${x.toFixed(1)}" cy="${oy.toFixed(1)}" rx="${(17*sz).toFixed(1)}" ry="${(7*sz).toFixed(1)}" transform="rotate(${ro.toFixed(1)} ${x.toFixed(1)} ${oy.toFixed(1)})" fill="url(#gold)" stroke="#6b4716" stroke-width="1"/>`}}}
+ for(let k=0;k<15;k++){const a=(98+k*11)*D,px=cx+r*Math.cos(a),py=cy+r*Math.sin(a);const t=Math.atan2(Math.cos(a),-Math.sin(a))/D;const sz=1-k*.022;
+  stem+=`${k?"L":"M"}${f1(px)},${f1(py)} `;
+  for(const sd of[-1,1]){const rot=t+sd*40;const ox=px+12*sz*Math.cos(rot*D),oy=py+12*sz*Math.sin(rot*D);
+   for(const m of[0,1]){const x=m?2*cx-ox:ox,ro=m?180-rot:rot;const L=19*sz,W=7.5*sz;
+    s+=`<g transform="translate(${f1(x)},${f1(oy)}) rotate(${f1(ro)})"><path d="M${-L},0 C${-L*.5},${-W} ${L*.5},${-W} ${L},0 C${L*.5},${W} ${-L*.5},${W} ${-L},0Z" fill="url(#gold)" stroke="#6b4716" stroke-width=".7"/><path d="M${-L+2},0 H${L-2}" stroke="#6b4716" stroke-width=".5"/>${[-.4,0,.4].map(q=>`<path d="M${f1(L*q)},0 l${f1(L*.18)},${f1(-W*.6)} M${f1(L*q)},0 l${f1(L*.18)},${f1(W*.6)}" stroke="#6b4716" stroke-width=".35"/>`).join("")}</g>`}}
+  if(k%3===1){for(const m of[0,1]){const bx=m?2*cx-px:px;s+=`<circle cx="${f1(bx+(m?-6:6))}" cy="${f1(py-4)}" r="4" fill="url(#beadR)" stroke="#5e140e" stroke-width=".5"/>`}}}
  const mir=stem.replace(/([ML])([\d.]+),/g,(_,c,x)=>`${c}${(2*cx-parseFloat(x)).toFixed(1)},`);
- return `<path d="${stem}" fill="none" stroke="#8a5d1e" stroke-width="3"/><path d="${mir}" fill="none" stroke="#8a5d1e" stroke-width="3"/>${s}<path d="M${cx-34},${cy+r+2} q34,22 68,0" stroke="#a3281e" stroke-width="8" fill="none"/>`}
+ return `<path d="${stem}" fill="none" stroke="#8a5d1e" stroke-width="3"/><path d="${mir}" fill="none" stroke="#8a5d1e" stroke-width="3"/>${s}
+ <g transform="translate(${cx},${cy+r+4})"><path d="M-4,0 C-16,16 -30,26 -44,30 l6,8 l-12,4 C-30,40 -14,24 -2,6Z M4,0 C16,16 30,26 44,30 l-6,8 l12,4 C30,40 14,24 2,6Z" fill="#a3281e" stroke="#5e140e" stroke-width=".8"/><path d="M0,0 C-22,-16 -40,-6 -30,6 C-22,14 -8,6 0,0Z M0,0 C22,-16 40,-6 30,6 C22,14 8,6 0,0Z" fill="#c63a2b" stroke="#5e140e" stroke-width=".8"/><circle r="6" fill="#a3281e" stroke="#5e140e"/></g>`}
 
 /* ===================== СОСТОЯНИЕ ===================== */
 const KEY="nedorosl-svoya-igra-v1";
