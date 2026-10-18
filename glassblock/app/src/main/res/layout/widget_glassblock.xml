@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Виджет 4×4: кадры воды листает ViewFlipper (анимация идёт без участия приложения),
+<!-- Виджет 3×3: кадры листает ViewFlipper с плавной сменой (анимация идёт без участия приложения),
      поверх — стеклянная рамка. Кадры генерирует tools/make_frames.py. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
@@ -11,7 +11,9 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:autoStart="true"
-        android:flipInterval="140">
+        android:flipInterval="144"
+        android:inAnimation="@anim/frame_in"
+        android:outAnimation="@anim/frame_out">
         <ImageView
             android:layout_width="match_parent"
             android:layout_height="match_parent"

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Новый кадр проявляется поверх старого: движение между кадрами плавное, без рывков. -->
+<alpha xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="144"
+    android:fromAlpha="0"
+    android:interpolator="@android:anim/linear_interpolator"
+    android:toAlpha="1" />
