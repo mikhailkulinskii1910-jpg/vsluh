@@ -8,7 +8,7 @@ import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
 
-/** Виджет-плеер: нажатие снимает музыку с паузы (или ставит на паузу); пластинка крутится до следующего нажатия. */
+/** Виджет-плеер: нажатие снимает музыку с паузы (или ставит на паузу); пластинка крутится, пока играет музыка. */
 class DiscWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         manager.updateAppWidget(ids, views(context, Player.spinning(context)))

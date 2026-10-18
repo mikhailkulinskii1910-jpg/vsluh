@@ -4,6 +4,9 @@
     <!-- Android 11+: без этого приложение не «видит» Яндекс Музыку и не может слать ей медиакнопки. -->
     <queries>
         <package android:name="ru.yandex.music" />
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
     </queries>
 
     <application
@@ -19,6 +22,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Доступ к уведомлениям: видеть, играет ли Яндекс Музыка, и управлять ею. -->
+        <service
+            android:name=".MusicListener"
+            android:exported="true"
+            android:label="@string/listener_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".DiscWidget"

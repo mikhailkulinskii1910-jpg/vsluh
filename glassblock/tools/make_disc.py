@@ -1,12 +1,13 @@
 """Картинки для виджета-плеера «Пластинка».
 
-Из art/case.jpg (прозрачный бокс) и art/disc.jpg (блюдо с рыбами — это пластинка) делает (res/drawable-nodpi):
-  case_front.png      — бокс поверх пластинки: чёрный фон снят (остаётся только пластик), место диска вырезано,
+Из art/case.jpg (прозрачный бокс) и art/disc.jpg (блюдо с рыбами — это пластинка) делает (res/drawable-nodpi).
+Все слои — квадрат CANVAS×CANVAS, центр диска ровно в центре: виджет крутит пластинку вокруг центра картинки.
+  case_front.webp     — бокс поверх пластинки: чёрный фон снят (остаётся только пластик), место диска вырезано,
                         шпиндель в центре остаётся, в его середине — сквозное отверстие;
-  disc_NN.webp        — кадры вращения пластинки (полный оборот за FRAMES кадров) с неподвижным бликом винила;
-  disc_art.webp       — пластинка без блика в полном размере (в приложении её крутит Canvas);
-  disc_sheen.png      — блик и бороздки для приложения;
+  disc_art.webp       — пластинка (с отверстием в центре); её вращает drawable/disc_spin.xml;
+  disc_sheen.webp     — неподвижный блик винила и бороздки поверх вращающейся пластинки;
   widget_preview.png  — превью в списке виджетов.
+Ещё пишет preview.gif — как крутится пластинка (для README).
 
 Запуск: python3 tools/make_disc.py (из папки glassblock).
 """
@@ -20,23 +21,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ART = os.path.join(HERE, "..", "art")
 OUT = os.path.join(HERE, "..", "app", "src", "main", "res", "drawable-nodpi")
 
-FRAMES = 24          # кадров на оборот; интервал — в layout/widget_disc.xml (оборот 1,92 с ≈ 31 об/мин)
-FRAME_PX = 576
-SIZE = 736           # размер art/case.jpg
-CASE = (3, 10, 730, 726, 24)          # контур бокса, радиус угла
-DISC_C = (373.0, 362.0)               # центр диска в боксе (и шпиндель)
+CANVAS = 740                          # размер слоёв; центр диска — CANVAS/2
+CASE = (3, 10, 730, 726, 24)          # контур бокса на art/case.jpg, радиус угла
+DISC_C = (373.0, 362.0)               # центр диска (и шпинделя) на art/case.jpg
 DISC_R = 312.0
 HUB_R = 93.0                          # шпиндель бокса — остаётся поверх пластинки
 HOLE_R = 45.0                         # сквозное отверстие в центре (и в пластинке)
 PLATE_C = (368.0, 381.0)              # блюдо на art/disc.jpg
 PLATE_R = 314.0
-
-
-def rounded_mask(size, box, feather):
-    x0, y0, x1, y1, r = box
-    ys, xs = np.mgrid[0:size, 0:size].astype(np.float32) + 0.5
-    cx = np.clip(xs, x0 + r, x1 - r); cy = np.clip(ys, y0 + r, y1 - r)
-    return np.clip(0.5 - (np.hypot(xs - cx, ys - cy) - r) / feather, 0, 1)
 
 
 def bilinear(img, sx, sy):
@@ -49,23 +41,10 @@ def bilinear(img, sx, sy):
     return ((a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy) * inside[..., None]
 
 
-def polar(px):
-    """Координаты пикселей кадра размером px относительно центра диска (в пикселях art/case.jpg)."""
-    sc = SIZE / px
-    ys, xs = np.mgrid[0:px, 0:px].astype(np.float32)
-    dx = (xs + 0.5) * sc - DISC_C[0]; dy = (ys + 0.5) * sc - DISC_C[1]
-    return dx, dy, np.hypot(dx, dy), sc
-
-
-def disc_alpha(rho, sc):
-    return np.clip((DISC_R - rho) / sc + 0.5, 0, 1)
-
-
 def sheen(dx, dy, rho):
     """Неподвижный свет на виниле: два встречных клина блика + тонкие бороздки. Возвращает (добавка яркости, тень)."""
     th = np.arctan2(dy, dx)
-    wedge = np.cos(th + math.pi / 4) ** 2
-    wedge = wedge ** 10 * np.clip((rho - HUB_R) / 60, 0, 1)
+    wedge = (np.cos(th + math.pi / 4) ** 2) ** 10 * np.clip((rho - HUB_R) / 60, 0, 1)
     rng = np.random.default_rng(7)
     rings = np.convolve(rng.standard_normal(4000), np.ones(3) / 3, mode="same")
     groove = rings[np.clip((rho * 6).astype(int), 0, 3999)]
@@ -74,58 +53,62 @@ def sheen(dx, dy, rho):
     return light, 1 - 0.35 * edge
 
 
+def save(arr, name):
+    Image.fromarray(arr.clip(0, 255).astype(np.uint8), "RGBA").save(os.path.join(OUT, name), lossless=True, method=6)
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     case = np.asarray(Image.open(os.path.join(ART, "case.jpg")).convert("RGB")).astype(np.float32)
     plate = np.asarray(Image.open(os.path.join(ART, "disc.jpg")).convert("RGB")).astype(np.float32)
 
+    c = CANVAS / 2
+    ys, xs = np.mgrid[0:CANVAS, 0:CANVAS].astype(np.float32) + 0.5
+    dx = xs - c; dy = ys - c; rho = np.hypot(dx, dy)
+    inner = np.clip(rho - HOLE_R + 0.5, 0, 1)                 # 0 в центральном отверстии
+    disc = np.clip(DISC_R - rho + 0.5, 0, 1)
+
     # Бокс: пластик снят с чёрного фона («обратное» наложение: на чёрном даёт ровно исходник),
     # шпиндель непрозрачный, место диска и центральное отверстие вырезаны.
-    dx, dy, rho, sc = polar(SIZE)
-    plastic = np.clip((case.max(axis=-1) - 8) / (255 - 8), 0, 1)
-    hub = np.clip(HUB_R - rho + 0.5, 0, 1) * np.clip(rho - HOLE_R + 0.5, 0, 1)
-    disc_hole = disc_alpha(rho, sc) * np.clip((rho - HUB_R) + 0.5, 0, 1)
-    a = rounded_mask(SIZE, CASE, 2) * np.maximum(plastic * (1 - disc_hole) * (1 - np.clip(HOLE_R - rho + 0.5, 0, 1)), hub)
-    rgb = np.where(hub[..., None] > 0, case, case / np.maximum(plastic, 1e-3)[..., None] * (plastic > 0)[..., None])
-    Image.fromarray(np.dstack([rgb.clip(0, 255), a * 255]).astype(np.uint8), "RGBA").save(
-        os.path.join(OUT, "case_front.png"), optimize=True)
+    cx = xs - 0.5 + DISC_C[0] - c; cy = ys - 0.5 + DISC_C[1] - c   # пиксель холста → пиксель art/case.jpg
+    rgb = bilinear(case, cx, cy)
+    x0, y0, x1, y1, r = CASE
+    qx = np.clip(cx + 0.5, x0 + r, x1 - r); qy = np.clip(cy + 0.5, y0 + r, y1 - r)
+    in_case = np.clip(0.5 - (np.hypot(cx + 0.5 - qx, cy + 0.5 - qy) - r) / 2, 0, 1)
+    plastic = np.clip((rgb.max(axis=-1) - 8) / (255 - 8), 0, 1)
+    hub = np.clip(HUB_R - rho + 0.5, 0, 1) * inner
+    disc_hole = disc * np.clip(rho - HUB_R + 0.5, 0, 1)
+    a = in_case * np.maximum(plastic * (1 - disc_hole) * inner, hub)
+    rgb = np.where(hub[..., None] > 0, rgb, rgb / np.maximum(plastic, 1e-3)[..., None] * (plastic > 0)[..., None])
+    save(np.dstack([rgb, a * 255]), "case_front.webp")
 
-    # Пластинка в полном размере для приложения (центр = центр картинки) и блик к ней.
+    # Пластинка: блюдо, вписанное в круг диска, с отверстием.
     k = PLATE_R / DISC_R
-    full_px = int(2 * DISC_R)
-    ys, xs = np.mgrid[0:full_px, 0:full_px].astype(np.float32) + 0.5
-    ddx = xs - DISC_R; ddy = ys - DISC_R; rr = np.hypot(ddx, ddy)
-    art = bilinear(plate, PLATE_C[0] + ddx * k, PLATE_C[1] + ddy * k)
-    al = np.clip(DISC_R - rr + 0.5, 0, 1) * np.clip(rr - HOLE_R + 0.5, 0, 1)
-    Image.fromarray(np.dstack([art, al * 255]).clip(0, 255).astype(np.uint8), "RGBA").save(
-        os.path.join(OUT, "disc_art.webp"), quality=95, method=6)
-    light, shade = sheen(ddx, ddy, rr)
-    # Блик для приложения: белый с альфой (добавка света) поверх тени у края.
+    art = bilinear(plate, PLATE_C[0] + dx * k, PLATE_C[1] + dy * k)
+    al = disc * inner
+    save(np.dstack([art, al * 255]), "disc_art.webp")
+
+    # Блик: белый с альфой (добавка света) поверх тени у края.
+    light, shade = sheen(dx, dy, rho)
     sh_a = np.clip(light, 0, 1) * al
     dark_a = (1 - shade) * al
     sh_rgb = 255 * sh_a / np.maximum(sh_a + dark_a, 1e-4)
-    Image.fromarray(np.dstack([sh_rgb, sh_rgb, sh_rgb, np.clip(sh_a + dark_a, 0, 1) * 255]).astype(np.uint8), "RGBA").save(
-        os.path.join(OUT, "disc_sheen.png"), optimize=True)
+    save(np.dstack([sh_rgb, sh_rgb, sh_rgb, np.clip(sh_a + dark_a, 0, 1) * 255]), "disc_sheen.webp")
 
-    # Кадры вращения для виджета (по часовой стрелке).
-    dx, dy, rho, sc = polar(FRAME_PX)
-    light, shade = sheen(dx, dy, rho)
-    alpha = disc_alpha(rho, sc) * np.clip((rho - HOLE_R) / sc + 0.5, 0, 1)
-    for i in range(FRAMES):
-        ang = -2 * math.pi * i / FRAMES
-        ca, sa = math.cos(ang), math.sin(ang)
-        rx = dx * ca - dy * sa; ry = dx * sa + dy * ca
-        img = bilinear(plate, PLATE_C[0] + rx * k, PLATE_C[1] + ry * k)
-        img = img * shade[..., None] + 255 * light[..., None]
-        lay = Image.fromarray(np.dstack([img, alpha * 255]).clip(0, 255).astype(np.uint8), "RGBA")
-        lay.save(os.path.join(OUT, f"disc_{i:02d}.webp"), quality=93, method=6)
-        if i == 0:
-            first = lay
+    case_im = Image.open(os.path.join(OUT, "case_front.webp")).convert("RGBA")
+    art_im = Image.open(os.path.join(OUT, "disc_art.webp")).convert("RGBA")
+    sheen_im = Image.open(os.path.join(OUT, "disc_sheen.webp")).convert("RGBA")
+    layers = lambda d: Image.alpha_composite(Image.alpha_composite(d, sheen_im), case_im)
+    layers(art_im).resize((360, 360), Image.LANCZOS).save(os.path.join(OUT, "widget_preview.png"), optimize=True)
 
-    case_im = Image.open(os.path.join(OUT, "case_front.png"))
-    prev = Image.alpha_composite(first.resize((SIZE, SIZE), Image.LANCZOS), case_im)
-    prev.resize((360, 360), Image.LANCZOS).save(os.path.join(OUT, "widget_preview.png"), optimize=True)
-    print("ok:", FRAMES, "кадров")
+    # Превью вращения на условных обоях.
+    g = np.linspace(0, 1, CANVAS)[:, None, None]
+    wall = Image.fromarray(((np.array([235, 200, 170]) * (1 - g) + np.array([40, 60, 110]) * g)
+                            * np.ones((CANVAS, CANVAS, 3))).astype(np.uint8)).convert("RGBA")
+    gif = [Image.alpha_composite(wall, layers(art_im.rotate(-15 * i, Image.BICUBIC))).convert("RGB").resize((420, 420), Image.LANCZOS)
+           for i in range(24)]
+    gif[0].save(os.path.join(HERE, "..", "preview.gif"), save_all=True, append_images=gif[1:], duration=80, loop=0)
+    print("ok")
 
 
 if __name__ == "__main__":

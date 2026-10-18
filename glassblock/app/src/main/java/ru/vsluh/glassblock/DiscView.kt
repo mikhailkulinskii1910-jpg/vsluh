@@ -21,8 +21,7 @@ class DiscView(context: Context) : View(context) {
     private val sheen: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.disc_sheen, opts)
     private val case: Bitmap = BitmapFactory.decodeResource(resources, R.drawable.case_front, opts)
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
-    private val discRect = RectF(DISC_X - DISC_R, DISC_Y - DISC_R, DISC_X + DISC_R, DISC_Y + DISC_R)
-    private val caseRect = RectF(0f, 0f, SIZE, SIZE)
+    private val rect = RectF(0f, 0f, SIZE, SIZE)    // все слои одного размера, диск в центре
     private val square = RectF()
 
     var spinning = false
@@ -50,21 +49,18 @@ class DiscView(context: Context) : View(context) {
         canvas.translate(square.left, square.top)
         canvas.scale(k, k)
         canvas.save()
-        canvas.rotate(angle, DISC_X, DISC_Y)
-        canvas.drawBitmap(disc, null, discRect, paint)
+        canvas.rotate(angle, SIZE / 2, SIZE / 2)
+        canvas.drawBitmap(disc, null, rect, paint)
         canvas.restore()
-        canvas.drawBitmap(sheen, null, discRect, paint)
-        canvas.drawBitmap(case, null, caseRect, paint)
+        canvas.drawBitmap(sheen, null, rect, paint)
+        canvas.drawBitmap(case, null, rect, paint)
         canvas.restore()
         if (speed > 0f || spinning) postInvalidateOnAnimation() else last = 0L
     }
 
     companion object {
-        private const val SIZE = 736f
-        private const val DISC_X = 373f
-        private const val DISC_Y = 362f
-        private const val DISC_R = 312f
-        private const val TURN_S = 1.92f      // как в виджете: 24 кадра × 80 мс
+        private const val SIZE = 740f
+        private const val TURN_S = 1.92f      // как в виджете (indeterminateDuration)
         private const val EASE_S = 0.45f
     }
 }
