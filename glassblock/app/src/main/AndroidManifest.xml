@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Android 11+: без этого приложение не «видит» Яндекс Музыку и не может слать ей медиакнопки. -->
+    <queries>
+        <package android:name="ru.yandex.music" />
+    </queries>
+
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
