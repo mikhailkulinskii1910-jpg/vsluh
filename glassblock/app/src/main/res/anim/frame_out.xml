@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Старый кадр остаётся под новым, пока тот проявляется (иначе в середине перехода просвечивает фон). -->
 <alpha xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="144"
+    android:duration="80"
     android:fromAlpha="1"
     android:toAlpha="1" />

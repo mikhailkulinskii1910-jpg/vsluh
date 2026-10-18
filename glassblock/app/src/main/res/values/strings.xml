@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Стеклоблок</string>
-    <string name="widget_description">Стеклоблок с водой и растениями, 3×3</string>
+    <string name="app_name">Пластинка</string>
+    <string name="widget_description">Плеер-пластинка: нажмите — музыка играет, пластинка крутится</string>
+    <string name="play_pause">Играть / пауза</string>
     <string name="add_widget">Добавить виджет 3×3</string>
-    <string name="add_widget_manual">Долгое нажатие на главном экране → «Виджеты» → «Стеклоблок»</string>
+    <string name="add_widget_manual">Долгое нажатие на главном экране → «Виджеты» → «Пластинка»</string>
+    <string name="no_player">Музыка не запустилась — откройте любой плеер и включите трек хотя бы раз</string>
 </resources>

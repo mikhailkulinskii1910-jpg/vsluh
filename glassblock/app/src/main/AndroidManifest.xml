@@ -16,7 +16,7 @@
         </activity>
 
         <receiver
-            android:name=".GlassBlockWidget"
+            android:name=".DiscWidget"
             android:exported="true"
             android:label="@string/app_name">
             <intent-filter>
@@ -24,7 +24,7 @@
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/glassblock_widget_info" />
+                android:resource="@xml/disc_widget_info" />
         </receiver>
     </application>
 </manifest>
