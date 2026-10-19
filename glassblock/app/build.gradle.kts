@@ -11,8 +11,15 @@ android {
         applicationId = "ru.vsluh.glassblock"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "2.3"
+        versionCode = 7
+        versionName = "2.3.1"
+    }
+
+    // v2 + v3. Подпись v1 (её требуют некоторые установщики на прошивках Xiaomi и файловые менеджеры)
+    // Gradle при minSdk ≥ 24 не ставит — её добавляет apksigner, см. README.
+    signingConfigs.getByName("debug") {
+        enableV2Signing = true
+        enableV3Signing = true
     }
 
     buildTypes {
