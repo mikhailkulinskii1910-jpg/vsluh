@@ -48,8 +48,8 @@ class MainActivity : Activity() {
             textSize = 16f
             background = GradientDrawable().apply {
                 cornerRadius = 28 * dp
-                setColor(0x33A0B4D2)
-                setStroke((1 * dp).toInt(), 0x88D2DCF0.toInt())
+                setColor(0x44C81E24)
+                setStroke((1 * dp).toInt(), 0xAAF07A50.toInt())
             }
             setPadding((24 * dp).toInt(), 0, (24 * dp).toInt(), 0)
             setOnClickListener { onClick() }

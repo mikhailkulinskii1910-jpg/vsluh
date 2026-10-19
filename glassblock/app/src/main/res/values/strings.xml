@@ -3,7 +3,7 @@
     <string name="app_name">Пластинка</string>
     <string name="widget_description">Плеер-пластинка для Яндекс Музыки: нажмите — музыка играет, пластинка крутится</string>
     <string name="play_pause">Играть / пауза</string>
-    <string name="add_widget">Добавить виджет 3×3</string>
+    <string name="add_widget">Добавить виджет 2×2</string>
     <string name="add_widget_manual">Долгое нажатие на главном экране → «Виджеты» → «Пластинка»</string>
     <string name="open_yandex">Открыть Яндекс Музыку</string>
     <string name="no_music">Яндекс Музыка не включилась. Откройте её и запустите трек — дальше пластинка будет включать и ставить на паузу сама</string>

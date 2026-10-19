@@ -1,11 +1,12 @@
 """Картинки для виджета-плеера «Пластинка».
 
-Из art/case.jpg (прозрачный бокс) и art/disc.jpg (блюдо с рыбами — это пластинка) делает (res/drawable-nodpi).
+Из art/case.jpg (бокс — берутся его форма и блики пластика) и art/vinyl.jpg (пластинка) делает (res/drawable-nodpi).
 Все слои — квадрат CANVAS×CANVAS, центр диска ровно в центре: виджет крутит пластинку вокруг центра картинки.
-  case_front.webp     — бокс поверх пластинки: чёрный фон снят (остаётся только пластик), место диска вырезано,
-                        шпиндель в центре остаётся, в его середине — сквозное отверстие;
-  disc_art.webp       — пластинка (с отверстием в центре); её вращает drawable/disc_spin.xml;
-  disc_sheen.webp     — неподвижный блик винила и бороздки поверх вращающейся пластинки;
+  case_front.webp     — бокс поверх пластинки: красный мутный пластик с градиентом (янтарный слева сверху →
+                        красный → тёмный дымчатый справа снизу), светящиеся рёбра, блики с фото; над пластинкой —
+                        лёгкая красная крышка; вокруг бокса прозрачно;
+  disc_art.webp       — пластинка с маленьким отверстием в центре; её вращает drawable/disc_spin.xml;
+  disc_sheen.webp     — неподвижный блик винила поверх вращающейся пластинки;
   widget_preview.png  — превью в списке виджетов.
 Ещё пишет preview.gif — как крутится пластинка (для README).
 
@@ -15,7 +16,7 @@ import math
 import os
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ART = os.path.join(HERE, "..", "art")
@@ -23,12 +24,18 @@ OUT = os.path.join(HERE, "..", "app", "src", "main", "res", "drawable-nodpi")
 
 CANVAS = 740                          # размер слоёв; центр диска — CANVAS/2
 CASE = (3, 10, 730, 726, 24)          # контур бокса на art/case.jpg, радиус угла
-DISC_C = (373.0, 362.0)               # центр диска (и шпинделя) на art/case.jpg
+DISC_C = (373.0, 362.0)               # центр места под диск на art/case.jpg
 DISC_R = 312.0
-HUB_R = 93.0                          # шпиндель бокса — остаётся поверх пластинки
-HOLE_R = 45.0                         # сквозное отверстие в центре (и в пластинке)
-PLATE_C = (368.0, 381.0)              # блюдо на art/disc.jpg
-PLATE_R = 314.0
+VINYL_C = (367.3, 367.4)              # пластинка на art/vinyl.jpg (центр и край подобраны по окружности)
+VINYL_R = 317.9
+HOLE_R = 6.5                          # отверстие пластинки, px холста
+LABEL_R = 104.0                       # наклейка — на ней нет бороздок и блика
+
+# Красный пластик (как у MiniDisc), градиент — как у стекла на референсе: янтарь → красный → тёмный.
+TINT = [(0.0, (244, 112, 46)), (0.38, (206, 26, 28)), (0.72, (128, 10, 16)), (1.0, (42, 5, 8))]
+BODY_ALPHA = 0.80                     # мутность пластика
+RIM_ALPHA = 0.95                      # у рёбер пластик толще
+LID_ALPHA = 0.16                      # крышка над пластинкой
 
 
 def bilinear(img, sx, sy):
@@ -41,14 +48,25 @@ def bilinear(img, sx, sy):
     return ((a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy) * inside[..., None]
 
 
+def gradient(t):
+    """Цвет пластика по диагонали t ∈ [0, 1]."""
+    out = np.zeros(t.shape + (3,), np.float32)
+    for (t0, c0), (t1, c1) in zip(TINT, TINT[1:]):
+        k = np.clip((t - t0) / (t1 - t0), 0, 1)[..., None]
+        sel = ((t >= t0) & (t <= t1))[..., None]
+        out = np.where(sel, np.array(c0) * (1 - k) + np.array(c1) * k, out)
+    return out
+
+
 def sheen(dx, dy, rho):
     """Неподвижный свет на виниле: два встречных клина блика + тонкие бороздки. Возвращает (добавка яркости, тень)."""
     th = np.arctan2(dy, dx)
-    wedge = (np.cos(th + math.pi / 4) ** 2) ** 10 * np.clip((rho - HUB_R) / 60, 0, 1)
+    groove_zone = np.clip((rho - LABEL_R - 4) / 20, 0, 1)
+    wedge = (np.cos(th + math.pi / 4) ** 2) ** 10 * groove_zone
     rng = np.random.default_rng(7)
     rings = np.convolve(rng.standard_normal(4000), np.ones(3) / 3, mode="same")
-    groove = rings[np.clip((rho * 6).astype(int), 0, 3999)]
-    light = 0.16 * wedge + 0.025 * groove
+    groove = rings[np.clip((rho * 6).astype(int), 0, 3999)] * groove_zone
+    light = 0.12 * wedge + 0.02 * groove
     edge = np.clip((rho - (DISC_R - 10)) / 10, 0, 1)          # лёгкое затемнение к краю
     return light, 1 - 0.35 * edge
 
@@ -59,33 +77,45 @@ def save(arr, name):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    case = np.asarray(Image.open(os.path.join(ART, "case.jpg")).convert("RGB")).astype(np.float32)
-    plate = np.asarray(Image.open(os.path.join(ART, "disc.jpg")).convert("RGB")).astype(np.float32)
+    case_src = Image.open(os.path.join(ART, "case.jpg")).convert("RGB").filter(ImageFilter.GaussianBlur(0.8))  # мутнее
+    case = np.asarray(case_src).astype(np.float32)
+    vinyl = np.asarray(Image.open(os.path.join(ART, "vinyl.jpg")).convert("RGB")).astype(np.float32)
 
     c = CANVAS / 2
     ys, xs = np.mgrid[0:CANVAS, 0:CANVAS].astype(np.float32) + 0.5
     dx = xs - c; dy = ys - c; rho = np.hypot(dx, dy)
-    inner = np.clip(rho - HOLE_R + 0.5, 0, 1)                 # 0 в центральном отверстии
     disc = np.clip(DISC_R - rho + 0.5, 0, 1)
 
-    # Бокс: пластик снят с чёрного фона («обратное» наложение: на чёрном даёт ровно исходник),
-    # шпиндель непрозрачный, место диска и центральное отверстие вырезаны.
+    # Бокс: форма и блики с фото, цвет — красный градиент.
     cx = xs - 0.5 + DISC_C[0] - c; cy = ys - 0.5 + DISC_C[1] - c   # пиксель холста → пиксель art/case.jpg
-    rgb = bilinear(case, cx, cy)
+    photo = bilinear(case, cx, cy)
     x0, y0, x1, y1, r = CASE
     qx = np.clip(cx + 0.5, x0 + r, x1 - r); qy = np.clip(cy + 0.5, y0 + r, y1 - r)
-    in_case = np.clip(0.5 - (np.hypot(cx + 0.5 - qx, cy + 0.5 - qy) - r) / 2, 0, 1)
-    plastic = np.clip((rgb.max(axis=-1) - 8) / (255 - 8), 0, 1)
-    hub = np.clip(HUB_R - rho + 0.5, 0, 1) * inner
-    disc_hole = disc * np.clip(rho - HUB_R + 0.5, 0, 1)
-    a = in_case * np.maximum(plastic * (1 - disc_hole) * inner, hub)
-    rgb = np.where(hub[..., None] > 0, rgb, rgb / np.maximum(plastic, 1e-3)[..., None] * (plastic > 0)[..., None])
-    save(np.dstack([rgb, a * 255]), "case_front.webp")
+    border = np.hypot(cx + 0.5 - qx, cy + 0.5 - qy) - r            # <0 внутри бокса
+    in_case = np.clip(0.5 - border / 2, 0, 1)
+    depth = np.clip(-border, 0, None)                              # расстояние до края бокса
+    t = np.clip(((xs / CANVAS) * 0.55 + (ys / CANVAS) * 0.45 - 0.1) / 0.85, 0, 1)
+    tint = gradient(t)
+    rim = np.exp(-depth / 9)                                       # рёбра: слева сверху светятся, справа снизу темнеют
+    glow = np.array([255, 190, 120], np.float32); smoke = np.array([45, 6, 9], np.float32)
+    rim_col = glow * (1 - t[..., None]) + smoke * t[..., None]
+    body = tint * (1 - rim[..., None] * 0.7) + rim_col * rim[..., None] * 0.7
+    body_a = BODY_ALPHA + (RIM_ALPHA - BODY_ALPHA) * rim
+    # Блики пластика с фото (только вне диска — там на фото был другой диск).
+    hl = np.clip((photo.max(axis=-1) - 25) / (255 - 25), 0, 1) ** 1.5 * 0.6 * (1 - disc)
+    hl_col = np.array([255, 150, 120], np.float32)                 # блики окрашены пластиком
+    # Крышка над пластинкой: тот же градиент, но почти прозрачная, и мягкий диагональный свет.
+    lid_light = 0.06 * np.clip(1 - np.abs((xs - ys) / CANVAS + 0.15) * 3, 0, 1)
+    a_base = body_a * (1 - disc) + LID_ALPHA * disc
+    col = body * (1 - hl[..., None]) + hl_col * hl[..., None]
+    col = col * (1 - lid_light[..., None] * disc[..., None]) + 255 * lid_light[..., None] * disc[..., None]
+    a = in_case * np.clip(a_base + (1 - a_base) * hl + lid_light * disc, 0, 1)
+    save(np.dstack([col, a * 255]), "case_front.webp")
 
-    # Пластинка: блюдо, вписанное в круг диска, с отверстием.
-    k = PLATE_R / DISC_R
-    art = bilinear(plate, PLATE_C[0] + dx * k, PLATE_C[1] + dy * k)
-    al = disc * inner
+    # Пластинка: фото, вписанное в круг диска, с маленьким отверстием.
+    k = VINYL_R / DISC_R
+    art = bilinear(vinyl, VINYL_C[0] + dx * k, VINYL_C[1] + dy * k)
+    al = disc * np.clip(rho - HOLE_R + 0.5, 0, 1)
     save(np.dstack([art, al * 255]), "disc_art.webp")
 
     # Блик: белый с альфой (добавка света) поверх тени у края.
