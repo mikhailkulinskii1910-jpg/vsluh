@@ -11,8 +11,8 @@ android {
         applicationId = "ru.vsluh.glassblock"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "2.4"
+        versionCode = 9
+        versionName = "2.5"
     }
 
     // v2 + v3. Подпись v1 (её требуют некоторые установщики на прошивках Xiaomi и файловые менеджеры)
