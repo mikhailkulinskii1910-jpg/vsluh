@@ -11,8 +11,8 @@ android {
         applicationId = "ru.vsluh.glassblock"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "2.3.1"
+        versionCode = 8
+        versionName = "2.4"
     }
 
     // v2 + v3. Подпись v1 (её требуют некоторые установщики на прошивках Xiaomi и файловые менеджеры)
@@ -20,6 +20,24 @@ android {
     signingConfigs.getByName("debug") {
         enableV2Signing = true
         enableV3Signing = true
+    }
+
+    buildFeatures { buildConfig = true }
+
+    // full — с доступом к уведомлениям (пластинка сама останавливается на паузе в Яндекс Музыке);
+    // lite — без него: ставится отдельно, нажатие решает по тому, играет ли музыка сейчас.
+    flavorDimensions += "access"
+    productFlavors {
+        create("full") {
+            dimension = "access"
+            buildConfigField("boolean", "LISTENER", "true")
+        }
+        create("lite") {
+            dimension = "access"
+            applicationIdSuffix = ".lite"
+            versionNameSuffix = "-lite"
+            buildConfigField("boolean", "LISTENER", "false")
+        }
     }
 
     buildTypes {

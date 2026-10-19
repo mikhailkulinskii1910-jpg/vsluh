@@ -81,8 +81,9 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        val granted = MusicListener.granted(this)  // могли выдать доступ в настройках
-        access.visibility = if (granted) View.GONE else View.VISIBLE
+        // Могли выдать доступ в настройках; в версии «лайт» доступа к уведомлениям нет совсем.
+        val ask = BuildConfig.LISTENER && !MusicListener.granted(this)
+        access.visibility = if (ask) View.VISIBLE else View.GONE
         accessHint.visibility = access.visibility
     }
 
