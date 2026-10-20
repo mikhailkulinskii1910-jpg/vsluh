@@ -136,6 +136,41 @@ enum ScriptStore {
         }
     }
 
+    /// Конец блока i: для цикла — индекс его «конца цикла» (или последний блок), иначе сам i.
+    static func rangeEnd(_ s: KScript, _ i: Int) -> Int {
+        if i < 0 || i >= s.blocks.count || !s.blocks[i].isLoop { return i }
+        var d: Int = 0
+        var k: Int = i + 1
+        while k < s.blocks.count {
+            if s.blocks[k].isLoop {
+                d += 1
+            } else if s.blocks[k].isEnd {
+                if d == 0 { return k }
+                d -= 1
+            }
+            k += 1
+        }
+        return s.blocks.count - 1
+    }
+
+    /// Перенести блок from (цикл — вместе с содержимым) так, чтобы он встал перед позицией to исходного списка.
+    static func move(_ s: inout KScript, _ from: Int, _ to: Int) -> Bool {
+        let end: Int = rangeEnd(s, from)
+        if to >= from && to <= end + 1 { return false }      // на то же место или внутрь самого себя
+        let part: [SBlock] = Array(s.blocks[from...end])
+        s.blocks.removeSubrange(from...end)
+        let at: Int = to > end ? to - part.count : to
+        s.blocks.insert(contentsOf: part, at: min(max(at, 0), s.blocks.count))
+        return true
+    }
+
+    /// Удалить блок i (цикл — вместе с содержимым).
+    static func remove(_ s: inout KScript, _ i: Int) {
+        if i < 0 || i >= s.blocks.count { return }
+        let end: Int = rangeEnd(s, i)
+        s.blocks.removeSubrange(i...end)
+    }
+
     // MARK: JSON
 
     private static func toJSON(_ b: SBlock) -> SBlockJSON {
@@ -260,32 +295,71 @@ enum ScriptRunner {
     }
 }
 
-/// Какой диалог открыт во вкладке «Сценарии».
-enum ScriptDialog: Identifiable {
-    case pickScript
-    case pickDevice(Int?)
-    case pickCommand(Int, Int?)
-    case editAc(Int?)
-    case newName
-    case rename
-    case delay(Int?)
-    case loop(Int?)
+/// Куда поставить блок из диалога: заменить блок i или вставить перед позицией i.
+enum ScriptTarget {
+    case replace(Int)
+    case insert(Int)
 
-    var id: String {
+    var key: String {
         switch self {
-        case .pickScript: return "script"
-        case .pickDevice(let i): return "dev" + String(i ?? -1)
-        case .pickCommand(let d, let i): return "cmd" + String(d) + "/" + String(i ?? -1)
-        case .editAc(let i): return "ac" + String(i ?? -1)
-        case .newName: return "new"
-        case .rename: return "rename"
-        case .delay(let i): return "delay" + String(i ?? -1)
-        case .loop(let i): return "loop" + String(i ?? -1)
+        case .replace(let i): return "r" + String(i)
+        case .insert(let i): return "i" + String(i)
         }
     }
 }
 
-/// Вкладка «Сценарии»: редактор из блоков и «▶ Отправить».
+/// Какой диалог открыт во вкладке «Сценарии».
+enum ScriptDialog: Identifiable {
+    case pickScript
+    case pickDevice(ScriptTarget)
+    case pickCommand(Int, ScriptTarget)
+    case editAc(ScriptTarget)
+    case newName
+    case rename
+    case delay(Int)
+    case loop(Int)
+
+    var id: String {
+        switch self {
+        case .pickScript: return "script"
+        case .pickDevice(let t): return "dev" + t.key
+        case .pickCommand(let d, let t): return "cmd" + String(d) + t.key
+        case .editAc(let t): return "ac" + t.key
+        case .newName: return "new"
+        case .rename: return "rename"
+        case .delay(let i): return "delay" + String(i)
+        case .loop(let i): return "loop" + String(i)
+        }
+    }
+}
+
+/// Образец блока в палитре.
+enum PaletteItem {
+    case dev(Int)
+    case cmd
+    case ac
+    case delay
+    case loop
+
+    var block: SBlock {
+        switch self {
+        case .dev(let d): return .dev(d)
+        case .cmd: return .cmd("кнопка", 0)
+        case .ac: return .ac(power: true, mode: .cool, temp: 24, fan: .auto)
+        case .delay: return .delay(1)
+        case .loop: return .loop(3)
+        }
+    }
+}
+
+/// Поднятый (удержанием) блок: из сценария или образец из палитры.
+enum HeldBlock {
+    case block(Int)
+    case palette(PaletteItem)
+}
+
+/// Вкладка «Сценарии»: редактор как в Scratch — палитра, стопка блоков, корзина и «▶ Отправить».
+/// Перетаскивание сделано как «взять/положить»: удержание поднимает блок, нажатие на место кладёт его.
 struct ScriptPanel: View {
     @ObservedObject var model: RemoteModel
     @AppStorage("scripts") private var json = ""
@@ -293,6 +367,8 @@ struct ScriptPanel: View {
     @State private var scripts: [KScript]
     @State private var dialog: ScriptDialog?
     @State private var askDelete = false
+    @State private var paletteCat = 0
+    @State private var held: HeldBlock?
 
     init(model: RemoteModel) {
         _model = ObservedObject(wrappedValue: model)
@@ -306,15 +382,17 @@ struct ScriptPanel: View {
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Блоки выполняются сверху вниз. Команда идёт тому устройству, что выбрано блоком «устройство» выше неё. Нажмите на блок, чтобы изменить его.")
+                Text("Как в Scratch: блок из палитры нажмите — он добавится в конец, или удерживайте — блок поднимется, и нажмите место в сценарии. Нажатие на блок — изменить, удержание — поднять, чтобы переставить или выбросить в корзину. Команда идёт устройству из блока «устройство» выше неё.")
                     .font(Term.ru(13)).foregroundColor(Term.dim)
                     .fixedSize(horizontal: false, vertical: true)
                 Button { dialog = .pickScript } label: {
                     TabLabel(title: label("[ " + script.name + " ▾ ]"), on: false, height: 50, ruSize: 15, forceRu: true)
                 }
                 manageRow
-                blockList.padding(.top, 4)
-                addRows.padding(.top, 4)
+                palette.padding(.top, 4)
+                if held != nil { heldBanner }
+                stackView.padding(.top, 6)
+                trash.padding(.top, 8)
                 playButton.padding(.top, 6)
             }
             .padding(.bottom, 16)
@@ -350,19 +428,6 @@ struct ScriptPanel: View {
         }
     }
 
-    private var addRows: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 6) {
-                small("[+ устройство]") { dialog = .pickDevice(nil) }
-                small("[+ команда]") { addCommand(nil) }
-            }
-            HStack(spacing: 6) {
-                small("[+ задержка]") { dialog = .delay(nil) }
-                small("[+ цикл]") { dialog = .loop(nil) }
-            }
-        }
-    }
-
     private var playButton: some View {
         let running: Bool = model.scriptRunning
         let title: String = running ? "[ ■ Стоп ]" : "[ ▶ Отправить ]"
@@ -371,40 +436,229 @@ struct ScriptPanel: View {
         }
     }
 
-    @ViewBuilder private var blockList: some View {
-        if script.blocks.isEmpty {
-            Text("пусто — добавьте блоки кнопками ниже").font(Term.ru(13)).foregroundColor(Term.dim)
-        } else {
-            VStack(spacing: 5) {
-                ForEach(0..<script.blocks.count, id: \.self) { i in blockRow(i) }
+    // MARK: палитра
+
+    private static let paletteCats: [String] = ["Устройства", "Команды", "Управление"]
+
+    private var palette: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(0..<3, id: \.self) { i in paletteChip(i) }
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(0..<paletteItems.count, id: \.self) { i in paletteBlock(paletteItems[i]) }
+                }
+                .padding(.vertical, 4)
             }
         }
     }
 
-    private func blockRow(_ i: Int) -> some View {
+    private func paletteChip(_ i: Int) -> some View {
+        Button { paletteCat = i } label: {
+            TabLabel(title: ScriptPanel.paletteCats[i], on: paletteCat == i, height: 36, ruSize: 13)
+        }
+    }
+
+    private var paletteItems: [PaletteItem] {
+        if paletteCat == 0 { return (0..<ScriptStore.devices.count).map { d in PaletteItem.dev(d) } }
+        if paletteCat == 1 { return [.cmd, .ac] }
+        return [.delay, .loop]
+    }
+
+    private func paletteBlock(_ item: PaletteItem) -> some View {
+        let b: SBlock = item.block
+        return blockFace(b, lit: false)
+            .onTapGesture { place(item, at: script.blocks.count) }
+            .onLongPressGesture(minimumDuration: 0.4) { pickUp(.palette(item)) }
+    }
+
+    // MARK: сценарий
+
+    private var heldBanner: some View {
+        HStack(spacing: 8) {
+            Text("Блок поднят — нажмите место: блок (встанет после него), цикл (внутрь), шапку (в начало) или корзину.")
+                .font(Term.ru(12)).foregroundColor(Term.fg)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button { held = nil } label: {
+                TabLabel(title: "отмена", on: true, height: 36, ruSize: 13).frame(width: 84)
+            }
+        }
+    }
+
+    private var stackView: some View {
+        VStack(alignment: .leading, spacing: -Scratch.bump) {
+            hat
+            stack(from: 0, to: script.blocks.count)
+            if script.blocks.isEmpty {
+                Text("нажмите или поднимите блок в палитре выше").font(Term.ru(13)).foregroundColor(Term.dim)
+                    .padding(.top, 12)
+            }
+        }
+    }
+
+    /// Шапка «когда нажата ▶ Отправить» — всегда первая; положить на неё — в начало.
+    private var hat: some View {
+        Text("когда нажата  ▶ Отправить").font(Scratch.font).foregroundColor(Scratch.event.text)
+            .padding(.leading, 12).padding(.trailing, 10).padding(.top, 18).padding(.bottom, 4 + Scratch.bump)
+            .frame(height: 60)
+            .background(ScratchBack(shape: ScratchShape(kind: 1), cat: Scratch.event, lit: false))
+            .contentShape(Rectangle())
+            .onTapGesture { drop(at: 0) }
+    }
+
+    /// Блоки с from по to; цикл — C-блок с содержимым внутри. AnyView — из-за рекурсии.
+    private func stack(from: Int, to: Int) -> AnyView {
         let s: KScript = script
-        let text: String = String(format: "%02d  ", i + 1) + ScriptStore.text(s.blocks[i])
-        let on: Bool = model.scriptRunning && model.scriptMark == i
-        let indent: CGFloat = CGFloat(14 * ScriptStore.depthAt(s, i))
-        return HStack(spacing: 4) {
-            Button { editBlock(i) } label: {
-                TabLabel(title: text, on: on, height: 42, ruSize: 14, leading: true, forceRu: true)
-            }
-            icon("↑") { move(i, -1) }
-            icon("↓") { move(i, 1) }
-            icon("✕") { remove(i) }
+        var items: [Int] = []
+        var i: Int = from
+        while i < min(to, s.blocks.count) {
+            if s.blocks[i].isEnd { i += 1; continue }
+            items.append(i)
+            i = s.blocks[i].isLoop ? ScriptStore.rangeEnd(s, i) + 1 : i + 1
         }
-        .padding(.leading, indent)
+        return AnyView(
+            VStack(alignment: .leading, spacing: -Scratch.bump) {
+                ForEach(items, id: \.self) { k in blockView(k) }
+            }
+        )
     }
 
-    private func icon(_ t: String, _ action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            TabLabel(title: t, on: false, height: 42, ruSize: 16, forceRu: true)
+    @ViewBuilder private func blockView(_ i: Int) -> some View {
+        if script.blocks[i].isLoop {
+            loopView(i)
+        } else {
+            plainView(i)
         }
-        .frame(width: 36)
+    }
+
+    private func isHeld(_ i: Int) -> Bool {
+        if case .block(let k) = held { return k == i }
+        return false
+    }
+
+    private func isLit(_ i: Int) -> Bool { model.scriptRunning && model.scriptMark == i }
+
+    /// Блок как в Scratch: подпись с полями на фоне формы категории.
+    private func blockFace(_ b: SBlock, lit: Bool) -> some View {
+        ScratchLabel(parts: Scratch.parts(b), cat: Scratch.cat(b))
+            .padding(.leading, 12).padding(.trailing, 10).padding(.top, 4).padding(.bottom, 4 + Scratch.bump)
+            .frame(minHeight: 44)
+            .background(ScratchBack(shape: ScratchShape(), cat: Scratch.cat(b), lit: lit))
+            .contentShape(Rectangle())
+    }
+
+    private func plainView(_ i: Int) -> some View {
+        blockFace(script.blocks[i], lit: isLit(i))
+            .opacity(isHeld(i) ? 0.55 : 1)
+            .onTapGesture { tapBlock(i) }
+            .onLongPressGesture(minimumDuration: 0.4) { pickUp(.block(i)) }
+    }
+
+    /// C-блок «повторить»: полка 44, рука 16, «рот» с вложенными блоками (минимум 26), нижняя полка 22.
+    private func loopView(_ i: Int) -> some View {
+        let b: SBlock = script.blocks[i]
+        let cat: ScratchCat = Scratch.cat(b)
+        let end: Int = ScriptStore.rangeEnd(script, i)
+        let innerTo: Int = end < script.blocks.count && script.blocks[end].isEnd ? end : end + 1
+        let shape = ScratchShape(kind: 2, top: 44, arm: 16, bottom: 22)
+        return VStack(alignment: .leading, spacing: 0) {
+            ScratchLabel(parts: Scratch.parts(b), cat: cat)
+                .padding(.leading, 12).padding(.trailing, 10)
+                .frame(height: 44)
+                .contentShape(Rectangle())
+                .onTapGesture { tapLoopHead(i) }
+                .onLongPressGesture(minimumDuration: 0.4) { pickUp(.block(i)) }
+            stack(from: i + 1, to: innerTo)
+                .frame(minWidth: 60, minHeight: 26, alignment: .topLeading)
+                .contentShape(Rectangle())
+                .onTapGesture { drop(at: i + 1) }
+                .padding(.leading, 16)
+            Color.clear.frame(width: 1, height: 22 + Scratch.bump)
+        }
+        .frame(minWidth: 200, alignment: .leading)
+        .background(ScratchBack(shape: shape, cat: cat, lit: isLit(i)))
+        .opacity(isHeld(i) ? 0.55 : 1)
+    }
+
+    /// Корзина под сценарием.
+    private var trash: some View {
+        Text("✕ перетащите блок сюда, чтобы удалить (удерживайте блок, затем нажмите сюда)")
+            .font(Term.ru(13)).foregroundColor(held == nil ? Term.dim : Term.fg)
+            .multilineTextAlignment(.center)
+            .padding(10)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(held == nil ? Term.line : Term.fg,
+                                                              style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+            .contentShape(Rectangle())
+            .onTapGesture { dropInTrash() }
     }
 
     // MARK: действия
+
+    private func pickUp(_ h: HeldBlock) {
+        if model.scriptRunning { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        held = h
+    }
+
+    private func tapBlock(_ i: Int) {
+        if held != nil {
+            drop(at: ScriptStore.rangeEnd(script, i) + 1)
+        } else {
+            editBlock(i)
+        }
+    }
+
+    /// Полка цикла: с поднятым блоком — первым внутрь цикла, иначе изменить число повторов.
+    private func tapLoopHead(_ i: Int) {
+        if held != nil {
+            drop(at: i + 1)
+        } else {
+            editBlock(i)
+        }
+    }
+
+    /// Положить поднятый блок перед позицией at.
+    private func drop(at: Int) {
+        guard let h = held else { return }
+        held = nil
+        switch h {
+        case .block(let from):
+            var s: KScript = script
+            if ScriptStore.move(&s, from, at) { changed(s) }
+        case .palette(let item):
+            place(item, at: at)
+        }
+    }
+
+    private func dropInTrash() {
+        guard let h = held else { return }
+        held = nil
+        if case .block(let i) = h {
+            var s: KScript = script
+            ScriptStore.remove(&s, i)
+            changed(s)
+        }
+    }
+
+    /// Добавить образец из палитры перед позицией at.
+    private func place(_ item: PaletteItem, at: Int) {
+        let pos: Int = min(max(at, 0), script.blocks.count)
+        switch item {
+        case .dev(let d):
+            insert([.dev(d)], at: pos)
+        case .cmd:
+            addCommand(.insert(pos))
+        case .ac:
+            dialog = .editAc(.insert(pos))
+        case .delay:
+            insert([.delay(1)], at: pos)
+        case .loop:
+            insert([.loop(3), .end], at: pos)
+        }
+    }
 
     private func save() {
         json = ScriptStore.encode(scripts)
@@ -416,25 +670,10 @@ struct ScriptPanel: View {
         save()
     }
 
-    private func insert(_ b: SBlock) {
+    private func insert(_ blocks: [SBlock], at: Int) {
         var s: KScript = script
-        s.blocks.append(b)
-        changed(s)
-    }
-
-    private func move(_ i: Int, _ d: Int) {
-        let j: Int = i + d
-        var s: KScript = script
-        if j < 0 || j >= s.blocks.count { return }
-        let b: SBlock = s.blocks.remove(at: i)
-        s.blocks.insert(b, at: j)
-        changed(s)
-    }
-
-    private func remove(_ i: Int) {
-        var s: KScript = script
-        if i < 0 || i >= s.blocks.count { return }
-        s.blocks.remove(at: i)
+        let pos: Int = min(max(at, 0), s.blocks.count)
+        s.blocks.insert(contentsOf: blocks, at: pos)
         changed(s)
     }
 
@@ -449,44 +688,52 @@ struct ScriptPanel: View {
         if model.scriptRunning {
             model.stopScript()
         } else {
+            held = nil
             model.runScript(script)
         }
     }
 
-    /// «+ команда» (или изменить команду at): список кнопок устройства, для кондиционера — редактор состояния.
-    private func addCommand(_ at: Int?) {
-        let from: Int = at ?? (script.blocks.count - 1)
+    /// Команда (новая перед позицией или замена): список кнопок устройства выше, для кондиционера — редактор.
+    private func addCommand(_ target: ScriptTarget) {
+        var from: Int = 0
+        switch target {
+        case .replace(let i): from = i
+        case .insert(let i): from = i - 1
+        }
         let dev: Int = ScriptStore.deviceAt(script, from)
         if dev < 0 {
             model.say("Сначала добавьте блок «устройство»", err: true)
-            dialog = .pickDevice(nil)
+            dialog = .pickDevice(target)
             return
         }
         if ScriptStore.devices[dev].acModel >= 0 {
-            dialog = .editAc(at)
+            dialog = .editAc(target)
         } else {
-            dialog = .pickCommand(dev, at)
+            dialog = .pickCommand(dev, target)
         }
     }
 
     private func editBlock(_ i: Int) {
         switch script.blocks[i] {
-        case .dev: dialog = .pickDevice(i)
-        case .cmd: addCommand(i)
-        case .ac: dialog = .editAc(i)
+        case .dev: dialog = .pickDevice(.replace(i))
+        case .cmd: addCommand(.replace(i))
+        case .ac: dialog = .editAc(.replace(i))
         case .delay: dialog = .delay(i)
         case .loop: dialog = .loop(i)
-        case .end: model.say("Конец цикла: перемещайте его стрелками ↑ ↓")
+        case .end: break
         }
     }
 
-    private func setBlock(_ i: Int?, _ b: SBlock) {
-        if let i = i, i < script.blocks.count {
-            var s: KScript = script
-            s.blocks[i] = b
-            changed(s)
-        } else {
-            insert(b)
+    private func setBlock(_ target: ScriptTarget, _ b: SBlock) {
+        switch target {
+        case .replace(let i):
+            if i < script.blocks.count {
+                var s: KScript = script
+                s.blocks[i] = b
+                changed(s)
+            }
+        case .insert(let i):
+            insert([b], at: i)
         }
     }
 
@@ -499,15 +746,15 @@ struct ScriptPanel: View {
                 cur = w
                 dialog = nil
             } cancel: { dialog = nil }
-        case .pickDevice(let at):
+        case .pickDevice(let target):
             ChoiceSheet(title: "Устройство", items: ScriptStore.devices.map { x in x.title }, selected: nil) { w in
                 dialog = nil
-                setBlock(at, .dev(w))
+                setBlock(target, .dev(w))
             } cancel: { dialog = nil }
-        case .pickCommand(let dev, let at):
-            commandSheet(dev, at)
-        case .editAc(let at):
-            acSheet(at)
+        case .pickCommand(let dev, let target):
+            commandSheet(dev, target)
+        case .editAc(let target):
+            acSheet(target)
         case .newName:
             AskSheet(title: "Новый сценарий", value: "Сценарий " + String(scripts.count + 1), numeric: false) { t in
                 dialog = nil
@@ -529,17 +776,17 @@ struct ScriptPanel: View {
         }
     }
 
-    private func commandSheet(_ dev: Int, _ at: Int?) -> some View {
+    private func commandSheet(_ dev: Int, _ target: ScriptTarget) -> some View {
         let keys: [(label: String, code: UInt32)] = ScriptStore.devices[dev].keys
         return ChoiceSheet(title: ScriptStore.devices[dev].title, items: keys.map { k in k.label }, selected: nil) { w in
             dialog = nil
-            setBlock(at, .cmd(keys[w].label, keys[w].code))
+            setBlock(target, .cmd(keys[w].label, keys[w].code))
         } cancel: { dialog = nil }
     }
 
-    private func acSheet(_ at: Int?) -> some View {
+    private func acSheet(_ target: ScriptTarget) -> some View {
         var start: AcState = AcState.decode(UserDefaults.standard.string(forKey: "acState") ?? "")
-        if let i = at, i < script.blocks.count, case .ac(let p, let m, let t, let f) = script.blocks[i] {
+        if case .replace(let i) = target, i < script.blocks.count, case .ac(let p, let m, let t, let f) = script.blocks[i] {
             start.power = p
             start.mode = m
             start.temp = t
@@ -547,36 +794,29 @@ struct ScriptPanel: View {
         }
         return AcBlockSheet(state: start) { st in
             dialog = nil
-            setBlock(at, .ac(power: st.power, mode: st.mode, temp: st.temp, fan: st.fan))
+            setBlock(target, .ac(power: st.power, mode: st.mode, temp: st.temp, fan: st.fan))
         } cancel: { dialog = nil }
     }
 
-    private func delaySheet(_ at: Int?) -> some View {
+    private func delaySheet(_ at: Int) -> some View {
         var value: String = "1"
-        if let i = at, i < script.blocks.count, case .delay(let sec) = script.blocks[i] { value = ScriptStore.fmt(sec) }
+        if at < script.blocks.count, case .delay(let sec) = script.blocks[at] { value = ScriptStore.fmt(sec) }
         return AskSheet(title: "Задержка, секунд", value: value, numeric: true) { t in
             dialog = nil
             if let v = Double(t.replacingOccurrences(of: ",", with: ".")) {
-                setBlock(at, .delay(min(max(v, 0.1), 600)))
+                setBlock(.replace(at), .delay(min(max(v, 0.1), 600)))
             }
         } cancel: { dialog = nil }
     }
 
-    private func loopSheet(_ at: Int?) -> some View {
+    private func loopSheet(_ at: Int) -> some View {
         var value: String = "3"
-        if let i = at, i < script.blocks.count, case .loop(let n) = script.blocks[i] { value = String(n) }
+        if at < script.blocks.count, case .loop(let n) = script.blocks[at] { value = String(n) }
         return AskSheet(title: "Сколько раз повторить", value: value, numeric: true) { t in
             dialog = nil
             guard let v = Double(t.replacingOccurrences(of: ",", with: ".")) else { return }
             let n: Int = min(max(Int(v), 1), 999)
-            if at != nil {
-                setBlock(at, .loop(n))
-            } else {
-                var s: KScript = script
-                s.blocks.append(.loop(n))      // «+ цикл» добавляет и начало, и конец
-                s.blocks.append(.end)
-                changed(s)
-            }
+            setBlock(.replace(at), .loop(n))
         } cancel: { dialog = nil }
     }
 }
