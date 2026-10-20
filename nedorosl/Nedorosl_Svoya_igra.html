@@ -212,6 +212,23 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .q-text{flex:1;display:flex;align-items:center;font-size:54px;line-height:1.22;font-weight:500;color:#f3e8d3;min-height:0;overflow:hidden;text-wrap:balance}
 .q-text .eq{display:block;font-family:var(--f-display);font-size:1.5em;color:var(--ochre-hi);margin-top:18px;letter-spacing:.03em}
 .q-text .qpart{display:block;margin-bottom:.35em}
+.q-text .task{display:block;font-size:.7em;color:var(--ochre-hi);font-style:italic;margin-bottom:.45em}
+.q-text .plist{margin:0;padding-left:1.3em;font-size:.76em;line-height:1.28}
+.q-text .plist li{margin:.14em 0;padding-left:.2em}
+.q-text .plist li::marker{font-family:var(--f-display);color:var(--ochre-hi)}
+.q-text .match{display:grid;grid-template-columns:1.75fr 1fr;gap:0 34px;align-items:start}
+.q-text .clist{list-style:none;margin:0;padding:0 0 0 24px;border-left:1px solid var(--line);font-size:.76em;line-height:1.28}
+.q-text .clist li{margin:.14em 0}
+.q-text .clist b{font-family:var(--f-display);font-weight:400;color:var(--ochre-hi);margin-right:.45em}
+.q-text.swap{animation:fadeUp .6s both}
+.q-right{display:flex;align-items:flex-start;gap:16px}
+.q-voice{display:flex;gap:8px;margin-top:30px}
+.q-voice .btn{padding:8px 12px;font-size:10px}
+.team .ed{flex:none;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--ochre);display:grid;place-items:center;padding:0;cursor:pointer}
+.team .ed:hover{border-color:var(--ochre-hi);color:var(--ochre-hi)}
+.team .ed svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.team input.nm{border-bottom-color:rgba(193,139,55,.22)}
+.team input.nm:focus{border-bottom-color:var(--ochre)}
 .q-text .qpart b{font-family:var(--f-display);font-weight:400;color:var(--ochre-hi);margin-right:.25em}
 .q-text .remark{display:block;font-size:.5em;font-style:italic;color:var(--ochre-hi);margin-top:22px;line-height:1.3}
 .q-text .eq i{font-family:var(--f-body);font-style:italic}
@@ -233,7 +250,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 .q-team span{font-family:var(--f-display);font-size:18px;margin-right:6px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .q-team em{font-style:normal;font-family:var(--f-ui);font-size:13px;color:var(--ochre-hi);margin-right:6px;font-variant-numeric:tabular-nums}
 .q-team button{border:1px solid var(--line);background:transparent;font-family:var(--f-ui);font-weight:600;font-size:13px;padding:8px 10px;min-width:58px}
-.many-q .q-nav{position:absolute;top:66px;right:190px}
+.many-q .q-nav{position:absolute;top:128px;right:190px}
 .many-q .q-score{width:100%;gap:8px 10px}
 .many-q .q-team{padding:4px 4px 4px 10px;gap:4px}
 .many-q .q-team span{font-size:16px;max-width:104px;margin-right:2px}
@@ -424,6 +441,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
     <div class="top">
       <div class="brand"><svg class="fleur"><use href="#fleur"/></svg><b>НЕДОРОСЛЬ</b><span class="eyebrow">Своя игра</span></div>
       <div class="tools">
+        <button class="btn small ghost" id="voiceBtn" title="Озвучка вопросов и баллов голосом">Озвучка: вкл</button>
         <button class="btn small ghost" id="soundBtn">Звук: вкл</button>
         <button class="btn small ghost" id="fsBtn">Во весь экран</button>
         <button class="btn small ghost" id="homeBtn">На старт</button>
@@ -460,7 +478,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
       <div class="q-main">
         <div class="q-head">
           <div><div class="eyebrow" id="qEyebrow"></div><div class="q-theme" id="qTheme"></div></div>
-          <button class="timer" id="timer" title="Пауза / продолжить"><svg viewBox="0 0 96 96"><circle class="tbg" cx="48" cy="48" r="42"/><circle class="tfg" id="tfg" cx="48" cy="48" r="42" stroke-dasharray="263.9" stroke-dashoffset="0"/></svg><b id="tval">30</b><small id="tlbl">СЕКУНД</small></button>
+          <div class="q-right"><div class="q-voice"><button class="btn small ghost" id="readBtn" title="Прочитать вопрос вслух ещё раз">Прочитать</button><button class="btn small ghost" id="voiceBtn2" title="Включить или выключить озвучку">Голос: вкл</button></div><button class="timer" id="timer" title="Пауза / продолжить"><svg viewBox="0 0 96 96"><circle class="tbg" cx="48" cy="48" r="42"/><circle class="tfg" id="tfg" cx="48" cy="48" r="42" stroke-dasharray="263.9" stroke-dashoffset="0"/></svg><b id="tval">30</b><small id="tlbl">СЕКУНД</small></button></div>
         </div>
         <div class="rule"></div>
         <div class="q-text" id="qText"></div>
@@ -475,7 +493,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
         </div>
         <div class="q-foot">
           <div class="q-score" id="qScore"></div>
-          <div class="q-nav"><button class="btn small ghost" id="undoBtn" title="Если вопрос открыли по ошибке">Вернуть на табло</button><button class="btn small" id="closeQ">К табло</button></div>
+          <div class="q-nav"><button class="btn small ghost" id="undoBtn" title="Если вопрос открыли по ошибке">Вернуть на табло</button><button class="btn small primary" id="nextBtn" hidden>Задание на «+» →</button><button class="btn small" id="closeQ">К табло</button></div>
         </div>
       </div>
     </div>
@@ -577,9 +595,22 @@ const CATS = [
  {q:"Решите квадратное уравнение", eq:"2<i>x</i>² − 7<i>x</i> + 3 = 0", a:"x₁ = 3,  x₂ = 0,5", n:"D = 49 − 24 = 25;  x = (7 ± 5) / 4"},
  {q:"Решите квадратное уравнение", eq:"3<i>x</i>² + 2<i>x</i> − 5 = 0", a:"x₁ = 1,  x₂ = −5/3", n:"D = 4 + 60 = 64;  x = (−2 ± 8) / 6"}
 ];
-const FINAL = {q:"<span class='qpart'><b>I.</b> Сколько слов произносит Правдин в полной версии комедии «Недоросль»? Ответ округлите до десятков.</span><span class='qpart'><b>II.</b> В каких произведениях русской литературы, кроме «Недоросля», говорится об обучении и воспитании детей дворян?</span><span class='remark'>Оценку получает только команда, ответившая на вопрос.</span>",
+const FINAL = {say:"Первый вопрос. Сколько слов произносит Правдин в полной версии комедии Недоросль? Ответ округлите до десятков. Второй вопрос. В каких произведениях русской литературы, кроме Недоросля, говорится об обучении и воспитании детей дворян? Оценку получает только команда, ответившая на вопрос.",
+ q:"<span class='qpart'><b>I.</b> Сколько слов произносит Правдин в полной версии комедии «Недоросль»? Ответ округлите до десятков.</span><span class='qpart'><b>II.</b> В каких произведениях русской литературы, кроме «Недоросля», говорится об обучении и воспитании детей дворян?</span><span class='remark'>Оценку получает только команда, ответившая на вопрос.</span>",
  a:"I. 1470 слов.  II. Например: «Капитанская дочка», «Евгений Онегин», «Горе от ума», «Обломов», «Детство»",
  n:"Оценку получает только команда, ответившая на вопрос. Ко II: Пушкин — воспитание Петруши Гринёва (француз Бопре, дядька Савельич) и Онегина («Мы все учились понемногу…»); Грибоедов — Фамусов об учителях-иностранцах; Гончаров — «Сон Обломова»; Л. Толстой — гувернёр Карл Иваныч."};
+const FINAL_PLUS = [
+ {btn:"Задание на «+» 1 →", eyebrow:"Финал · задание на «+» · 1 из 2", theme:"Продолжите фразу", value:100, art:"words",
+  q:"<span class='task'>Продолжите крылатые фразы из комедии:</span><ol class='plist'><li>«Не хочу учиться, …»</li><li>«Вот злонравия …»</li><li>«Невежда без души — …»</li><li>«Имей сердце, имей душу — …»</li><li>«Да извозчики-то на что ж? …»</li></ol>",
+  a:"1) …хочу жениться. 2) …достойные плоды! 3) …зверь. 4) …и будешь человек во всякое время. 5) …Это их дело.",
+  n:"Говорят: 1 — Митрофан, 2–4 — Стародум, 5 — Простакова.",
+  say:"Задание на плюс. Продолжите крылатые фразы из комедии. Первая: Не хочу учиться... Вторая: Вот злонравия... Третья: Невежда без души... Четвёртая: Имей сердце, имей душу... Пятая: Да извозчики-то на что ж..."},
+ {btn:"Задание на «+» 2 →", eyebrow:"Финал · задание на «+» · 2 из 2", theme:"Сопоставьте фразы с персонажами", value:100, art:"lady",
+  q:"<span class='task'>Кому принадлежат эти слова? Соедините цифру с буквой.</span><div class='match'><ol class='plist'><li>«Да отвяжись, матушка, как навязалась…»</li><li>«Нашёл деньги, ни с кем не делись. Всё себе возьми»</li><li>«Убоялся бездны премудрости»</li><li>«Ум, коль скоро он только что ум, — самая безделица»</li><li>«Жалованья мне на год пять рублей, да пять пощёчин на день»</li></ol><ul class='clist'><li><b>А</b>Стародум</li><li><b>Б</b>Еремеевна</li><li><b>В</b>Митрофан</li><li><b>Г</b>Кутейкин</li><li><b>Д</b>Простакова</li></ul></div>",
+  a:"1 — В, 2 — Д, 3 — Г, 4 — А, 5 — Б",
+  n:"1 — Митрофан, 2 — Простакова, 3 — Кутейкин, 4 — Стародум, 5 — Еремеевна.",
+  say:"Задание на плюс. Сопоставьте фразы с персонажами. Первая: Да отвяжись, матушка, как навязалась. Вторая: Нашёл деньги, ни с кем не делись, всё себе возьми. Третья: Убоялся бездны премудрости. Четвёртая: Ум, коль скоро он только что ум, самая безделица. Пятая: Жалованья мне на год пять рублей, да пять пощёчин на день. Персонажи: А — Стародум, Б — Еремеевна, В — Митрофан, Г — Кутейкин, Д — Простакова."}
+];
 const VALUES=[10,20,30,40,50,60,70,80,90,100];
 const ROMAN=["I","II","III","IV","V","VI"];
 
@@ -775,7 +806,7 @@ function wreath(cx,cy,r){let s="",stem="";const D=Math.PI/180;
 
 /* ===================== СОСТОЯНИЕ ===================== */
 const KEY="nedorosl-svoya-igra-v1";
-const fresh=()=>({played:{},catMap:{},teams:[{name:"Команда 1",score:0},{name:"Команда 2",score:0}],finalPlayed:false,sound:true});
+const fresh=()=>({played:{},catMap:{},teams:[{name:"Команда 1",score:0},{name:"Команда 2",score:0}],finalPlayed:false,sound:true,voice:true});
 let S=fresh();
 try{const raw=localStorage.getItem(KEY);if(raw){const p=JSON.parse(raw);if(p&&p.teams)S=Object.assign(fresh(),p)}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
@@ -832,8 +863,10 @@ function renderBoard(anim){const g=$("grid");g.innerHTML="";g.classList.toggle("
  renderScores()}
 function renderScores(){const box=$("scores");box.innerHTML="";
  S.teams.forEach((t,k)=>{const d=document.createElement("div");d.className="team";
-  d.innerHTML=`<input id="team-${k}" value="${t.name.replace(/"/g,"&quot;")}" aria-label="Название команды ${k+1}"><input class="pts" id="pts-${k}" value="${t.score}" inputmode="numeric" title="Нажмите, чтобы исправить счёт" aria-label="Счёт команды ${k+1}">${S.teams.length>2?`<button class="rm" title="Убрать команду" aria-label="Убрать команду">×</button>`:""}`;
-  d.querySelector("input").oninput=e=>{t.name=e.target.value||("Команда "+(k+1));save()};
+  d.innerHTML=`<button class="ed" title="Переименовать команду" aria-label="Переименовать команду ${k+1}"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></button><input class="nm" id="team-${k}" title="Нажмите, чтобы изменить название" value="${t.name.replace(/"/g,"&quot;")}" aria-label="Название команды ${k+1}"><input class="pts" id="pts-${k}" value="${t.score}" inputmode="numeric" title="Нажмите, чтобы исправить счёт" aria-label="Счёт команды ${k+1}">${S.teams.length>2?`<button class="rm" title="Убрать команду" aria-label="Убрать команду">×</button>`:""}`;
+  const ni=d.querySelector("input.nm");ni.oninput=e=>{t.name=e.target.value||("Команда "+(k+1));save()};
+  ni.onkeydown=e=>{if(e.key==="Enter")ni.blur()};ni.onblur=()=>{ni.value=t.name};
+  d.querySelector(".ed").onclick=()=>{ni.focus();ni.select()};
   const pi=d.querySelector("input.pts");
   pi.oninput=()=>{const v=parseInt(pi.value.replace(/[^\d-]/g,""),10);if(!isNaN(v)){t.score=v;save()}};
   pi.onchange=pi.onblur=()=>{pi.value=t.score};
@@ -852,7 +885,7 @@ function openCell(ti,i,el){const id=ti+"-"+i;if(S.played[id])return;S.played[id]
  const item=THEMES[ti].q[i];const v=VALUES[i];
  setTimeout(()=>{el.classList.remove("flash");el.classList.add("played");
   if(item.cat){let k=S.catMap[id];if(k===undefined){k=Object.keys(S.catMap).length%CATS.length;S.catMap[id]=k;save()}
-   openCat(v,()=>openQuestion({id,cell:el,origin:o,eyebrow:`Кот в мешке · ${v} баллов`,theme:"Алгебра: квадратное уравнение",value:v,art:"cat",q:`${CATS[k].q}<span class="eq">${CATS[k].eq}</span>`,a:CATS[k].a,n:CATS[k].n,time:0}))}
+   openCat(v,()=>openQuestion({id,cell:el,origin:o,eyebrow:`Кот в мешке · ${v} баллов`,theme:"Алгебра: квадратное уравнение",value:v,art:"cat",q:`${CATS[k].q}<span class="eq">${CATS[k].eq}</span>`,a:CATS[k].a,n:CATS[k].n,time:0,say:"Решите квадратное уравнение: "+eqWords(CATS[k].eq)}))}
   else openQuestion({id,cell:el,origin:o,eyebrow:`Тема ${ROMAN[ti]} · ${v} баллов`,theme:THEMES[ti].name,value:v,art:THEMES[ti].art,q:item.q,a:item.a,n:item.n||"",time:v>=70?45:30})},450)}
 
 function openQuestion(o){Q=o;const L=$("qlayer");
@@ -863,11 +896,24 @@ function openQuestion(o){Q=o;const L=$("qlayer");
  const qt=$("qText");qt.innerHTML=`<div>${o.q}</div>`;
  $("aText").textContent=o.a;$("aNote").textContent=o.n||"";
  const ac=$("ansCard");ac.classList.remove("show","ink");$("showAns").hidden=false;
- $("undoBtn").hidden=!o.id;
+ $("undoBtn").hidden=!o.id||!!(o.steps&&o.steps.length);
+ $("nextBtn").hidden=!(o.steps&&o.steps.length);if(o.steps&&o.steps.length)$("nextBtn").textContent=o.steps[0].btn;
+ $("qText").classList.remove("swap");
  renderQScore();L.classList.remove("open");void L.offsetWidth;L.classList.add("open");
  requestAnimationFrame(()=>fitText(qt,58,30));
  if(o.time===0){stopTimer();T={total:0,left:0,run:false,last:0,raf:0};$("timer").hidden=true}
- else{$("timer").hidden=false;startTimer(o.time||30)}}
+ else{$("timer").hidden=false;startTimer(o.time||30)}
+ setTimeout(()=>{if(Q===o)speakQ()},950)}
+function speakQ(){if(!Q)return;if(Q.step)return say(Q.say);if(Q.value>=1000)return say("Тысяча баллов. "+(Q.say||plain(Q.q)));say(`${Q.theme}. ${Q.value} баллов. ${Q.say||plain(Q.q)}`)}
+$("nextBtn").onclick=()=>{if(!Q||!Q.steps||!Q.steps.length)return;const st=Q.steps.shift();Object.assign(Q,st,{step:true,say:st.say});
+ $("qArt").innerHTML=ART[Q.art]();torn($("qArt"),1.2);
+ $("qNum").innerHTML=`+${Q.value}<small>БАЛЛОВ</small>`;$("qNum").style.fontSize="";
+ $("qEyebrow").textContent=Q.eyebrow;$("qTheme").textContent=Q.theme;
+ const qt=$("qText");qt.innerHTML=`<div>${Q.q}</div>`;qt.classList.remove("swap");void qt.offsetWidth;qt.classList.add("swap");
+ $("aText").textContent=Q.a;$("aNote").textContent=Q.n||"";$("ansCard").classList.remove("show","ink");$("showAns").hidden=false;
+ renderQScore();requestAnimationFrame(()=>fitText(qt,58,24));
+ $("nextBtn").hidden=!Q.steps.length;if(Q.steps.length)$("nextBtn").textContent=Q.steps[0].btn;
+ tone(SND.open);setTimeout(speakQ,450)};
 function fitText(el,max,min){let s=max;el.style.fontSize=s+"px";const inner=el.firstElementChild;
  while(s>min&&inner.scrollHeight>el.clientHeight){s-=2;el.style.fontSize=s+"px"}}
 function renderQScore(){const box=$("qScore");box.innerHTML="";const v=Q.value;$("qlayer").classList.toggle("many-q",S.teams.length>3);
@@ -875,6 +921,7 @@ function renderQScore(){const box=$("qScore");box.innerHTML="";const v=Q.value;$
   d.innerHTML=`<span>${t.name}</span><em id="qs-${k}">${t.score}</em><button class="plus" aria-label="Добавить ${v} баллов">+${v}</button><button class="minus" aria-label="Снять ${v} баллов">−${v}</button>`;
   d.querySelector(".plus").onclick=e=>award(k,v,e.currentTarget);d.querySelector(".minus").onclick=e=>award(k,-v,e.currentTarget);box.appendChild(d)})}
 function award(k,v,btn){S.teams[k].score+=v;save();tone(v>0?SND.plus:SND.minus);
+ say(`${S.teams[k].name}: ${v>0?"плюс":"минус"} ${Math.abs(v)}. Счёт: ${S.teams[k].score}.`);
  $("qs-"+k).textContent=S.teams[k].score;
  const s=stage.getBoundingClientRect(),r=btn.getBoundingClientRect();const f=document.createElement("div");f.className="floatpts";
  f.textContent=(v>0?"+":"")+v;f.style.color=v>0?"#e3b35e":"#c63a2b";f.style.left=((r.left-s.left)/scale)+"px";f.style.top=((r.top-s.top)/scale-40)+"px";stage.appendChild(f);setTimeout(()=>f.remove(),1200);
@@ -885,7 +932,7 @@ function fitAns(){const c=$("ansCard"),t=$("aText"),n=$("aNote");let a=33,b=22;t
  const need=()=>[...c.querySelectorAll(".lbl,.txt,.note")].reduce((h,e)=>h+e.offsetHeight+6,0),avail=c.clientHeight-44;
  while(need()>avail&&a>20){a-=1;b=Math.max(16,b-1);t.style.fontSize=a+"px";n.style.fontSize=b+"px"}}
 $("showAns").onclick=revealAnswer;
-function closeQuestion(){const L=$("qlayer");if(!L.classList.contains("open"))return;stopTimer();
+function closeQuestion(){const L=$("qlayer");if(!L.classList.contains("open"))return;stopTimer();hush();
  if(Q&&Q.cell){const o=originOf(Q.cell);L.style.setProperty("--ox",o[0]+"px");L.style.setProperty("--oy",o[1]+"px")}
  L.classList.remove("open");Q=null;renderScores();
  [...document.querySelectorAll(".team .pts")].forEach(p=>{p.classList.remove("bump");void p.offsetWidth;p.classList.add("bump")});
@@ -908,7 +955,7 @@ $("catScene").innerHTML=`<svg viewBox="0 0 300 420">${catSVG(0,0,1)}</svg>`;
 $("catTitle").innerHTML=[..."КОТ В МЕШКЕ!"].map((c,i)=>c===" "?" ":`<span style="animation-delay:${2.1+i*.06}s">${c}</span>`).join("");
 let catNext=null;
 function openCat(v,next){catNext=next;$("catVal").textContent=`ВОПРОС ЗА ${v} БАЛЛОВ`;const L=$("catlayer");L.classList.remove("open");void L.offsetWidth;L.classList.add("open");
- setTimeout(()=>tone(SND.cat),1800);setTimeout(()=>confetti(L,40),2000)}
+ setTimeout(()=>tone(SND.cat),1800);setTimeout(()=>confetti(L,40),2000);setTimeout(()=>say(`Кот в мешке! Вопрос за ${v} баллов. Передайте вопрос другой команде.`),2300)}
 $("catGo").onclick=()=>{const L=$("catlayer");L.classList.remove("open");L.querySelectorAll(".confetti").forEach(c=>c.remove());const n=catNext;catNext=null;n&&n()};
 function confetti(host,n){const cols=["#a3281e","#c18b37","#dccbad","#3d4c5e","#5c6038"];
  for(let i=0;i<n;i++){const c=document.createElement("div");c.className="confetti";c.style.left=(Math.random()*1600)+"px";c.style.background=cols[i%cols.length];
@@ -919,9 +966,9 @@ $("fWreath").innerHTML=`<svg viewBox="0 0 400 400" style="width:100%;height:100%
 $("finalCell").onclick=()=>{if(S.finalPlayed)return;S.finalPlayed=true;save();$("finalCell").classList.add("played");
  const L=$("finallayer");L.classList.remove("open");void L.offsetWidth;L.classList.add("open");tone(SND.final);
  const t0=performance.now();(function c(now){const p=Math.min(1,(now-t0)/1400);$("fNum").textContent=Math.round(1000*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(c)})(t0);
- setTimeout(()=>confetti(L,50),900)};
+ setTimeout(()=>confetti(L,50),900);setTimeout(()=>say("Финальный вопрос. Тысяча баллов. Оценку получает только команда, ответившая на вопрос."),1500)};
 $("finalGo").onclick=()=>{const L=$("finallayer");L.classList.remove("open");L.querySelectorAll(".confetti").forEach(c=>c.remove());
- openQuestion({id:"final",cell:$("finalCell"),origin:originOf($("finalCell")),eyebrow:"Финальный вопрос · 1000 баллов",theme:"Вопрос на 1000 баллов",value:1000,art:"gold",q:FINAL.q,a:FINAL.a,n:FINAL.n,time:0})};
+ openQuestion({id:"final",cell:$("finalCell"),origin:originOf($("finalCell")),eyebrow:"Финальный вопрос · 1000 баллов",theme:"Вопрос на 1000 баллов",value:1000,art:"gold",q:FINAL.q,a:FINAL.a,n:FINAL.n,say:FINAL.say,time:0,steps:FINAL_PLUS.map(x=>({...x}))})};
 
 /* ===================== ИТОГИ ===================== */
 function renderResults(){$("resArt").innerHTML=ART.stage();torn($("resArt"),1.4);
@@ -940,6 +987,18 @@ function askReset(){$("dialog").classList.add("open");torn($("dialog").querySele
 $("resetBtn").onclick=askReset;$("resetBtn2").onclick=askReset;
 $("dlgNo").onclick=()=>$("dialog").classList.remove("open");
 $("dlgYes").onclick=()=>{const snd=S.sound;S=fresh();S.sound=snd;save();$("dialog").classList.remove("open");curtainTo("board",()=>renderBoard(true))};
+/* ===================== ОЗВУЧКА ===================== */
+let RU=null;
+function pickVoice(){try{const v=speechSynthesis.getVoices();RU=v.find(x=>/^ru/i.test(x.lang)&&/google|natural|online|microsoft/i.test(x.name))||v.find(x=>/^ru/i.test(x.lang))||null}catch(e){}}
+try{if(window.speechSynthesis){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}}catch(e){}
+function plain(h){const d=document.createElement("div");d.innerHTML=h;return d.textContent}
+function eqWords(eq){return eq.replace(/<i>x<\/i>²/g," икс в квадрате").replace(/<i>x<\/i>/g," икс").replace(/−/g," минус ").replace(/\+/g," плюс ").replace(/= 0/," равно нулю")}
+function say(t){if(!S.voice)return;try{if(!window.speechSynthesis)return;speechSynthesis.cancel();
+ const u=new SpeechSynthesisUtterance(String(t).replace(/[«»"]/g,"").replace(/…/g,"...").replace(/\s+/g," "));u.lang="ru-RU";if(RU)u.voice=RU;u.rate=.95;speechSynthesis.speak(u)}catch(e){}}
+function hush(){try{window.speechSynthesis&&speechSynthesis.cancel()}catch(e){}}
+function syncVoice(){const t=S.voice?"вкл":"выкл";$("voiceBtn").textContent="Озвучка: "+t;$("voiceBtn2").textContent="Голос: "+t}
+function toggleVoice(){S.voice=!S.voice;save();syncVoice();if(!S.voice)hush();else say("Озвучка включена")}
+$("voiceBtn").onclick=toggleVoice;$("voiceBtn2").onclick=toggleVoice;$("readBtn").onclick=()=>{if(!S.voice){S.voice=true;save();syncVoice()}speakQ()};syncVoice();
 function syncSound(){$("soundBtn").textContent="Звук: "+(S.sound?"вкл":"выкл")}
 $("soundBtn").onclick=()=>{S.sound=!S.sound;save();syncSound()};syncSound();
 $("fsBtn").onclick=()=>{try{if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen().catch(()=>{})}catch(e){}};
