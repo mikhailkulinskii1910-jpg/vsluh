@@ -17,7 +17,7 @@
 // Палитра тепловизора (krisa-heat) — тоже сразу: ironbow (по умолчанию), white, rainbow, arctic.
 try {
   const t = localStorage.getItem('krisa-theme'); if (t === 'prism' || t === 'thermal' || t === 'blueprint') document.documentElement.dataset.theme = t;
-  const h = localStorage.getItem('krisa-heat'); if (h === 'white' || h === 'rainbow' || h === 'arctic') document.documentElement.dataset.heat = h;
+  const h = localStorage.getItem('krisa-heat'); if (['white',  'rainbow',  'arctic',  'lava',  'medical',  'sepia',  'night',  'alert',  'ice'].includes(h)) document.documentElement.dataset.heat = h;
 } catch {}
 </script>
 <style>
@@ -124,11 +124,15 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 dialog{width:min(560px,calc(100vw - 32px));max-height:calc(100dvh - 32px);border:1px solid var(--line);
   border-radius:0;background:#000;color:var(--fg);padding:0}
 dialog::backdrop{background:rgba(0,0,0,.75)}
+/* RGB-перелив: окна в верхнем слое не попадают под общий multiply — накладываем перелив на содержимое окна */
+dialog .sheet{position:relative}
+html.rgb:not([data-theme]) dialog{isolation:isolate;border-color:var(--rgb1)}
+html.rgb:not([data-theme]) dialog .sheet::after{content:"";position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;background:var(--rgbg)}
 .sheet{padding:20px}
 .sheet h2{margin:0 0 14px;font:30px var(--mono);color:var(--fg)}
 .sheet h3{margin:20px 0 8px;font:22px var(--mono);color:var(--fg)}
 .opt{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--line);margin-bottom:8px;cursor:pointer}
-.opt input{margin-top:3px;accent-color:#fff}
+.opt input{margin-top:3px;accent-color:var(--fg)}
 .opt b{display:block;color:var(--fg);font-size:14px}
 .opt span{display:block;font-size:12px;color:var(--dim);margin-top:3px;line-height:1.45}
 label.f{display:block;font-size:12px;color:var(--dim);margin:12px 0 6px}
@@ -137,7 +141,7 @@ input[type=text]{width:100%;font:16px var(--ru);padding:10px 12px;border:1px sol
 .note code{color:var(--fg)}
 .note a{color:var(--fg)}
 table{width:100%;border-collapse:collapse;font-size:12px}
-td{padding:6px 4px;border-top:1px solid #2a2a2a;vertical-align:top}
+td{padding:6px 4px;border-top:1px solid var(--faint);vertical-align:top}
 td:first-child{color:var(--fg);white-space:nowrap}
 td code{color:var(--fg)}
 .row{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
@@ -256,10 +260,10 @@ html[data-theme=prism]{
   background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,.1) 55%,transparent),linear-gradient(90deg,var(--iris));
   -webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-stroke:1px rgba(255,255,255,.45);
   filter:drop-shadow(0 3px 2px rgba(20,10,50,.6)) drop-shadow(0 0 16px var(--i1))}
-[data-theme=prism] dialog{border-radius:24px;border:1px solid #5A4E8C;background:linear-gradient(160deg,color-mix(in srgb,var(--bg) 70%,#2A2440),color-mix(in srgb,var(--bg) 85%,#0D0B16))}
+[data-theme=prism] dialog{border-radius:24px;border:1px solid color-mix(in srgb,var(--i1) 45%,var(--bg));background:linear-gradient(160deg,color-mix(in srgb,var(--bg) 70%,#2A2440),color-mix(in srgb,var(--bg) 85%,#0D0B16))}
 [data-theme=prism] .sheet h2,[data-theme=prism] .sheet h3{font-family:var(--mono);font-weight:600;font-size:20px}
 [data-theme=prism] .opt{border-radius:16px;border-color:#4B4270;background:rgba(255,255,255,calc(min(1, .04 * var(--pf))))}
-[data-theme=prism] .opt input{accent-color:#B49CFF}
+[data-theme=prism] .opt input{accent-color:var(--i1)}
 [data-theme=prism] .btn{border-radius:14px;font:600 15px var(--mono)}
 [data-theme=prism] .btn.primary{background:linear-gradient(135deg,var(--iris));color:var(--ink);border:0}
 [data-theme=prism] input[type=text]{border-radius:12px}
@@ -299,6 +303,49 @@ html[data-theme=thermal][data-heat=arctic]{
   --heatr:#fff,#FFD966,#F7B733,#E9D9A6,#8EC3F2,#3C82E0,#1C47A8,#0B1E5B,#020617;
   --warm:#3C82E0,#8EC3F2,#E9D9A6,#F7B733,#FFD966,#fff; --warmr:#fff,#FFD966,#F7B733,#E9D9A6,#8EC3F2,#3C82E0;
   --hot3:#8EC3F2,#E9D9A6,#F7B733; --irisimg:url(iris_arctic.jpg);
+}
+/* ещё 6 палитр (1.27): lava, medical, sepia, night vision, hot alert, ice */
+html[data-theme=thermal][data-heat=lava]{
+  --bg:#04040C; --fg:#FFF1DC; --dim:#7FB8C8; --line:#FF8A3D; --faint:#18171D; --yel:#FF8A3D; --glow:#FF5A1F; --ink:#140700;
+  --heat:#04040C,#14204A,#0E5A6E,#3A6E4C,#B0362A,#E8611A,#F7A531,#FFE27A,#FFFFFF;
+  --heatr:#FFFFFF,#FFE27A,#F7A531,#E8611A,#B0362A,#3A6E4C,#0E5A6E,#14204A,#04040C;
+  --warm:#3A6E4C,#B0362A,#E8611A,#F7A531,#FFE27A,#FFFFFF; --warmr:#FFFFFF,#FFE27A,#F7A531,#E8611A,#B0362A,#3A6E4C;
+  --hot3:#B0362A,#E8611A,#F7A531; --irisimg:url(iris_lava.jpg);
+}
+html[data-theme=thermal][data-heat=medical]{
+  --bg:#000010; --fg:#F2FBFF; --dim:#8FD0FF; --line:#00E0FF; --faint:#131423; --yel:#00E0FF; --glow:#FF4000; --ink:#00101A;
+  --heat:#000010,#0030A0,#00A0C0,#00C060,#A0E000,#FFD000,#FF6000,#E00000,#FFFFFF;
+  --heatr:#FFFFFF,#E00000,#FF6000,#FFD000,#A0E000,#00C060,#00A0C0,#0030A0,#000010;
+  --warm:#00C060,#A0E000,#FFD000,#FF6000,#E00000,#FFFFFF; --warmr:#FFFFFF,#E00000,#FF6000,#FFD000,#A0E000,#00C060;
+  --hot3:#A0E000,#FFD000,#FF6000; --irisimg:url(iris_medical.jpg);
+}
+html[data-theme=thermal][data-heat=sepia]{
+  --bg:#140A04; --fg:#FFF1DC; --dim:#C99D66; --line:#FFC27A; --faint:#271C15; --yel:#FFC27A; --glow:#E3A15A; --ink:#1A0E04;
+  --heat:#140A04,#3A2412,#5E3C1E,#84582E,#A87A46,#C99D66,#E3C08C,#F4DDB4,#FFF6E6;
+  --heatr:#FFF6E6,#F4DDB4,#E3C08C,#C99D66,#A87A46,#84582E,#5E3C1E,#3A2412,#140A04;
+  --warm:#84582E,#A87A46,#C99D66,#E3C08C,#F4DDB4,#FFF6E6; --warmr:#FFF6E6,#F4DDB4,#E3C08C,#C99D66,#A87A46,#84582E;
+  --hot3:#A87A46,#C99D66,#E3C08C; --irisimg:url(iris_sepia.jpg);
+}
+html[data-theme=thermal][data-heat=night]{
+  --bg:#010A02; --fg:#DFFFE0; --dim:#5FBF6A; --line:#6CFF7A; --faint:#131E14; --yel:#6CFF7A; --glow:#3CD650; --ink:#021204;
+  --heat:#010A02,#03250A,#064A14,#0B7A22,#16A832,#3CD650,#86F08A,#CFFFD0,#FFFFFF;
+  --heatr:#FFFFFF,#CFFFD0,#86F08A,#3CD650,#16A832,#0B7A22,#064A14,#03250A,#010A02;
+  --warm:#0B7A22,#16A832,#3CD650,#86F08A,#CFFFD0,#FFFFFF; --warmr:#FFFFFF,#CFFFD0,#86F08A,#3CD650,#16A832,#0B7A22;
+  --hot3:#16A832,#3CD650,#86F08A; --irisimg:url(iris_night.jpg);
+}
+html[data-theme=thermal][data-heat=alert]{
+  --bg:#0A0A0A; --fg:#F2F2F2; --dim:#9A9A9A; --line:#FF3B30; --faint:#1D1D1D; --yel:#FF3B30; --glow:#FF3B30; --ink:#140000;
+  --heat:#0A0A0A,#2A2A2A,#4D4D4D,#707070,#939393,#B6B6B6,#D9D9D9,#FF6A3D,#FF1E1E;
+  --heatr:#FF1E1E,#FF6A3D,#D9D9D9,#B6B6B6,#939393,#707070,#4D4D4D,#2A2A2A,#0A0A0A;
+  --warm:#707070,#939393,#B6B6B6,#D9D9D9,#FF6A3D,#FF1E1E; --warmr:#FF1E1E,#FF6A3D,#D9D9D9,#B6B6B6,#939393,#707070;
+  --hot3:#939393,#B6B6B6,#D9D9D9; --irisimg:url(iris_alert.jpg);
+}
+html[data-theme=thermal][data-heat=ice]{
+  --bg:#00040C; --fg:#EFFBFF; --dim:#6FA9C2; --line:#7FE8FF; --faint:#13181F; --yel:#7FE8FF; --glow:#9BE1F0; --ink:#001018;
+  --heat:#00040C,#06203A,#0B4A6E,#1E7FA8,#4FB6D6,#9BE1F0,#D6F6FF,#F2FCFF,#FFFFFF;
+  --heatr:#FFFFFF,#F2FCFF,#D6F6FF,#9BE1F0,#4FB6D6,#1E7FA8,#0B4A6E,#06203A,#00040C;
+  --warm:#1E7FA8,#4FB6D6,#9BE1F0,#D6F6FF,#F2FCFF,#FFFFFF; --warmr:#FFFFFF,#F2FCFF,#D6F6FF,#9BE1F0,#4FB6D6,#1E7FA8;
+  --hot3:#4FB6D6,#9BE1F0,#D6F6FF; --irisimg:url(iris_ice.jpg);
 }
 .therm{display:none}
 [data-theme=thermal] .therm{display:block;position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;background:var(--bg)}
@@ -354,7 +401,7 @@ html[data-theme=thermal][data-heat=arctic]{
 [data-theme=thermal] #splash .lines{background:repeating-linear-gradient(var(--glow) 0 1px,transparent 1px 4px)}
 [data-theme=thermal] #splash .name{text-shadow:none;background:linear-gradient(90deg,var(--warm));
   -webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 0 14px var(--glow))}
-[data-theme=thermal] dialog{border:1px solid var(--yel);background:#0A0508}
+[data-theme=thermal] dialog{border:1px solid var(--yel);background:color-mix(in srgb,var(--bg) 85%,#000)}
 [data-theme=thermal] .btn.primary{background:linear-gradient(90deg,var(--hot3));color:var(--ink);border:0}
 @media (prefers-reduced-motion:reduce){[data-theme=thermal] .therm *{animation:none}}
 /* ================= Вкладка «Цвет» =================
@@ -626,7 +673,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     <label class="opt"><input type="radio" name="theme" value="prism">
       <div><b>Призма</b><span>Переливающееся стекло, радужные блики, как на CD и призмах.</span></div></label>
     <label class="opt"><input type="radio" name="theme" value="thermal">
-      <div><b>Тепловизор</b><span>Кадр тепловизора: палитра ironbow, рамки обнаружения, вращающаяся радужка.</span></div></label>
+      <div><b>Тепловизор</b><span>Кадр тепловизора, 10 палитр: рамки обнаружения, вращающаяся радужка.</span></div></label>
     <label class="opt"><input type="radio" name="theme" value="blueprint">
       <div><b>Чертёж</b><span>Синий blueprint, схема на фоне.</span></div></label>
 
@@ -648,7 +695,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     <table id="codes"></table>
 
     <p class="note" style="margin-top:16px">Встроенный ИК-порт телефона браузер использовать не может — для него нет веб-интерфейса. Поэтому нужен внешний излучатель: в разъём наушников или по Wi-Fi.</p>
-    <p class="note"><a href="irbis-remote.apk" download style="color:#8FD3C9">Скачать Android-приложение</a> — работает со встроенным ИК-портом и с USB-C ИК-передатчиком.</p>
+    <p class="note"><a href="irbis-remote.apk" download>Скачать Android-приложение</a> — работает со встроенным ИК-портом и с USB-C ИК-передатчиком.</p>
     <div class="row"><button class="btn primary" value="ok">Готово</button></div>
   </form>
 </dialog>
@@ -1019,6 +1066,12 @@ const HEATS = {
   white: { name: 'WHITE HOT', acc: '#4DFF7A', glow: '#D0D8E0', pal: '050505 1E1E22 3C3C42 616168 8A8A90 B2B2B6 D6D6D8 F0F0F0 FFFFFF' },
   rainbow: { name: 'RAINBOW HC', acc: '#FFFFFF', glow: '#FF3060', pal: '0A0030 1A1AA8 0070FF 00C8E0 00E060 B8F000 FFD000 FF5000 FF0030 FFFFFF' },
   arctic: { name: 'ARCTIC', acc: '#7FE3FF', glow: '#F7B733', pal: '020617 0B1E5B 1C47A8 3C82E0 8EC3F2 E9D9A6 F7B733 FFD966 FFFFFF' },
+  lava: { name: 'LAVA', acc: '#FF8A3D', glow: '#FF5A1F', pal: '04040C 14204A 0E5A6E 3A6E4C B0362A E8611A F7A531 FFE27A FFFFFF' },
+  medical: { name: 'MEDICAL', acc: '#00E0FF', glow: '#FF4000', pal: '000010 0030A0 00A0C0 00C060 A0E000 FFD000 FF6000 E00000 FFFFFF' },
+  sepia: { name: 'SEPIA', acc: '#FFC27A', glow: '#E3A15A', pal: '140A04 3A2412 5E3C1E 84582E A87A46 C99D66 E3C08C F4DDB4 FFF6E6' },
+  night: { name: 'NIGHT VISION', acc: '#6CFF7A', glow: '#3CD650', pal: '010A02 03250A 064A14 0B7A22 16A832 3CD650 86F08A CFFFD0 FFFFFF' },
+  alert: { name: 'HOT ALERT', acc: '#FF3B30', glow: '#FF3B30', pal: '0A0A0A 2A2A2A 4D4D4D 707070 939393 B6B6B6 D9D9D9 FF6A3D FF1E1E' },
+  ice: { name: 'ICE', acc: '#7FE8FF', glow: '#9BE1F0', pal: '00040C 06203A 0B4A6E 1E7FA8 4FB6D6 9BE1F0 D6F6FF F2FCFF FFFFFF' },
 };
 Object.values(HEATS).forEach(h => { h.pal = h.pal.split(' ').map(x => '#' + x); });
 
@@ -1063,6 +1116,9 @@ function rgbFlow() {
   const ov = $('rgbov'), r = rgbNow();
   if (!r) { ov.firstElementChild.style.background = ''; return; }
   const L = innerHeight * 1.2, cols = r[1], n = cols.length;
+  // окна (настройки, выбор темы, диалоги сценариев) лежат над переливом — красим их тем же градиентом отдельно
+  document.documentElement.style.setProperty('--rgbg', 'linear-gradient(135deg,' + cols.join(',') + ')');
+  document.documentElement.style.setProperty('--rgb1', cols[0]);
   const stops = cols.map((c, i) => c + ' ' + (L * i / (n - 1)).toFixed(1) + 'px')
     .concat(cols.slice(0, -1).reverse().map((c, i) => c + ' ' + (L + L * (i + 1) / (n - 1)).toFixed(1) + 'px'));
   ov.firstElementChild.style.background = 'repeating-linear-gradient(135deg,' + stops.join(',') + ')';
@@ -2159,7 +2215,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.26', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.27', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
