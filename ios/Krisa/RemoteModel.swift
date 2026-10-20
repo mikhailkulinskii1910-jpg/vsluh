@@ -86,6 +86,24 @@ final class RemoteModel: ObservableObject {
 
     /// Произвольный кадр (кондиционер): звуковому адаптеру — массив меток и пауз в мкс,
     /// Tasmota — команда IRSend с протоколом, числом бит и данными. Без повторов.
+    /// Один NEC-кадр без повторов (сканер скрытых команд).
+    func sendOnce(_ code: UInt32, status: String) {
+        say(status)
+        let mode = self.mode, host = self.host
+        let audio = mode == .audio1 ? audio1 : audio2
+        io.async { [weak self] in
+            do {
+                if mode == .http {
+                    try TasmotaIr(host: host).sendNec(code, repeatFrame: false)
+                } else {
+                    try audio.transmit(Nec.withGap(Nec.frame(code)))
+                }
+            } catch {
+                DispatchQueue.main.async { self?.say(error.localizedDescription, err: true) }
+            }
+        }
+    }
+
     func sendFrame(_ pattern: [Int], proto: String, bits: Int, data: String, status: String) {
         say(status)
         let mode = self.mode, host = self.host
@@ -108,6 +126,8 @@ final class RemoteModel: ObservableObject {
     /// Идёт ли сценарий и какой блок сейчас выполняется (для подсветки).
     @Published var scriptRunning = false
     @Published var scriptMark = -1
+    /// Кто запустил сценарий: "panel" — вкладка «Сценарии», "macroN" — кнопка-макрос на пульте IRBIS.
+    @Published var scriptTag = ""
     /// Нажата «Стоп» (читается из потока передачи).
     private var scriptStop = false
 
@@ -134,12 +154,13 @@ final class RemoteModel: ObservableObject {
     }
 
     /// Выполнить сценарий: блоки по порядку, текущий подсвечивается; экран не гаснет, пока идёт.
-    func runScript(_ s: KScript) {
+    func runScript(_ s: KScript, tag: String = "") {
         if scriptRunning { return }
         if s.blocks.isEmpty { say("Сценарий пуст", err: true); return }
         lock.lock(); scriptStop = false; lock.unlock()
         scriptRunning = true
         scriptMark = -1
+        scriptTag = tag
         UIApplication.shared.isIdleTimerDisabled = true
         say("> сценарий «" + s.name + "»: старт")
         let mode = self.mode, host = self.host

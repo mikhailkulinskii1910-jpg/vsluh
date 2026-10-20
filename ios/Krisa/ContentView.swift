@@ -3,6 +3,10 @@ import WebKit
 
 @main
 struct KrisaApp: App {
+    init() {
+        ScriptStore.seedIfNeeded()   // 1.30: готовые макросы для пульта IRBIS — один раз
+    }
+
     var body: some Scene {
         WindowGroup { ContentView() }
     }
@@ -244,8 +248,42 @@ struct ContentView: View {
                 boardChip(1, "MocTec")
             }
             // у MocTec полный пульт (52 кнопки) — сетка в 3 колонки с прокруткой, как у проекторов
-            if boardIndex == 1 { projGrid } else { keyGrid }
+            if boardIndex == 1 { projGrid } else { irbisArea }
         }
+    }
+
+    /// IRBIS: 12 кнопок пульта, под ними найденные сканером, «мои кнопки» и сканер. Всё прокручивается.
+    private var irbisArea: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
+                    if ready {
+                        ForEach(0..<KEYS.count, id: \.self) { i in irbisKey(i) }
+                    }
+                }
+                IrbisExtras(model: model, scanOpen: $extraOpen, ready: ready) { i in openScript(i) }
+            }
+            .padding(6)
+            .padding(.bottom, 12)
+            .id(gridKey)
+        }
+    }
+
+    private func irbisKey(_ i: Int) -> some View {
+        let k: (label: String, code: UInt32) = KEYS[i]
+        return KeyView(index: i, label: k.label, code: k.code, inverted: k.label == "POWER",
+                       revealDelay: 0.05 * Double(i),
+                       onDown: { model.press(k.label, k.code) },
+                       onUp: { model.release() },
+                       scrollable: true)
+            .frame(height: 70)
+    }
+
+    /// Открыть сценарий номер i во вкладке «Сценарии».
+    private func openScript(_ i: Int) {
+        scriptCur = i
+        extraOpen = false
+        remote = "scripts"
     }
 
     private func boardChip(_ i: Int, _ title: String) -> some View {
