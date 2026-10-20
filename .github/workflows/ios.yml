@@ -118,6 +118,11 @@ jobs:
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote ac
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-ac.png"
+          # вкладка «Сценарии» (пример «Конец урока»)
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote scripts
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-scripts.png"
           # «Терминал» с RGB-переливом Rainbow: пульт и вкладка «Цвет»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa remote boards; xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa boardBrand -int 0
