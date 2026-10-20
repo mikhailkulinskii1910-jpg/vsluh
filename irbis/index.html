@@ -429,22 +429,41 @@ body.scripts #grid,body.scripts #more,body.scripts #grid2{display:none}
 .scp .gear.tab.acb.sname{display:block;width:100%;height:50px;font-size:17px}
 .scp .srow{display:flex;gap:6px;margin-top:6px}
 .scp .s3{margin-top:6px}
-.scp .blocks{margin-top:10px}
-.scp .a1{margin-top:8px}
-.scp .brow{display:flex;gap:4px;margin-top:5px}
-.scp .gear.tab.acb.bt{flex:1;min-width:0;height:42px;text-align:left;padding:0 10px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.scp .gear.tab.acb.ic{flex:0 0 36px;height:42px;padding:0;font-size:16px}
 .scp .gear.tab.acb.play{display:block;width:100%;height:58px;margin-top:12px;font-size:20px}
 [data-theme=prism] .scp .gear.tab.acb{font-size:11px}
-[data-theme=prism] .scp .gear.tab.acb.bt{font-size:12px;border-radius:12px}
-[data-theme=prism] .scp .gear.tab.acb.ic{font-size:14px;border-radius:12px}
 [data-theme=prism] .scp .gear.tab.acb.sname{font-size:14px}
 [data-theme=prism] .scp .gear.tab.acb.play{font-size:16px}
 [data-theme=blueprint] .scp .gear.tab.acb{font-size:11.5px}
-[data-theme=blueprint] .scp .gear.tab.acb.bt{font-size:12px;text-transform:none;letter-spacing:.02em}
 [data-theme=blueprint] .scp .gear.tab.acb.sname{font-size:14px}
 [data-theme=blueprint] .scp .gear.tab.acb.play{font-size:16px}
 [data-theme=thermal] .scp .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
+/* редактор как в Scratch: палитра, стопка блоков с пазами, C-блок «повторить», корзина */
+.scp .pcats{margin-top:10px}
+.scp .pcats .gear.tab.chip{font:13px var(--ru)}
+[data-theme=prism] .scp .pcats .gear.tab.chip{font-size:11px}
+[data-theme=blueprint] .scp .pcats .gear.tab.chip{font-size:11px}
+.scp .pal{display:flex;gap:8px;overflow-x:auto;padding:12px 2px 8px;scrollbar-width:none}
+.scp .pal::-webkit-scrollbar{display:none}
+.scp .pal .sb{flex:none;margin-top:0;touch-action:pan-x}
+.scp .blocks{margin-top:4px;padding:10px 0 6px;overflow-x:auto}
+.sb{position:relative;z-index:0;width:max-content;max-width:100%;min-height:44px;display:flex;align-items:center;padding:4px 10px 9px 12px;margin-top:-5px;
+  font:700 14px/1.2 var(--ru);white-space:nowrap;touch-action:pan-y;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:grab}
+.sb > svg.shp{position:absolute;left:-2px;top:-8px;z-index:-1;overflow:visible;pointer-events:none}
+.sb.lit > svg.shp path{stroke:#fff;stroke-width:3}
+.sb.hat{min-height:60px;padding-top:18px;margin-top:0;cursor:default}
+.sb .fn{border-radius:999px;padding:2px 9px;margin:0 3px}
+.sb .fd{border-radius:999px;padding:2px 9px;margin:0 3px}
+.sb .fd::after{content:" ▾"}
+.sb.cb{display:block;min-width:200px;padding:0}
+.sb.cb > .head{height:44px;display:flex;align-items:center;padding:4px 10px 4px 12px}
+.sb.cb > .mouth{margin:5px 0 0 16px;min-height:26px}
+.sb.cb > .foot{height:27px}
+.sb.tgt,.sb .head.tgt{opacity:.55}
+.sb .mouth.tgt{background:rgba(255,255,255,.3);border-radius:4px}
+.sb.dragging{opacity:.35}
+.sb.ghost{position:fixed;left:0;top:0;z-index:60;margin:0;pointer-events:none;opacity:.9;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
+.scp .trash{display:flex;align-items:center;justify-content:center;height:40px;margin-top:6px;border:1px dashed var(--line);font:13px var(--ru);color:var(--dim)}
+.scp .trash.tgt{background:color-mix(in srgb,var(--fg) 22%,transparent);color:var(--fg)}
 /* модальные окна выбора и ввода — в стиле темы */
 .mdl .items{display:flex;flex-direction:column;gap:6px;max-height:min(60dvh,520px);overflow:auto;padding:2px}
 .mdl .items .gear.tab.acb{flex:none;height:42px;text-align:left;padding:0 12px;font-size:15px}
@@ -1143,6 +1162,7 @@ function applyColor() {
     root.style.setProperty('--bg', prBg());
   }
   window.prismBurst && prismBurst();
+  window.scrRecolor && scrRecolor();
   window.acDial && requestAnimationFrame(() => acDial());
   if (theme() === 'blueprint') {
     root.style.setProperty('--bg', bp.bg); root.style.setProperty('--fg', bp.ink); root.style.setProperty('--dim', bp.dim);
@@ -1613,6 +1633,23 @@ const Scripts = {
     for (let i = 0; i < at; i++) { const t = s.blocks[i].t; if (t === 'loop') d++; else if (t === 'end') d = Math.max(0, d - 1); }
     return s.blocks[at] && s.blocks[at].t === 'end' ? Math.max(0, d - 1) : d;
   },
+  /** Последний индекс блока i: у цикла — его «конец цикла» (или конец сценария), у остальных — сам i. */
+  rangeEnd(s, i) {
+    if (!s.blocks[i] || s.blocks[i].t !== 'loop') return i;
+    let d = 0;
+    for (let k = i + 1; k < s.blocks.length; k++) { const t = s.blocks[k].t; if (t === 'loop') d++; else if (t === 'end') { if (d === 0) return k; d--; } }
+    return s.blocks.length - 1;
+  },
+  /** Перенести блок from (цикл — вместе с содержимым) так, чтобы он встал перед позицией to исходного списка. */
+  move(s, from, to) {
+    const end = this.rangeEnd(s, from);
+    if (to >= from && to <= end + 1) return false;           // на то же место или внутрь самого себя
+    const part = s.blocks.splice(from, end - from + 1);
+    s.blocks.splice(to > end ? to - part.length : to, 0, ...part);
+    return true;
+  },
+  /** Удалить блок i (цикл — вместе с содержимым). */
+  remove(s, i) { s.blocks.splice(i, this.rangeEnd(s, i) - i + 1); },
   fmt(x) { return x === Math.floor(x) ? String(x) : x.toFixed(1); },
   text(b) {
     switch (b.t) {
@@ -1683,10 +1720,12 @@ const btnLabel = l => clean() ? l.replace(/^\[ ?| ?\]$/g, '') : l;
 function scriptsSave() { try { localStorage.setItem('krisa-scripts', JSON.stringify(scripts)); localStorage.setItem('krisa-script-cur', String(scriptIdx)); } catch {} }
 
 const sp = $('scripts');
-sp.innerHTML = '<p class="projnote">Блоки выполняются сверху вниз. Команда идёт тому устройству, что выбрано блоком «устройство» выше неё. Нажмите на блок, чтобы изменить его.</p>'
-  + '<button class="gear tab acb sname"></button><div class="srow s3"></div><div class="blocks"></div><div class="srow a1"></div><div class="srow a2"></div>'
+sp.innerHTML = '<p class="projnote">Как в Scratch: блоки из палитры нажмите или перетащите в сценарий (удерживайте). Нажатие на блок — изменить, перетащить — переставить или в корзину. Команда идёт устройству из блока «устройство» выше неё.</p>'
+  + '<button class="gear tab acb sname"></button><div class="srow s3"></div>'
+  + '<div class="brands pcats"></div><div class="pal"></div>'
+  + '<div class="blocks"></div><div class="trash" data-drop="trash">✕  перетащите блок сюда, чтобы удалить</div>'
   + '<button class="gear tab acb play"></button>';
-const sname = sp.querySelector('.sname'), blocksBox = sp.querySelector('.blocks'), play = sp.querySelector('.play');
+const sname = sp.querySelector('.sname'), blocksBox = sp.querySelector('.blocks'), play = sp.querySelector('.play'), palBox = sp.querySelector('.pal');
 const sBtns = [];   // кнопки с подписями «[ … ]» — перерисовать при смене темы
 function sBtn(box, label, click) {
   const b = document.createElement('button'); b.className = 'gear tab acb';
@@ -1701,25 +1740,27 @@ sBtn(s3, '[ удалить ]', () => modal({ title: 'Удалить «' + script
   scripts.splice(scriptIdx, 1); if (!scripts.length) scripts.push({ name: 'Сценарий 1', blocks: [] });
   scriptIdx = Math.min(scriptIdx, scripts.length - 1); scriptChanged();
 } }));
-const insertBlock = b => { script().blocks.push(b); scriptChanged(); };
+/** Вставить блоки перед позицией at (по умолчанию — в конец). */
+function insertAt(at, ...b) { const bl = script().blocks; bl.splice(Math.max(0, Math.min(bl.length, at)), 0, ...b); scriptChanged(); }
 /** Выбор устройства: для нового блока (edit = null) или для изменения существующего. */
 function pickDevice(edit) {
   modal({ title: 'Устройство', items: DEVICES.map(d => d.title), sel: edit ? edit.d : -1,
-    pick: w => { if (edit) { edit.d = w; scriptChanged(); } else insertBlock({ t: 'dev', d: w }); } });
+    pick: w => { if (edit) { edit.d = w; scriptChanged(); } else insertAt(script().blocks.length, { t: 'dev', d: w }); } });
 }
-function addCommand(replaceAt = -1) {
-  const dev = Scripts.deviceAt(script(), replaceAt >= 0 ? replaceAt : script().blocks.length - 1);
-  if (dev < 0) { status('Сначала добавьте блок «устройство»', 'err'); pickDevice(null); return; }
+/** Команда: заменить блок replaceAt или вставить новую перед позицией at; список кнопок — устройства из блока «устройство» выше. */
+function addCommand(replaceAt = -1, at = script().blocks.length) {
+  const dev = Scripts.deviceAt(script(), replaceAt >= 0 ? replaceAt : at - 1);
+  if (dev < 0) { status('Сначала поставьте выше блок «устройство»', 'err'); palCat = 0; fillPalette(); return; }
   const d = DEVICES[dev];
-  if (d.acModel >= 0) { editAc(replaceAt >= 0 && script().blocks[replaceAt].t === 'ac' ? script().blocks[replaceAt] : null, replaceAt); return; }
+  if (d.acModel >= 0) { editAc(replaceAt >= 0 && script().blocks[replaceAt].t === 'ac' ? script().blocks[replaceAt] : null, replaceAt, at); return; }
   const cur = replaceAt >= 0 ? script().blocks[replaceAt] : null;
   modal({ title: d.title, items: d.keys.map(k => k[0]), sel: cur && cur.t === 'cmd' ? d.keys.findIndex(k => parseInt(k[1], 16) === cur.c) : -1, pick: w => {
     const [l, h] = d.keys[w], b = { t: 'cmd', l, c: parseInt(h, 16) };
-    if (replaceAt >= 0) { script().blocks[replaceAt] = b; scriptChanged(); } else insertBlock(b);
+    if (replaceAt >= 0) { script().blocks[replaceAt] = b; scriptChanged(); } else insertAt(at, b);
   } });
 }
 /** Команда кондиционеру: питание, режим, температура, скорость — кнопками, которые перебирают значения. */
-function editAc(edit, at = -1) {
+function editAc(edit, replaceAt = -1, at = script().blocks.length) {
   const b = edit ? { ...edit } : { t: 'ac', p: ac.power, m: AC_MODE_N[ac.mode], x: ac.temp, f: AC_FAN_N[ac.fan] };
   const box = document.createElement('div'); box.className = 'items';
   const upd = [];
@@ -1735,7 +1776,7 @@ function editAc(edit, at = -1) {
   cyc(() => 'скорость: ' + Haier.FANS[AC_FAN_N.indexOf(b.f)], () => { b.f = AC_FAN_N[(AC_FAN_N.indexOf(b.f) + 1) % 4]; });
   upd.forEach(f => f());
   modal({ title: 'Кондиционер', body: box, ok: () => {
-    if (edit) { Object.assign(edit, b); scriptChanged(); } else if (at >= 0) { script().blocks[at] = b; scriptChanged(); } else insertBlock(b);
+    if (edit) { Object.assign(edit, b); scriptChanged(); } else if (replaceAt >= 0) { script().blocks[replaceAt] = b; scriptChanged(); } else insertAt(at, b);
   } });
 }
 function editBlock(i) {
@@ -1744,39 +1785,215 @@ function editBlock(i) {
   else if (b.t === 'cmd' || b.t === 'ac') addCommand(i);
   else if (b.t === 'delay') modal({ title: 'Задержка, секунд', input: Scripts.fmt(b.s), numeric: true, ok: v => { b.s = Math.max(0.1, Math.min(600, v)); scriptChanged(); } });
   else if (b.t === 'loop') modal({ title: 'Сколько раз повторить', input: String(b.n), numeric: true, ok: v => { b.n = Math.max(1, Math.min(999, Math.round(v))); scriptChanged(); } });
-  else status('Конец цикла: перемещайте его стрелками ↑ ↓');
 }
-function moveBlock(i, d) {
-  const bl = script().blocks, j = i + d;
-  if (j < 0 || j >= bl.length) return;
-  bl.splice(j, 0, bl.splice(i, 1)[0]); scriptChanged();
+
+/* ---------- Блоки в стиле Scratch 3: цвета категорий, паз сверху и выступ снизу, шапка «когда нажата», C-блок «повторить» ---------- */
+/* Цвета категорий — из текущей темы (1.29): 0 — шапка, 1 — устройство, 2 — команда, 3 — кондиционер, 4 — управление.
+   Каждая категория: [заливка, кромка, текст]; scrBase — фон и текст темы для полей-«овалов». Пересчитываются при смене темы. */
+let SCR = [], scrBase = ['#000', '#fff'];
+const lum = h => { const [r, g, b] = rgbOf(h); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+function scrColors() {
+  const th = theme(), css = getComputedStyle(document.documentElement), v = n => css.getPropertyValue(n).trim();
+  if (th === 'prism') {
+    const I = prIris();
+    SCR = [0, 3, 2, 4, 1].map(k => [lerpHex('#120E1F', I[k], 0.62), I[k], '#FFFFFF']);
+    scrBase = [prBg(), '#F4F1FF'];
+  } else if (th === 'thermal') {
+    const P = HEATS[heatId].pal, ink = v('--ink') || '#000000';
+    const heat = t => { const k = t * (P.length - 1), i = Math.min(P.length - 2, Math.floor(k)); return lerpHex(P[i], P[i + 1], k - i); };
+    SCR = [0.95, 0.32, 0.52, 0.68, 0.82].map(t => { const f = heat(t); return [f, mulHex(f, 0.62), lum(f) > 0.55 ? ink : '#FFFFFF']; });
+    scrBase = [v('--bg') || '#000000', v('--fg') || '#FFFFFF'];
+  } else if (th === 'blueprint') {
+    const P = bpColors(bpShade, bpHue);
+    SCR = [0.34, 0.17, 0.10, 0.13, 0.05].map(k => [lerpHex(P.bg, P.ink, k), P.ink, P.ink]);
+    scrBase = [P.bg, P.ink];
+  } else {
+    const fg = termFg(), bg = '#000000';
+    SCR = [0.85, 0.40, 0.28, 0.34, 0.18].map((k, i) => { const f = lerpHex(bg, fg, k); return [f, i ? fg : mulHex(fg, 0.7), lum(f) > 0.5 ? bg : fg]; });
+    scrBase = [bg, fg];
+  }
 }
-const a1 = sp.querySelector('.a1'), a2 = sp.querySelector('.a2');
-sBtn(a1, '[+ устройство]', () => pickDevice(null));
-sBtn(a1, '[+ команда]', () => addCommand());
-sBtn(a2, '[+ задержка]', () => modal({ title: 'Задержка, секунд', input: '1', numeric: true, ok: v => insertBlock({ t: 'delay', s: Math.max(0.1, Math.min(600, v)) }) }));
-sBtn(a2, '[+ цикл]', () => modal({ title: 'Сколько раз повторить', input: '3', numeric: true, ok: v => {
-  script().blocks.push({ t: 'loop', n: Math.max(1, Math.min(999, Math.round(v))) }, { t: 'end' }); scriptChanged();
-} }));
-let blockRows = [];
-function renderBlocks() {
-  blocksBox.textContent = ''; blockRows = [];
-  const s = script();
-  if (!s.blocks.length) { blocksBox.innerHTML = '<p class="projnote">пусто — добавьте блоки кнопками ниже</p>'; return; }
-  s.blocks.forEach((b, i) => {
-    const r = document.createElement('div'); r.className = 'brow';
-    r.style.marginLeft = 14 * Scripts.depthAt(s, i) + 'px';
-    const m = document.createElement('button'); m.className = 'gear tab acb bt';
-    m.textContent = String(i + 1).padStart(2, '0') + '  ' + Scripts.text(b);
-    m.addEventListener('click', () => { if (!scriptRun) editBlock(i); });
-    r.appendChild(m); blockRows.push(m);
-    [['↑', () => moveBlock(i, -1)], ['↓', () => moveBlock(i, 1)], ['✕', () => { s.blocks.splice(i, 1); scriptChanged(); }]].forEach(([t, f]) => {
-      const x = document.createElement('button'); x.className = 'gear tab acb ic'; x.textContent = t;
-      x.addEventListener('click', () => { if (!scriptRun) f(); }); r.appendChild(x);
-    });
-    blocksBox.appendChild(r);
+const scrCat = b => SCR[b.t === 'dev' ? 1 : b.t === 'cmd' ? 2 : b.t === 'ac' ? 3 : 4];
+/** Подпись: текст и поля — [текст, 0 — обычный, 1 — число (белый «овал»), 2 — выбор (плашка с ▾)]. */
+function scrParts(b) {
+  switch (b.t) {
+    case 'dev': return [['устройство ', 0], [DEVICES[b.d] ? DEVICES[b.d].title : '?', 2]];
+    case 'cmd': return [['отправить ', 0], [b.l, 2]];
+    case 'ac': return [['кондиционер ', 0], [b.p ? 'вкл · ' + Haier.MODES[AC_MODE_N.indexOf(b.m)] + ' · ' + b.x + '° · ' + Haier.FANS[AC_FAN_N.indexOf(b.f)] : 'выкл', 2]];
+    case 'delay': return [['ждать ', 0], [Scripts.fmt(b.s), 1], [' сек', 0]];
+    case 'loop': return [['повторить ', 0], [String(b.n), 1], [' раз', 0]];
+    default: return [];
+  }
+}
+function scrLabel(el, b, edge) {
+  scrParts(b).forEach(([t, k]) => {
+    const s = document.createElement('span');
+    s.textContent = t;
+    // поля: число — «овал» цвета фона темы, выбор — плашка цвета кромки с контрастным текстом
+    if (k === 1) { s.className = 'fn'; s.style.background = scrBase[0]; s.style.color = scrBase[1]; }
+    else if (k === 2) { s.className = 'fd'; s.style.background = edge; s.style.color = lum(edge) > 0.5 ? scrBase[0] : '#FFFFFF'; }
+    el.appendChild(s);
   });
 }
+/** Контур блока (перенос Scratch.Shape): kind 0 — обычный, 1 — шапка, 2 — C-блок с полками top/bottom и «рукой» arm. */
+function scrPath(w, h, kind, top = 44, arm = 16, bottom = 22) {
+  const r = 4, B = 5, btm = h - B, l = 0, t = 0;
+  let p = '';
+  if (kind === 1) p = `M${l} ${t + 18} Q${l + 40} ${t - 6} ${l + 90} ${t + 14} L${w - r} ${t + 14} Q${w} ${t + 14} ${w} ${t + 14 + r} `;
+  else p = `M${l} ${t + r} Q${l} ${t} ${l + r} ${t} L${l + 12} ${t} L${l + 16} ${t + 5} L${l + 28} ${t + 5} L${l + 32} ${t} L${w - r} ${t} Q${w} ${t} ${w} ${t + r} `;
+  if (kind === 2) {
+    const ty = t + top, by = btm - bottom, a = l + arm;
+    p += `L${w} ${ty - r} Q${w} ${ty} ${w - r} ${ty} L${a + 32} ${ty} L${a + 28} ${ty + 5} L${a + 16} ${ty + 5} L${a + 12} ${ty} L${a + r} ${ty} Q${a} ${ty} ${a} ${ty + r} `
+      + `L${a} ${by - r} Q${a} ${by} ${a + r} ${by} L${a + 12} ${by} L${a + 16} ${by + 5} L${a + 28} ${by + 5} L${a + 32} ${by} L${w - r} ${by} Q${w} ${by} ${w} ${by + r} `;
+  }
+  p += `L${w} ${btm - r} Q${w} ${btm} ${w - r} ${btm} L${l + 32} ${btm} L${l + 28} ${btm + B} L${l + 16} ${btm + B} L${l + 12} ${btm} L${l + r} ${btm} Q${l} ${btm} ${l} ${btm - r} Z`;
+  return p;
+}
+/** Блок: div с SVG-контуром позади текста; контур пересчитывается по размеру после вёрстки. */
+function scrBlock(cat, kind) {
+  const el = document.createElement('div'); el.className = 'sb' + (kind === 1 ? ' hat' : kind === 2 ? ' cb' : '');
+  el.dataset.kind = kind;
+  el.innerHTML = '<svg class="shp" aria-hidden="true"><path/></svg>';
+  const path = el.firstChild.firstChild;
+  path.setAttribute('fill', cat[0]); path.setAttribute('stroke', cat[1]);
+  el.style.color = cat[2];
+  return el;
+}
+function scrShape(root) {
+  root.querySelectorAll('.sb').forEach(el => {
+    const w = el.offsetWidth, h = el.offsetHeight, svg = el.querySelector(':scope > svg');
+    svg.setAttribute('viewBox', `-2 -8 ${w + 4} ${h + 10}`); svg.setAttribute('width', w + 4); svg.setAttribute('height', h + 10);
+    svg.firstChild.setAttribute('d', scrPath(w, h, +el.dataset.kind));
+  });
+}
+
+/* ---------- Перетаскивание (Pointer Events): удержание 350 мс (или сдвиг мышью) — «призрак» блока следует за пальцем,
+   цель под ним полупрозрачная; бросить — вставить/переставить/удалить. Нажатие без перетаскивания — tap(). ---------- */
+let drag = null;
+document.addEventListener('touchmove', e => { if (drag && drag.on) e.preventDefault(); }, { passive: false });
+function draggable(el, src, tap) {
+  el.addEventListener('pointerdown', e => {
+    if (e.button > 0 || scriptRun) return;
+    e.stopPropagation();
+    const d = drag = { el, src, tap, x: e.clientX, y: e.clientY, on: false, id: e.pointerId, tgt: null };
+    d.timer = setTimeout(() => startDrag(d), 350);
+  });
+}
+function startDrag(d) {
+  if (drag !== d || d.on) return;
+  d.on = true; navigator.vibrate?.(12);
+  const r = d.el.getBoundingClientRect(), g = d.el.cloneNode(true);
+  g.classList.add('ghost'); g.style.width = r.width + 'px';
+  d.dx = d.x - r.left; d.dy = d.y - r.top;
+  document.body.appendChild(g); d.ghost = g;
+  d.el.classList.add('dragging');
+  d.cx = d.x; d.cy = d.y;
+  moveGhost(d, d.x, d.y);
+  // у краёв экрана страница сама прокручивается, чтобы дотащить блок до цели ниже/выше
+  d.scroll = setInterval(() => {
+    const dy = d.cy > innerHeight - 70 ? 14 : d.cy < 70 ? -14 : 0;
+    if (dy) { scrollBy(0, dy); moveGhost(d, d.cx, d.cy); }
+  }, 30);
+}
+function moveGhost(d, x, y) {
+  d.ghost.style.transform = `translate(${x - d.dx}px,${y - d.dy}px)`;
+  const hit = document.elementFromPoint(x, y), t = hit && hit.closest('[data-drop]');
+  const tgt = t && !(d.src.index >= 0 && d.el.contains(t)) ? t : null;   // цикл нельзя бросить внутрь самого себя
+  if (tgt !== d.tgt) { d.tgt && d.tgt.classList.remove('tgt'); tgt && tgt.classList.add('tgt'); d.tgt = tgt; }
+}
+addEventListener('pointermove', e => {
+  const d = drag; if (!d || e.pointerId !== d.id) return;
+  if (!d.on) {
+    const far = Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8;
+    if (far && e.pointerType === 'mouse') startDrag(d);
+    else if (far) { clearTimeout(d.timer); drag = null; return; }   // палец поехал до удержания — это прокрутка
+    else return;
+  }
+  d.cx = e.clientX; d.cy = e.clientY;
+  moveGhost(d, e.clientX, e.clientY);
+});
+function endDrag(e, cancel) {
+  const d = drag; if (!d || e.pointerId !== d.id) return;
+  clearTimeout(d.timer); drag = null;
+  if (!d.on) { if (!cancel) d.tap(); return; }
+  clearInterval(d.scroll); d.ghost.remove(); d.el.classList.remove('dragging');
+  const t = d.tgt; t && t.classList.remove('tgt');
+  if (cancel || !t) return;
+  const to = t.dataset.drop === 'trash' ? -2 : +t.dataset.drop;
+  if (to === -2) { if (d.src.index >= 0) { Scripts.remove(script(), d.src.index); scriptChanged(); } }
+  else if (d.src.index >= 0) { if (Scripts.move(script(), d.src.index, to)) scriptChanged(); }
+  else d.src.place(to);
+}
+addEventListener('pointerup', e => endDrag(e, false));
+addEventListener('pointercancel', e => endDrag(e, true));
+
+/* ---------- Палитра: «Устройства | Команды | Управление», под ней лента блоков-образцов ---------- */
+let palCat = 0;
+const pcats = sp.querySelector('.pcats');
+chipRow(pcats, ['Устройства', 'Команды', 'Управление'], i => { palCat = i; fillPalette(); });
+function fillPalette() {
+  scrColors();
+  [...pcats.children].forEach((c, i) => c.classList.toggle('on', i === palCat));
+  palBox.textContent = '';
+  const item = (b, place) => {
+    const cat = scrCat(b), el = scrBlock(cat, 0);
+    scrLabel(el, b, cat[1]);
+    draggable(el, { place }, () => place(script().blocks.length));
+    palBox.appendChild(el);
+  };
+  if (palCat === 0) DEVICES.forEach((_, i) => item({ t: 'dev', d: i }, at => insertAt(at, { t: 'dev', d: i })));
+  else if (palCat === 1) {
+    item({ t: 'cmd', l: 'кнопка' }, at => addCommand(-1, at));
+    item({ t: 'ac', p: true, m: 'COOL', x: 24, f: 'AUTO' }, at => editAc(null, -1, at));
+  } else {
+    item({ t: 'delay', s: 1 }, at => insertAt(at, { t: 'delay', s: 1 }));
+    item({ t: 'loop', n: 3 }, at => insertAt(at, { t: 'loop', n: 3 }, { t: 'end' }));
+  }
+  requestAnimationFrame(() => scrShape(palBox));
+}
+
+/* ---------- Сценарий: шапка «когда нажата ▶ Отправить», под ней стопка блоков; цикл — C-блок с телом внутри ---------- */
+let blockEls = {};
+function renderBlocks() {
+  scrColors();
+  blocksBox.textContent = ''; blockEls = {};
+  const s = script();
+  const hat = scrBlock(SCR[0], 1);
+  hat.insertAdjacentHTML('beforeend', '<span>когда нажата  ▶ Отправить</span>');
+  hat.dataset.drop = 0;
+  blocksBox.appendChild(hat);
+  const stack = (into, from, to) => {
+    for (let i = from; i < to; i++) {
+      const b = s.blocks[i], idx = i;
+      if (b.t === 'end') continue;
+      const cat = scrCat(b);
+      if (b.t === 'loop') {
+        const end = Scripts.rangeEnd(s, i), c = scrBlock(cat, 2);
+        const head = document.createElement('div'); head.className = 'head'; head.dataset.drop = idx + 1;
+        scrLabel(head, b, cat[1]);
+        const mouth = document.createElement('div'); mouth.className = 'mouth'; mouth.dataset.drop = idx + 1;
+        const foot = document.createElement('div'); foot.className = 'foot'; foot.dataset.drop = end + 1;   // нижняя полка — после цикла
+        c.append(head, mouth, foot);
+        stack(mouth, i + 1, s.blocks[end] && s.blocks[end].t === 'end' ? end : end + 1);
+        draggable(c, { index: idx }, () => editBlock(idx));
+        blockEls[idx] = c; into.appendChild(c);
+        i = end;
+      } else {
+        const el = scrBlock(cat, 0);
+        scrLabel(el, b, cat[1]);
+        el.dataset.drop = Scripts.rangeEnd(s, idx) + 1;
+        draggable(el, { index: idx }, () => editBlock(idx));
+        blockEls[idx] = el; into.appendChild(el);
+      }
+    }
+  };
+  stack(blocksBox, 0, s.blocks.length);
+  if (!s.blocks.length) blocksBox.insertAdjacentHTML('beforeend', '<p class="projnote">перетащите или нажмите блок в палитре выше</p>');
+  requestAnimationFrame(() => scrShape(blocksBox));
+}
+/** Подсветка выполняемого блока белой рамкой (как в Scratch). */
+function markBlock(i) { Object.entries(blockEls).forEach(([k, el]) => el.classList.toggle('lit', +k === i)); }
+addEventListener('resize', () => { scrShape(blocksBox); scrShape(palBox); });
 function scriptLabels() {
   sname.textContent = btnLabel('[ ' + script().name + ' ▾ ]');
   play.textContent = btnLabel(scriptRun ? '[ ■ Стоп ]' : '[ ▶ Отправить ]');
@@ -1807,16 +2024,18 @@ async function runScript() {
   status('> сценарий «' + s.name + '»: старт');
   let err = null;
   try {
-    await Scripts.run(s, scriptSend, i => blockRows.forEach((r, k) => r.classList.toggle('on', k === i)), () => !scriptRun);
+    await Scripts.run(s, scriptSend, markBlock, () => !scriptRun);
   } catch (e) { err = e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message || 'Ошибка передачи'; }
   const stoppedByUser = !scriptRun;
-  scriptRun = false; scriptLabels();
-  blockRows.forEach(r => r.classList.remove('on'));
+  scriptRun = false; scriptLabels(); markBlock(-1);
   try { lock && lock.release(); } catch {}
   if (err) status(err, 'err'); else status(stoppedByUser ? '> сценарий остановлен' : '> сценарий выполнен');
 }
 play.addEventListener('click', () => { if (scriptRun) scriptRun = false; else runScript(); });
+fillPalette();
 scriptChanged();
+// смена темы или её цвета — перекрасить блоки
+window.scrRecolor = () => { fillPalette(); renderBlocks(); };
 
 buildGrid(false);
 applyColor();
@@ -2215,7 +2434,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.27', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.29', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
