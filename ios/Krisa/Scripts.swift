@@ -603,8 +603,7 @@ struct ChoiceSheet: View {
             }
         }
         .padding(20)
-        .background(Term.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        .modifier(ThemedSheet())
     }
 
     private func row(_ i: Int) -> some View {
@@ -635,7 +634,7 @@ struct AskSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title).font(Term.ru(18)).foregroundColor(Term.fg)
             TextField("", text: $text)
-                .font(Term.ru(18))
+                .font(Term.ru(18)).foregroundColor(Term.fg)
                 .keyboardType(numeric ? .decimalPad : .default)
                 .disableAutocorrection(true)
                 .padding(10)
@@ -647,8 +646,7 @@ struct AskSheet: View {
             Spacer()
         }
         .padding(20)
-        .background(Term.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        .modifier(ThemedSheet())
     }
 
     private func submit() {
@@ -684,8 +682,7 @@ struct AcBlockSheet: View {
             Spacer()
         }
         .padding(20)
-        .background(Term.bg.ignoresSafeArea())
-        .preferredColorScheme(.dark)
+        .modifier(ThemedSheet())
     }
 
     private func cycle(_ title: String, _ action: @escaping () -> Void) -> some View {

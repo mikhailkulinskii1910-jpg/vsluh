@@ -199,7 +199,8 @@ class ScreenshotTest {
             val out = File(System.getProperty("shots.dir") ?: "build/shots", "scripts").apply { mkdirs() }
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()
-                .putString("theme", theme).putString("tab", "scripts").commit()
+                .putString("theme", theme).putString("tab", "scripts")
+                .putString("scripts", """[{"name":"Громкость","blocks":[{"t":"dev","d":1},{"t":"cmd","l":"POWER","c":83577525},{"t":"loop","n":5},{"t":"cmd","l":"VOL+","c":83607615},{"t":"delay","s":0.3},{"t":"end"},{"t":"dev","d":6},{"t":"ac","p":true,"m":"COOL","x":22,"f":"AUTO"}]}]""").commit()
             val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
             val root = ctl.get().window.decorView
             shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
