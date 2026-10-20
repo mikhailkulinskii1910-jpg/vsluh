@@ -666,8 +666,8 @@ class MainActivity : Activity() {
         if (scripts.isEmpty()) scripts += Scripts.example()
         scriptIdx = prefs.getInt(PREF_SCRIPT_CUR, 0).coerceIn(0, scripts.size - 1)
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        p.addView(text("Блоки выполняются сверху вниз. Команда идёт тому устройству, что выбрано блоком «устройство» выше неё. " +
-            "Нажмите на блок, чтобы изменить его.", 13f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(2), 0, 0, dp(8)) })
+        p.addView(text("Как в Scratch: блоки из палитры нажмите или перетащите в сценарий (удерживайте). Нажатие на блок — изменить, " +
+            "перетащить — переставить или в корзину. Команда идёт устройству из блока «устройство» выше неё.", 13f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(2), 0, 0, dp(8)) })
         // имя сценария: нажать — выбрать другой; «новый», «имя», «удалить»
         scriptName = mocButton("") { pickScript() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 17f) }
         p.addView(scriptName, LinearLayout.LayoutParams(-1, dp(50)))
@@ -689,18 +689,16 @@ class MainActivity : Activity() {
             },
         ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
 
-        scriptList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        p.addView(scriptList, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
-
-        p.addView(row(
-            small("[+ устройство]") { pickDevice(null) },
-            small("[+ команда]") { addCommand() },
-        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
-        p.addView(row(
-            small("[+ задержка]") { askNumber("Задержка, секунд", "1") { v -> insertBlock(Scripts.Block.Delay(v.coerceIn(0.1, 600.0))) } },
-            small("[+ цикл]") { askNumber("Сколько раз повторить", "3", integer = true) { v ->
-                insertBlock(Scripts.Block.Loop(v.toInt().coerceIn(1, 999))); insertBlock(Scripts.Block.End) } },
-        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        // палитра блоков (как в Scratch): категории сверху, блоки — лентой; нажать — добавить в конец, удерживать — перетащить
+        p.addView(buildPalette(), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        scriptList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(6), 0, dp(6)) }
+        p.addView(scriptList, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // корзина: перетащите сюда блок, чтобы удалить
+        val trash = text("✕  перетащите блок сюда, чтобы удалить", 13f, Term.DIM).apply {
+            typeface = Term.ru; gravity = Gravity.CENTER; background = Term.boxBg(this@MainActivity)
+            setOnDragListener(dropTarget({ -2 }))
+        }
+        p.addView(trash, LinearLayout.LayoutParams(-1, dp(40)).apply { topMargin = dp(6) })
 
         scriptPlay = mocButton("[ ▶ Отправить ]") { if (scriptRun) scriptRun = false else runScript() }
         p.addView(scriptPlay, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(12) })
@@ -715,39 +713,152 @@ class MainActivity : Activity() {
         renderBlocks()
     }
 
-    private fun renderBlocks() {
-        scriptList.removeAllViews(); blockRows.clear()
-        if (script.blocks.isEmpty()) scriptList.addView(text("пусто — добавьте блоки кнопками ниже", 13f, Term.DIM).apply { typeface = Term.ru })
-        script.blocks.forEachIndexed { i, b ->
-            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-            val main = TextView(this).apply {
-                text = "%02d  %s".format(i + 1, Scripts.text(b))
-                typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setTextColor(Term.FG)
-                isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
-                setPadding(dp(10), 0, dp(6), 0); gravity = Gravity.CENTER_VERTICAL
-                background = Term.boxBg(this@MainActivity)
-                setOnClickListener { glitch(it); editBlock(i) }
+    /** Откуда тащат блок: из сценария (индекс) или из палитры (что создать). */
+    private class DragSrc(val index: Int = -1, val make: (() -> Unit)? = null, val place: ((Int) -> Unit)? = null)
+    private val shapes = HashMap<Int, Scratch.Shape>()
+
+    private fun blockLabel(b: Scripts.Block, cat: Scratch.Cat): CharSequence {
+        val sb = android.text.SpannableStringBuilder()
+        Scratch.parts(b).forEach { (t, kind) ->
+            val st = sb.length; sb.append(t)
+            if (kind > 0) sb.setSpan(Scratch.Field(kind == 1, cat, resources.displayMetrics.density), st, sb.length, 0)
+        }
+        return sb
+    }
+
+    private fun blockText(label: CharSequence, shape: Scratch.Shape) = TextView(this).apply {
+        text = label; setTextColor(Color.WHITE); typeface = android.graphics.Typeface.DEFAULT_BOLD
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+        gravity = Gravity.CENTER_VERTICAL; background = shape
+        setPadding(dp(12), dp(4), dp(10), dp(4) + shape.bump.toInt())
+    }
+
+    /** Цель для перетаскивания: [pos] — куда вставить (-2 — корзина). */
+    private fun dropTarget(pos: () -> Int) = View.OnDragListener { v, e ->
+        when (e.action) {
+            android.view.DragEvent.ACTION_DRAG_STARTED -> true
+            android.view.DragEvent.ACTION_DRAG_ENTERED -> { v.alpha = 0.55f; true }
+            android.view.DragEvent.ACTION_DRAG_EXITED, android.view.DragEvent.ACTION_DRAG_ENDED -> { v.alpha = 1f; true }
+            android.view.DragEvent.ACTION_DROP -> {
+                v.alpha = 1f
+                val src = e.localState as? DragSrc ?: return@OnDragListener false
+                val to = pos()
+                when {
+                    to == -2 -> if (src.index >= 0) { Scripts.remove(script, src.index); scriptChanged() }
+                    src.index >= 0 -> if (Scripts.move(script, src.index, to)) scriptChanged()
+                    else -> src.place?.invoke(to)
+                }
+                true
             }
-            blockRows += main
-            r.addView(main, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(14) * Scripts.depthAt(script, i) })
-            fun icon(t: String, click: () -> Unit) = TextView(this).apply {
-                text = t; gravity = Gravity.CENTER; setTextColor(Term.FG); typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                background = Term.boxBg(this@MainActivity); setOnClickListener { glitch(it); click() }
-            }
-            r.addView(icon("↑") { moveBlock(i, -1) }, LinearLayout.LayoutParams(dp(36), dp(42)).apply { leftMargin = dp(4) })
-            r.addView(icon("↓") { moveBlock(i, 1) }, LinearLayout.LayoutParams(dp(36), dp(42)).apply { leftMargin = dp(4) })
-            r.addView(icon("✕") { script.blocks.removeAt(i); scriptChanged() }, LinearLayout.LayoutParams(dp(36), dp(42)).apply { leftMargin = dp(4) })
-            scriptList.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+            else -> true
         }
     }
 
-    private fun moveBlock(i: Int, d: Int) {
-        val j = i + d
-        if (j !in script.blocks.indices) return
-        val b = script.blocks.removeAt(i); script.blocks.add(j, b); scriptChanged()
+    private fun startDrag(v: View, src: DragSrc): Boolean {
+        v.startDragAndDrop(android.content.ClipData.newPlainText("block", ""), View.DragShadowBuilder(v), src, 0)
+        return true
     }
 
-    private fun insertBlock(b: Scripts.Block) { script.blocks += b; scriptChanged() }
+    /** Рисует сценарий: шапка «когда нажата ▶», под ней блоки; цикл — C-блок с содержимым внутри. */
+    private fun renderBlocks() {
+        scriptList.removeAllViews(); blockRows.clear(); shapes.clear()
+        val d = resources.displayMetrics.density
+        val hatShape = Scratch.Shape(Scratch.EVENT, 1, d)
+        val hat = blockText("когда нажата  ▶ Отправить", hatShape).apply {
+            setPadding(dp(12), dp(18), dp(10), dp(4) + hatShape.bump.toInt()); setOnDragListener(dropTarget { 0 })
+        }
+        scriptList.addView(hat, LinearLayout.LayoutParams(-2, dp(60)).apply { })
+        fun stack(into: LinearLayout, from: Int, to: Int) {
+            var i = from
+            while (i < to) {
+                val b = script.blocks[i]; val idx = i
+                if (b == Scripts.Block.End) { i++; continue }
+                val cat = Scratch.cat(b)
+                val lp = LinearLayout.LayoutParams(-2, -2).apply { topMargin = -(5 * d).toInt() }
+                if (b is Scripts.Block.Loop) {
+                    val end = Scripts.rangeEnd(script, i)
+                    val shape = Scratch.Shape(cat, 2, d, top = 44 * d, arm = 16 * d, bottom = 22 * d)
+                    val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = shape; minimumWidth = dp(200) }
+                    val head = blockText(blockLabel(b, cat), Scratch.Shape(cat, 0, d)).apply {
+                        background = null; setPadding(dp(12), dp(4), dp(10), dp(4))
+                        setOnClickListener { glitch(it); editBlock(idx) }
+                        setOnLongClickListener { startDrag(c, DragSrc(idx)) }
+                        setOnDragListener(dropTarget { idx + 1 })
+                    }
+                    c.addView(head, LinearLayout.LayoutParams(-2, dp(44)))
+                    val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; minimumHeight = dp(26); setOnDragListener(dropTarget { idx + 1 }) }
+                    stack(body, i + 1, if (script.blocks.getOrNull(end) == Scripts.Block.End) end else end + 1)
+                    c.addView(body, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(16); topMargin = dp(5) })
+                    c.addView(View(this), LinearLayout.LayoutParams(dp(1), dp(22) + shape.bump.toInt()))
+                    shapes[idx] = shape; blockRows += head
+                    into.addView(c, lp)
+                    i = end + 1
+                } else {
+                    val shape = Scratch.Shape(cat, 0, d)
+                    val v = blockText(blockLabel(b, cat), shape).apply {
+                        minHeight = dp(44)
+                        setOnClickListener { glitch(it); editBlock(idx) }
+                        setOnLongClickListener { startDrag(it, DragSrc(idx)) }
+                        setOnDragListener(dropTarget { Scripts.rangeEnd(script, idx) + 1 })
+                    }
+                    shapes[idx] = shape; blockRows += v
+                    into.addView(v, lp)
+                    i++
+                }
+            }
+        }
+        stack(scriptList, 0, script.blocks.size)
+        if (script.blocks.isEmpty()) scriptList.addView(text("перетащите или нажмите блок в палитре выше", 13f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(8), 0, 0) })
+    }
+
+    /** Подсветка выполняемого блока белой обводкой (как в Scratch). */
+    private fun markBlock(i: Int) { shapes.forEach { (k, sh) -> val on = k == i; if (sh.lit != on) { sh.lit = on; sh.invalidateSelf() } }; scriptList.invalidate() }
+
+    private var paletteCat = 0
+    private lateinit var paletteRow: LinearLayout
+
+    /** Палитра: «Устройства», «Команды», «Управление». */
+    private fun buildPalette(): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(chipRow(listOf("Устройства", "Команды", "Управление"), paletteCat) { i, _ -> paletteCat = i; fillPalette() }.apply {
+            for (k in 0 until childCount) (getChildAt(k) as TextView).apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 11f else 13f) }
+        }, LinearLayout.LayoutParams(-1, -2))
+        paletteRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(8), 0, dp(4)) }
+        box.addView(android.widget.HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(paletteRow) },
+            LinearLayout.LayoutParams(-1, -2))
+        fillPalette()
+        return box
+    }
+
+    private fun fillPalette() {
+        paletteRow.removeAllViews()
+        val d = resources.displayMetrics.density
+        fun item(b: Scripts.Block, place: (Int) -> Unit) {
+            val cat = Scratch.cat(b)
+            val v = blockText(blockLabel(b, cat), Scratch.Shape(cat, 0, d)).apply {
+                minHeight = dp(44)
+                setOnClickListener { glitch(it); place(script.blocks.size) }
+                setOnLongClickListener { startDrag(it, DragSrc(place = place)) }
+            }
+            paletteRow.addView(v, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(8) })
+        }
+        when (paletteCat) {
+            0 -> Scripts.DEVICES.forEachIndexed { i, _ -> item(Scripts.Block.Dev(i)) { at -> insertAt(at, Scripts.Block.Dev(i)) } }
+            1 -> {
+                item(Scripts.Block.Cmd("кнопка", 0)) { at -> addCommand(insertAt = at) }
+                item(Scripts.Block.Ac()) { at -> editAc(null, at) }
+            }
+            else -> {
+                item(Scripts.Block.Delay(1.0)) { at -> insertAt(at, Scripts.Block.Delay(1.0)) }
+                item(Scripts.Block.Loop(3)) { at -> insertAt(at, Scripts.Block.Loop(3), Scripts.Block.End) }
+            }
+        }
+    }
+
+    private fun insertAt(at: Int, vararg b: Scripts.Block) {
+        script.blocks.addAll(at.coerceIn(0, script.blocks.size), b.toList()); scriptChanged()
+    }
 
     private fun pickScript() {
         AlertDialog.Builder(this).setTitle("Сценарии")
@@ -758,24 +869,24 @@ class MainActivity : Activity() {
     /** Выбор устройства: для нового блока ([edit] = null) или для изменения существующего. */
     private fun pickDevice(edit: Scripts.Block.Dev?) {
         AlertDialog.Builder(this).setTitle("Устройство")
-            .setItems(Scripts.DEVICES.map { it.title }.toTypedArray()) { _, w -> if (edit != null) { edit.device = w; scriptChanged() } else insertBlock(Scripts.Block.Dev(w)) }
+            .setItems(Scripts.DEVICES.map { it.title }.toTypedArray()) { _, w -> if (edit != null) { edit.device = w; scriptChanged() } else insertAt(script.blocks.size, Scripts.Block.Dev(w)) }
             .showThemed()
     }
 
-    private fun addCommand(replaceAt: Int = -1) {
-        val dev = Scripts.deviceAt(script, if (replaceAt >= 0) replaceAt else script.blocks.size - 1)
-        if (dev < 0) { say("Сначала добавьте блок «устройство»", err = true); pickDevice(null); return }
+    private fun addCommand(replaceAt: Int = -1, insertAt: Int = script.blocks.size) {
+        val dev = Scripts.deviceAt(script, if (replaceAt >= 0) replaceAt else insertAt - 1)
+        if (dev < 0) { say("Сначала поставьте выше блок «устройство»", err = true); paletteCat = 0; fillPalette(); return }
         val d = Scripts.DEVICES[dev]
-        if (d.acModel >= 0) { editAc(if (replaceAt >= 0) script.blocks[replaceAt] as? Scripts.Block.Ac else null); return }
+        if (d.acModel >= 0) { if (replaceAt >= 0) editAc(script.blocks[replaceAt] as? Scripts.Block.Ac) else editAc(null, insertAt); return }
         AlertDialog.Builder(this).setTitle(d.title)
             .setItems(d.keys.map { it.first }.toTypedArray()) { _, w ->
                 val (l, c) = d.keys[w]
-                if (replaceAt >= 0) { script.blocks[replaceAt] = Scripts.Block.Cmd(l, c); scriptChanged() } else insertBlock(Scripts.Block.Cmd(l, c))
+                if (replaceAt >= 0) { script.blocks[replaceAt] = Scripts.Block.Cmd(l, c); scriptChanged() } else insertAt(insertAt, Scripts.Block.Cmd(l, c))
             }.showThemed()
     }
 
     /** Команда кондиционеру: питание, режим, температура, скорость — кнопками, которые перебирают значения. */
-    private fun editAc(edit: Scripts.Block.Ac?) {
+    private fun editAc(edit: Scripts.Block.Ac?, at: Int = script.blocks.size) {
         val b = edit ?: Scripts.Block.Ac(ac.power, ac.mode, ac.temp, ac.fan)
         val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
         val rows = ArrayList<() -> Unit>()
@@ -789,7 +900,7 @@ class MainActivity : Activity() {
         box.addView(cyc({ "температура: ${b.temp}° (нажмите: +1)" }) { b.temp = if (b.temp >= 30) 16 else b.temp + 1 })
         box.addView(cyc({ "скорость: " + b.fan.title }) { b.fan = Haier.Fan.values()[(b.fan.ordinal + 1) % 4] })
         AlertDialog.Builder(this).setTitle("Кондиционер").setView(box).setNegativeButton("Отмена", null)
-            .setPositiveButton("OK") { _, _ -> if (edit != null) scriptChanged() else insertBlock(b) }.showThemed()
+            .setPositiveButton("OK") { _, _ -> if (edit != null) scriptChanged() else insertAt(at, b) }.showThemed()
     }
 
     private fun editBlock(i: Int) {
@@ -830,7 +941,7 @@ class MainActivity : Activity() {
             var err: String? = null
             try {
                 Scripts.run(s, send = { frame, what -> tx.transmit(frame); ui.post { say("> tx $what [sent]") } },
-                    mark = { i -> ui.post { blockRows.forEachIndexed { k, v -> styleTab(v, k == i); if (k != i) v.setTextColor(Term.FG) } } },
+                    mark = { i -> ui.post { markBlock(i) } },
                     stopped = { !scriptRun })
             } catch (e: Exception) { err = e.message ?: "Ошибка передачи" }
             ui.post {
@@ -838,7 +949,7 @@ class MainActivity : Activity() {
                 scriptRun = false
                 window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 scriptPlay.text = btnLabel("[ ▶ Отправить ]"); styleTab(scriptPlay, false)
-                blockRows.forEach { styleTab(it, false); it.setTextColor(Term.FG) }
+                markBlock(-1)
                 if (err != null) say(err!!, err = true) else say(if (stoppedByUser) "> сценарий остановлен" else "> сценарий выполнен", ok = !stoppedByUser)
             }
         }

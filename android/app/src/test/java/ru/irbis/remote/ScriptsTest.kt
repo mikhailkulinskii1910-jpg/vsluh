@@ -21,4 +21,15 @@ class ScriptsTest {
         org.junit.Assert.assertEquals(5, back.blocks.size)
     }
 
+
+    @Test
+    fun moveAndRemoveKeepLoopsTogether() {
+        // [dev, loop, cmd, end, delay] — переносим цикл (с телом) в конец, затем удаляем его целиком
+        val s = Scripts.Script("m", mutableListOf(Scripts.Block.Dev(0), Scripts.Block.Loop(2), Scripts.Block.Cmd("A", 1), Scripts.Block.End, Scripts.Block.Delay(1.0)))
+        org.junit.Assert.assertTrue(Scripts.move(s, 1, 5))
+        org.junit.Assert.assertTrue(s.blocks[1] is Scripts.Block.Delay && s.blocks[2] is Scripts.Block.Loop && s.blocks[4] == Scripts.Block.End)
+        org.junit.Assert.assertFalse(Scripts.move(s, 2, 3))          // внутрь самого себя нельзя
+        Scripts.remove(s, 2)
+        org.junit.Assert.assertEquals(2, s.blocks.size)
+    }
 }

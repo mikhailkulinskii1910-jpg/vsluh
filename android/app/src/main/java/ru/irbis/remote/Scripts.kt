@@ -52,6 +52,32 @@ object Scripts {
         return if (s.blocks.getOrNull(at) == Block.End) maxOf(0, d - 1) else d
     }
 
+    /** Конец блока [i]: для цикла — индекс его «конца цикла» (или последний блок), иначе сам [i]. */
+    fun rangeEnd(s: Script, i: Int): Int {
+        if (s.blocks.getOrNull(i) !is Block.Loop) return i
+        var d = 0
+        for (k in i + 1 until s.blocks.size) when (s.blocks[k]) {
+            is Block.Loop -> d++
+            Block.End -> if (d == 0) return k else d--
+            else -> {}
+        }
+        return s.blocks.size - 1
+    }
+
+    /** Перенести блок [from] (цикл — вместе с содержимым) так, чтобы он встал перед позицией [to] исходного списка. */
+    fun move(s: Script, from: Int, to: Int): Boolean {
+        val end = rangeEnd(s, from)
+        if (to in from..end + 1) return false           // на то же место или внутрь самого себя
+        val part = ArrayList(s.blocks.subList(from, end + 1))
+        repeat(part.size) { s.blocks.removeAt(from) }
+        val at = if (to > end) to - part.size else to
+        s.blocks.addAll(at, part)
+        return true
+    }
+
+    /** Удалить блок [i] (цикл — вместе с содержимым). */
+    fun remove(s: Script, i: Int) { val end = rangeEnd(s, i); repeat(end - i + 1) { s.blocks.removeAt(i) } }
+
     fun text(b: Block, s: Script? = null): String = when (b) {
         is Block.Dev -> "→ " + (DEVICES.getOrNull(b.device)?.title ?: "?")
         is Block.Cmd -> "▶ " + b.label
