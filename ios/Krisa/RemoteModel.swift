@@ -103,6 +103,75 @@ final class RemoteModel: ObservableObject {
         }
     }
 
+    // MARK: сценарии
+
+    /// Идёт ли сценарий и какой блок сейчас выполняется (для подсветки).
+    @Published var scriptRunning = false
+    @Published var scriptMark = -1
+    /// Нажата «Стоп» (читается из потока передачи).
+    private var scriptStop = false
+
+    func stopScript() { lock.lock(); scriptStop = true; lock.unlock() }
+    private func scriptStopped() -> Bool { lock.lock(); defer { lock.unlock() }; return scriptStop }
+
+    /// Отправить одну команду сценария (из потока передачи).
+    private func sendScriptItem(_ item: ScriptSend, mode: TxMode, host: String, audio: AudioIr) throws {
+        switch item {
+        case .nec(let code, _):
+            if mode == .http {
+                try TasmotaIr(host: host).sendNec(code, repeatFrame: false)
+            } else {
+                try audio.transmit(Nec.withGap(Nec.frame(code)))
+            }
+        case .haier(let bytes, let model):
+            if mode == .http {
+                let tx: (proto: String, bits: Int) = Haier.tasmota[min(max(model, 0), 2)]
+                try TasmotaIr(host: host).sendRaw(proto: tx.proto, bits: tx.bits, data: Haier.data(bytes))
+            } else {
+                try audio.transmit(Haier.pattern(bytes))
+            }
+        }
+    }
+
+    /// Выполнить сценарий: блоки по порядку, текущий подсвечивается; экран не гаснет, пока идёт.
+    func runScript(_ s: KScript) {
+        if scriptRunning { return }
+        if s.blocks.isEmpty { say("Сценарий пуст", err: true); return }
+        lock.lock(); scriptStop = false; lock.unlock()
+        scriptRunning = true
+        scriptMark = -1
+        UIApplication.shared.isIdleTimerDisabled = true
+        say("> сценарий «" + s.name + "»: старт")
+        let mode = self.mode, host = self.host
+        let audio = mode == .audio1 ? audio1 : audio2
+        io.async { [weak self] in
+            guard let self else { return }
+            var failure: String?
+            do {
+                try ScriptRunner.run(s, send: { item in
+                    try self.sendScriptItem(item, mode: mode, host: host, audio: audio)
+                    let line: String = "> tx " + item.what + " [sent]"
+                    DispatchQueue.main.async { self.say(line) }
+                }, mark: { i in
+                    DispatchQueue.main.async { self.scriptMark = i }
+                }, stopped: { self.scriptStopped() })
+            } catch {
+                failure = error.localizedDescription
+            }
+            let byUser: Bool = self.scriptStopped()
+            DispatchQueue.main.async {
+                self.scriptRunning = false
+                self.scriptMark = -1
+                UIApplication.shared.isIdleTimerDisabled = false
+                if let f = failure {
+                    self.say(f, err: true)
+                } else {
+                    self.say(byUser ? "> сценарий остановлен" : "> сценарий выполнен")
+                }
+            }
+        }
+    }
+
     func release() { lock.lock(); held = 0; lock.unlock() }
     private func isHeld(_ id: Int) -> Bool { lock.lock(); defer { lock.unlock() }; return held == id }
 

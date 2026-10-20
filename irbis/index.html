@@ -56,7 +56,9 @@ h1::after{content:"_";margin-left:2px;animation:blink 1s steps(1) infinite}
 .gear.help{width:52px;display:grid;place-items:center;text-decoration:none}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* вкладки IRBIS / MocTec — в стиле кнопок шапки текущей темы */
-.tabs{display:flex;gap:8px;margin:0 0 12px}
+.tabs{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+/* вкладки в два ряда: «Доски | Проекторы | Кондиционеры» и «Сценарии | Цвет» */
+.tabs .trow{display:flex;gap:8px}
 .gear.tab{flex:1;width:auto;margin:0;height:40px}
 .gear.tab.on{background:var(--fg);color:#000}
 [data-theme=prism] .gear.tab.on{background:linear-gradient(135deg,var(--iris));color:var(--ink)}
@@ -372,6 +374,36 @@ body.boards #boards{display:block}
 #ac{display:none}
 body.ac #ac{display:block}
 body.ac #grid,body.ac #more,body.ac #grid2{display:none}
+/* «Сценарии»: редактор из блоков */
+#scripts{display:none}
+body.scripts #scripts{display:block}
+body.scripts #grid,body.scripts #more,body.scripts #grid2{display:none}
+.scp .gear.tab.acb{height:44px;font-size:13px}
+.scp .gear.tab.acb.sname{display:block;width:100%;height:50px;font-size:17px}
+.scp .srow{display:flex;gap:6px;margin-top:6px}
+.scp .s3{margin-top:6px}
+.scp .blocks{margin-top:10px}
+.scp .a1{margin-top:8px}
+.scp .brow{display:flex;gap:4px;margin-top:5px}
+.scp .gear.tab.acb.bt{flex:1;min-width:0;height:42px;text-align:left;padding:0 10px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scp .gear.tab.acb.ic{flex:0 0 36px;height:42px;padding:0;font-size:16px}
+.scp .gear.tab.acb.play{display:block;width:100%;height:58px;margin-top:12px;font-size:20px}
+[data-theme=prism] .scp .gear.tab.acb{font-size:11px}
+[data-theme=prism] .scp .gear.tab.acb.bt{font-size:12px;border-radius:12px}
+[data-theme=prism] .scp .gear.tab.acb.ic{font-size:14px;border-radius:12px}
+[data-theme=prism] .scp .gear.tab.acb.sname{font-size:14px}
+[data-theme=prism] .scp .gear.tab.acb.play{font-size:16px}
+[data-theme=blueprint] .scp .gear.tab.acb{font-size:11.5px}
+[data-theme=blueprint] .scp .gear.tab.acb.bt{font-size:12px;text-transform:none;letter-spacing:.02em}
+[data-theme=blueprint] .scp .gear.tab.acb.sname{font-size:14px}
+[data-theme=blueprint] .scp .gear.tab.acb.play{font-size:16px}
+[data-theme=thermal] .scp .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
+/* модальные окна выбора и ввода — в стиле темы */
+.mdl .items{display:flex;flex-direction:column;gap:6px;max-height:min(60dvh,520px);overflow:auto;padding:2px}
+.mdl .items .gear.tab.acb{flex:none;height:42px;text-align:left;padding:0 12px;font-size:15px}
+[data-theme=prism] .mdl .items .gear.tab.acb{font-size:13px}
+[data-theme=blueprint] .mdl .items .gear.tab.acb{font-size:12px}
+.mdl input[type=text]{margin-top:4px}
 .acp .models .gear.tab.chip{font-size:15px}
 [data-theme=prism] .acp .models .gear.tab.chip{font-size:11px}
 [data-theme=blueprint] .acp .models .gear.tab.chip{font-size:10.5px}
@@ -401,7 +433,7 @@ body.proj #proj{display:block}
 [data-theme=blueprint] .gear.tab.chip{font-size:12px}
 .projnote{margin:0 2px 12px;font:13px/1.4 var(--ru);color:var(--dim)}
 /* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
-html:not([data-theme]) body:is(.proj,.boards,.ac) .id,[data-theme=thermal] body:is(.proj,.boards,.ac) .id{font-size:17px}
+html:not([data-theme]) body:is(.proj,.boards,.ac,.scripts) .id,[data-theme=thermal] body:is(.proj,.boards,.ac,.scripts) .id{font-size:17px}
 /* сетка проекторов — 3 колонки, низкие кнопки; подпись ужимается под ширину кнопки (--len — длина подписи, --cw — ширина буквы шрифта темы) */
 body.grid3 .grid{grid-template-columns:repeat(3,1fr);gap:8px}
 body.grid3 .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
@@ -570,7 +602,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
     </div>
     <div class="hbtns"><a class="gear help" href="guide/" aria-label="Как пользоваться">[?]</a><button class="gear" id="gear" aria-label="Настройки">[tx]</button></div>
   </header>
-  <nav class="tabs" id="tabs" aria-label="Пульт"><button class="gear tab ru" data-r="boards">Доски</button><button class="gear tab ru" data-r="proj">Проекторы</button><button class="gear tab ru" data-r="ac">Кондиционеры</button><button class="gear tab ctab ru" data-r="color">Цвет</button></nav>
+  <nav class="tabs" id="tabs" aria-label="Пульт"><div class="trow"><button class="gear tab ru" data-r="boards">Доски</button><button class="gear tab ru" data-r="proj">Проекторы</button><button class="gear tab ru" data-r="ac">Кондиционеры</button></div><div class="trow"><button class="gear tab ru" data-r="scripts">Сценарии</button><button class="gear tab ctab ru" data-r="color">Цвет</button></div></nav>
   <div id="boards"><div class="brands" id="boardChips" aria-label="Доска"></div></div>
   <div id="proj"><div class="brands" id="brands" aria-label="Марка проектора"></div>
     <p class="projnote">Выключение: нажмите POWER два раза — проектор спрашивает подтверждение.</p></div>
@@ -578,10 +610,13 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
   <button class="gear tab acb more" id="more" hidden></button>
   <div class="grid" id="grid2" hidden></div>
   <section class="acp" id="ac" aria-label="Кондиционер"></section>
+  <section class="scp" id="scripts" aria-label="Сценарии"></section>
   <section class="cp" id="cpanel" aria-label="Цвет"></section>
   <div class="status" id="status" role="status" aria-live="polite"></div>
 </div>
 <div id="rgbov" aria-hidden="true"><i></i></div>
+
+<dialog id="mdl" class="mdl"><form method="dialog" class="sheet"></form></dialog>
 
 <dialog id="dlg">
   <form method="dialog" class="sheet">
@@ -1265,7 +1300,7 @@ function renderPanel() {
 let topTab = 'boards', boardIdx = 0, tab = 'boards';
 try {
   const r = localStorage.getItem('krisa-remote');
-  if (r === 'proj' || r === 'ac') topTab = r;
+  if (r === 'proj' || r === 'ac' || r === 'scripts') topTab = r;
   const bi = localStorage.getItem('krisa-board');
   boardIdx = bi === '1' || (bi === null && r === 'moc') ? 1 : 0;
 } catch {}
@@ -1299,13 +1334,14 @@ chipRow(boardChips, ['IRBIS', 'MocTec'], i => {
 function syncTabs() {
   // «Цвет» есть во всех темах
   document.querySelectorAll('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.r === tab));
-  ['boards', 'proj', 'ac'].forEach(k => document.body.classList.toggle(k, tab === k));
+  ['boards', 'proj', 'ac', 'scripts'].forEach(k => document.body.classList.toggle(k, tab === k));
   // сетка в 3 колонки: у проекторов и у полного пульта MocTec
   document.body.classList.toggle('grid3', tab === 'proj' || (tab === 'boards' && remote === 'moc'));
   document.body.classList.toggle('ctab', tab === 'color');
   [...brands.children].forEach((c, i) => c.classList.toggle('on', i === projBrand));
   [...boardChips.children].forEach((c, i) => c.classList.toggle('on', i === boardIdx));
   if (tab === 'ac') { document.querySelector('.id').textContent = 'кондиционер :: Haier :: ' + Haier.MODELS[ac.model]; acRefresh(); }
+  else if (tab === 'scripts') document.querySelector('.id').textContent = 'сценарий :: ' + scripts[scriptIdx].name;
   else if (tab !== 'color') document.querySelector('.id').textContent = REMOTES[remote].id;
 }
 /* Меню «доп.»: на экране только основные кнопки (main), остальные — во второй сетке под кнопкой «доп.».
@@ -1338,7 +1374,7 @@ document.querySelectorAll('#tabs .tab').forEach(t => t.addEventListener('click',
   if (t.dataset.r === 'color') { tab = 'color'; renderPanel(); syncTabs(); return; }
   topTab = t.dataset.r;
   try { localStorage.setItem('krisa-remote', topTab); } catch {}
-  if (topTab === 'ac') { tab = 'ac'; syncTabs(); return; }
+  if (topTab === 'ac' || topTab === 'scripts') { tab = topTab; syncTabs(); return; }
   remote = topTab === 'proj' ? 'proj' : boardIdx ? 'moc' : 'irbis';
   buildGrid(true);
 }));
@@ -1448,6 +1484,284 @@ function acSend(btn, change) {
     () => acSend('TIMER', () => { ac.timer = Haier.TIMERS[(Haier.TIMERS.indexOf(ac.timer) + 1) % Haier.TIMERS.length]; }));
 })();
 
+/* ---------- Модальные окна в стиле темы (вместо prompt/confirm) ----------
+   modal({ title, items, sel, pick }) — список на выбор; modal({ title, input, numeric, ok }) — ввод строки/числа;
+   modal({ title, body, ok, okText }) — своё содержимое и кнопки «Отмена» / «OK». */
+const mdl = $('mdl');
+mdl.addEventListener('click', e => { if (e.target === mdl) mdl.close(); });
+function modal({ title, items, sel = -1, pick, input, numeric, body, ok, okText = 'OK' }) {
+  const f = mdl.querySelector('form');
+  f.innerHTML = '<h2></h2>';
+  f.firstChild.textContent = title;
+  let inp = null;
+  if (items) {
+    const list = document.createElement('div'); list.className = 'items';
+    items.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'gear tab acb' + (i === sel ? ' on' : ''); b.textContent = t;
+      b.addEventListener('click', () => { mdl.close(); pick(i); });
+      list.appendChild(b);
+    });
+    f.appendChild(list);
+  }
+  if (input !== undefined) {
+    inp = document.createElement('input');
+    inp.type = 'text'; inp.value = input; inp.autocomplete = 'off'; inp.spellcheck = false;
+    if (numeric) inp.inputMode = 'decimal';
+    f.appendChild(inp);
+  }
+  if (body) f.appendChild(body);
+  const row = document.createElement('div'); row.className = 'row';
+  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'btn'; cancel.textContent = items ? 'Закрыть' : 'Отмена';
+  cancel.addEventListener('click', () => mdl.close());
+  row.appendChild(cancel);
+  if (ok) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn primary'; b.textContent = okText;
+    const done = () => {
+      if (inp) {
+        const v = inp.value.trim();
+        if (numeric) { const n = parseFloat(v.replace(',', '.')); if (!isFinite(n)) return; mdl.close(); ok(n); }
+        else { if (!v) return; mdl.close(); ok(v); }
+      } else { mdl.close(); ok(); }
+    };
+    b.addEventListener('click', done);
+    if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); done(); } });
+    row.appendChild(b);
+  }
+  f.appendChild(row);
+  mdl.showModal();
+  if (inp) { inp.focus(); inp.select(); }
+  else { const s = f.querySelector('.items .on'); s && s.scrollIntoView({ block: 'center' }); }
+}
+
+/* ---------- Вкладка «Сценарии»: программа из блоков, как в Scratch (перенос Android Scripts.kt) ----------
+   Блоки идут списком сверху вниз; цикл — пара «цикл ×N {» … «} конец цикла» (циклы вкладываются, незакрытый идёт до конца).
+   Команда относится к устройству из ближайшего блока «→ устройство» выше неё.
+   JSON как в Android: [{name, blocks:[{t:"dev",d},{t:"cmd",l,c},{t:"ac",p,m,x,f},{t:"delay",s},{t:"loop",n},{t:"end"}]}]. */
+const AC_MODE_N = ['COOL', 'HEAT', 'DRY', 'FAN', 'AUTO'], AC_FAN_N = ['AUTO', 'LOW', 'MED', 'HIGH'];
+const DEVICES = [{ title: 'Доска · IRBIS', keys: KEYS }, { title: 'Доска · MocTec', keys: MOC_KEYS }]
+  .concat(PROJ.map(p => ({ title: 'Проектор · ' + p.name, keys: p.keys })))
+  .concat(Haier.MODELS.map((m, i) => ({ title: 'Кондиционер · Haier ' + (i + 1) + ' ' + m, keys: [], acModel: i })));
+const Scripts = {
+  /** Пример для первого запуска: выключить проектор NEC (два нажатия POWER) и доску MocTec. */
+  example() {
+    const nec = parseInt(PROJ[0].keys.find(k => k[0] === 'POWER')[1], 16), moc = parseInt(MOC_KEYS.find(k => k[0] === 'POWER')[1], 16);
+    return { name: 'Конец урока', blocks: [{ t: 'dev', d: 2 }, { t: 'cmd', l: 'POWER', c: nec }, { t: 'delay', s: 1.5 }, { t: 'cmd', l: 'POWER', c: nec },
+      { t: 'delay', s: 2 }, { t: 'dev', d: 1 }, { t: 'cmd', l: 'POWER', c: moc }] };
+  },
+  /** Устройство, к которому относится блок номер at (ближайший «устройство» выше), или -1. */
+  deviceAt(s, at) { for (let i = Math.min(at, s.blocks.length - 1); i >= 0; i--) if (s.blocks[i].t === 'dev') return s.blocks[i].d; return -1; },
+  /** Глубина вложенности циклов перед блоком at — для отступа в списке. */
+  depthAt(s, at) {
+    let d = 0;
+    for (let i = 0; i < at; i++) { const t = s.blocks[i].t; if (t === 'loop') d++; else if (t === 'end') d = Math.max(0, d - 1); }
+    return s.blocks[at] && s.blocks[at].t === 'end' ? Math.max(0, d - 1) : d;
+  },
+  fmt(x) { return x === Math.floor(x) ? String(x) : x.toFixed(1); },
+  text(b) {
+    switch (b.t) {
+      case 'dev': return '→ ' + (DEVICES[b.d] ? DEVICES[b.d].title : '?');
+      case 'cmd': return '▶ ' + b.l;
+      case 'ac': return '▶ ' + (b.p ? 'вкл, ' + Haier.MODES[AC_MODE_N.indexOf(b.m)] + ', ' + b.x + '°, скорость ' + Haier.FANS[AC_FAN_N.indexOf(b.f)] : 'выключить');
+      case 'delay': return 'задержка ' + this.fmt(b.s) + ' с';
+      case 'loop': return 'цикл ×' + b.n + ' {';
+      default: return '} конец цикла';
+    }
+  },
+  fromJson(json) {
+    try {
+      const a = JSON.parse(json || 'null');
+      if (!Array.isArray(a)) return [];
+      return a.filter(s => s && typeof s.name === 'string' && Array.isArray(s.blocks))
+        .map(s => ({ name: s.name, blocks: s.blocks.filter(b => b && ['dev', 'cmd', 'ac', 'delay', 'loop', 'end'].includes(b.t)) }));
+    } catch { return []; }
+  },
+  /** Выполнение: send(frame мкс, what, tx) — отправить; mark(i) — подсветить блок; stopped() — нажата «Стоп». */
+  async run(s, send, mark, stopped) {
+    let device = -1;
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const matchEnd = from => {
+      let d = 0;
+      for (let i = from + 1; i < s.blocks.length; i++) { const t = s.blocks[i].t; if (t === 'loop') d++; else if (t === 'end') { if (d === 0) return i; d--; } }
+      return s.blocks.length;
+    };
+    const exec = async (from, to) => {
+      for (let i = from; i < to && !stopped(); i++) {
+        mark(i);
+        const b = s.blocks[i];
+        if (b.t === 'dev') device = b.d;
+        else if (b.t === 'cmd') {
+          const hex = (b.c >>> 0).toString(16).toUpperCase().padStart(8, '0');
+          await send(necFrame(hex), '0x' + hex + ' ' + b.l, { nec: hex });
+        } else if (b.t === 'ac') {
+          const model = DEVICES[device] && DEVICES[device].acModel >= 0 ? DEVICES[device].acModel : 0;
+          const st = { ...Haier.state(), model, power: b.p, mode: Math.max(0, AC_MODE_N.indexOf(b.m)), temp: b.x, fan: Math.max(0, AC_FAN_N.indexOf(b.f)) };
+          const bytes = Haier.bytes(st, 'POWER');
+          await send(Haier.pattern(bytes), 'haier ' + Haier.hex(bytes), { haier: model, hex: Haier.hex(bytes).replace(/ /g, '') });
+        } else if (b.t === 'delay') {
+          let left = b.s * 1000;
+          while (left > 0 && !stopped()) { const st = Math.min(left, 100); await sleep(st); left -= st; }
+        } else if (b.t === 'loop') {
+          const end = matchEnd(i), n = Math.max(1, Math.min(999, b.n | 0));
+          for (let k = 0; k < n && !stopped(); k++) await exec(i + 1, end);
+          i = end;
+          continue;
+        }
+        if (b.t === 'cmd' || b.t === 'ac') await sleep(150);   // пауза между командами
+      }
+    };
+    await exec(0, s.blocks.length);
+  },
+};
+
+let scripts = [], scriptIdx = 0, scriptRun = false;
+try {
+  scripts = Scripts.fromJson(localStorage.getItem('krisa-scripts'));
+  scriptIdx = parseInt(localStorage.getItem('krisa-script-cur'), 10) || 0;
+} catch {}
+if (!scripts.length) scripts.push(Scripts.example());
+scriptIdx = Math.max(0, Math.min(scripts.length - 1, scriptIdx));
+const script = () => scripts[scriptIdx];
+const clean = () => theme() === 'prism' || theme() === 'blueprint';      // в «чистых» темах — без квадратных скобок
+const btnLabel = l => clean() ? l.replace(/^\[ ?| ?\]$/g, '') : l;
+function scriptsSave() { try { localStorage.setItem('krisa-scripts', JSON.stringify(scripts)); localStorage.setItem('krisa-script-cur', String(scriptIdx)); } catch {} }
+
+const sp = $('scripts');
+sp.innerHTML = '<p class="projnote">Блоки выполняются сверху вниз. Команда идёт тому устройству, что выбрано блоком «устройство» выше неё. Нажмите на блок, чтобы изменить его.</p>'
+  + '<button class="gear tab acb sname"></button><div class="srow s3"></div><div class="blocks"></div><div class="srow a1"></div><div class="srow a2"></div>'
+  + '<button class="gear tab acb play"></button>';
+const sname = sp.querySelector('.sname'), blocksBox = sp.querySelector('.blocks'), play = sp.querySelector('.play');
+const sBtns = [];   // кнопки с подписями «[ … ]» — перерисовать при смене темы
+function sBtn(box, label, click) {
+  const b = document.createElement('button'); b.className = 'gear tab acb';
+  b.dataset.l = label; b.textContent = btnLabel(label); sBtns.push(b);
+  b.addEventListener('click', click); box.appendChild(b); return b;
+}
+sname.addEventListener('click', () => modal({ title: 'Сценарии', items: scripts.map(s => s.name), sel: scriptIdx, pick: i => { scriptIdx = i; scriptChanged(); } }));
+const s3 = sp.querySelector('.s3');
+sBtn(s3, '[ новый ]', () => modal({ title: 'Новый сценарий', input: 'Сценарий ' + (scripts.length + 1), ok: n => { scripts.push({ name: n, blocks: [] }); scriptIdx = scripts.length - 1; scriptChanged(); } }));
+sBtn(s3, '[ имя ]', () => modal({ title: 'Имя сценария', input: script().name, ok: n => { script().name = n; scriptChanged(); } }));
+sBtn(s3, '[ удалить ]', () => modal({ title: 'Удалить «' + script().name + '»?', okText: 'Удалить', ok: () => {
+  scripts.splice(scriptIdx, 1); if (!scripts.length) scripts.push({ name: 'Сценарий 1', blocks: [] });
+  scriptIdx = Math.min(scriptIdx, scripts.length - 1); scriptChanged();
+} }));
+const insertBlock = b => { script().blocks.push(b); scriptChanged(); };
+/** Выбор устройства: для нового блока (edit = null) или для изменения существующего. */
+function pickDevice(edit) {
+  modal({ title: 'Устройство', items: DEVICES.map(d => d.title), sel: edit ? edit.d : -1,
+    pick: w => { if (edit) { edit.d = w; scriptChanged(); } else insertBlock({ t: 'dev', d: w }); } });
+}
+function addCommand(replaceAt = -1) {
+  const dev = Scripts.deviceAt(script(), replaceAt >= 0 ? replaceAt : script().blocks.length - 1);
+  if (dev < 0) { status('Сначала добавьте блок «устройство»', 'err'); pickDevice(null); return; }
+  const d = DEVICES[dev];
+  if (d.acModel >= 0) { editAc(replaceAt >= 0 && script().blocks[replaceAt].t === 'ac' ? script().blocks[replaceAt] : null, replaceAt); return; }
+  const cur = replaceAt >= 0 ? script().blocks[replaceAt] : null;
+  modal({ title: d.title, items: d.keys.map(k => k[0]), sel: cur && cur.t === 'cmd' ? d.keys.findIndex(k => parseInt(k[1], 16) === cur.c) : -1, pick: w => {
+    const [l, h] = d.keys[w], b = { t: 'cmd', l, c: parseInt(h, 16) };
+    if (replaceAt >= 0) { script().blocks[replaceAt] = b; scriptChanged(); } else insertBlock(b);
+  } });
+}
+/** Команда кондиционеру: питание, режим, температура, скорость — кнопками, которые перебирают значения. */
+function editAc(edit, at = -1) {
+  const b = edit ? { ...edit } : { t: 'ac', p: ac.power, m: AC_MODE_N[ac.mode], x: ac.temp, f: AC_FAN_N[ac.fan] };
+  const box = document.createElement('div'); box.className = 'items';
+  const upd = [];
+  const cyc = (label, click) => {
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'gear tab acb';
+    upd.push(() => { x.textContent = label(); });
+    x.addEventListener('click', () => { click(); upd.forEach(f => f()); });
+    box.appendChild(x);
+  };
+  cyc(() => 'питание: ' + (b.p ? 'вкл' : 'выкл'), () => { b.p = !b.p; });
+  cyc(() => 'режим: ' + Haier.MODES[AC_MODE_N.indexOf(b.m)], () => { b.m = AC_MODE_N[(AC_MODE_N.indexOf(b.m) + 1) % 5]; });
+  cyc(() => 'температура: ' + b.x + '° (нажмите: +1)', () => { b.x = b.x >= 30 ? 16 : b.x + 1; });
+  cyc(() => 'скорость: ' + Haier.FANS[AC_FAN_N.indexOf(b.f)], () => { b.f = AC_FAN_N[(AC_FAN_N.indexOf(b.f) + 1) % 4]; });
+  upd.forEach(f => f());
+  modal({ title: 'Кондиционер', body: box, ok: () => {
+    if (edit) { Object.assign(edit, b); scriptChanged(); } else if (at >= 0) { script().blocks[at] = b; scriptChanged(); } else insertBlock(b);
+  } });
+}
+function editBlock(i) {
+  const b = script().blocks[i];
+  if (b.t === 'dev') pickDevice(b);
+  else if (b.t === 'cmd' || b.t === 'ac') addCommand(i);
+  else if (b.t === 'delay') modal({ title: 'Задержка, секунд', input: Scripts.fmt(b.s), numeric: true, ok: v => { b.s = Math.max(0.1, Math.min(600, v)); scriptChanged(); } });
+  else if (b.t === 'loop') modal({ title: 'Сколько раз повторить', input: String(b.n), numeric: true, ok: v => { b.n = Math.max(1, Math.min(999, Math.round(v))); scriptChanged(); } });
+  else status('Конец цикла: перемещайте его стрелками ↑ ↓');
+}
+function moveBlock(i, d) {
+  const bl = script().blocks, j = i + d;
+  if (j < 0 || j >= bl.length) return;
+  bl.splice(j, 0, bl.splice(i, 1)[0]); scriptChanged();
+}
+const a1 = sp.querySelector('.a1'), a2 = sp.querySelector('.a2');
+sBtn(a1, '[+ устройство]', () => pickDevice(null));
+sBtn(a1, '[+ команда]', () => addCommand());
+sBtn(a2, '[+ задержка]', () => modal({ title: 'Задержка, секунд', input: '1', numeric: true, ok: v => insertBlock({ t: 'delay', s: Math.max(0.1, Math.min(600, v)) }) }));
+sBtn(a2, '[+ цикл]', () => modal({ title: 'Сколько раз повторить', input: '3', numeric: true, ok: v => {
+  script().blocks.push({ t: 'loop', n: Math.max(1, Math.min(999, Math.round(v))) }, { t: 'end' }); scriptChanged();
+} }));
+let blockRows = [];
+function renderBlocks() {
+  blocksBox.textContent = ''; blockRows = [];
+  const s = script();
+  if (!s.blocks.length) { blocksBox.innerHTML = '<p class="projnote">пусто — добавьте блоки кнопками ниже</p>'; return; }
+  s.blocks.forEach((b, i) => {
+    const r = document.createElement('div'); r.className = 'brow';
+    r.style.marginLeft = 14 * Scripts.depthAt(s, i) + 'px';
+    const m = document.createElement('button'); m.className = 'gear tab acb bt';
+    m.textContent = String(i + 1).padStart(2, '0') + '  ' + Scripts.text(b);
+    m.addEventListener('click', () => { if (!scriptRun) editBlock(i); });
+    r.appendChild(m); blockRows.push(m);
+    [['↑', () => moveBlock(i, -1)], ['↓', () => moveBlock(i, 1)], ['✕', () => { s.blocks.splice(i, 1); scriptChanged(); }]].forEach(([t, f]) => {
+      const x = document.createElement('button'); x.className = 'gear tab acb ic'; x.textContent = t;
+      x.addEventListener('click', () => { if (!scriptRun) f(); }); r.appendChild(x);
+    });
+    blocksBox.appendChild(r);
+  });
+}
+function scriptLabels() {
+  sname.textContent = btnLabel('[ ' + script().name + ' ▾ ]');
+  play.textContent = btnLabel(scriptRun ? '[ ■ Стоп ]' : '[ ▶ Отправить ]');
+  play.classList.toggle('on', scriptRun);
+  sBtns.forEach(b => { b.textContent = btnLabel(b.dataset.l); });
+}
+function scriptChanged() {
+  scriptsSave(); scriptLabels(); renderBlocks();
+  if (tab === 'scripts') document.querySelector('.id').textContent = 'сценарий :: ' + script().name;
+}
+/** Отправить кадр: звук — дождаться конца кадра; Wi-Fi — IRSend NEC или Haier. */
+async function scriptSend(frame, what, x) {
+  if (settings.mode === 'http') {
+    if (x.nec) await httpTx.send(x.nec);
+    else { const [proto, bits] = Haier.TASMOTA[x.haier]; await httpTx.proto(proto, bits, x.hex); }
+  } else {
+    audioTx.raw('s ' + frame.join(','), frame);
+    await new Promise(r => setTimeout(r, frame.reduce((a, b) => a + b, 0) / 1000 + 20));
+  }
+  status('> tx ' + what + ' [sent]');
+}
+async function runScript() {
+  const s = script();
+  if (!s.blocks.length) { status('Сценарий пуст', 'err'); return; }
+  scriptRun = true; scriptLabels();
+  let lock = null;
+  try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // экран не гаснет, пока идёт сценарий
+  status('> сценарий «' + s.name + '»: старт');
+  let err = null;
+  try {
+    await Scripts.run(s, scriptSend, i => blockRows.forEach((r, k) => r.classList.toggle('on', k === i)), () => !scriptRun);
+  } catch (e) { err = e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message || 'Ошибка передачи'; }
+  const stoppedByUser = !scriptRun;
+  scriptRun = false; scriptLabels();
+  blockRows.forEach(r => r.classList.remove('on'));
+  try { lock && lock.release(); } catch {}
+  if (err) status(err, 'err'); else status(stoppedByUser ? '> сценарий остановлен' : '> сценарий выполнен');
+}
+play.addEventListener('click', () => { if (scriptRun) scriptRun = false; else runScript(); });
+scriptChanged();
+
 buildGrid(false);
 applyColor();
 
@@ -1472,7 +1786,7 @@ dlg.querySelectorAll('input[name=mode]').forEach(r => r.addEventListener('change
 dlg.querySelectorAll('input[name=theme]').forEach(r => r.addEventListener('change', () => {
   if (r.value === 'terminal') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = r.value;
   try { localStorage.setItem('krisa-theme', r.value); } catch {}
-  applyColor(); syncTabs(); moreLabel();
+  applyColor(); syncTabs(); moreLabel(); scriptLabels();
   if (tab === 'color') renderPanel();
 }));
 $('host').addEventListener('input', e => { settings.host = e.target.value; save(); renderMode(); });
@@ -1845,7 +2159,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.25', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.26', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

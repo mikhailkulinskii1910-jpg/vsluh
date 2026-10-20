@@ -23,6 +23,9 @@ struct ContentView: View {
     @AppStorage("boardBrand") private var boardBrand = 0
     /// Состояние кондиционера (для подзаголовка — номер пульта).
     @AppStorage("acState") private var acState = ""
+    /// Сценарии (JSON) и номер текущего — для подзаголовка.
+    @AppStorage("scripts") private var scriptsJSON = ""
+    @AppStorage("scriptCur") private var scriptCur = 0
     // цвет «Терминала» и палитра «Тепловизора» (сами значения Term/Heat держат в статических полях)
     @AppStorage("termColor") private var termColor = 0xEDEDED
     @AppStorage("matrix") private var matrix = false
@@ -93,6 +96,8 @@ struct ContentView: View {
                     projArea.padding(.top, 12)
                 } else if tab == "ac" {
                     AcPanel(model: model).padding(.top, 12)
+                } else if tab == "scripts" {
+                    ScriptPanel(model: model).padding(.top, 12)
                 } else {
                     boardsArea.padding(.top, 12)
                 }
@@ -476,6 +481,11 @@ extension ContentView {
             let m: Int = AcState.decode(acState).model
             return "кондиционер :: Haier :: " + Haier.models[m]
         }
+        if tab == "scripts" {
+            let list: [KScript] = ScriptStore.load(scriptsJSON)
+            let i: Int = min(max(scriptCur, 0), list.count - 1)
+            return "сценарий :: " + list[i].name
+        }
         return boardIndex == 1 ? "доска :: MocTec :: NEC 04FB" : "доска :: IRBIS #500202 :: NEC 807F"
     }
     /// Шрифт подзаголовка: он русский — в VT323 кириллицы нет.
@@ -485,33 +495,38 @@ extension ContentView {
         return Term.mono(20)
     }
 
-    /// Вкладки «Доски» / «Проекторы» / «Кондиционеры» / «Цвет» над пультом.
+    /// Вкладки в два ряда: «Доски | Проекторы | Кондиционеры» и «Сценарии | Цвет».
     func remoteTabs() -> some View {
-        GeometryReader { g in tabRow(width: g.size.width) }
-            .frame(height: 40)
+        VStack(spacing: 6) {
+            GeometryReader { g in tabRow(ContentView.tabs1, width: g.size.width) }
+                .frame(height: 40)
+            GeometryReader { g in tabRow(ContentView.tabs2, width: g.size.width) }
+                .frame(height: 40)
+        }
     }
 
-    /// Вкладки: id, подпись и вес ширины (длина подписи + 2.5).
-    private static let tabs: [(id: String, title: String, weight: CGFloat)] = [
-        ("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5), ("color", "Цвет", 6.5),
-    ]
+    /// Вкладка: id, подпись и вес ширины (длина подписи + 2.5).
+    typealias TabSpec = (id: String, title: String, weight: CGFloat)
 
-    private func tabRow(width: CGFloat) -> some View {
+    private static let tabs1: [TabSpec] = [("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5)]
+    private static let tabs2: [TabSpec] = [("scripts", "Сценарии", 10.5), ("color", "Цвет", 6.5)]
+
+    private func tabRow(_ tabs: [TabSpec], width: CGFloat) -> some View {
         HStack(spacing: 8) {
-            ForEach(ContentView.tabs.indices, id: \.self) { i in
-                remoteTab(ContentView.tabs[i].id, ContentView.tabs[i].title)
-                    .frame(width: tabWidth(i, total: width))
+            ForEach(tabs.indices, id: \.self) { i in
+                remoteTab(tabs[i].id, tabs[i].title)
+                    .frame(width: tabWidth(tabs, i, total: width))
             }
         }
     }
 
     /// Ширина вкладки пропорционально её весу.
-    private func tabWidth(_ i: Int, total: CGFloat) -> CGFloat {
+    private func tabWidth(_ tabs: [TabSpec], _ i: Int, total: CGFloat) -> CGFloat {
         var sum: CGFloat = 0
-        for t in ContentView.tabs { sum += t.weight }
-        let gaps: CGFloat = 8 * CGFloat(ContentView.tabs.count - 1)
+        for t in tabs { sum += t.weight }
+        let gaps: CGFloat = 8 * CGFloat(tabs.count - 1)
         let free: CGFloat = max(0, total - gaps)
-        return free * ContentView.tabs[i].weight / sum
+        return free * tabs[i].weight / sum
     }
 
     /// Какая вкладка подсвечена.
@@ -651,11 +666,19 @@ struct TabLabel: View {
     var height: CGFloat = 40
     /// Кегль русских подписей (в VT323 кириллицы нет — у них свой шрифт).
     var ruSize: CGFloat = 13
+    /// Текст слева (строки блоков сценария), а не по центру.
+    var leading: Bool = false
+    /// Всегда русский шрифт (строки, где кириллица может и не встретиться).
+    var forceRu: Bool = false
 
     /// Есть ли в подписи кириллица.
     private var isRu: Bool {
-        title.unicodeScalars.contains { u in u.value >= 0x400 && u.value <= 0x4FF }
+        if forceRu { return true }
+        return title.unicodeScalars.contains { u in u.value >= 0x400 && u.value <= 0x4FF }
     }
+
+    private var align: Alignment { leading ? .leading : .center }
+    private var pad: CGFloat { leading ? 10 : 3 }
 
     private var font: Font {
         if isRu && (Term.terminal || Term.thermal) { return Term.ru(ruSize) }
@@ -667,20 +690,20 @@ struct TabLabel: View {
             prismLabel
         } else if Term.thermal {
             Text(title).font(font).foregroundColor(on ? Heat.ink : Term.fg)
-                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
-                .frame(maxWidth: .infinity).frame(height: height)
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, pad)
+                .frame(maxWidth: .infinity, alignment: align).frame(height: height)
                 .background(thermalFill)
                 .overlay(Rectangle().strokeBorder(Heat.yellow, lineWidth: 1))
         } else if Term.blueprint {
             Blueprint.caps(title, isRu ? ruSize * 0.88 : 13).foregroundColor(on ? Blueprint.bg : Blueprint.ink)
-                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
-                .frame(maxWidth: .infinity).frame(height: height)
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, pad)
+                .frame(maxWidth: .infinity, alignment: align).frame(height: height)
                 .background(on ? Blueprint.ink : Blueprint.bg.opacity(0.78))
                 .overlay(Rectangle().strokeBorder(Blueprint.ink, lineWidth: 1))
         } else {
             Text(title).font(font).foregroundColor(on ? Color.black : Term.fg)
-                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
-                .frame(maxWidth: .infinity).frame(height: height)
+                .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, pad)
+                .frame(maxWidth: .infinity, alignment: align).frame(height: height)
                 .background(on ? Term.fg : Color.black)
                 .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
         }
@@ -689,8 +712,8 @@ struct TabLabel: View {
     private var prismLabel: some View {
         let size: CGFloat = isRu ? ruSize * 0.76 : 15
         return Text(title).font(Prism.display(size)).foregroundColor(on ? Prism.ink : Term.fg)
-            .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, 3)
-            .frame(maxWidth: .infinity).frame(height: height)
+            .lineLimit(1).minimumScaleFactor(0.6).padding(.horizontal, pad)
+            .frame(maxWidth: .infinity, alignment: align).frame(height: height)
             .background(GlassBox(radius: 14, on: on, seed: on ? 5 : 2))
     }
 

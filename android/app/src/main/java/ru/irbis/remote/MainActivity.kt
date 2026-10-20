@@ -328,17 +328,23 @@ class MainActivity : Activity() {
         tabAc = ruTab("Кондиционеры", TAB_AC)
         tabRoulette = ruTab("Рулетка", TAB_ROULETTE)
         tabColor = ruTab("Цвет", TAB_COLOR)
-        val tabList = listOf(tabBoards, tabProj, tabAc, tabRoulette, tabColor!!)
-        // ширина вкладки — по длине подписи
-        tabList.forEachIndexed { i, t ->
-            tabs.addView(t, LinearLayout.LayoutParams(0, dp(40), t.text.length + 2.5f).apply { if (i > 0) leftMargin = dp(4) })
+        tabScripts = ruTab("Сценарии", TAB_SCRIPTS)
+        // два ряда вкладок: устройства сверху, «Сценарии», «Рулетка» и «Цвет» — во втором; ширина — по длине подписи
+        val tabs2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
+        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc), tabs2 to listOf(tabScripts, tabRoulette, tabColor!!))) {
+            list.forEachIndexed { i, t ->
+                row.addView(t, LinearLayout.LayoutParams(0, dp(40), t.text.length + 2.5f).apply { if (i > 0) leftMargin = dp(4) })
+            }
         }
         root.addView(tabs, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        root.addView(tabs2, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
 
         boardsPanel = buildBoardsPanel()
         root.addView(boardsPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         acPanel = buildAcPanel()
         root.addView(acPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        scriptPanel = buildScriptPanel()
+        root.addView(scriptPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         projPanel = buildProjPanel()
         root.addView(projPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         mocPanel = buildMocPanel()
@@ -409,6 +415,8 @@ class MainActivity : Activity() {
     private lateinit var tabAc: TextView
     private lateinit var boardsPanel: View
     private lateinit var acPanel: View
+    private lateinit var tabScripts: TextView
+    private lateinit var scriptPanel: View
     private lateinit var tabRoulette: TextView
     private lateinit var mocPanel: View
     private lateinit var mocCode: TextView
@@ -453,11 +461,14 @@ class MainActivity : Activity() {
         tabColor?.let { styleTab(it, tab == TAB_COLOR) }
         boardsPanel.visibility = if (tab == TAB_BOARDS) View.VISIBLE else View.GONE
         acPanel.visibility = if (tab == TAB_AC) View.VISIBLE else View.GONE
+        styleTab(tabScripts, tab == TAB_SCRIPTS)
+        scriptPanel.visibility = if (tab == TAB_SCRIPTS) View.VISIBLE else View.GONE
         mocPanel.visibility = if (tab == TAB_ROULETTE) View.VISIBLE else View.GONE
         colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
         subtitle.text = when (tab) {
             TAB_BOARDS -> boardSubtitle()
             TAB_AC -> acSubtitle()
+            TAB_SCRIPTS -> "сценарий :: ${scripts.getOrNull(scriptIdx)?.name ?: "—"}"
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
             TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
             TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else if (Term.prism) "призма :: стекло и свет" else "terminal :: phosphor color"
@@ -627,6 +638,209 @@ class MainActivity : Activity() {
         p.addView(btn, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(8) })
         p.addView(extra, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         return p
+    }
+
+    /* ---------- Вкладка «Сценарии»: редактор из блоков ---------- */
+
+    private var scripts: MutableList<Scripts.Script> = ArrayList()
+    private var scriptIdx = 0
+    @Volatile private var scriptRun = false
+    private lateinit var scriptList: LinearLayout
+    private lateinit var scriptName: TextView
+    private lateinit var scriptPlay: TextView
+    private val blockRows = ArrayList<TextView>()
+    private val script get() = scripts[scriptIdx]
+
+    private fun scriptsSave() {
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_SCRIPTS, Scripts.toJson(scripts)).putInt(PREF_SCRIPT_CUR, scriptIdx).apply()
+    }
+
+    /**
+     * Сценарий — список блоков: устройство, команда, задержка, цикл ×N … конец цикла.
+     * «▶ Отправить» выполняет его по порядку, текущий блок подсвечивается; «■ Стоп» — прервать.
+     */
+    private fun buildScriptPanel(): View {
+        val prefs = getPreferences(MODE_PRIVATE)
+        scripts = Scripts.fromJson(prefs.getString(PREF_SCRIPTS, null))
+        if (scripts.isEmpty()) scripts += Scripts.example()
+        scriptIdx = prefs.getInt(PREF_SCRIPT_CUR, 0).coerceIn(0, scripts.size - 1)
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(text("Блоки выполняются сверху вниз. Команда идёт тому устройству, что выбрано блоком «устройство» выше неё. " +
+            "Нажмите на блок, чтобы изменить его.", 13f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(2), 0, 0, dp(8)) })
+        // имя сценария: нажать — выбрать другой; «новый», «имя», «удалить»
+        scriptName = mocButton("") { pickScript() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 17f) }
+        p.addView(scriptName, LinearLayout.LayoutParams(-1, dp(50)))
+        fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply {
+            typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (Term.prism) 11f else 13f)
+        }
+        fun row(vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(44), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+        p.addView(row(
+            small("[ новый ]") { askText("Новый сценарий", "Сценарий ${scripts.size + 1}") { n -> scripts += Scripts.Script(n); scriptIdx = scripts.size - 1; scriptChanged() } },
+            small("[ имя ]") { askText("Имя сценария", script.name) { n -> script.name = n; scriptChanged() } },
+            small("[ удалить ]") {
+                AlertDialog.Builder(this).setTitle("Удалить «${script.name}»?").setNegativeButton("Нет", null).setPositiveButton("Удалить") { _, _ ->
+                    scripts.removeAt(scriptIdx); if (scripts.isEmpty()) scripts += Scripts.Script("Сценарий 1")
+                    scriptIdx = scriptIdx.coerceAtMost(scripts.size - 1); scriptChanged()
+                }.show()
+            },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+
+        scriptList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(scriptList, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+
+        p.addView(row(
+            small("[+ устройство]") { pickDevice(null) },
+            small("[+ команда]") { addCommand() },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(
+            small("[+ задержка]") { askNumber("Задержка, секунд", "1") { v -> insertBlock(Scripts.Block.Delay(v.coerceIn(0.1, 600.0))) } },
+            small("[+ цикл]") { askNumber("Сколько раз повторить", "3", integer = true) { v ->
+                insertBlock(Scripts.Block.Loop(v.toInt().coerceIn(1, 999))); insertBlock(Scripts.Block.End) } },
+        ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+
+        scriptPlay = mocButton("[ ▶ Отправить ]") { if (scriptRun) scriptRun = false else runScript() }
+        p.addView(scriptPlay, LinearLayout.LayoutParams(-1, dp(58)).apply { topMargin = dp(12) })
+        scriptChanged()
+        return p
+    }
+
+    private fun scriptChanged() {
+        scriptsSave()
+        scriptName.text = btnLabel("[ ${script.name} ▾ ]")
+        if (::subtitle.isInitialized && ::scriptPanel.isInitialized && scriptPanel.visibility == View.VISIBLE) subtitle.text = "сценарий :: ${script.name}"
+        renderBlocks()
+    }
+
+    private fun renderBlocks() {
+        scriptList.removeAllViews(); blockRows.clear()
+        if (script.blocks.isEmpty()) scriptList.addView(text("пусто — добавьте блоки кнопками ниже", 13f, Term.DIM).apply { typeface = Term.ru })
+        script.blocks.forEachIndexed { i, b ->
+            val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+            val main = TextView(this).apply {
+                text = "%02d  %s".format(i + 1, Scripts.text(b))
+                typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setTextColor(Term.FG)
+                isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(dp(10), 0, dp(6), 0); gravity = Gravity.CENTER_VERTICAL
+                background = Term.boxBg(this@MainActivity)
+                setOnClickListener { glitch(it); editBlock(i) }
+            }
+            blockRows += main
+            r.addView(main, LinearLayout.LayoutParams(0, dp(42), 1f).apply { leftMargin = dp(14) * Scripts.depthAt(script, i) })
+            fun icon(t: String, click: () -> Unit) = TextView(this).apply {
+                text = t; gravity = Gravity.CENTER; setTextColor(Term.FG); typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                background = Term.boxBg(this@MainActivity); setOnClickListener { glitch(it); click() }
+            }
+            r.addView(icon("↑") { moveBlock(i, -1) }, LinearLayout.LayoutParams(dp(36), dp(42)).apply { leftMargin = dp(4) })
+            r.addView(icon("↓") { moveBlock(i, 1) }, LinearLayout.LayoutParams(dp(36), dp(42)).apply { leftMargin = dp(4) })
+            r.addView(icon("✕") { script.blocks.removeAt(i); scriptChanged() }, LinearLayout.LayoutParams(dp(36), dp(42)).apply { leftMargin = dp(4) })
+            scriptList.addView(r, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(5) })
+        }
+    }
+
+    private fun moveBlock(i: Int, d: Int) {
+        val j = i + d
+        if (j !in script.blocks.indices) return
+        val b = script.blocks.removeAt(i); script.blocks.add(j, b); scriptChanged()
+    }
+
+    private fun insertBlock(b: Scripts.Block) { script.blocks += b; scriptChanged() }
+
+    private fun pickScript() {
+        AlertDialog.Builder(this).setTitle("Сценарии")
+            .setSingleChoiceItems(scripts.map { it.name }.toTypedArray(), scriptIdx) { d, w -> d.dismiss(); scriptIdx = w; scriptChanged() }
+            .show()
+    }
+
+    /** Выбор устройства: для нового блока ([edit] = null) или для изменения существующего. */
+    private fun pickDevice(edit: Scripts.Block.Dev?) {
+        AlertDialog.Builder(this).setTitle("Устройство")
+            .setItems(Scripts.DEVICES.map { it.title }.toTypedArray()) { _, w -> if (edit != null) { edit.device = w; scriptChanged() } else insertBlock(Scripts.Block.Dev(w)) }
+            .show()
+    }
+
+    private fun addCommand(replaceAt: Int = -1) {
+        val dev = Scripts.deviceAt(script, if (replaceAt >= 0) replaceAt else script.blocks.size - 1)
+        if (dev < 0) { say("Сначала добавьте блок «устройство»", err = true); pickDevice(null); return }
+        val d = Scripts.DEVICES[dev]
+        if (d.acModel >= 0) { editAc(if (replaceAt >= 0) script.blocks[replaceAt] as? Scripts.Block.Ac else null); return }
+        AlertDialog.Builder(this).setTitle(d.title)
+            .setItems(d.keys.map { it.first }.toTypedArray()) { _, w ->
+                val (l, c) = d.keys[w]
+                if (replaceAt >= 0) { script.blocks[replaceAt] = Scripts.Block.Cmd(l, c); scriptChanged() } else insertBlock(Scripts.Block.Cmd(l, c))
+            }.show()
+    }
+
+    /** Команда кондиционеру: питание, режим, температура, скорость — кнопками, которые перебирают значения. */
+    private fun editAc(edit: Scripts.Block.Ac?) {
+        val b = edit ?: Scripts.Block.Ac(ac.power, ac.mode, ac.temp, ac.fan)
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val rows = ArrayList<() -> Unit>()
+        fun cyc(label: () -> String, click: () -> Unit) = TextView(this).apply {
+            typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); gravity = Gravity.CENTER; setPadding(0, dp(10), 0, dp(10))
+            val upd = { text = label() }; rows += upd; upd()
+            setOnClickListener { click(); rows.forEach { it() } }
+        }
+        box.addView(cyc({ "питание: " + if (b.power) "вкл" else "выкл" }) { b.power = !b.power })
+        box.addView(cyc({ "режим: " + b.mode.title }) { b.mode = Haier.Mode.values()[(b.mode.ordinal + 1) % 5] })
+        box.addView(cyc({ "температура: ${b.temp}° (нажмите: +1)" }) { b.temp = if (b.temp >= 30) 16 else b.temp + 1 })
+        box.addView(cyc({ "скорость: " + b.fan.title }) { b.fan = Haier.Fan.values()[(b.fan.ordinal + 1) % 4] })
+        AlertDialog.Builder(this).setTitle("Кондиционер").setView(box).setNegativeButton("Отмена", null)
+            .setPositiveButton("OK") { _, _ -> if (edit != null) scriptChanged() else insertBlock(b) }.show()
+    }
+
+    private fun editBlock(i: Int) {
+        when (val b = script.blocks[i]) {
+            is Scripts.Block.Dev -> pickDevice(b)
+            is Scripts.Block.Cmd -> addCommand(i)
+            is Scripts.Block.Ac -> editAc(b)
+            is Scripts.Block.Delay -> askNumber("Задержка, секунд", Scripts.fmt(b.sec)) { v -> b.sec = v.coerceIn(0.1, 600.0); scriptChanged() }
+            is Scripts.Block.Loop -> askNumber("Сколько раз повторить", b.times.toString(), integer = true) { v -> b.times = v.toInt().coerceIn(1, 999); scriptChanged() }
+            Scripts.Block.End -> say("Конец цикла: перемещайте его стрелками ↑ ↓")
+        }
+    }
+
+    private fun askText(title: String, value: String, ok: (String) -> Unit) {
+        val e = android.widget.EditText(this).apply { setText(value); setSelection(value.length); setSingleLine() }
+        AlertDialog.Builder(this).setTitle(title).setView(e).setNegativeButton("Отмена", null)
+            .setPositiveButton("OK") { _, _ -> e.text.toString().trim().takeIf { it.isNotEmpty() }?.let(ok) }.show()
+    }
+
+    private fun askNumber(title: String, value: String, integer: Boolean = false, ok: (Double) -> Unit) {
+        val e = android.widget.EditText(this).apply {
+            setText(value); setSelection(value.length); setSingleLine()
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or (if (integer) 0 else android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL)
+        }
+        AlertDialog.Builder(this).setTitle(title).setView(e).setNegativeButton("Отмена", null)
+            .setPositiveButton("OK") { _, _ -> e.text.toString().replace(',', '.').toDoubleOrNull()?.let(ok) }.show()
+    }
+
+    private fun runScript() {
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        if (script.blocks.isEmpty()) return say("Сценарий пуст", err = true)
+        scriptRun = true
+        scriptPlay.text = btnLabel("[ ■ Стоп ]"); styleTab(scriptPlay, true)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)   // экран не гаснет, пока идёт сценарий
+        val s = script
+        say("> сценарий «${s.name}»: старт")
+        io.execute {
+            var err: String? = null
+            try {
+                Scripts.run(s, send = { frame, what -> tx.transmit(frame); ui.post { say("> tx $what [sent]") } },
+                    mark = { i -> ui.post { blockRows.forEachIndexed { k, v -> styleTab(v, k == i); if (k != i) v.setTextColor(Term.FG) } } },
+                    stopped = { !scriptRun })
+            } catch (e: Exception) { err = e.message ?: "Ошибка передачи" }
+            ui.post {
+                val stoppedByUser = !scriptRun
+                scriptRun = false
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                scriptPlay.text = btnLabel("[ ▶ Отправить ]"); styleTab(scriptPlay, false)
+                blockRows.forEach { styleTab(it, false); it.setTextColor(Term.FG) }
+                if (err != null) say(err!!, err = true) else say(if (stoppedByUser) "> сценарий остановлен" else "> сценарий выполнен", ok = !stoppedByUser)
+            }
+        }
     }
 
     /** Номера пультов коротко: «#1803 +3». */
@@ -1241,6 +1455,9 @@ class MainActivity : Activity() {
         private const val TAB_IRBIS = "irbis"
         private const val TAB_BOARDS = "boards"
         private const val TAB_AC = "ac"
+        private const val TAB_SCRIPTS = "scripts"
+        private const val PREF_SCRIPTS = "scripts"
+        private const val PREF_SCRIPT_CUR = "script_cur"
         private const val PREF_BOARD = "board_brand"
         private const val PREF_AC = "ac_state"
         private const val TAB_MOC = "moc"
