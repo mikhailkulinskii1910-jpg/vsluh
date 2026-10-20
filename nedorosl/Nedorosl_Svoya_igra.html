@@ -810,9 +810,10 @@ function wreath(cx,cy,r){let s="",stem="";const D=Math.PI/180;
 
 /* ===================== СОСТОЯНИЕ ===================== */
 const KEY="nedorosl-svoya-igra-v1";
-const fresh=()=>({played:{},catMap:{},teams:[{name:"Команда 1",score:0},{name:"Команда 2",score:0}],finalPlayed:false,sound:true,voice:true});
+const fresh=()=>({played:{},catMap:{},teams:[{name:"Команда 1",score:0},{name:"Команда 2",score:0}],finalPlayed:false,sound:true,voice:false});
 let S=fresh();
 try{const raw=localStorage.getItem(KEY);if(raw){const p=JSON.parse(raw);if(p&&p.teams)S=Object.assign(fresh(),p)}}catch(e){}
+S.voice=false; /* озвучка всегда выключена при запуске — включается кнопкой */
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 
 /* ===================== ЗВУК ===================== */
