@@ -12,11 +12,13 @@ object Scripts {
     /** Устройства, которые можно выбрать в блоке «устройство». */
     class Device(val title: String, val keys: List<Pair<String, Long>>, val acModel: Int = -1)
 
-    val DEVICES: List<Device> by lazy {
-        listOf(Device("Доска · IRBIS", KEYS), Device("Доска · MocTec", MOC_KEYS)) +
+    /** Команды IRBIS, найденные сканером (подпись, код NEC) — добавляются к 12 известным. */
+    var irbisFound: List<Pair<String, Long>> = emptyList()
+
+    val DEVICES: List<Device> get() =
+        listOf(Device("Доска · IRBIS", KEYS + irbisFound), Device("Доска · MocTec", MOC_KEYS)) +
             PROJECTORS.map { Device("Проектор · ${it.brand}", it.keys) } +
             Haier.MODELS.mapIndexed { i, m -> Device("Кондиционер · Haier ${i + 1} $m", emptyList(), acModel = i) }
-    }
 
     sealed class Block {
         class Dev(var device: Int) : Block()
@@ -28,7 +30,8 @@ object Scripts {
         object End : Block()
     }
 
-    class Script(var name: String, val blocks: MutableList<Block> = ArrayList())
+    /** [pin] — сценарий вынесен кнопкой-макросом на пульт IRBIS («Мои кнопки»). */
+    class Script(var name: String, val blocks: MutableList<Block> = ArrayList(), var pin: Boolean = false)
 
     /** Пример для первого запуска: выключить проектор NEC (два нажатия POWER) и доску MocTec. */
     fun example(): Script {
@@ -38,6 +41,32 @@ object Scripts {
             Block.Dev(2), Block.Cmd(nec.first, nec.second), Block.Delay(1.5), Block.Cmd(nec.first, nec.second),
             Block.Delay(2.0), Block.Dev(1), Block.Cmd(moc.first, moc.second)))
     }
+
+    /** Готовые макросы для пульта IRBIS — создаются один раз, их можно менять и удалять. */
+    fun presets(): List<Script> {
+        fun k(name: String) = KEYS.first { it.first == name }.let { Block.Cmd(it.first, it.second) }
+        return listOf(
+            Script("Тихо", mutableListOf(Block.Dev(0), Block.Loop(20), k("VOL-"), Block.End), pin = true),
+            Script("Громче +5", mutableListOf(Block.Dev(0), Block.Loop(5), k("VOL+"), Block.End), pin = true),
+            Script("Пауза урока", mutableListOf(Block.Dev(0), k("FREEZE"), Block.Delay(0.5), k("EMPY SCREEN")), pin = true),
+            Script("Следующий вход", mutableListOf(Block.Dev(0), k("INPUT"), Block.Delay(1.0), k("J DOWN"), Block.Delay(0.5), k("J OK")), pin = true),
+        )
+    }
+
+    /** Код NEC: адрес (16 бит), команда, инверсия команды. */
+    fun nec(addr: Int, cmd: Int): Long = ((addr.toLong() and 0xFFFF) shl 16) or ((cmd.toLong() and 0xFF) shl 8) or (cmd.inv() and 0xFF).toLong()
+
+    /** Подпись известного кода из всех пультов приложения, или null. */
+    fun knownLabel(code: Long): String? =
+        (KEYS + irbisFound).firstOrNull { it.second == code }?.first?.let { "IRBIS $it" }
+            ?: MOC_KEYS.firstOrNull { it.second == code }?.first?.let { "MocTec $it" }
+            ?: PROJECTORS.firstNotNullOfOrNull { p -> p.keys.firstOrNull { it.second == code }?.first?.let { "${p.brand} $it" } }
+
+    fun keysToJson(k: List<Pair<String, Long>>): String = JSONArray().apply { k.forEach { put(JSONObject().put("l", it.first).put("c", it.second)) } }.toString()
+    fun keysFromJson(json: String?): List<Pair<String, Long>> = runCatching {
+        val a = JSONArray(json ?: return emptyList())
+        (0 until a.length()).map { a.getJSONObject(it).let { o -> o.getString("l") to o.getLong("c") } }
+    }.getOrDefault(emptyList())
 
     /** Устройство, к которому относится блок номер [at] (ближайший «устройство» выше), или -1. */
     fun deviceAt(s: Script, at: Int): Int {
@@ -93,7 +122,7 @@ object Scripts {
 
     fun toJson(list: List<Script>): String = JSONArray().apply {
         list.forEach { s ->
-            put(JSONObject().put("name", s.name).put("blocks", JSONArray().apply {
+            put(JSONObject().put("name", s.name).put("pin", s.pin).put("blocks", JSONArray().apply {
                 s.blocks.forEach { b ->
                     put(when (b) {
                         is Block.Dev -> JSONObject().put("t", "dev").put("d", b.device)
@@ -114,7 +143,7 @@ object Scripts {
         runCatching {
             val a = JSONArray(json)
             for (i in 0 until a.length()) {
-                val o = a.getJSONObject(i); val bl = o.getJSONArray("blocks"); val s = Script(o.getString("name"))
+                val o = a.getJSONObject(i); val bl = o.getJSONArray("blocks"); val s = Script(o.getString("name"), pin = o.optBoolean("pin"))
                 for (k in 0 until bl.length()) {
                     val b = bl.getJSONObject(k)
                     s.blocks += when (b.getString("t")) {

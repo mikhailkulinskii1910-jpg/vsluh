@@ -27,6 +27,8 @@ enum SBlock {
 struct KScript {
     var name: String
     var blocks: [SBlock] = []
+    /// Сценарий вынесен кнопкой-макросом на пульт IRBIS («мои кнопки»).
+    var pin: Bool = false
 }
 
 /// Устройство для блока «устройство».
@@ -69,13 +71,21 @@ private struct SBlockJSON: Codable {
 private struct KScriptJSON: Codable {
     var name: String
     var blocks: [SBlockJSON]
+    var pin: Bool?
 }
 
 enum ScriptStore {
-    static let devices: [SDevice] = makeDevices()
+    /// Устройства для блока «устройство»; пересобираются, когда меняются найденные сканером команды IRBIS.
+    static var devices: [SDevice] = makeDevices()
+
+    /// Команды IRBIS, найденные сканером (ключ "irbis_found") — добавляются к 12 известным.
+    static var irbisFound: [(label: String, code: UInt32)] = Irbis.decodeFound(UserDefaults.standard.string(forKey: "irbis_found") ?? "") {
+        didSet { devices = makeDevices() }
+    }
 
     private static func makeDevices() -> [SDevice] {
-        var out: [SDevice] = [SDevice(title: "Доска · IRBIS", keys: KEYS, acModel: -1),
+        let irbis: [(label: String, code: UInt32)] = KEYS + irbisFound
+        var out: [SDevice] = [SDevice(title: "Доска · IRBIS", keys: irbis, acModel: -1),
                               SDevice(title: "Доска · MocTec", keys: MOC_KEYS, acModel: -1)]
         for b in PROJ_BRANDS { out.append(SDevice(title: "Проектор · " + b.name, keys: b.keys, acModel: -1)) }
         for i in 0..<Haier.models.count {
@@ -205,7 +215,7 @@ enum ScriptStore {
     }
 
     static func encode(_ list: [KScript]) -> String {
-        let arr: [KScriptJSON] = list.map { s in KScriptJSON(name: s.name, blocks: s.blocks.map { b in toJSON(b) }) }
+        let arr: [KScriptJSON] = list.map { s in KScriptJSON(name: s.name, blocks: s.blocks.map { b in toJSON(b) }, pin: s.pin) }
         guard let data = try? JSONEncoder().encode(arr) else { return "" }
         return String(data: data, encoding: .utf8) ?? ""
     }
@@ -213,7 +223,35 @@ enum ScriptStore {
     static func decode(_ json: String) -> [KScript] {
         guard let data = json.data(using: .utf8),
               let arr = try? JSONDecoder().decode([KScriptJSON].self, from: data) else { return [] }
-        return arr.map { j in KScript(name: j.name, blocks: j.blocks.map { b in fromJSON(b) }) }
+        return arr.map { j in KScript(name: j.name, blocks: j.blocks.map { b in fromJSON(b) }, pin: j.pin ?? false) }
+    }
+
+    /// Команда пульта IRBIS по подписи.
+    private static func irbisKey(_ name: String) -> SBlock {
+        let code: UInt32 = KEYS.first { k in k.label == name }?.code ?? 0
+        return .cmd(name, code)
+    }
+
+    /// Готовые макросы для пульта IRBIS — создаются один раз, их можно менять и удалять.
+    static func presets() -> [KScript] {
+        let quiet: [SBlock] = [.dev(0), .loop(20), irbisKey("VOL-"), .end]
+        let louder: [SBlock] = [.dev(0), .loop(5), irbisKey("VOL+"), .end]
+        let pause: [SBlock] = [.dev(0), irbisKey("FREEZE"), .delay(0.5), irbisKey("EMPY SCREEN")]
+        let next: [SBlock] = [.dev(0), irbisKey("INPUT"), .delay(1), irbisKey("J DOWN"), .delay(0.5), irbisKey("J OK")]
+        return [KScript(name: "Тихо", blocks: quiet, pin: true),
+                KScript(name: "Громче +5", blocks: louder, pin: true),
+                KScript(name: "Пауза урока", blocks: pause, pin: true),
+                KScript(name: "Следующий вход", blocks: next, pin: true)]
+    }
+
+    /// При первом запуске 1.30 добавить готовые макросы в конец списка сценариев (флаг "macros_seeded").
+    static func seedIfNeeded() {
+        let d = UserDefaults.standard
+        if d.bool(forKey: "macros_seeded") { return }
+        var list: [KScript] = load(d.string(forKey: "scripts") ?? "")
+        list.append(contentsOf: presets())
+        d.set(encode(list), forKey: "scripts")
+        d.set(true, forKey: "macros_seeded")
     }
 
     /// Сохранённые сценарии; если пусто — пример «Конец урока».
@@ -425,6 +463,20 @@ struct ScriptPanel: View {
             small("[ новый ]") { dialog = .newName }
             small("[ имя ]") { dialog = .rename }
             small("[ удалить ]") { askDelete = true }
+            pinButton
+        }
+    }
+
+    /// «на пульт»: сценарий становится кнопкой-макросом на пульте IRBIS.
+    private var pinButton: some View {
+        let on: Bool = script.pin
+        let title: String = on ? "[ ✓ на пульте ]" : "[ на пульт ]"
+        return Button {
+            var s: KScript = script
+            s.pin.toggle()
+            changed(s)
+        } label: {
+            TabLabel(title: label(title), on: on, height: 44, ruSize: 12)
         }
     }
 
@@ -689,7 +741,7 @@ struct ScriptPanel: View {
             model.stopScript()
         } else {
             held = nil
-            model.runScript(script)
+            model.runScript(script, tag: "panel")
         }
     }
 

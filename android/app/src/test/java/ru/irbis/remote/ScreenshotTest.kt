@@ -215,6 +215,43 @@ class ScreenshotTest {
         }
     }
 
+    /** IRBIS: найденные сканером кнопки, «Мои кнопки» и открытый сканер — в двух темах. */
+    @Test
+    fun shotsMacros() {
+        for (theme in listOf("terminal", "blueprint")) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", "macros").apply { mkdirs() }
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()
+                .putString("theme", theme).putString("tab", "boards")
+                .putString("irbis_found", """[{"l":"HDMI 1","c":2155811310},{"l":"OPS","c":2155819470}]""").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
+            root.draw(Canvas(Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+            val scan = (findText(root, "[ сканер ▾ ]") ?: findText(root, " сканер ▾ "))!!
+            scan.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+            val sv = findScroll(root)!!
+            for ((name, target) in listOf("keys" to 0, "scan" to 1)) {
+                val loc = IntArray(2); val top = IntArray(2)
+                sv.scrollTo(0, 0); scan.getLocationInWindow(loc); sv.getLocationInWindow(top)
+                sv.scrollTo(0, if (target == 0) loc[1] - top[1] - sv.height / 2 else loc[1] - top[1] - 40)
+                shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100))
+                Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                    root.draw(Canvas(bmp)); File(out, "$theme-$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                }
+            }
+            ctl.pause().stop().destroy()
+        }
+    }
+
+    private fun findScroll(v: View): android.widget.ScrollView? = when (v) {
+        is android.widget.ScrollView -> v
+        is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findScroll(v.getChildAt(it)) }
+        else -> null
+    }
+
     /** Вкладка «Кондиционеры» во всех темах. */
     @Test
     fun shotsAc() {
