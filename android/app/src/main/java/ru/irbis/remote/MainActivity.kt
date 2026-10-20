@@ -21,6 +21,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.LinearLayout
@@ -684,7 +685,7 @@ class MainActivity : Activity() {
                 AlertDialog.Builder(this).setTitle("Удалить «${script.name}»?").setNegativeButton("Нет", null).setPositiveButton("Удалить") { _, _ ->
                     scripts.removeAt(scriptIdx); if (scripts.isEmpty()) scripts += Scripts.Script("Сценарий 1")
                     scriptIdx = scriptIdx.coerceAtMost(scripts.size - 1); scriptChanged()
-                }.show()
+                }.showThemed()
             },
         ), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
 
@@ -751,14 +752,14 @@ class MainActivity : Activity() {
     private fun pickScript() {
         AlertDialog.Builder(this).setTitle("Сценарии")
             .setSingleChoiceItems(scripts.map { it.name }.toTypedArray(), scriptIdx) { d, w -> d.dismiss(); scriptIdx = w; scriptChanged() }
-            .show()
+            .showThemed()
     }
 
     /** Выбор устройства: для нового блока ([edit] = null) или для изменения существующего. */
     private fun pickDevice(edit: Scripts.Block.Dev?) {
         AlertDialog.Builder(this).setTitle("Устройство")
             .setItems(Scripts.DEVICES.map { it.title }.toTypedArray()) { _, w -> if (edit != null) { edit.device = w; scriptChanged() } else insertBlock(Scripts.Block.Dev(w)) }
-            .show()
+            .showThemed()
     }
 
     private fun addCommand(replaceAt: Int = -1) {
@@ -770,7 +771,7 @@ class MainActivity : Activity() {
             .setItems(d.keys.map { it.first }.toTypedArray()) { _, w ->
                 val (l, c) = d.keys[w]
                 if (replaceAt >= 0) { script.blocks[replaceAt] = Scripts.Block.Cmd(l, c); scriptChanged() } else insertBlock(Scripts.Block.Cmd(l, c))
-            }.show()
+            }.showThemed()
     }
 
     /** Команда кондиционеру: питание, режим, температура, скорость — кнопками, которые перебирают значения. */
@@ -788,7 +789,7 @@ class MainActivity : Activity() {
         box.addView(cyc({ "температура: ${b.temp}° (нажмите: +1)" }) { b.temp = if (b.temp >= 30) 16 else b.temp + 1 })
         box.addView(cyc({ "скорость: " + b.fan.title }) { b.fan = Haier.Fan.values()[(b.fan.ordinal + 1) % 4] })
         AlertDialog.Builder(this).setTitle("Кондиционер").setView(box).setNegativeButton("Отмена", null)
-            .setPositiveButton("OK") { _, _ -> if (edit != null) scriptChanged() else insertBlock(b) }.show()
+            .setPositiveButton("OK") { _, _ -> if (edit != null) scriptChanged() else insertBlock(b) }.showThemed()
     }
 
     private fun editBlock(i: Int) {
@@ -805,7 +806,7 @@ class MainActivity : Activity() {
     private fun askText(title: String, value: String, ok: (String) -> Unit) {
         val e = android.widget.EditText(this).apply { setText(value); setSelection(value.length); setSingleLine() }
         AlertDialog.Builder(this).setTitle(title).setView(e).setNegativeButton("Отмена", null)
-            .setPositiveButton("OK") { _, _ -> e.text.toString().trim().takeIf { it.isNotEmpty() }?.let(ok) }.show()
+            .setPositiveButton("OK") { _, _ -> e.text.toString().trim().takeIf { it.isNotEmpty() }?.let(ok) }.showThemed()
     }
 
     private fun askNumber(title: String, value: String, integer: Boolean = false, ok: (Double) -> Unit) {
@@ -814,7 +815,7 @@ class MainActivity : Activity() {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or (if (integer) 0 else android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL)
         }
         AlertDialog.Builder(this).setTitle(title).setView(e).setNegativeButton("Отмена", null)
-            .setPositiveButton("OK") { _, _ -> e.text.toString().replace(',', '.').toDoubleOrNull()?.let(ok) }.show()
+            .setPositiveButton("OK") { _, _ -> e.text.toString().replace(',', '.').toDoubleOrNull()?.let(ok) }.showThemed()
     }
 
     private fun runScript() {
@@ -1288,7 +1289,7 @@ class MainActivity : Activity() {
             .setPositiveButton("OK", null)
             .setNeutralButton("Как подключить") { _, _ -> showHelp("need") }
             .setNegativeButton("Проверка") { _, _ -> diagnostics() }
-            .show()
+            .showThemed()
     }
 
     /** «Как пользоваться»: тот же гид, что в веб-версии, из assets/guide. */
@@ -1322,7 +1323,7 @@ class MainActivity : Activity() {
 
     private fun chooseTheme() {
         val ids = arrayOf("terminal", "prism", "thermal", "blueprint")
-        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло", "Тепловизор — кадр тепловизора, 4 палитры",
+        val names = arrayOf("Терминал — чёрно-белый, пиксельный", "Призма — переливающееся стекло", "Тепловизор — кадр тепловизора, 10 палитр",
             "Чертёж — синий blueprint, схема на фоне")
         val cur = ids.indexOf(themeId).coerceAtLeast(0)
         AlertDialog.Builder(this)
@@ -1334,7 +1335,7 @@ class MainActivity : Activity() {
                     recreate()   // пересоздать экран в новой теме
                 }
             }
-            .show()
+            .showThemed()
     }
 
     private fun chooseMode() {
@@ -1359,7 +1360,7 @@ class MainActivity : Activity() {
             }
             .setNeutralButton("Проверка") { _, _ -> diagnostics() }
             .setNegativeButton("Тема") { _, _ -> chooseTheme() }
-            .show()
+            .showThemed()
     }
 
     /** Что телефон видит: встроенный ИК-порт, USB-устройства, звуковые выходы. */
@@ -1405,7 +1406,7 @@ class MainActivity : Activity() {
             getPreferences(MODE_PRIVATE).edit().putString(PREF_MODE, mode.name).apply()
             useUsb(d)
         }
-        b.show()
+        b.showThemed()
     }
 
     private fun renderMode() {
@@ -1433,6 +1434,39 @@ class MainActivity : Activity() {
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    /**
+     * Диалоги — в цветах текущей темы: фон, рамка, текст и «кружочки» выбора берутся из выбранного цвета,
+     * палитры тепловизора, оттенка чертежа или фона призмы (стили в XML знают только цвета по умолчанию).
+     */
+    private fun AlertDialog.Builder.showThemed(): AlertDialog = show().also { themeDialog(it) }
+
+    private fun themeDialog(d: AlertDialog) {
+        val stroke = if (Term.thermal) Heat.YELLOW else if (Term.blueprint) Term.FG else if (Term.prism) Term.IRIS[0] else Term.LINE
+        d.window?.setBackgroundDrawable(android.graphics.drawable.InsetDrawable(GradientDrawable().apply {
+            setColor(Term.BG); setStroke(dp(1), stroke)
+            if (Term.prism) cornerRadius = dp(18).toFloat()
+        }, dp(16)))
+        val fg = android.content.res.ColorStateList.valueOf(Term.FG)
+        fun recolor(v: View) {
+            when (v) {
+                is android.widget.CheckedTextView -> { v.setTextColor(Term.FG); v.checkMarkTintList = fg }
+                is android.widget.EditText -> { v.setTextColor(Term.FG); v.setHintTextColor(Term.DIM); v.backgroundTintList = fg }
+                is android.widget.CompoundButton -> { v.setTextColor(Term.FG); v.buttonTintList = fg }
+                is TextView -> v.setTextColor(Term.FG)
+                is ViewGroup -> {
+                    for (i in 0 until v.childCount) recolor(v.getChildAt(i))
+                    // строки списка создаются позже, при показе — красим их по мере появления
+                    if (v is android.widget.AbsListView) v.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
+                        override fun onChildViewAdded(parent: View?, child: View?) { child?.let { recolor(it) } }
+                        override fun onChildViewRemoved(parent: View?, child: View?) {}
+                    })
+                }
+            }
+        }
+        d.window?.decorView?.let { recolor(it) }
+        for (b in listOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL)) d.getButton(b)?.setTextColor(Term.FG)
+    }
 
     @Suppress("DEPRECATION")
     private fun Intent.usbDevice(): UsbDevice? =

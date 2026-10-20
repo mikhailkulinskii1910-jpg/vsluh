@@ -27,7 +27,7 @@ object Heat {
                   val accent: Int, val glow: Int, val ink: Int, val iris: Int)
     private fun cs(vararg h: String) = h.map { Color.parseColor(it) }.toIntArray()
     private fun c(h: String) = Color.parseColor(h)
-    /** Четыре самые популярные палитры тепловизоров (как у FLIR): Ironbow, White Hot, Rainbow HC, Arctic. */
+    /** Палитры тепловизоров: Ironbow, White Hot, Rainbow HC, Arctic (как у FLIR) и ещё шесть: Lava, Medical, Sepia, Night Vision, Hot Alert, Ice. */
     val PALETTES = listOf(
         Palette("ironbow", "IRONBOW", cs("#0B0418", "#2E0B5E", "#6B1585", "#B51F7A", "#E8382F", "#FF7A1A", "#FFC233", "#FFF27A", "#FFFFFF"),
             c("#050308"), c("#FFF1DC"), c("#E0974A"), c("#FFD43B"), c("#FF4A12"), c("#140700"), R.drawable.iris),
@@ -37,6 +37,18 @@ object Heat {
             c("#07001F"), c("#FFFFFF"), c("#7FD6FF"), c("#FFFFFF"), c("#FF3060"), c("#10001A"), R.drawable.iris_rainbow),
         Palette("arctic", "ARCTIC", cs("#020617", "#0B1E5B", "#1C47A8", "#3C82E0", "#8EC3F2", "#E9D9A6", "#F7B733", "#FFD966", "#FFFFFF"),
             c("#020617"), c("#F2F8FF"), c("#8EC3F2"), c("#7FE3FF"), c("#F7B733"), c("#04102A"), R.drawable.iris_arctic),
+        Palette("lava", "LAVA", cs("#04040C", "#14204A", "#0E5A6E", "#3A6E4C", "#B0362A", "#E8611A", "#F7A531", "#FFE27A", "#FFFFFF"),
+            c("#04040C"), c("#FFF1DC"), c("#7FB8C8"), c("#FF8A3D"), c("#FF5A1F"), c("#140700"), R.drawable.iris_lava),
+        Palette("medical", "MEDICAL", cs("#000010", "#0030A0", "#00A0C0", "#00C060", "#A0E000", "#FFD000", "#FF6000", "#E00000", "#FFFFFF"),
+            c("#000010"), c("#F2FBFF"), c("#8FD0FF"), c("#00E0FF"), c("#FF4000"), c("#00101A"), R.drawable.iris_medical),
+        Palette("sepia", "SEPIA", cs("#140A04", "#3A2412", "#5E3C1E", "#84582E", "#A87A46", "#C99D66", "#E3C08C", "#F4DDB4", "#FFF6E6"),
+            c("#140A04"), c("#FFF1DC"), c("#C99D66"), c("#FFC27A"), c("#E3A15A"), c("#1A0E04"), R.drawable.iris_sepia),
+        Palette("night", "NIGHT VISION", cs("#010A02", "#03250A", "#064A14", "#0B7A22", "#16A832", "#3CD650", "#86F08A", "#CFFFD0", "#FFFFFF"),
+            c("#010A02"), c("#DFFFE0"), c("#5FBF6A"), c("#6CFF7A"), c("#3CD650"), c("#021204"), R.drawable.iris_night),
+        Palette("alert", "HOT ALERT", cs("#0A0A0A", "#2A2A2A", "#4D4D4D", "#707070", "#939393", "#B6B6B6", "#D9D9D9", "#FF6A3D", "#FF1E1E"),
+            c("#0A0A0A"), c("#F2F2F2"), c("#9A9A9A"), c("#FF3B30"), c("#FF3B30"), c("#140000"), R.drawable.iris_alert),
+        Palette("ice", "ICE", cs("#00040C", "#06203A", "#0B4A6E", "#1E7FA8", "#4FB6D6", "#9BE1F0", "#D6F6FF", "#F2FCFF", "#FFFFFF"),
+            c("#00040C"), c("#EFFBFF"), c("#6FA9C2"), c("#7FE8FF"), c("#9BE1F0"), c("#001018"), R.drawable.iris_ice),
     )
     var P = PALETTES[0]; private set
     fun use(id: String?) { P = PALETTES.firstOrNull { it.id == id } ?: PALETTES[0] }

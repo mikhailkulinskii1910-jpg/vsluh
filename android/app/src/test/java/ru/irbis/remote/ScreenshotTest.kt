@@ -161,6 +161,37 @@ class ScreenshotTest {
         }
     }
 
+    /** Меню выбора темы — в цветах темы: тёмный зелёный «Чертёж», тепловизор Lava, зелёный терминал. */
+    @Test
+    fun shotsDialogs() {
+        val cases = listOf("bp" to mapOf("theme" to "blueprint", "bp_shade" to 0.9f, "bp_hue" to 130f),
+            "heat" to mapOf("theme" to "thermal", "heat" to "lava"), "term" to mapOf("theme" to "terminal", "term_color" to 0xFF1FFF3A.toInt()))
+        for ((name, prefs) in cases) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", "dialogs").apply { mkdirs() }
+            val e = org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()
+            prefs.forEach { (k, v) -> when (v) { is String -> e.putString(k, v); is Float -> e.putFloat(k, v); is Int -> e.putInt(k, v) } }
+            e.putString("tab", "color").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
+            root.draw(Canvas(Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+            findText(root, "[tx]")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(200))
+            (org.robolectric.shadows.ShadowDialog.getLatestDialog() as android.app.AlertDialog).getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+            val dv = org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!.decorView
+            Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                val c = Canvas(bmp); root.draw(c)
+                val loc = IntArray(2).also { dv.getLocationOnScreen(it) }
+                c.translate(((root.width - dv.width) / 2).toFloat(), ((root.height - dv.height) / 2).toFloat()); dv.draw(c)
+                File(out, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            ctl.pause().stop().destroy()
+        }
+    }
+
     /** Вкладка «Сценарии» с примером, в двух темах; и сам пример выполняется до конца. */
     @Test
     fun shotsScripts() {
@@ -208,7 +239,7 @@ class ScreenshotTest {
     /** Палитры тепловизора: пульт в каждой и вкладка «Цвет». */
     @Test
     fun shotsHeat() {
-        for (id in listOf("white", "rainbow", "arctic")) {
+        for (id in listOf("white", "rainbow", "arctic", "lava", "night")) {
             val out = File(System.getProperty("shots.dir") ?: "build/shots", "heat-$id").apply { mkdirs() }
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit()
