@@ -78,6 +78,11 @@ jobs:
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa heat rainbow
           xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
           sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-thermal-rainbow.png"
+          # «Тепловизор», палитра LAVA
+          xcrun simctl terminate "$DEV" ru.irbis.krisa || true
+          xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa heat lava
+          xcrun simctl launch --terminate-running-process "$DEV" ru.irbis.krisa
+          sleep 5; xcrun simctl io "$DEV" screenshot "out/shot-heat-lava.png"
           # тема «Чертёж»
           xcrun simctl terminate "$DEV" ru.irbis.krisa || true
           xcrun simctl spawn "$DEV" defaults write ru.irbis.krisa theme blueprint

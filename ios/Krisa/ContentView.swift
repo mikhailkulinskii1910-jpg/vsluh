@@ -350,13 +350,13 @@ struct SettingsView: View {
     @AppStorage("theme") private var theme = "terminal"
     private let themes = [("terminal", "Терминал", "Чёрно-белый, пиксельный шрифт, бегущий лог и крысы"),
                           ("prism", "Призма", "Жидкое стекло, лучи и радужные переливы"),
-                          ("thermal", "Тепловизор", "Кадр тепловизора: палитры, рамки обнаружения, вращающаяся радужка"),
+                          ("thermal", "Тепловизор", "Кадр тепловизора, 10 палитр"),
                           ("blueprint", "Чертёж", "Синий blueprint, схема на фоне")]
 
     /// Фон строки выбора в текущей теме: выбранная подсвечена.
     private func rowFill(_ on: Bool) -> AnyView {
         if !on { return AnyView(Term.bg) }
-        if Term.prism { return AnyView(Color(hex: 0x8B6CFF, alpha: 0.35)) }
+        if Term.prism { return AnyView(Color(hex: Prism.irisHex[0], alpha: 0.35)) }
         if Term.thermal { return AnyView(LinearGradient(colors: [Heat.color(0.55), Heat.color(0.72), Heat.color(0.86)], startPoint: .leading, endPoint: .trailing)) }
         if Term.blueprint { return AnyView(Blueprint.ink) }
         return AnyView(Term.fg)
@@ -366,6 +366,7 @@ struct SettingsView: View {
     private func rowInk(_ on: Bool) -> Color {
         if !on || Term.prism { return Term.fg }
         if Term.blueprint { return Blueprint.bg }
+        if Term.thermal { return Heat.ink }
         return Color.black
     }
 
@@ -415,7 +416,7 @@ struct SettingsView: View {
             if model.mode == .http {
                 Text("Адрес модуля Tasmota").font(Term.ru(12)).foregroundColor(Term.dim)
                 TextField("192.168.1.50", text: $model.host)
-                    .font(Term.ru(16)).keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
+                    .font(Term.ru(16)).foregroundColor(Term.fg).keyboardType(.URL).autocapitalization(.none).disableAutocorrection(true)
                     .padding(10).overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
             }
         }
@@ -455,15 +456,32 @@ struct SettingsView: View {
                         }
                         .foregroundColor(Term.fg)
                     }
-                    Rectangle().fill(Color(white: 0.16)).frame(height: 1)
+                    Rectangle().fill(Term.line.opacity(0.5)).frame(height: 1)
                 }
             }
             .foregroundColor(Term.fg)
             .padding(20)
         }
-        .background(Term.bg.ignoresSafeArea())
+        .modifier(ThemedSheet())
         .id(theme)
-        .preferredColorScheme(.dark)
+    }
+}
+
+/// Лист/окно в цветах текущей темы: фон темы (с учётом настроек) и, в «Терминале» с переливом, RGB-перелив поверх.
+struct ThemedSheet: ViewModifier {
+    private var flow: RgbFlow? { Term.rgbActive ? TermColors.flow(Term.rgbName) : nil }
+
+    func body(content: Content) -> some View {
+        content
+            .background(Term.bg.ignoresSafeArea())
+            .overlay(rgbLayer)
+            .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder private var rgbLayer: some View {
+        if let f = flow {
+            RgbOverlay(colors: f.colors).ignoresSafeArea()
+        }
     }
 }
 
