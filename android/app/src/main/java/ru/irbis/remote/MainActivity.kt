@@ -456,6 +456,7 @@ class MainActivity : Activity() {
 
     private fun showTab(tab: String) {
         if (tab != TAB_ROULETTE) mocRun = false
+        if (tab != TAB_BOARDS) scanRun = false
         styleTab(tabBoards, tab == TAB_BOARDS); styleTab(tabAc, tab == TAB_AC); styleTab(tabRoulette, tab == TAB_ROULETTE)
         styleTab(tabProj, tab == TAB_PROJ)
         projPanel.visibility = if (tab == TAB_PROJ) View.VISIBLE else View.GONE
@@ -508,7 +509,8 @@ class MainActivity : Activity() {
     private fun buildBoardsPanel(): View {
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         boardIdx = getPreferences(MODE_PRIVATE).getInt(PREF_BOARD, if (getPreferences(MODE_PRIVATE).getString(PREF_TAB, null) == TAB_MOC) 1 else 0).coerceIn(0, 1)
-        val grids = listOf(keyGrid(KEYS), withExtras(MOC_KEYS, MOC_MAIN))   // у MocTec полный пульт: основные + «доп.»
+        ensureScripts()
+        val grids = listOf(buildIrbis(), withExtras(MOC_KEYS, MOC_MAIN))   // у MocTec полный пульт: основные + «доп.»
         fun show(i: Int) { grids.forEachIndexed { k, g -> g.visibility = if (k == i) View.VISIBLE else View.GONE } }
         p.addView(chipRow(listOf("IRBIS", "MocTec"), boardIdx) { i, _ ->
             boardIdx = i; show(i); extraToggles.forEach { it() }; subtitle.text = boardSubtitle()
@@ -617,6 +619,262 @@ class MainActivity : Activity() {
 
     private val extraToggles = ArrayList<() -> Unit>()
 
+    /* ---------- IRBIS: найденные команды, «Мои кнопки» (макросы) и сканер ---------- */
+
+    private lateinit var irbisFoundBox: LinearLayout
+    private lateinit var macroBox: LinearLayout
+    private lateinit var scanPanel: View
+    private lateinit var scanBtn: TextView
+    private lateinit var scanCode: TextView
+    private lateinit var scanInfo: TextView
+    private lateinit var scanPlay: TextView
+    private lateinit var scanAddrBtn: TextView
+    private lateinit var scanSkipBtn: TextView
+    private lateinit var scanPaceBtn: TextView
+    private lateinit var scanFoundBtn: TextView
+    private var scanAddr = IRBIS_ADDR
+    @Volatile private var scanCmd = 0
+    private var scanSkip = true
+    private var scanPace = 1
+    @Volatile private var scanRun = false
+    private val scanCode0 get() = Scripts.nec(scanAddr, scanCmd)
+
+    /** Подвкладка IRBIS: 12 кнопок пульта, под ними найденные сканером, «Мои кнопки» и сканер. */
+    private fun buildIrbis(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(keyGrid(KEYS))
+        irbisFoundBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(irbisFoundBox, LinearLayout.LayoutParams(-1, -2))
+        p.addView(text("мои кнопки", 14f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(12), 0, dp(2)) })
+        macroBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(macroBox, LinearLayout.LayoutParams(-1, -2))
+        scanPanel = buildScanner().apply { visibility = View.GONE }
+        scanBtn = mocButton("") { setScan(scanPanel.visibility != View.VISIBLE) }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 16f) }
+        val add = mocButton("[ + макрос ]") { newMacro() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 16f) }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(add, LinearLayout.LayoutParams(0, dp(48), 1f))
+            addView(scanBtn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(scanPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        setScan(false)
+        extraToggles += { setScan(false) }
+        renderFound(); renderMacros()
+        return p
+    }
+
+    private fun setScan(open: Boolean) {
+        if (!open) scanRun = false
+        scanPanel.visibility = if (open) View.VISIBLE else View.GONE
+        scanBtn.text = btnLabel(if (open) "[ сканер ▴ ]" else "[ сканер ▾ ]")
+        styleTab(scanBtn, open)
+    }
+
+    /** Найденные сканером команды — отдельной сеткой под пультом (нумерация продолжается с 13). */
+    private fun renderFound() {
+        if (!::irbisFoundBox.isInitialized) return
+        irbisFoundBox.removeAllViews()
+        if (Scripts.irbisFound.isEmpty()) return
+        irbisFoundBox.addView(text("найденные сканером", 14f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(12), 0, dp(2)) })
+        val g = keyGrid(Scripts.irbisFound, cols = 3, first = KEYS.size)
+        for (i in 0 until g.childCount) (g.getChildAt(i) as KeyView).alpha = 1f
+        irbisFoundBox.addView(g)
+        if (::scanFoundBtn.isInitialized) scanFoundBtn.text = btnLabel("[ найденные: ${Scripts.irbisFound.size} ]")
+    }
+
+    private fun saveFound() {
+        getPreferences(MODE_PRIVATE).edit().putString(PREF_FOUND, Scripts.keysToJson(Scripts.irbisFound)).apply()
+        renderFound()
+        if (::scanFoundBtn.isInitialized) scanFoundBtn.text = btnLabel("[ найденные: ${Scripts.irbisFound.size} ]")
+    }
+
+    /** «Мои кнопки»: сценарии с отметкой «на пульт». Нажать — выполнить (ещё раз — стоп), удерживать — меню. */
+    private fun renderMacros() {
+        if (!::macroBox.isInitialized) return
+        macroBox.removeAllViews()
+        val pinned = scripts.filter { it.pin }
+        if (pinned.isEmpty()) {
+            macroBox.addView(text("нет — нажмите «+ макрос» или в «Сценариях» кнопку «на пульт»", 13f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), 0, 0, 0) })
+            return
+        }
+        pinned.chunked(2).forEach { pair ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            pair.forEachIndexed { i, s ->
+                val b = mocButton("[ ${s.name} ]") { v -> if (scriptRun) scriptRun = false else runScript(s, v as TextView) }.apply {
+                    typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 16f)
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setOnLongClickListener { macroMenu(s); true }
+                }
+                row.addView(b, LinearLayout.LayoutParams(0, dp(52), 1f).apply { if (i > 0) leftMargin = dp(6) })
+            }
+            if (pair.size == 1) row.addView(View(this), LinearLayout.LayoutParams(0, dp(52), 1f).apply { leftMargin = dp(6) })
+            macroBox.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
+    }
+
+    private fun macroMenu(s: Scripts.Script) {
+        AlertDialog.Builder(this).setTitle(s.name)
+            .setItems(arrayOf("Изменить в «Сценариях»", "Переименовать", "Убрать с пульта", "Удалить")) { _, w ->
+                when (w) {
+                    0 -> openScript(s)
+                    1 -> askText("Имя кнопки", s.name) { n -> s.name = n; scriptChanged() }
+                    2 -> { s.pin = false; scriptChanged() }
+                    else -> AlertDialog.Builder(this).setTitle("Удалить «${s.name}»?").setNegativeButton("Нет", null).setPositiveButton("Удалить") { _, _ ->
+                        val i = scripts.indexOf(s)
+                        scripts.remove(s); if (scripts.isEmpty()) scripts += Scripts.Script("Сценарий 1")
+                        if (scriptIdx >= i && scriptIdx > 0) scriptIdx--
+                        scriptChanged()
+                    }.showThemed()
+                }
+            }.showThemed()
+    }
+
+    private fun openScript(s: Scripts.Script) {
+        scriptIdx = scripts.indexOf(s).coerceAtLeast(0); scriptChanged(); showTab(TAB_SCRIPTS)
+    }
+
+    /** Новый макрос: имя, затем редактор блоков с уже поставленным устройством IRBIS. */
+    private fun newMacro() {
+        askText("Новая кнопка-макрос", "Макрос ${scripts.count { it.pin } + 1}") { n ->
+            val s = Scripts.Script(n, mutableListOf(Scripts.Block.Dev(0)), pin = true)
+            scripts += s; openScript(s)
+            say("> добавляйте блоки «отправить», «ждать», «повторить» — кнопка уже на пульте IRBIS")
+        }
+    }
+
+    /**
+     * Сканер: по одной перебирает команды 00–FF на адресе пульта (по умолчанию IRBIS, 807F).
+     * Известные коды можно пропускать. Сработало — «★ сохранить»: код станет кнопкой IRBIS и командой в «Сценариях».
+     */
+    private fun buildScanner(): View {
+        val prefs = getPreferences(MODE_PRIVATE)
+        scanAddr = prefs.getInt(PREF_SCAN_ADDR, IRBIS_ADDR); scanCmd = prefs.getInt(PREF_SCAN_CMD, 0).coerceIn(0, 255)
+        scanSkip = prefs.getBoolean(PREF_SCAN_SKIP, true); scanPace = prefs.getInt(PREF_SCAN_PACE, 1).coerceIn(0, SCAN_PACE.size - 1)
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(text("⚠ Сканер шлёт команды, которых нет на пульте. Доска может открыть сервисное меню, поменять настройки " +
+            "или выключиться — авто-режим не оставляйте без присмотра.\n" +
+            "1. Направьте телефон на доску, нажмите «▶ авто» (или «▶|» по одной).\n" +
+            "2. Доска отреагировала — «пауза», затем «◀» и «⟳», чтобы найти точный код.\n" +
+            "3. «★ сработало» — дайте имя, и код станет кнопкой пульта и командой в «Сценариях».", 13f, Term.DIM).apply {
+            typeface = Term.ru
+            if (Term.prism || Term.thermal || Term.blueprint) { background = Term.boxBg(this@MainActivity); setTextColor(Term.FG); setPadding(dp(12), dp(10), dp(12), dp(10)) }
+        })
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = Term.boxBg(this@MainActivity); setPadding(0, dp(10), 0, dp(10)) }
+        scanCode = text("", if (clean) 30f else 44f, Term.FG).apply { gravity = Gravity.CENTER; setShadowLayer(dp(8).toFloat(), 0f, 0f, if (Term.thermal) Heat.GLOW else Term.FG) }
+        scanInfo = text("", 14f, Term.DIM).apply { typeface = Term.ru; gravity = Gravity.CENTER }
+        box.addView(scanCode); box.addView(scanInfo)
+        p.addView(box, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
+        fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(h), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+        scanPlay = mocButton("[▶ авто]") { if (scanRun) scanPause() else scanStart() }
+        p.addView(row(54, mocButton("[◀]") { scanStep(-1) }, mocButton("[⟳]") { scanStep(0) }, mocButton("[▶|]") { scanStep(+1) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(54, scanPlay, small("[ ★ сработало ]") { scanSave() }), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        scanAddrBtn = small("") {
+            askText("Адрес NEC (4 hex-цифры)", "%04X".format(scanAddr)) { t ->
+                t.toIntOrNull(16)?.takeIf { t.length <= 4 }?.let { scanAddr = it; scanCmd = 0; scanRender() } ?: say("Нужно 4 hex-цифры, например 807F", err = true)
+            }
+        }
+        scanSkipBtn = small("") { scanSkip = !scanSkip; scanRender() }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f) }
+        scanPaceBtn = small("") { scanPace = (scanPace + 1) % SCAN_PACE.size; scanRender() }
+        p.addView(row(44, scanAddrBtn, scanSkipBtn, scanPaceBtn), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        scanFoundBtn = small("") { manageFound() }
+        p.addView(row(44, small("[ с 00 ]") { scanPause(); scanCmd = 0; scanRender() }, scanFoundBtn), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        scanRender()
+        return p
+    }
+
+    private fun scanRender() {
+        val c = scanCode0
+        scanCode.text = "%04X %04X".format(c ushr 16, c and 0xFFFF)
+        scanInfo.text = "команда 0x%02X · %d / 256 · ".format(scanCmd, scanCmd + 1) + (Scripts.knownLabel(c)?.let { "известна: $it" } ?: "новая")
+        scanAddrBtn.text = btnLabel("[ адрес %04X ]".format(scanAddr))
+        scanSkipBtn.text = btnLabel(if (scanSkip) "[ только новые ]" else "[ все коды ]")
+        scanPaceBtn.text = btnLabel("[ темп ${Scripts.fmt(SCAN_PACE[scanPace] / 1000.0)} с ]")
+        scanFoundBtn.text = btnLabel("[ найденные: ${Scripts.irbisFound.size} ]")
+        getPreferences(MODE_PRIVATE).edit().putInt(PREF_SCAN_ADDR, scanAddr).putInt(PREF_SCAN_CMD, scanCmd)
+            .putBoolean(PREF_SCAN_SKIP, scanSkip).putInt(PREF_SCAN_PACE, scanPace).apply()
+    }
+
+    /** Следующая (dir = ±1) команда с учётом «без известных»; −1, если дальше ничего нет. */
+    private fun scanNext(from: Int, dir: Int): Int {
+        var i = from + dir
+        while (i in 0..255) { if (!scanSkip || Scripts.knownLabel(Scripts.nec(scanAddr, i)) == null) return i; i += dir }
+        return -1
+    }
+
+    private fun scanSend(tx: IrTransmitter) {
+        val c = scanCode0
+        tx.transmit(Nec.withGap(Nec.frame(c)))
+        ui.post { say("> tx скан 0x%08X [sent]".format(c)) }
+    }
+
+    private fun scanStep(dir: Int) {
+        if (scanRun) scanPause()
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        if (dir != 0) { val n = scanNext(scanCmd, dir); if (n < 0) return say(if (dir > 0) "> дальше команд нет (FF)" else "> это первая команда"); scanCmd = n }
+        scanRender()
+        io.execute { try { scanSend(tx) } catch (e: Exception) { ui.post { say(e.message ?: "Ошибка передачи", err = true) } } }
+    }
+
+    private fun scanStart() {
+        val tx = current() ?: return say(noTxMessage(), err = true)
+        if (scanSkip && Scripts.knownLabel(scanCode0) != null) scanCmd = scanNext(scanCmd, 1).takeIf { it >= 0 } ?: 0
+        scanRun = true
+        scanPlay.text = btnLabel("[|| пауза]"); styleTab(scanPlay, true)
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        val pace = SCAN_PACE[scanPace]
+        io.execute {
+            try {
+                while (scanRun) {
+                    scanSend(tx)
+                    ui.post { scanRender() }
+                    var left = pace
+                    while (left > 0 && scanRun) { Thread.sleep(minOf(left, 100L)); left -= 100 }
+                    if (!scanRun) break
+                    val n = scanNext(scanCmd, 1)
+                    if (n < 0) { scanRun = false; ui.post { say("> сканер прошёл все команды адреса %04X".format(scanAddr), ok = true) }; break }
+                    scanCmd = n
+                }
+            } catch (e: Exception) { ui.post { say(e.message ?: "Ошибка передачи", err = true) } }
+            ui.post { scanPause(quiet = true) }
+        }
+    }
+
+    private fun scanPause(quiet: Boolean = false) {
+        if (!quiet && scanRun) say("> пауза на 0x%08X".format(scanCode0))
+        scanRun = false
+        scanPlay.text = btnLabel("[▶ авто]"); styleTab(scanPlay, false)
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        scanRender()
+    }
+
+    private fun scanSave() {
+        if (scanRun) scanPause()
+        val c = scanCode0
+        Scripts.knownLabel(c)?.let { return say("> этот код уже есть: $it") }
+        askText("Что сделала доска? (имя кнопки)", "CMD %02X".format(scanCmd)) { n ->
+            Scripts.irbisFound = Scripts.irbisFound + (n to c); saveFound()
+            say("> «$n» (0x%08X) — новая кнопка IRBIS".format(c), ok = true)
+        }
+    }
+
+    private fun manageFound() {
+        val f = Scripts.irbisFound
+        if (f.isEmpty()) return say("> пока ничего не найдено")
+        AlertDialog.Builder(this).setTitle("Найденные команды")
+            .setItems(f.map { "${it.first} · %08X".format(it.second) }.toTypedArray()) { _, w ->
+                val (l, c) = f[w]
+                AlertDialog.Builder(this).setTitle(l).setItems(arrayOf("Переименовать", "Удалить")) { _, a ->
+                    if (a == 0) askText("Имя кнопки", l) { n -> Scripts.irbisFound = Scripts.irbisFound.map { if (it.second == c) n to c else it }; saveFound() }
+                    else { Scripts.irbisFound = Scripts.irbisFound.filter { it.second != c }; saveFound() }
+                }.showThemed()
+            }.showThemed()
+    }
+
     /**
      * Основные кнопки пульта сеткой в 3 колонки, под ними — кнопка «доп.», которая раскрывает остальные.
      * Нумерация сквозная. При смене марки или подвкладки меню сворачивается.
@@ -652,6 +910,22 @@ class MainActivity : Activity() {
     private val blockRows = ArrayList<TextView>()
     private val script get() = scripts[scriptIdx]
 
+    private var scriptsLoaded = false
+    /** Загрузить сценарии и найденные команды (один раз); при первом запуске 1.30 — добавить готовые макросы. */
+    private fun ensureScripts() {
+        if (scriptsLoaded) return
+        scriptsLoaded = true
+        val prefs = getPreferences(MODE_PRIVATE)
+        Scripts.irbisFound = Scripts.keysFromJson(prefs.getString(PREF_FOUND, null))
+        scripts = Scripts.fromJson(prefs.getString(PREF_SCRIPTS, null))
+        if (scripts.isEmpty()) scripts += Scripts.example()
+        if (!prefs.getBoolean(PREF_MACROS_SEEDED, false)) {
+            scripts.addAll(Scripts.presets())
+            prefs.edit().putBoolean(PREF_MACROS_SEEDED, true).putString(PREF_SCRIPTS, Scripts.toJson(scripts)).apply()
+        }
+        scriptIdx = prefs.getInt(PREF_SCRIPT_CUR, 0).coerceIn(0, scripts.size - 1)
+    }
+
     private fun scriptsSave() {
         getPreferences(MODE_PRIVATE).edit().putString(PREF_SCRIPTS, Scripts.toJson(scripts)).putInt(PREF_SCRIPT_CUR, scriptIdx).apply()
     }
@@ -661,10 +935,7 @@ class MainActivity : Activity() {
      * «▶ Отправить» выполняет его по порядку, текущий блок подсвечивается; «■ Стоп» — прервать.
      */
     private fun buildScriptPanel(): View {
-        val prefs = getPreferences(MODE_PRIVATE)
-        scripts = Scripts.fromJson(prefs.getString(PREF_SCRIPTS, null))
-        if (scripts.isEmpty()) scripts += Scripts.example()
-        scriptIdx = prefs.getInt(PREF_SCRIPT_CUR, 0).coerceIn(0, scripts.size - 1)
+        ensureScripts()
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         p.addView(text("Как в Scratch: блоки из палитры нажмите или перетащите в сценарий (удерживайте). Нажатие на блок — изменить, " +
             "перетащить — переставить или в корзину. Команда идёт устройству из блока «устройство» выше неё.", 13f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(2), 0, 0, dp(8)) })
@@ -681,6 +952,7 @@ class MainActivity : Activity() {
         p.addView(row(
             small("[ новый ]") { askText("Новый сценарий", "Сценарий ${scripts.size + 1}") { n -> scripts += Scripts.Script(n); scriptIdx = scripts.size - 1; scriptChanged() } },
             small("[ имя ]") { askText("Имя сценария", script.name) { n -> script.name = n; scriptChanged() } },
+            small("") { script.pin = !script.pin; scriptChanged(); say(if (script.pin) "> «${script.name}» — кнопка на пульте IRBIS" else "> «${script.name}» убран с пульта") }.also { pinBtn = it },
             small("[ удалить ]") {
                 AlertDialog.Builder(this).setTitle("Удалить «${script.name}»?").setNegativeButton("Нет", null).setPositiveButton("Удалить") { _, _ ->
                     scripts.removeAt(scriptIdx); if (scripts.isEmpty()) scripts += Scripts.Script("Сценарий 1")
@@ -706,9 +978,13 @@ class MainActivity : Activity() {
         return p
     }
 
+    private lateinit var pinBtn: TextView
+
     private fun scriptChanged() {
         scriptsSave()
         scriptName.text = btnLabel("[ ${script.name} ▾ ]")
+        pinBtn.text = btnLabel(if (script.pin) "[ ✓ на пульте ]" else "[ на пульт ]"); styleTab(pinBtn, script.pin)
+        renderMacros()
         if (::subtitle.isInitialized && ::scriptPanel.isInitialized && scriptPanel.visibility == View.VISIBLE) subtitle.text = "сценарий :: ${script.name}"
         renderBlocks()
     }
@@ -929,19 +1205,20 @@ class MainActivity : Activity() {
             .setPositiveButton("OK") { _, _ -> e.text.toString().replace(',', '.').toDoubleOrNull()?.let(ok) }.showThemed()
     }
 
-    private fun runScript() {
+    /** Выполнить сценарий [s]; [btn] — кнопка-макрос, которая подсвечивается, пока он идёт. */
+    private fun runScript(s: Scripts.Script = script, btn: TextView? = null) {
         val tx = current() ?: return say(noTxMessage(), err = true)
-        if (script.blocks.isEmpty()) return say("Сценарий пуст", err = true)
+        if (s.blocks.isEmpty()) return say("Сценарий пуст", err = true)
         scriptRun = true
         scriptPlay.text = btnLabel("[ ■ Стоп ]"); styleTab(scriptPlay, true)
+        btn?.let { styleTab(it, true) }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)   // экран не гаснет, пока идёт сценарий
-        val s = script
         say("> сценарий «${s.name}»: старт")
         io.execute {
             var err: String? = null
             try {
                 Scripts.run(s, send = { frame, what -> tx.transmit(frame); ui.post { say("> tx $what [sent]") } },
-                    mark = { i -> ui.post { markBlock(i) } },
+                    mark = { i -> ui.post { if (s === script) markBlock(i) } },
                     stopped = { !scriptRun })
             } catch (e: Exception) { err = e.message ?: "Ошибка передачи" }
             ui.post {
@@ -949,6 +1226,7 @@ class MainActivity : Activity() {
                 scriptRun = false
                 window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 scriptPlay.text = btnLabel("[ ▶ Отправить ]"); styleTab(scriptPlay, false)
+                btn?.let { styleTab(it, false) }
                 markBlock(-1)
                 if (err != null) say(err!!, err = true) else say(if (stoppedByUser) "> сценарий остановлен" else "> сценарий выполнен", ok = !stoppedByUser)
             }
@@ -1603,6 +1881,15 @@ class MainActivity : Activity() {
         private const val TAB_SCRIPTS = "scripts"
         private const val PREF_SCRIPTS = "scripts"
         private const val PREF_SCRIPT_CUR = "script_cur"
+        private const val PREF_FOUND = "irbis_found"
+        private const val PREF_SCAN_ADDR = "scan_addr"
+        private const val PREF_SCAN_CMD = "scan_cmd"
+        private const val PREF_SCAN_SKIP = "scan_skip"
+        private const val PREF_SCAN_PACE = "scan_pace"
+        private const val IRBIS_ADDR = 0x807F
+        /** Темп авто-сканера, мс между командами. */
+        private val SCAN_PACE = longArrayOf(500, 1000, 2000)
+        private const val PREF_MACROS_SEEDED = "macros_seeded"
         private const val PREF_BOARD = "board_brand"
         private const val PREF_AC = "ac_state"
         private const val TAB_MOC = "moc"
