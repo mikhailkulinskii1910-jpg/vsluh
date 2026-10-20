@@ -437,6 +437,35 @@ body.scripts #grid,body.scripts #more,body.scripts #grid2{display:none}
 [data-theme=blueprint] .scp .gear.tab.acb.sname{font-size:14px}
 [data-theme=blueprint] .scp .gear.tab.acb.play{font-size:16px}
 [data-theme=thermal] .scp .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
+/* Доски → IRBIS: найденные сканером кнопки, «мои кнопки», сканер */
+#irbisx{display:none}
+body.irbis #irbisx{display:block}
+.irx .xl{margin:14px 4px 6px;font:14px var(--ru);color:var(--dim)}
+.irx .macros{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.irx .gear.tab.acb.mac{height:52px;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.irx .srow{display:flex;gap:6px;margin-top:6px}
+.irx .xrow{margin-top:10px}
+.irx .xrow .gear.tab.acb{height:48px;font-size:16px}
+.irx .scan[hidden]{display:none}
+.irx .scan{margin-top:8px}
+.irx .warn{margin:0;font:13px/1.45 var(--ru);color:var(--dim)}
+[data-theme=prism] .irx .warn,[data-theme=thermal] .irx .warn,[data-theme=blueprint] .irx .warn{padding:10px 12px;color:var(--fg);border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 75%,transparent)}
+[data-theme=prism] .irx .warn{border-radius:14px}
+.irx .sbox{margin-top:8px;padding:10px 0;border:1px solid var(--line);text-align:center;background:color-mix(in srgb,var(--bg) 70%,transparent)}
+[data-theme=prism] .irx .sbox{border-radius:16px}
+.irx .sbox .code{font:44px/1.1 var(--mono);color:var(--fg);text-shadow:0 0 8px var(--fg)}
+[data-theme=thermal] .irx .sbox .code{text-shadow:0 0 8px var(--glow)}
+[data-theme=prism] .irx .sbox .code,[data-theme=blueprint] .irx .sbox .code{font-size:30px;text-shadow:none}
+.irx .sbox .info{font:14px var(--ru);color:var(--dim)}
+.irx .scan .gear.tab.acb{height:44px;font-size:15px}
+.irx .scan .r1 .gear.tab.acb,.irx .scan .gear.tab.acb.big{height:54px;font-size:20px}
+.irx .scan .gear.tab.acb.big:last-child{font-size:15px}
+.irx .scan .r3 .gear.tab.acb{font-size:12px;padding:0 2px;white-space:nowrap;letter-spacing:-.2px}
+[data-theme=prism] .irx .gear.tab.acb,[data-theme=blueprint] .irx .gear.tab.acb{font-size:13px}
+[data-theme=prism] .irx .scan .r1 .gear.tab.acb,[data-theme=blueprint] .irx .scan .r1 .gear.tab.acb{font-size:18px}
+[data-theme=prism] .irx .scan .r3 .gear.tab.acb,[data-theme=blueprint] .irx .scan .r3 .gear.tab.acb{font-size:12px}
+[data-theme=thermal] .irx .xl,[data-theme=thermal] .irx .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
+.g3 .grid{grid-template-columns:repeat(3,1fr);gap:8px}
 /* редактор как в Scratch: палитра, стопка блоков с пазами, C-блок «повторить», корзина */
 .scp .pcats{margin-top:10px}
 .scp .pcats .gear.tab.chip{font:13px var(--ru)}
@@ -501,19 +530,19 @@ body.proj #proj{display:block}
 /* «проектор» кириллицей в VT323 выходит крупнее — уменьшаем, чтобы подзаголовок шапки влез в строку */
 html:not([data-theme]) body:is(.proj,.boards,.ac,.scripts) .id,[data-theme=thermal] body:is(.proj,.boards,.ac,.scripts) .id{font-size:17px}
 /* сетка проекторов — 3 колонки, низкие кнопки; подпись ужимается под ширину кнопки (--len — длина подписи, --cw — ширина буквы шрифта темы) */
-body.grid3 .grid{grid-template-columns:repeat(3,1fr);gap:8px}
-body.grid3 .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
+body.grid3 .grid,.g3 .grid{grid-template-columns:repeat(3,1fr);gap:8px}
+body.grid3 .key,.g3 .key{height:64px;padding:4px;container-type:inline-size;--cw:.52;line-height:1.02;
   font-size:min(26px,calc((100cqw - 10px) / (var(--len) * var(--cw))))}
-[data-theme=prism] body.grid3 .key{--cw:.98;border-radius:16px;font-size:min(16px,calc((100cqw - 12px) / (var(--len) * var(--cw))))}
-[data-theme=prism] body.grid3 .key::before{border-radius:14px}
-[data-theme=blueprint] body.grid3 .grid{gap:12px}
-[data-theme=blueprint] body.grid3 .key{--cw:.8;font-size:min(15px,calc((100cqw - 14px) / (var(--len) * var(--cw))))}
-html:not([data-theme]) body.grid3 .key .n,[data-theme=prism] body.grid3 .key .n,body.grid3 .key .h{font-size:11px}
-body.grid3 .key .n{top:3px;left:6px}body.grid3 .key .h{bottom:3px;right:6px}
-[data-theme=thermal] body.grid3 .key .n::after{font-size:10px}
-[data-theme=blueprint] body.grid3 .key .n{top:7px;left:8px}[data-theme=blueprint] body.grid3 .key .h{bottom:7px;right:8px;font-size:9px}
-[data-theme=blueprint] body.grid3 .key .n::after{font-size:9px}
-[data-theme=prism] body.grid3 .key .n{top:5px;left:9px}[data-theme=prism] body.grid3 .key .h{bottom:4px;right:9px;font-size:10px}
+[data-theme=prism] body.grid3 .key,[data-theme=prism] .g3 .key{--cw:.98;border-radius:16px;font-size:min(16px,calc((100cqw - 12px) / (var(--len) * var(--cw))))}
+[data-theme=prism] body.grid3 .key::before,[data-theme=prism] .g3 .key::before{border-radius:14px}
+[data-theme=blueprint] body.grid3 .grid,[data-theme=blueprint] .g3 .grid{gap:12px}
+[data-theme=blueprint] body.grid3 .key,[data-theme=blueprint] .g3 .key{--cw:.8;font-size:min(15px,calc((100cqw - 14px) / (var(--len) * var(--cw))))}
+html:not([data-theme]) body.grid3 .key .n,[data-theme=prism] body.grid3 .key .n,body.grid3 .key .h,html:not([data-theme]) .g3 .key .n,[data-theme=prism] .g3 .key .n,.g3 .key .h{font-size:11px}
+body.grid3 .key .n,.g3 .key .n{top:3px;left:6px}body.grid3 .key .h,.g3 .key .h{bottom:3px;right:6px}
+[data-theme=thermal] body.grid3 .key .n::after,[data-theme=thermal] .g3 .key .n::after{font-size:10px}
+[data-theme=blueprint] body.grid3 .key .n,[data-theme=blueprint] .g3 .key .n{top:7px;left:8px}[data-theme=blueprint] body.grid3 .key .h,[data-theme=blueprint] .g3 .key .h{bottom:7px;right:8px;font-size:9px}
+[data-theme=blueprint] body.grid3 .key .n::after,[data-theme=blueprint] .g3 .key .n::after{font-size:9px}
+[data-theme=prism] body.grid3 .key .n,[data-theme=prism] .g3 .key .n{top:5px;left:9px}[data-theme=prism] body.grid3 .key .h,[data-theme=prism] .g3 .key .h{bottom:4px;right:9px;font-size:10px}
 [data-theme=thermal] .projnote{text-shadow:0 0 3px #000,0 0 6px #000}
 .cp h3{margin:16px 2px 8px;font:24px var(--mono);color:var(--fg)}
 .cp h3:first-child{margin-top:2px}
@@ -675,6 +704,7 @@ html.bplight[data-theme=blueprint] #splash .sign{filter:brightness(0) invert(18%
   <main class="grid" id="grid"></main>
   <button class="gear tab acb more" id="more" hidden></button>
   <div class="grid" id="grid2" hidden></div>
+  <section class="irx" id="irbisx" aria-label="Мои кнопки и сканер"></section>
   <section class="acp" id="ac" aria-label="Кондиционер"></section>
   <section class="scp" id="scripts" aria-label="Сценарии"></section>
   <section class="cp" id="cpanel" aria-label="Цвет"></section>
@@ -1414,6 +1444,8 @@ function syncTabs() {
   // сетка в 3 колонки: у проекторов и у полного пульта MocTec
   document.body.classList.toggle('grid3', tab === 'proj' || (tab === 'boards' && remote === 'moc'));
   document.body.classList.toggle('ctab', tab === 'color');
+  document.body.classList.toggle('irbis', tab === 'boards' && remote === 'irbis');
+  if (tab !== 'boards' && window.irxReady && scanRun) scanPause();   // ушли с «Досок» — авто-сканер стоп
   [...brands.children].forEach((c, i) => c.classList.toggle('on', i === projBrand));
   [...boardChips.children].forEach((c, i) => c.classList.toggle('on', i === boardIdx));
   if (tab === 'ac') { document.querySelector('.id').textContent = 'кондиционер :: Haier :: ' + Haier.MODELS[ac.model]; acRefresh(); }
@@ -1442,6 +1474,7 @@ function buildGrid(reveal) {
   const R = REMOTES[remote], main = R.main || R.keys.length;
   R.keys.forEach((k, i) => makeKey(k, R.nec2, i < main ? grid : grid2, i + 1));
   moreOpen = false; grid2.hidden = true; more.hidden = !grid2.children.length; moreLabel();
+  window.irxReady && setScan(false);   // смена подвкладки сворачивает сканер
   tab = topTab; syncTabs();
   if (reveal) showRemote();
 }
@@ -1615,7 +1648,10 @@ function modal({ title, items, sel = -1, pick, input, numeric, body, ok, okText 
    Команда относится к устройству из ближайшего блока «→ устройство» выше неё.
    JSON как в Android: [{name, blocks:[{t:"dev",d},{t:"cmd",l,c},{t:"ac",p,m,x,f},{t:"delay",s},{t:"loop",n},{t:"end"}]}]. */
 const AC_MODE_N = ['COOL', 'HEAT', 'DRY', 'FAN', 'AUTO'], AC_FAN_N = ['AUTO', 'LOW', 'MED', 'HIGH'];
-const DEVICES = [{ title: 'Доска · IRBIS', keys: KEYS }, { title: 'Доска · MocTec', keys: MOC_KEYS }]
+/* Найденные сканером команды IRBIS: [{l: имя, c: код}] — добавляются к командам «Доска · IRBIS». */
+let irbisFound = [];
+try { irbisFound = (JSON.parse(localStorage.getItem('krisa-irbis-found') || '[]') || []).filter(f => f && typeof f.l === 'string' && typeof f.c === 'number'); } catch {}
+const DEVICES = [{ title: 'Доска · IRBIS', get keys() { return KEYS.concat(irbisFound.map(f => [f.l, (f.c >>> 0).toString(16).toUpperCase().padStart(8, '0')])); } }, { title: 'Доска · MocTec', keys: MOC_KEYS }]
   .concat(PROJ.map(p => ({ title: 'Проектор · ' + p.name, keys: p.keys })))
   .concat(Haier.MODELS.map((m, i) => ({ title: 'Кондиционер · Haier ' + (i + 1) + ' ' + m, keys: [], acModel: i })));
 const Scripts = {
@@ -1666,7 +1702,7 @@ const Scripts = {
       const a = JSON.parse(json || 'null');
       if (!Array.isArray(a)) return [];
       return a.filter(s => s && typeof s.name === 'string' && Array.isArray(s.blocks))
-        .map(s => ({ name: s.name, blocks: s.blocks.filter(b => b && ['dev', 'cmd', 'ac', 'delay', 'loop', 'end'].includes(b.t)) }));
+        .map(s => ({ name: s.name, pin: !!s.pin, blocks: s.blocks.filter(b => b && ['dev', 'cmd', 'ac', 'delay', 'loop', 'end'].includes(b.t)) }));
     } catch { return []; }
   },
   /** Выполнение: send(frame мкс, what, tx) — отправить; mark(i) — подсветить блок; stopped() — нажата «Стоп». */
@@ -1713,6 +1749,19 @@ try {
   scriptIdx = parseInt(localStorage.getItem('krisa-script-cur'), 10) || 0;
 } catch {}
 if (!scripts.length) scripts.push(Scripts.example());
+// готовые макросы для пульта IRBIS — один раз, при первом запуске 1.30
+try {
+  if (!localStorage.getItem('krisa-macros-seeded')) {
+    const k = n => { const x = KEYS.find(k => k[0] === n); return { t: 'cmd', l: x[0], c: parseInt(x[1], 16) }; };
+    scripts.push(
+      { name: 'Тихо', pin: true, blocks: [{ t: 'dev', d: 0 }, { t: 'loop', n: 20 }, k('VOL-'), { t: 'end' }] },
+      { name: 'Громче +5', pin: true, blocks: [{ t: 'dev', d: 0 }, { t: 'loop', n: 5 }, k('VOL+'), { t: 'end' }] },
+      { name: 'Пауза урока', pin: true, blocks: [{ t: 'dev', d: 0 }, k('FREEZE'), { t: 'delay', s: 0.5 }, k('EMPY SCREEN')] },
+      { name: 'Следующий вход', pin: true, blocks: [{ t: 'dev', d: 0 }, k('INPUT'), { t: 'delay', s: 1 }, k('J DOWN'), { t: 'delay', s: 0.5 }, k('J OK')] });
+    localStorage.setItem('krisa-macros-seeded', '1');
+    localStorage.setItem('krisa-scripts', JSON.stringify(scripts));
+  }
+} catch {}
 scriptIdx = Math.max(0, Math.min(scripts.length - 1, scriptIdx));
 const script = () => scripts[scriptIdx];
 const clean = () => theme() === 'prism' || theme() === 'blueprint';      // в «чистых» темах — без квадратных скобок
@@ -1740,6 +1789,10 @@ sBtn(s3, '[ удалить ]', () => modal({ title: 'Удалить «' + script
   scripts.splice(scriptIdx, 1); if (!scripts.length) scripts.push({ name: 'Сценарий 1', blocks: [] });
   scriptIdx = Math.min(scriptIdx, scripts.length - 1); scriptChanged();
 } }));
+// «на пульт»: сценарий становится кнопкой в «Доски → IRBIS → мои кнопки»
+const pinBtn = document.createElement('button'); pinBtn.className = 'gear tab acb';
+pinBtn.addEventListener('click', () => { script().pin = !script().pin; scriptChanged(); });
+s3.appendChild(pinBtn);
 /** Вставить блоки перед позицией at (по умолчанию — в конец). */
 function insertAt(at, ...b) { const bl = script().blocks; bl.splice(Math.max(0, Math.min(bl.length, at)), 0, ...b); scriptChanged(); }
 /** Выбор устройства: для нового блока (edit = null) или для изменения существующего. */
@@ -1999,6 +2052,8 @@ function scriptLabels() {
   play.textContent = btnLabel(scriptRun ? '[ ■ Стоп ]' : '[ ▶ Отправить ]');
   play.classList.toggle('on', scriptRun);
   sBtns.forEach(b => { b.textContent = btnLabel(b.dataset.l); });
+  pinBtn.textContent = btnLabel(script().pin ? '[ ✓ на пульте ]' : '[ на пульт ]'); pinBtn.classList.toggle('on', !!script().pin);
+  if (window.irxReady) { renderMacros(); scanRender(); }
 }
 function scriptChanged() {
   scriptsSave(); scriptLabels(); renderBlocks();
@@ -2015,27 +2070,207 @@ async function scriptSend(frame, what, x) {
   }
   status('> tx ' + what + ' [sent]');
 }
-async function runScript() {
-  const s = script();
+// s — сценарий (по умолчанию открытый); «мои кнопки» запускают свой, его кнопка подсвечена, пока идёт
+async function runScript(s = script()) {
   if (!s.blocks.length) { status('Сценарий пуст', 'err'); return; }
-  scriptRun = true; scriptLabels();
+  scriptRun = true; macroRunning = s; scriptLabels();
   let lock = null;
   try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // экран не гаснет, пока идёт сценарий
   status('> сценарий «' + s.name + '»: старт');
   let err = null;
   try {
-    await Scripts.run(s, scriptSend, markBlock, () => !scriptRun);
+    await Scripts.run(s, scriptSend, i => markBlock(s === script() ? i : -1), () => !scriptRun);
   } catch (e) { err = e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message || 'Ошибка передачи'; }
   const stoppedByUser = !scriptRun;
-  scriptRun = false; scriptLabels(); markBlock(-1);
+  scriptRun = false; macroRunning = null; scriptLabels(); markBlock(-1);
   try { lock && lock.release(); } catch {}
   if (err) status(err, 'err'); else status(stoppedByUser ? '> сценарий остановлен' : '> сценарий выполнен');
 }
 play.addEventListener('click', () => { if (scriptRun) scriptRun = false; else runScript(); });
+let macroRunning = null;
 fillPalette();
 scriptChanged();
 // смена темы или её цвета — перекрасить блоки
 window.scrRecolor = () => { fillPalette(); renderBlocks(); };
+
+/* ---------- Доски → IRBIS: найденные сканером кнопки, «мои кнопки» (макросы) и сканер скрытых команд ----------
+   Найденные коды — отдельная сетка под пультом (нумерация с 13), они же — команды «Доски · IRBIS» в «Сценариях».
+   «Мои кнопки» — сценарии с отметкой «на пульт»: нажать — выполнить (ещё раз — стоп), удерживать — меню. */
+const ix = $('irbisx');
+ix.innerHTML = '<div class="found g3"></div><p class="xl">мои кнопки</p><div class="macros"></div>'
+  + '<div class="srow xrow"></div><div class="scan" hidden></div>';
+const foundBox = ix.querySelector('.found'), macroBox = ix.querySelector('.macros'), scanBox = ix.querySelector('.scan');
+const hex8 = c => (c >>> 0).toString(16).toUpperCase().padStart(8, '0');
+function saveFound() { try { localStorage.setItem('krisa-irbis-found', JSON.stringify(irbisFound)); } catch {} renderFound(); scanRender(); }
+function renderFound() {
+  foundBox.textContent = '';
+  if (!irbisFound.length) return;
+  foundBox.insertAdjacentHTML('beforeend', '<p class="xl">найденные сканером</p><div class="grid"></div>');
+  const g = foundBox.querySelector('.grid');
+  irbisFound.forEach((f, i) => makeKey([f.l, hex8(f.c)], false, g, KEYS.length + i + 1));
+  [...g.children].forEach(b => b.classList.add('shown'));
+}
+/** Длинное нажатие (500 мс) — меню; обычное — действие. */
+function longPress(el, tap, hold) {
+  let t = null, held = false;
+  el.addEventListener('pointerdown', e => { if (e.button > 0) return; held = false; t = setTimeout(() => { held = true; navigator.vibrate?.(15); hold(); }, 500); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(n => el.addEventListener(n, () => clearTimeout(t)));
+  el.addEventListener('click', () => { if (!held) tap(); held = false; });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+function renderMacros() {
+  macroBox.textContent = '';
+  const pinned = scripts.filter(s => s.pin);
+  if (!pinned.length) { macroBox.innerHTML = '<p class="projnote">нет — нажмите «+ макрос» или в «Сценариях» кнопку «на пульт»</p>'; return; }
+  pinned.forEach(s => {
+    const b = document.createElement('button'); b.className = 'gear tab acb mac';
+    b.textContent = btnLabel('[ ' + s.name + ' ]');
+    b.classList.toggle('on', macroRunning === s);
+    longPress(b, () => { if (scriptRun) scriptRun = false; else runScript(s); }, () => macroMenu(s));
+    macroBox.appendChild(b);
+  });
+}
+function openScript(s) {
+  scriptIdx = Math.max(0, scripts.indexOf(s)); scriptChanged();
+  document.querySelector('#tabs [data-r=scripts]').click();
+}
+function macroMenu(s) {
+  modal({ title: s.name, items: ['Изменить в «Сценариях»', 'Переименовать', 'Убрать с пульта', 'Удалить'], pick: w => {
+    if (w === 0) openScript(s);
+    else if (w === 1) modal({ title: 'Имя кнопки', input: s.name, ok: n => { s.name = n; scriptChanged(); } });
+    else if (w === 2) { s.pin = false; scriptChanged(); }
+    else modal({ title: 'Удалить «' + s.name + '»?', okText: 'Удалить', ok: () => {
+      const i = scripts.indexOf(s);
+      scripts.splice(i, 1); if (!scripts.length) scripts.push({ name: 'Сценарий 1', blocks: [], pin: false });
+      if (scriptIdx >= i && scriptIdx > 0) scriptIdx--;
+      scriptChanged();
+    } });
+  } });
+}
+/** Новый макрос: имя, затем редактор блоков с уже поставленным устройством IRBIS. */
+function newMacro() {
+  modal({ title: 'Новая кнопка-макрос', input: 'Макрос ' + (scripts.filter(s => s.pin).length + 1), ok: n => {
+    const s = { name: n, blocks: [{ t: 'dev', d: 0 }], pin: true };
+    scripts.push(s); openScript(s);
+    status('> добавляйте блоки «отправить», «ждать», «повторить» — кнопка уже на пульте IRBIS');
+  } });
+}
+const xrow = ix.querySelector('.xrow');
+sBtn(xrow, '[ + макрос ]', newMacro);
+const scanBtn = document.createElement('button'); scanBtn.className = 'gear tab acb';
+scanBtn.addEventListener('click', () => setScan(scanBox.hidden));
+xrow.appendChild(scanBtn);
+
+/* Сканер: по одной перебирает команды 00–FF на адресе пульта (по умолчанию IRBIS, 807F). Известные коды можно пропускать.
+   Сработало — «★ сработало»: код станет кнопкой IRBIS и командой в «Сценариях». Адрес, команда, режим и темп сохраняются. */
+const SCAN_PACE = [500, 1000, 2000];
+const scan = { addr: 0x807F, cmd: 0, skip: true, pace: 1 };
+try { Object.assign(scan, JSON.parse(localStorage.getItem('krisa-scan') || '{}')); } catch {}
+scan.cmd = Math.max(0, Math.min(255, scan.cmd | 0)); scan.pace = Math.max(0, Math.min(2, scan.pace | 0));
+let scanRun = false, scanLock = null;
+/** Код NEC: адрес (16 бит), команда, инверсия команды. */
+const necCode = (addr, cmd) => (((addr & 0xFFFF) << 16) | ((cmd & 0xFF) << 8) | (~cmd & 0xFF)) >>> 0;
+/** Подпись известного кода из всех пультов приложения, или null. */
+function knownLabel(code) {
+  const hit = (keys, pre) => { const k = keys.find(k => parseInt(k[1], 16) === code); return k ? pre + ' ' + k[0] : null; };
+  const f = irbisFound.find(f => f.c === code);
+  return hit(KEYS, 'IRBIS') || (f ? 'IRBIS ' + f.l : null) || hit(MOC_KEYS, 'MocTec') || PROJ.reduce((a, p) => a || hit(p.keys, p.name), null);
+}
+scanBox.innerHTML = '<p class="warn">⚠ Сканер шлёт команды, которых нет на пульте. Доска может открыть сервисное меню, поменять настройки или выключиться — авто-режим не оставляйте без присмотра.<br>'
+  + '1. Направьте телефон на доску, нажмите «▶ авто» (или «▶|» по одной).<br>2. Доска отреагировала — «пауза», затем «◀» и «⟳», чтобы найти точный код.<br>'
+  + '3. «★ сработало» — дайте имя, и код станет кнопкой пульта и командой в «Сценариях».</p>'
+  + '<div class="sbox"><div class="code"></div><div class="info"></div></div>'
+  + '<div class="srow r1"></div><div class="srow r2"></div><div class="srow r3"></div><div class="srow r4"></div>';
+const scanCodeEl = scanBox.querySelector('.code'), scanInfo = scanBox.querySelector('.info');
+const sr = n => scanBox.querySelector('.r' + n);
+const scanDyn = (box, cls) => { const b = document.createElement('button'); b.className = 'gear tab acb ' + (cls || ''); box.appendChild(b); return b; };
+sBtn(sr(1), '[◀]', () => scanStep(-1)); sBtn(sr(1), '[⟳]', () => scanStep(0)); sBtn(sr(1), '[▶|]', () => scanStep(1));
+const scanPlay = scanDyn(sr(2), 'big'); scanPlay.addEventListener('click', () => scanRun ? scanPause() : scanStart());
+sBtn(sr(2), '[ ★ сработало ]', scanSave).classList.add('big');
+const scanAddrBtn = scanDyn(sr(3)), scanSkipBtn = scanDyn(sr(3)), scanPaceBtn = scanDyn(sr(3));
+scanAddrBtn.addEventListener('click', () => modal({ title: 'Адрес NEC (4 hex-цифры)', input: scan.addr.toString(16).toUpperCase().padStart(4, '0'), ok: t => {
+  if (/^[0-9a-f]{1,4}$/i.test(t)) { scan.addr = parseInt(t, 16); scan.cmd = 0; scanRender(); } else status('Нужно 4 hex-цифры, например 807F', 'err');
+} }));
+scanSkipBtn.addEventListener('click', () => { scan.skip = !scan.skip; scanRender(); });
+scanPaceBtn.addEventListener('click', () => { scan.pace = (scan.pace + 1) % SCAN_PACE.length; scanRender(); });
+sBtn(sr(4), '[ с 00 ]', () => { scanPause(); scan.cmd = 0; scanRender(); });
+const scanFoundBtn = scanDyn(sr(4)); scanFoundBtn.addEventListener('click', manageFound);
+const scanCur = () => necCode(scan.addr, scan.cmd);
+function scanRender() {
+  const c = scanCur(), h = hex8(c), k = knownLabel(c);
+  scanCodeEl.textContent = h.slice(0, 4) + ' ' + h.slice(4);
+  scanInfo.textContent = 'команда 0x' + scan.cmd.toString(16).toUpperCase().padStart(2, '0') + ' · ' + (scan.cmd + 1) + ' / 256 · ' + (k ? 'известна: ' + k : 'новая');
+  scanAddrBtn.textContent = btnLabel('[ адрес ' + scan.addr.toString(16).toUpperCase().padStart(4, '0') + ' ]');
+  scanSkipBtn.textContent = btnLabel(scan.skip ? '[ только новые ]' : '[ все коды ]');
+  scanPaceBtn.textContent = btnLabel('[ темп ' + Scripts.fmt(SCAN_PACE[scan.pace] / 1000) + ' с ]');
+  scanFoundBtn.textContent = btnLabel('[ найденные: ' + irbisFound.length + ' ]');
+  scanPlay.textContent = btnLabel(scanRun ? '[|| пауза]' : '[▶ авто]'); scanPlay.classList.toggle('on', scanRun);
+  scanBtn.textContent = btnLabel(scanBox.hidden ? '[ сканер ▾ ]' : '[ сканер ▴ ]'); scanBtn.classList.toggle('on', !scanBox.hidden);
+  try { localStorage.setItem('krisa-scan', JSON.stringify(scan)); } catch {}
+}
+function setScan(open) {
+  if (!open) scanPause(true);
+  scanBox.hidden = !open; scanRender();
+}
+/** Следующая (dir = ±1) команда с учётом «только новые»; −1, если дальше ничего нет. */
+function scanNext(from, dir) {
+  for (let i = from + dir; i >= 0 && i <= 255; i += dir) if (!scan.skip || !knownLabel(necCode(scan.addr, i))) return i;
+  return -1;
+}
+function scanSend() {
+  const h = hex8(scanCur());
+  const p = (settings.mode === 'http' ? httpTx : audioTx).send(h);
+  status('> tx скан 0x' + h + ' [sent]');
+  if (p && p.catch) p.catch(e => status(e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message, 'err'));
+}
+function scanStep(dir) {
+  if (scanRun) scanPause();
+  if (dir) { const n = scanNext(scan.cmd, dir); if (n < 0) { status(dir > 0 ? '> дальше команд нет (FF)' : '> это первая команда'); return; } scan.cmd = n; }
+  scanRender(); scanSend();
+}
+async function scanStart() {
+  if (scan.skip && knownLabel(scanCur())) { const n = scanNext(scan.cmd, 1); scan.cmd = n >= 0 ? n : 0; }
+  scanRun = true; scanRender();
+  try { scanLock = await navigator.wakeLock?.request('screen'); } catch {}   // экран не гаснет
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  while (scanRun) {
+    scanSend(); scanRender();
+    for (let left = SCAN_PACE[scan.pace]; left > 0 && scanRun; left -= 100) await sleep(Math.min(100, left));
+    if (!scanRun) break;
+    const n = scanNext(scan.cmd, 1);
+    if (n < 0) { scanRun = false; status('> сканер прошёл все команды адреса ' + scan.addr.toString(16).toUpperCase().padStart(4, '0')); break; }
+    scan.cmd = n;
+  }
+  scanPause(true);
+}
+function scanPause(quiet) {
+  if (!quiet && scanRun) status('> пауза на 0x' + hex8(scanCur()));
+  scanRun = false;
+  try { scanLock && scanLock.release(); } catch {}
+  scanLock = null;
+  scanRender();
+}
+function scanSave() {
+  if (scanRun) scanPause();
+  const c = scanCur(), k = knownLabel(c);
+  if (k) { status('> этот код уже есть: ' + k); return; }
+  modal({ title: 'Что сделала доска? (имя кнопки)', input: 'CMD ' + scan.cmd.toString(16).toUpperCase().padStart(2, '0'), ok: n => {
+    irbisFound.push({ l: n, c }); saveFound();
+    status('> «' + n + '» (0x' + hex8(c) + ') — новая кнопка IRBIS');
+  } });
+}
+function manageFound() {
+  if (!irbisFound.length) { status('> пока ничего не найдено'); return; }
+  modal({ title: 'Найденные команды', items: irbisFound.map(f => f.l + ' · ' + hex8(f.c)), pick: w => {
+    const f = irbisFound[w];
+    modal({ title: f.l, items: ['Переименовать', 'Удалить'], pick: a => {
+      if (a === 0) modal({ title: 'Имя кнопки', input: f.l, ok: n => { f.l = n; saveFound(); } });
+      else { irbisFound.splice(irbisFound.indexOf(f), 1); saveFound(); }
+    } });
+  } });
+}
+renderFound(); renderMacros(); scanRender();
+window.irxReady = true;
 
 buildGrid(false);
 applyColor();
@@ -2434,7 +2669,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.29', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.30', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
