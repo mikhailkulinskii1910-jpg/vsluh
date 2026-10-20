@@ -161,6 +161,28 @@ class ScreenshotTest {
         }
     }
 
+    /** Вкладка «Сценарии» с примером, в двух темах; и сам пример выполняется до конца. */
+    @Test
+    fun shotsScripts() {
+        for (theme in listOf("terminal", "prism", "blueprint")) {
+            val out = File(System.getProperty("shots.dir") ?: "build/shots", "scripts").apply { mkdirs() }
+            org.robolectric.RuntimeEnvironment.getApplication()
+                .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()
+                .putString("theme", theme).putString("tab", "scripts").commit()
+            val ctl = Robolectric.buildActivity(MainActivity::class.java).setup()
+            val root = ctl.get().window.decorView
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(4700))
+            root.draw(Canvas(Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)))
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(600))
+            findText(root, "Сценарии")!!.performClick()
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300))
+            Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888).also { bmp ->
+                root.draw(Canvas(bmp)); File(out, "$theme.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            ctl.pause().stop().destroy()
+        }
+    }
+
     /** Вкладка «Кондиционеры» во всех темах. */
     @Test
     fun shotsAc() {
