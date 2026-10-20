@@ -15,20 +15,51 @@ import android.text.style.ReplacementSpan
  * шапка «когда нажата ▶» и C-образный блок «повторить».
  */
 object Scratch {
-    /** Цвета категорий, как в Scratch 3: события, «движение» (устройства), расширения (команды), «внешность» (кондиционер), управление. */
-    class Cat(val fill: Int, val edge: Int)
-    val EVENT = Cat(Color.parseColor("#FFBF00"), Color.parseColor("#CC9900"))
-    val DEVICE = Cat(Color.parseColor("#4C97FF"), Color.parseColor("#3373CC"))
-    val COMMAND = Cat(Color.parseColor("#0FBD8C"), Color.parseColor("#0B8E69"))
-    val AC = Cat(Color.parseColor("#9966FF"), Color.parseColor("#774DCB"))
-    val CONTROL = Cat(Color.parseColor("#FFAB19"), Color.parseColor("#CF8B17"))
-
-    fun cat(b: Scripts.Block): Cat = when (b) {
-        is Scripts.Block.Dev -> DEVICE
-        is Scripts.Block.Cmd -> COMMAND
-        is Scripts.Block.Ac -> AC
-        else -> CONTROL
+    /**
+     * Цвета категорий — в стилистике текущей темы (а не стандартные цвета Scratch):
+     * терминал — оттенки свечения люминофора, призма — радужное стекло, тепловизор — цвета «температуры»
+     * палитры, чертёж — калька с линиями туши. [ink] — цвет текста на блоке.
+     */
+    class Cat(val fill: Int, val edge: Int, val ink: Int)
+    /** 0 — события (шапка), 1 — устройства, 2 — команды, 3 — кондиционер, 4 — управление. */
+    fun cat(i: Int): Cat {
+        val bg = Color.rgb(Color.red(Term.BG), Color.green(Term.BG), Color.blue(Term.BG))
+        return when {
+            Term.prism -> {
+                val c = Term.IRIS[intArrayOf(0, 3, 2, 4, 1)[i] % Term.IRIS.size]
+                Cat(mix(Color.parseColor("#120E1F"), c, 0.62f), c, Color.WHITE)
+            }
+            Term.thermal -> {
+                val f = Heat.color(floatArrayOf(0.95f, 0.32f, 0.52f, 0.68f, 0.82f)[i])
+                Cat(f, Term.shade(f, 0.62f), if (lum(f) > 0.55f) Heat.INK else Color.WHITE)
+            }
+            Term.blueprint -> {
+                val b = Color.rgb(Color.red(Blueprint.BG), Color.green(Blueprint.BG), Color.blue(Blueprint.BG))
+                Cat(mix(b, Blueprint.INK, floatArrayOf(0.34f, 0.17f, 0.10f, 0.13f, 0.05f)[i]), Blueprint.INK, Blueprint.INK)
+            }
+            else -> {
+                val k = floatArrayOf(0.85f, 0.40f, 0.28f, 0.34f, 0.18f)[i]
+                val f = mix(bg, Term.FG, k)
+                Cat(f, if (i == 0) Term.shade(Term.FG, 0.7f) else Term.FG, if (lum(f) > 0.5f) bg else Term.FG)
+            }
+        }
     }
+    val EVENT get() = cat(0)
+
+    fun cat(b: Scripts.Block): Cat = cat(when (b) {
+        is Scripts.Block.Dev -> 1
+        is Scripts.Block.Cmd -> 2
+        is Scripts.Block.Ac -> 3
+        else -> 4
+    })
+
+    private fun mix(a: Int, b: Int, k: Float) = Color.rgb(
+        (Color.red(a) + (Color.red(b) - Color.red(a)) * k).toInt(),
+        (Color.green(a) + (Color.green(b) - Color.green(a)) * k).toInt(),
+        (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * k).toInt())
+    fun lum(c: Int) = (0.299f * Color.red(c) + 0.587f * Color.green(c) + 0.114f * Color.blue(c)) / 255f
+    /** Текст на поле-плашке: тёмный на светлом, светлый на тёмном. */
+    private fun on(c: Int) = if (lum(c) > 0.5f) (if (lum(Term.BG) < 0.4f) Color.rgb(Color.red(Term.BG), Color.green(Term.BG), Color.blue(Term.BG)) else Color.BLACK) else Color.WHITE
 
     /** Подпись блока: обычный текст и поля (‹…› — выпадающий список, (…) — число). */
     fun parts(b: Scripts.Block): List<Pair<String, Int>> = when (b) {
@@ -40,7 +71,7 @@ object Scratch {
         Scripts.Block.End -> emptyList()
     }
 
-    /** Поле внутри блока: белый «овал» для чисел, тёмная «плашка с ▾» для выбора. */
+    /** Поле внутри блока: «овал» цвета фона темы для чисел, «плашка с ▾» цвета обводки для выбора. */
     class Field(private val number: Boolean, private val cat: Cat, private val d: Float) : ReplacementSpan() {
         private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
         private val pad = 8 * d
@@ -51,10 +82,10 @@ object Scratch {
             val h = p.textSize * 1.45f
             val cy = y + p.fontMetrics.ascent / 2 + p.fontMetrics.descent / 2
             val r = RectF(x, cy - h / 2, x + w, cy + h / 2)
-            bg.color = if (number) Color.WHITE else cat.edge
+            bg.color = if (number) Color.rgb(Color.red(Term.BG), Color.green(Term.BG), Color.blue(Term.BG)) else cat.edge
             c.drawRoundRect(r, h / 2, h / 2, bg)
             val old = p.color
-            p.color = if (number) Color.parseColor("#575E75") else Color.WHITE
+            p.color = if (number) Term.FG else on(cat.edge)
             c.drawText(t, s, e, x + pad, y.toFloat(), p)
             if (!number) c.drawText("▾", x + w - pad - 9 * d, y.toFloat(), p)
             p.color = old
@@ -65,7 +96,7 @@ object Scratch {
      * Форма блока. kind: 0 — обычный, 1 — шапка (скруглённый верх, без паза), 2 — C-блок «повторить»
      * (верхняя полка высотой [top], левая «рука» шириной [arm], нижняя полка высотой [bottom]).
      */
-    class Shape(private val cat: Cat, private val kind: Int, private val d: Float,
+    class Shape(val cat: Cat, private val kind: Int, private val d: Float,
                 private val top: Float = 0f, private val arm: Float = 0f, private val bottom: Float = 0f) : Drawable() {
         var lit = false
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)

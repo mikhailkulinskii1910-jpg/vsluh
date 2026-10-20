@@ -195,7 +195,7 @@ class ScreenshotTest {
     /** Вкладка «Сценарии» с примером, в двух темах; и сам пример выполняется до конца. */
     @Test
     fun shotsScripts() {
-        for (theme in listOf("terminal", "prism", "blueprint")) {
+        for (theme in listOf("terminal", "prism", "thermal", "blueprint")) {
             val out = File(System.getProperty("shots.dir") ?: "build/shots", "scripts").apply { mkdirs() }
             org.robolectric.RuntimeEnvironment.getApplication()
                 .getSharedPreferences("MainActivity", android.content.Context.MODE_PRIVATE).edit().clear()

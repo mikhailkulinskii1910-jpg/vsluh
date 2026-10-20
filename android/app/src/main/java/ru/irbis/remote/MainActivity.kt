@@ -727,7 +727,7 @@ class MainActivity : Activity() {
     }
 
     private fun blockText(label: CharSequence, shape: Scratch.Shape) = TextView(this).apply {
-        text = label; setTextColor(Color.WHITE); typeface = android.graphics.Typeface.DEFAULT_BOLD
+        text = label; setTextColor(shape.cat.ink); typeface = android.graphics.Typeface.create(Term.ru, android.graphics.Typeface.BOLD)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
         gravity = Gravity.CENTER_VERTICAL; background = shape
         setPadding(dp(12), dp(4), dp(10), dp(4) + shape.bump.toInt())
