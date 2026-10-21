@@ -308,11 +308,12 @@ enum ScriptRunner {
                     try send(.haier(Haier.bytes(st, .power), model))
                     sent = true
                 case .delay(let sec):
-                    var left: Int = Int(sec * 1000)
-                    while left > 0 && !stopped() {
-                        let step: Int = min(left, 100)
-                        Thread.sleep(forTimeInterval: Double(step) / 1000)
-                        left -= step
+                    // пауза по часам (не суммой sleep) — в фоне не накапливает ошибку
+                    let deadline: Date = Date().addingTimeInterval(sec)
+                    while !stopped() {
+                        let left: Double = deadline.timeIntervalSinceNow
+                        if left <= 0 { break }
+                        Thread.sleep(forTimeInterval: min(left, 0.1))
                     }
                 case .loop(let n):
                     let end: Int = matchEnd(s, i)
@@ -432,6 +433,9 @@ struct ScriptPanel: View {
                 stackView.padding(.top, 6)
                 trash.padding(.top, 8)
                 playButton.padding(.top, 6)
+                Text("Можно выключить экран — сценарий продолжит работу (держите адаптер подключённым).")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(.bottom, 16)
         }

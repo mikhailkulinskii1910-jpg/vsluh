@@ -3,6 +3,11 @@
 
     <uses-permission android:name="android.permission.TRANSMIT_IR" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Сценарии и сканер работают при выключенном экране: служба с уведомлением и запрет сна процессора -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.consumerir" android:required="false" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
 
@@ -28,5 +33,6 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+        <service android:name=".RunService" android:exported="false" android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

@@ -129,6 +129,7 @@ class MainActivity : Activity() {
         unregisterReceiver(usbReceiver)
         usbIr?.let { ir -> io.execute { ir.close() } }
         io.shutdown()
+        RunService.onStop = null; RunService.stop(this)
         super.onDestroy()
     }
 
@@ -827,6 +828,7 @@ class MainActivity : Activity() {
         scanPlay.text = btnLabel("[|| пауза]"); styleTab(scanPlay, true)
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val pace = SCAN_PACE[scanPace]
+        bgStart("Сканер IRBIS: адрес %04X".format(scanAddr))
         io.execute {
             try {
                 while (scanRun) {
@@ -850,6 +852,7 @@ class MainActivity : Activity() {
         scanPlay.text = btnLabel("[▶ авто]"); styleTab(scanPlay, false)
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         scanRender()
+        bgEnd()
     }
 
     private fun scanSave() {
@@ -1205,6 +1208,22 @@ class MainActivity : Activity() {
             .setPositiveButton("OK") { _, _ -> e.text.toString().replace(',', '.').toDoubleOrNull()?.let(ok) }.showThemed()
     }
 
+    /* ---------- Работа при выключенном экране ---------- */
+
+    /** Запущено что-то долгое (сценарий, макрос, сканер, рулетка) — держим службу с уведомлением, чтобы не уснуть. */
+    private fun bgStart(title: String) {
+        RunService.onStop = { ui.post { scriptRun = false; scanRun = false; mocRun = false } }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            && !getPreferences(MODE_PRIVATE).getBoolean(PREF_NOTIF_ASKED, false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean(PREF_NOTIF_ASKED, true).apply()
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 37)   // уведомление с кнопкой «Стоп»; без него всё равно работает
+        }
+        RunService.start(this, title)
+    }
+
+    /** Всё долгое закончилось — отпускаем службу. */
+    private fun bgEnd() { if (!scriptRun && !scanRun && !mocRun) RunService.stop(this) }
+
     /** Выполнить сценарий [s]; [btn] — кнопка-макрос, которая подсвечивается, пока он идёт. */
     private fun runScript(s: Scripts.Script = script, btn: TextView? = null) {
         val tx = current() ?: return say(noTxMessage(), err = true)
@@ -1214,6 +1233,7 @@ class MainActivity : Activity() {
         btn?.let { styleTab(it, true) }
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)   // экран не гаснет, пока идёт сценарий
         say("> сценарий «${s.name}»: старт")
+        bgStart("Выполняется «${s.name}»")
         io.execute {
             var err: String? = null
             try {
@@ -1228,6 +1248,7 @@ class MainActivity : Activity() {
                 scriptPlay.text = btnLabel("[ ▶ Отправить ]"); styleTab(scriptPlay, false)
                 btn?.let { styleTab(it, false) }
                 markBlock(-1)
+                bgEnd()
                 if (err != null) say(err!!, err = true) else say(if (stoppedByUser) "> сценарий остановлен" else "> сценарий выполнен", ok = !stoppedByUser)
             }
         }
@@ -1582,6 +1603,7 @@ class MainActivity : Activity() {
         mocRun = true
         mocPlay.text = btnLabel("[|| пауза]")
         say("> рулетка: старт с 0x%08X".format(mocCodeOf(mocIdx)))
+        bgStart("Рулетка: подбор кода")
         io.execute {
             try {
                 val last = rouletteSize - 1
@@ -1600,6 +1622,7 @@ class MainActivity : Activity() {
                 mocPlay.text = btnLabel("[▶ старт]")
                 if (mocIdx >= rouletteSize - 1) say("> рулетка закончена: все $rouletteSize команд отправлены")
                 mocRender()
+                bgEnd()
             }
         }
     }
@@ -1882,6 +1905,7 @@ class MainActivity : Activity() {
         private const val PREF_SCRIPTS = "scripts"
         private const val PREF_SCRIPT_CUR = "script_cur"
         private const val PREF_FOUND = "irbis_found"
+        private const val PREF_NOTIF_ASKED = "notif_asked"
         private const val PREF_SCAN_ADDR = "scan_addr"
         private const val PREF_SCAN_CMD = "scan_cmd"
         private const val PREF_SCAN_SKIP = "scan_skip"
