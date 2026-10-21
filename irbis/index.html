@@ -1647,6 +1647,68 @@ function modal({ title, items, sel = -1, pick, input, numeric, body, ok, okText 
    Блоки идут списком сверху вниз; цикл — пара «цикл ×N {» … «} конец цикла» (циклы вкладываются, незакрытый идёт до конца).
    Команда относится к устройству из ближайшего блока «→ устройство» выше неё.
    JSON как в Android: [{name, blocks:[{t:"dev",d},{t:"cmd",l,c},{t:"ac",p,m,x,f},{t:"delay",s},{t:"loop",n},{t:"end"}]}]. */
+/* ---------- Работа в фоне (1.31): пока идёт сценарий, макрос или авто-сканер ----------
+   Браузер сильнее усыпляет тихие вкладки, поэтому на время работы играет беззвучный звук (зацикленный WAV из нулей
+   и осциллятор с громкостью 0), Media Session показывает «krisa37™ — «имя»» с кнопками пауза/стоп → «Стоп»,
+   Screen Wake Lock держит экран, пока вкладка видна (и берётся снова, когда вкладка вернулась). */
+const bg = {
+  n: 0, audio: null, osc: null, lock: null, onStop: null,
+  silentUrl() {
+    if (this.url) return this.url;
+    const sr = 8000, n = sr, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const str = (o, s) => [...s].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+    str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+    return (this.url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })));
+  },
+  async wake() { try { this.lock = await navigator.wakeLock?.request('screen'); } catch {} },
+  /** Начать работу в фоне: title — что выполняется, onStop — что делать по кнопке «стоп» в уведомлении/на гарнитуре. */
+  start(title, onStop) {
+    this.onStop = onStop;
+    if (this.n++ === 0) {
+      try {
+        this.audio = new Audio(this.silentUrl()); this.audio.loop = true;
+        this.audio.play().catch(() => {});
+      } catch {}
+      try {
+        const c = audioCtx(), g = c.createGain(); g.gain.value = 0;
+        this.osc = c.createOscillator(); this.osc.connect(g).connect(c.destination); this.osc.start();
+      } catch {}
+      this.wake();
+    }
+    if ('mediaSession' in navigator) {
+      try { navigator.mediaSession.metadata = new MediaMetadata({ title: 'krisa37™ — «' + title + '»', artist: 'krisa37™ ir-remote' }); } catch {}
+      ['pause', 'stop'].forEach(a => { try { navigator.mediaSession.setActionHandler(a, () => this.onStop && this.onStop()); } catch {} });
+      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+    }
+  },
+  end() {
+    if (this.n === 0 || --this.n > 0) return;
+    try { this.audio && (this.audio.pause(), this.audio.removeAttribute('src'), this.audio.load()); } catch {}
+    try { this.osc && (this.osc.stop(), this.osc.disconnect()); } catch {}
+    this.audio = this.osc = this.onStop = null;
+    try { this.lock && this.lock.release(); } catch {}
+    this.lock = null;
+    if ('mediaSession' in navigator) {
+      ['pause', 'stop'].forEach(a => { try { navigator.mediaSession.setActionHandler(a, null); } catch {} });
+      try { navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; } catch {}
+    }
+  },
+};
+document.addEventListener('visibilitychange', () => { if (bg.n && document.visibilityState === 'visible') bg.wake(); });
+/** Часы для пауз: due — момент конца ожидания. setTimeout в фоне опаздывает — догоняем по performance.now(), ошибка не копится. */
+function pacer(stopped) {
+  let due = performance.now();
+  return {
+    /** После действия, которое само заняло время (отправка кадра), отсчёт — от «сейчас». */
+    sync() { due = Math.max(due, performance.now()); },
+    async wait(ms) {
+      due += ms;
+      for (let left; (left = due - performance.now()) > 0 && !stopped();) await new Promise(r => setTimeout(r, Math.min(100, left)));
+    },
+  };
+}
+
 const AC_MODE_N = ['COOL', 'HEAT', 'DRY', 'FAN', 'AUTO'], AC_FAN_N = ['AUTO', 'LOW', 'MED', 'HIGH'];
 /* Найденные сканером команды IRBIS: [{l: имя, c: код}] — добавляются к командам «Доска · IRBIS». */
 let irbisFound = [];
@@ -1708,7 +1770,7 @@ const Scripts = {
   /** Выполнение: send(frame мкс, what, tx) — отправить; mark(i) — подсветить блок; stopped() — нажата «Стоп». */
   async run(s, send, mark, stopped) {
     let device = -1;
-    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const clk = pacer(stopped);   // паузы — по часам
     const matchEnd = from => {
       let d = 0;
       for (let i = from + 1; i < s.blocks.length; i++) { const t = s.blocks[i].t; if (t === 'loop') d++; else if (t === 'end') { if (d === 0) return i; d--; } }
@@ -1728,15 +1790,14 @@ const Scripts = {
           const bytes = Haier.bytes(st, 'POWER');
           await send(Haier.pattern(bytes), 'haier ' + Haier.hex(bytes), { haier: model, hex: Haier.hex(bytes).replace(/ /g, '') });
         } else if (b.t === 'delay') {
-          let left = b.s * 1000;
-          while (left > 0 && !stopped()) { const st = Math.min(left, 100); await sleep(st); left -= st; }
+          await clk.wait(b.s * 1000);
         } else if (b.t === 'loop') {
           const end = matchEnd(i), n = Math.max(1, Math.min(999, b.n | 0));
           for (let k = 0; k < n && !stopped(); k++) await exec(i + 1, end);
           i = end;
           continue;
         }
-        if (b.t === 'cmd' || b.t === 'ac') await sleep(150);   // пауза между командами
+        if (b.t === 'cmd' || b.t === 'ac') { clk.sync(); await clk.wait(150); }   // пауза между командами (отсчёт — после отправки)
       }
     };
     await exec(0, s.blocks.length);
@@ -1770,6 +1831,7 @@ function scriptsSave() { try { localStorage.setItem('krisa-scripts', JSON.string
 
 const sp = $('scripts');
 sp.innerHTML = '<p class="projnote">Как в Scratch: блоки из палитры нажмите или перетащите в сценарий (удерживайте). Нажатие на блок — изменить, перетащить — переставить или в корзину. Команда идёт устройству из блока «устройство» выше неё.</p>'
+  + '<p class="projnote">Экран можно выключить: в Chrome на Android сценарий продолжит работу, пока вкладка открыта; в Safari на iPhone — не всегда, лучше приложение.</p>'
   + '<button class="gear tab acb sname"></button><div class="srow s3"></div>'
   + '<div class="brands pcats"></div><div class="pal"></div>'
   + '<div class="blocks"></div><div class="trash" data-drop="trash">✕  перетащите блок сюда, чтобы удалить</div>'
@@ -2074,8 +2136,7 @@ async function scriptSend(frame, what, x) {
 async function runScript(s = script()) {
   if (!s.blocks.length) { status('Сценарий пуст', 'err'); return; }
   scriptRun = true; macroRunning = s; scriptLabels();
-  let lock = null;
-  try { lock = await navigator.wakeLock?.request('screen'); } catch {}   // экран не гаснет, пока идёт сценарий
+  bg.start(s.name, () => { scriptRun = false; });   // фон: беззвучный звук, Media Session «стоп», экран не гаснет
   status('> сценарий «' + s.name + '»: старт');
   let err = null;
   try {
@@ -2083,7 +2144,7 @@ async function runScript(s = script()) {
   } catch (e) { err = e.message === 'Failed to fetch' ? 'Модуль не отвечает' : e.message || 'Ошибка передачи'; }
   const stoppedByUser = !scriptRun;
   scriptRun = false; macroRunning = null; scriptLabels(); markBlock(-1);
-  try { lock && lock.release(); } catch {}
+  bg.end();
   if (err) status(err, 'err'); else status(stoppedByUser ? '> сценарий остановлен' : '> сценарий выполнен');
 }
 play.addEventListener('click', () => { if (scriptRun) scriptRun = false; else runScript(); });
@@ -2231,11 +2292,11 @@ function scanStep(dir) {
 async function scanStart() {
   if (scan.skip && knownLabel(scanCur())) { const n = scanNext(scan.cmd, 1); scan.cmd = n >= 0 ? n : 0; }
   scanRun = true; scanRender();
-  try { scanLock = await navigator.wakeLock?.request('screen'); } catch {}   // экран не гаснет
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  if (!scanLock) { scanLock = true; bg.start('сканер ' + scan.addr.toString(16).toUpperCase().padStart(4, '0'), () => scanPause()); }   // работа в фоне
+  const clk = pacer(() => !scanRun);   // темп — по часам
   while (scanRun) {
     scanSend(); scanRender();
-    for (let left = SCAN_PACE[scan.pace]; left > 0 && scanRun; left -= 100) await sleep(Math.min(100, left));
+    await clk.wait(SCAN_PACE[scan.pace]);
     if (!scanRun) break;
     const n = scanNext(scan.cmd, 1);
     if (n < 0) { scanRun = false; status('> сканер прошёл все команды адреса ' + scan.addr.toString(16).toUpperCase().padStart(4, '0')); break; }
@@ -2246,7 +2307,7 @@ async function scanStart() {
 function scanPause(quiet) {
   if (!quiet && scanRun) status('> пауза на 0x' + hex8(scanCur()));
   scanRun = false;
-  try { scanLock && scanLock.release(); } catch {}
+  if (scanLock) bg.end();
   scanLock = null;
   scanRender();
 }
@@ -2669,7 +2730,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.30', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.31', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
