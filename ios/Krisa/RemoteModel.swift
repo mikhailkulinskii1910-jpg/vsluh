@@ -33,6 +33,7 @@ final class RemoteModel: ObservableObject {
         NotificationCenter.default.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] _ in
             self?.routeOK = AudioIr.adapterConnected
         }
+        KeepAlive.shared.onResume = { [weak self] in self?.say("> прервано звонком, продолжаю") }
     }
 
     var modeLine: String {
@@ -136,6 +137,9 @@ final class RemoteModel: ObservableObject {
 
     /// Отправить одну команду сценария (из потока передачи).
     private func sendScriptItem(_ item: ScriptSend, mode: TxMode, host: String, audio: AudioIr) throws {
+        // звонок прервал звук — подождать его окончания и продолжить
+        while KeepAlive.shared.isInterrupted && !scriptStopped() { Thread.sleep(forTimeInterval: 0.1) }
+        if scriptStopped() { return }
         switch item {
         case .nec(let code, _):
             if mode == .http {
@@ -162,6 +166,7 @@ final class RemoteModel: ObservableObject {
         scriptMark = -1
         scriptTag = tag
         UIApplication.shared.isIdleTimerDisabled = true
+        KeepAlive.shared.begin()      // работает и при выключенном экране
         say("> сценарий «" + s.name + "»: старт")
         let mode = self.mode, host = self.host
         let audio = mode == .audio1 ? audio1 : audio2
@@ -184,6 +189,7 @@ final class RemoteModel: ObservableObject {
                 self.scriptRunning = false
                 self.scriptMark = -1
                 UIApplication.shared.isIdleTimerDisabled = false
+                KeepAlive.shared.end()
                 if let f = failure {
                     self.say(f, err: true)
                 } else {

@@ -37,7 +37,8 @@ final class AudioIr: IrTransmitter {
 
     private func start() throws {
         let s = AVAudioSession.sharedInstance()
-        try s.setCategory(.playback, mode: .default, options: [])
+        // смешивание с другим звуком: одновременно может играть фоновая «тишина» (работа при выключенном экране)
+        try s.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try? s.setPreferredSampleRate(AudioIr.rate)
         try s.setActive(true)
         if !engine.isRunning { try engine.start() }

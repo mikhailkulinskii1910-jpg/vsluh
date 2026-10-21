@@ -352,18 +352,28 @@ struct IrbisExtras: View {
         autoOn = true
         autoToken += 1
         UIApplication.shared.isIdleTimerDisabled = true
-        tick(autoToken)
+        KeepAlive.shared.begin()      // работает и при выключенном экране
+        tick(autoToken, due: Date())
     }
 
     /// Авто: отправить текущий, подождать темп, перейти к следующему.
-    private func tick(_ token: Int) {
+    /// Время берётся по часам: следующий шаг — ровно через темп после этого (в фоне ошибка не копится).
+    private func tick(_ token: Int, due: Date) {
         guard autoOn && token == autoToken else { return }
+        if KeepAlive.shared.isInterrupted {
+            // звонок — подождать и продолжить с той же команды
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { tick(token, due: Date()) }
+            return
+        }
         sendCurrent()
-        DispatchQueue.main.asyncAfter(deadline: .now() + pace) {
+        var nextDue: Date = due.addingTimeInterval(pace)
+        if nextDue < Date() { nextDue = Date() }
+        let wait: Double = max(0, nextDue.timeIntervalSinceNow)
+        DispatchQueue.main.asyncAfter(deadline: .now() + wait) {
             guard autoOn && token == autoToken else { return }
             if let n = next(scanCmd, 1) {
                 scanCmd = n
-                tick(token)
+                tick(token, due: nextDue)
             } else {
                 pause(quiet: true)
                 model.say("> сканер прошёл все команды адреса " + Irbis.hex4(scanAddr))
@@ -381,7 +391,10 @@ struct IrbisExtras: View {
 
     private func pause(quiet: Bool) {
         if !quiet && autoOn { model.say("> пауза на 0x" + Irbis.hex8(code)) }
-        if autoOn { UIApplication.shared.isIdleTimerDisabled = false }
+        if autoOn {
+            UIApplication.shared.isIdleTimerDisabled = false
+            KeepAlive.shared.end()
+        }
         autoOn = false
         autoToken += 1
     }
