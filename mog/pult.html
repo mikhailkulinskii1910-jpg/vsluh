@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1210">
+<meta name="robots" content="noindex">
+<title>Пульт · {{TITLE}}</title>
+<style>
+:root{--ink:#0e1210;--paper:#ece8dc;--line:rgba(236,232,220,.18);--gold:#c9a96a;--muted:rgba(236,232,220,.6);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--ink);color:var(--paper);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;justify-content:center;gap:16px;padding-block:max(24px,env(safe-area-inset-top,0px)) max(24px,env(safe-area-inset-bottom,0px));padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));max-width:520px;margin:0 auto}
+.st{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--muted);min-height:24px}
+.st i{width:10px;height:10px;border-radius:50%;background:var(--muted);flex:none}
+.st.show i{background:#e0574f;box-shadow:0 0 0 4px rgba(224,87,79,.2)}
+.st.hide i{background:#6fbf73;box-shadow:0 0 0 4px rgba(111,191,115,.2)}
+button{appearance:none;border:1px solid var(--line);border-radius:20px;padding:28px 20px;font-family:inherit;font-weight:600;font-size:22px;line-height:1.2;color:var(--paper);background:rgba(236,232,220,.06);cursor:pointer;transition:transform .15s,background .2s,border-color .2s;-webkit-tap-highlight-color:transparent}
+button:active{transform:scale(.97)}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+#show{background:#7a2b26;border-color:#a8433c}
+#show:hover{background:#8c322c}
+#hide:hover{background:rgba(236,232,220,.1)}
+button[disabled]{opacity:.6}
+.msg{font-size:14px;color:var(--muted);min-height:20px}
+</style>
+</head>
+<body>
+<div class="st" id="st"><i></i><span id="stTxt">Проверяю состояние…</span></div>
+<button id="show" type="button">Показать фото</button>
+<button id="hide" type="button">Вернуть презентацию</button>
+<div class="msg" id="msg" role="status"></div>
+<script>
+(function(){
+  var BASE='https://ntfy.sh/{{TOPIC}}';
+  var st=document.getElementById('st'),stTxt=document.getElementById('stTxt'),msg=document.getElementById('msg');
+  function show(m){
+    st.className='st '+(m==='show'?'show':'hide');
+    stTxt.textContent=m==='show'?'Сейчас на сайте: фото':'Сейчас на сайте: презентация';
+  }
+  function latest(){
+    fetch(BASE+'/json?poll=1&since=latest',{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){
+      var ls=t.trim().split('\n').filter(Boolean),last='hide';
+      ls.forEach(function(l){try{var d=JSON.parse(l);if(d.event==='message')last=String(d.message).trim()}catch(e){}});
+      show(last);
+    }).catch(function(){stTxt.textContent='Нет связи с сервером команд'});
+  }
+  function send(m,btn){
+    btn.disabled=true;msg.textContent='Отправляю…';
+    fetch(BASE,{method:'POST',body:m}).then(function(r){
+      if(!r.ok)throw 0;
+      show(m);msg.textContent=m==='show'?'Фото показано на всех открытых страницах.':'Презентация возвращена.';
+    }).catch(function(){msg.textContent='Не отправилось. Проверьте интернет и нажмите ещё раз.'}).finally(function(){btn.disabled=false});
+  }
+  document.getElementById('show').onclick=function(){send('show',this)};
+  document.getElementById('hide').onclick=function(){send('hide',this)};
+  latest();
+  try{var es=new EventSource(BASE+'/sse');es.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.event==='message')show(String(d.message).trim())}catch(_){}}}catch(e){}
+  document.addEventListener('visibilitychange',function(){if(!document.hidden)latest()});
+})();
+</script>
+</body>
+</html>
