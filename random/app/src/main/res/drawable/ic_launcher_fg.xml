@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Колесо из шести секторов с указателем сверху (холст 108dp, безопасная зона 66dp в центре). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFE84A5F" android:pathData="M54,56 L54,30 A26,26 0 0,1 76.52,43 Z" />
+    <path android:fillColor="#FFFF8C42" android:pathData="M54,56 L76.52,43 A26,26 0 0,1 76.52,69 Z" />
+    <path android:fillColor="#FFFFC93C" android:pathData="M54,56 L76.52,69 A26,26 0 0,1 54,82 Z" />
+    <path android:fillColor="#FF2EC4B6" android:pathData="M54,56 L54,82 A26,26 0 0,1 31.48,69 Z" />
+    <path android:fillColor="#FF3A86FF" android:pathData="M54,56 L31.48,69 A26,26 0 0,1 31.48,43 Z" />
+    <path android:fillColor="#FF8338EC" android:pathData="M54,56 L31.48,43 A26,26 0 0,1 54,30 Z" />
+    <path android:fillColor="#FFF2F2F5" android:pathData="M54,51 A5,5 0 1,1 53.99,51 Z" />
+    <path android:fillColor="#FFF2F2F5" android:pathData="M47,22 L61,22 L54,34 Z" />
+</vector>

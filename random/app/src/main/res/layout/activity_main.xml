@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <!-- 5 быстрых нажатий или долгое нажатие на заголовок открывают скрытую вкладку «Шансы». -->
+    <TextView
+        android:id="@+id/title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="14dp"
+        android:paddingBottom="6dp"
+        android:text="@string/app_name"
+        android:textColor="@color/text"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Колесо -->
+        <LinearLayout
+            android:id="@+id/panelWheel"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <ru.random.wheel.WheelView
+                android:id="@+id/wheel"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/result"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:minHeight="56dp"
+                android:paddingTop="8dp"
+                android:textColor="@color/accent"
+                android:textSize="26sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/spin"
+                style="@style/Btn"
+                android:layout_width="match_parent"
+                android:layout_height="60dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/btn_accent"
+                android:text="Крутить"
+                android:textColor="@color/bg"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Варианты -->
+        <LinearLayout
+            android:id="@+id/panelItems"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Количество"
+                    android:textColor="@color/text"
+                    android:textSize="18sp" />
+
+                <Button
+                    android:id="@+id/minus"
+                    style="@style/Btn"
+                    android:layout_width="52dp"
+                    android:text="−"
+                    android:textSize="22sp" />
+
+                <TextView
+                    android:id="@+id/count"
+                    android:layout_width="56dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="@color/text"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <Button
+                    android:id="@+id/plus"
+                    style="@style/Btn"
+                    android:layout_width="52dp"
+                    android:text="+"
+                    android:textSize="22sp" />
+            </LinearLayout>
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="12dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/itemsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <Button
+                android:id="@+id/shuffle"
+                style="@style/Btn"
+                android:layout_width="match_parent"
+                android:layout_marginTop="8dp"
+                android:text="Перемешать порядок" />
+        </LinearLayout>
+
+        <!-- Скрытая вкладка: подкрутка шансов -->
+        <LinearLayout
+            android:id="@+id/panelOdds"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <Switch
+                android:id="@+id/rigged"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Подкрутка включена"
+                android:textColor="@color/text"
+                android:textSize="18sp" />
+
+            <TextView
+                android:id="@+id/oddsHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="6dp"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="8dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/oddsList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/oddsReset"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="Всем поровну" />
+
+                <Button
+                    android:id="@+id/oddsClose"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Закрыть" />
+            </LinearLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
+
+        <Button
+            android:id="@+id/tabWheel"
+            style="@style/Btn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Колесо" />
+
+        <Button
+            android:id="@+id/tabItems"
+            style="@style/Btn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:text="Варианты" />
+    </LinearLayout>
+</LinearLayout>
