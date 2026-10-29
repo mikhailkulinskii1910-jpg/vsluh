@@ -12,7 +12,6 @@ import android.graphics.RectF
 import android.text.TextPaint
 import android.text.TextUtils
 import android.util.AttributeSet
-import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 import kotlin.math.min
@@ -24,6 +23,17 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     var labels: List<String> = emptyList()
         set(value) { field = value; invalidate() }
 
+    var theme: AppTheme = Themes.all[0]
+        set(value) {
+            field = value
+            rimPaint.color = value.rim; hubPaint.color = value.rim; pointerPaint.color = value.rim
+            hubInner.color = value.panel; emptyPaint.color = value.muted
+            invalidate()
+        }
+
+    /** Указатель перешёл на следующий сектор (для щелчка и вибрации). */
+    var onTick: (() -> Unit)? = null
+
     /** Поворот колеса по часовой стрелке, градусы. */
     private var rotationDeg = 0f
     private var animator: ValueAnimator? = null
@@ -31,7 +41,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
 
     private val sectorPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE; color = 0x55000000; strokeWidth = dp(1.5f)
+        style = Paint.Style.STROKE; color = 0x40000000; strokeWidth = dp(1.5f)
     }
     private val rimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; color = Color.parseColor("#F2F2F5")
@@ -44,14 +54,20 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER; isFakeBoldText = true
     }
+    private val emptyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val emptyRing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeWidth = dp(3f)
+        pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(10f), dp(8f)), 0f)
+    }
     private val oval = RectF()
     private val pointer = Path()
 
     fun colorOf(i: Int): Int {
+        val pal = theme.palette
         val n = labels.size
         // последний сектор не должен совпасть по цвету с первым (они соседние)
-        val k = if (n > 1 && i == n - 1 && i % PALETTE.size == 0) 3 else i % PALETTE.size
-        return PALETTE[k]
+        val k = if (n > 1 && i == n - 1 && i % pal.size == 0) pal.size / 2 else i % pal.size
+        return pal[k]
     }
 
     /** Индекс сектора под указателем. */
@@ -63,23 +79,24 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     }
 
     /** Крутит колесо так, чтобы указатель остановился в случайном месте сектора [index]. */
-    fun spinTo(index: Int, onEnd: () -> Unit) {
+    fun spinTo(index: Int, durationMs: Long, onEnd: () -> Unit) {
         val n = labels.size
         if (n == 0 || spinning) return
         val s = 360f / n
         val target = index * s + s * (0.12f + 0.76f * Random.nextFloat()) // угол внутри сектора
         val start = (rotationDeg % 360 + 360) % 360
         val delta = ((-target - start) % 360 + 720) % 360
-        val end = start + 360f * Random.nextInt(5, 8) + delta
+        val turns = (durationMs / 800).toInt().coerceAtLeast(2)
+        val end = start + 360f * Random.nextInt(turns, turns + 3) + delta
         rotationDeg = start
         var lastIdx = indexUnderPointer()
         animator = ValueAnimator.ofFloat(start, end).apply {
-            duration = 4200L + Random.nextLong(1200)
+            duration = durationMs + Random.nextLong(durationMs / 4 + 1)
             interpolator = DecelerateInterpolator(2.2f)
             addUpdateListener {
                 rotationDeg = it.animatedValue as Float
                 val idx = indexUnderPointer()
-                if (idx != lastIdx) { lastIdx = idx; performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+                if (idx != lastIdx) { lastIdx = idx; onTick?.invoke() }
                 invalidate()
             }
             addListener(object : AnimatorListenerAdapter() {
@@ -99,7 +116,16 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         val cx = width / 2f
         val cy = height / 2f + dp(8f)
         val r = min(width / 2f, height / 2f - dp(8f)) - dp(10f)
-        if (r <= 0 || n == 0) return
+        if (r <= 0) return
+        if (n == 0) {
+            emptyRing.color = theme.muted
+            canvas.drawCircle(cx, cy, r, emptyRing)
+            emptyPaint.textSize = dp(18f)
+            canvas.drawText("Добавьте варианты", cx, cy, emptyPaint)
+            emptyPaint.textSize = dp(14f)
+            canvas.drawText("на вкладке «Варианты»", cx, cy + dp(24f), emptyPaint)
+            return
+        }
         oval.set(cx - r, cy - r, cx + r, cy + r)
         val s = 360f / n
 
@@ -114,7 +140,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         for (i in 0 until n) {
             canvas.save()
             canvas.rotate(-90f + (i + 0.5f) * s + rotationDeg, cx, cy)
-            textPaint.color = if (isLight(colorOf(i))) Color.parseColor("#15161C") else Color.WHITE
+            textPaint.color = if (isLight(colorOf(i))) 0xFF15161C.toInt() else Color.WHITE
             val t = TextUtils.ellipsize(labels[i].ifBlank { "—" }, textPaint, maxW, TextUtils.TruncateAt.END)
             canvas.drawText(t, 0, t.length, cx + r * 0.58f, cy - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
             canvas.restore()
@@ -138,12 +164,4 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         Color.red(c) * 0.299 + Color.green(c) * 0.587 + Color.blue(c) * 0.114 > 160
 
     private fun dp(v: Float) = v * resources.displayMetrics.density
-
-    companion object {
-        val PALETTE = intArrayOf(
-            0xFFE84A5F.toInt(), 0xFFFF8C42.toInt(), 0xFFFFC93C.toInt(), 0xFF8AC926.toInt(),
-            0xFF2EC4B6.toInt(), 0xFF3A86FF.toInt(), 0xFF8338EC.toInt(), 0xFFFF5DA2.toInt(),
-            0xFF06D6A0.toInt(), 0xFF118AB2.toInt(), 0xFFF15BB5.toInt(), 0xFFB5838D.toInt(),
-        )
-    }
 }

@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Цвета задаются в коде по выбранной теме (MainActivity.paint). Теги:
+     accent — кнопка цвета акцента, muted — второстепенный текст, keep — цвет не трогать. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+<LinearLayout
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
@@ -15,7 +21,6 @@
         android:paddingTop="14dp"
         android:paddingBottom="6dp"
         android:text="@string/app_name"
-        android:textColor="@color/text"
         android:textSize="28sp"
         android:textStyle="bold" />
 
@@ -44,11 +49,43 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center"
-                android:minHeight="56dp"
+                android:minHeight="48dp"
                 android:paddingTop="8dp"
-                android:textColor="@color/accent"
+                android:tag="keep"
                 android:textSize="26sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/resultNote"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:tag="muted"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:id="@+id/resultActions"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="horizontal"
+                android:visibility="invisible">
+
+                <Button
+                    android:id="@+id/share"
+                    style="@style/Btn"
+                    android:layout_height="40dp"
+                    android:text="Поделиться"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/restore"
+                    style="@style/Btn"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:text="Вернуть выбывших"
+                    android:textSize="14sp" />
+            </LinearLayout>
 
             <Button
                 android:id="@+id/spin"
@@ -56,9 +93,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:layout_marginTop="8dp"
-                android:background="@drawable/btn_accent"
+                android:tag="accent"
                 android:text="Крутить"
-                android:textColor="@color/bg"
                 android:textSize="20sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -83,7 +119,6 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Количество"
-                    android:textColor="@color/text"
                     android:textSize="18sp" />
 
                 <Button
@@ -98,7 +133,6 @@
                     android:layout_width="56dp"
                     android:layout_height="wrap_content"
                     android:gravity="center"
-                    android:textColor="@color/text"
                     android:textSize="22sp"
                     android:textStyle="bold" />
 
@@ -110,10 +144,60 @@
                     android:textSize="22sp" />
             </LinearLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/templates"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="Шаблоны"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/bulk"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="Списком"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/clearAll"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:text="Удалить все"
+                    android:textSize="14sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="8dp"
+                android:tag="muted"
+                android:text="Галочка — вариант на колесе. Снимите её, чтобы временно убрать вариант."
+                android:textSize="12sp" />
+
             <ScrollView
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="6dp"
                 android:layout_weight="1">
 
                 <LinearLayout
@@ -123,13 +207,179 @@
                     android:orientation="vertical" />
             </ScrollView>
 
+            <TextView
+                android:id="@+id/itemsEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:padding="24dp"
+                android:tag="muted"
+                android:text="Список пуст. Нажмите «+», «Списком» или выберите шаблон."
+                android:textSize="15sp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/shuffle"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="Перемешать" />
+
+                <Button
+                    android:id="@+id/sort"
+                    style="@style/Btn"
+                    android:layout_width="0dp"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="По алфавиту" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- История и статистика -->
+        <LinearLayout
+            android:id="@+id/panelHistory"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/historyList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
             <Button
-                android:id="@+id/shuffle"
+                android:id="@+id/historyClear"
                 style="@style/Btn"
                 android:layout_width="match_parent"
                 android:layout_marginTop="8dp"
-                android:text="Перемешать порядок" />
+                android:text="Очистить историю" />
         </LinearLayout>
+
+        <!-- Настройки -->
+        <ScrollView
+            android:id="@+id/panelSettings"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Тема"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/themesGrid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="Скорость вращения"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/speedRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="Быстро" />
+
+                    <Button
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Обычно" />
+
+                    <Button
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Долго" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="Функции"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <Switch
+                    android:id="@+id/optEliminate"
+                    style="@style/Opt"
+                    android:text="Убирать выпавший вариант (выбывание)" />
+
+                <Switch
+                    android:id="@+id/optConfetti"
+                    style="@style/Opt"
+                    android:text="Конфетти при результате" />
+
+                <Switch
+                    android:id="@+id/optSound"
+                    style="@style/Opt"
+                    android:text="Щелчки при вращении" />
+
+                <Switch
+                    android:id="@+id/optVibro"
+                    style="@style/Opt"
+                    android:text="Вибрация" />
+
+                <Switch
+                    android:id="@+id/optShake"
+                    style="@style/Opt"
+                    android:text="Крутить встряхиванием телефона" />
+
+                <Switch
+                    android:id="@+id/optAwake"
+                    style="@style/Opt"
+                    android:text="Не гасить экран" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:tag="muted"
+                    android:text="random 1.1"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </ScrollView>
 
         <!-- Скрытая вкладка: подкрутка шансов -->
         <LinearLayout
@@ -145,7 +395,6 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Подкрутка включена"
-                android:textColor="@color/text"
                 android:textSize="18sp" />
 
             <TextView
@@ -153,7 +402,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:paddingTop="6dp"
-                android:textColor="@color/muted"
+                android:tag="muted"
                 android:textSize="13sp" />
 
             <ScrollView
@@ -194,26 +443,40 @@
     </FrameLayout>
 
     <LinearLayout
+        android:id="@+id/tabs"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
         android:paddingBottom="12dp">
 
         <Button
             android:id="@+id/tabWheel"
-            style="@style/Btn"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
+            style="@style/Tab"
             android:text="Колесо" />
 
         <Button
             android:id="@+id/tabItems"
-            style="@style/Btn"
-            android:layout_width="0dp"
-            android:layout_weight="1"
+            style="@style/Tab"
             android:text="Варианты" />
+
+        <Button
+            android:id="@+id/tabHistory"
+            style="@style/Tab"
+            android:text="История" />
+
+        <Button
+            android:id="@+id/tabSettings"
+            style="@style/Tab"
+            android:text="Настройки" />
     </LinearLayout>
 </LinearLayout>
+
+    <ru.random.wheel.ConfettiView
+        android:id="@+id/confetti"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clickable="false"
+        android:focusable="false" />
+</FrameLayout>

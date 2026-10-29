@@ -1,0 +1,42 @@
+package ru.random.wheel
+
+/** Тема оформления: цвета интерфейса и палитра секторов колеса. */
+class AppTheme(
+    val id: String,
+    val title: String,
+    val bg: Int,
+    val panel: Int,
+    val text: Int,
+    val muted: Int,
+    val accent: Int,
+    val onAccent: Int,
+    val rim: Int,
+    val light: Boolean,
+    val palette: IntArray,
+)
+
+object Themes {
+    private fun c(hex: Long) = (0xFF000000 or hex).toInt()
+    private fun p(vararg hex: Long) = IntArray(hex.size) { c(hex[it]) }
+
+    val all = listOf(
+        AppTheme("night", "Ночь", c(0x15161C), c(0x22242E), c(0xF2F2F5), c(0x9A9CA8), c(0xFFC93C), c(0x15161C), c(0xF2F2F5), false,
+            p(0xE84A5F, 0xFF8C42, 0xFFC93C, 0x8AC926, 0x2EC4B6, 0x3A86FF, 0x8338EC, 0xFF5DA2, 0x06D6A0, 0x118AB2, 0xF15BB5, 0xB5838D)),
+        AppTheme("day", "День", c(0xF4F5F8), c(0xFFFFFF), c(0x1B1C22), c(0x6B6E7B), c(0x3A6FF7), c(0xFFFFFF), c(0x2B2D38), true,
+            p(0xE84A5F, 0xFF8C42, 0xFFC93C, 0x8AC926, 0x2EC4B6, 0x3A86FF, 0x8338EC, 0xFF5DA2, 0x06D6A0, 0x118AB2, 0xF15BB5, 0xB5838D)),
+        AppTheme("neon", "Неон", c(0x0B0221), c(0x1C0C3F), c(0xF8F0FF), c(0xA08CC8), c(0xFF2E97), c(0xFFFFFF), c(0x00F0FF), false,
+            p(0xFF2E97, 0x00F0FF, 0xB026FF, 0x39FF14, 0xFFE600, 0xFF6B00, 0x7B2FFF, 0x00FFA3)),
+        AppTheme("ocean", "Океан", c(0x0A1F2E), c(0x12344A), c(0xE6F7FF), c(0x8FB3C6), c(0x00C2D1), c(0x0A1F2E), c(0xE6F7FF), false,
+            p(0x0077B6, 0x00B4D8, 0x90E0EF, 0x48CAE4, 0x023E8A, 0x2EC4B6, 0x0096C7, 0xCAF0F8)),
+        AppTheme("sunset", "Закат", c(0x2A1325), c(0x3D1D36), c(0xFFEFE6), c(0xC99AAE), c(0xFF7B54), c(0x2A1325), c(0xFFEFE6), false,
+            p(0xFF7B54, 0xFFB26B, 0xFFD56F, 0xE84A5F, 0xB83B5E, 0x6A2C70, 0xF08A5D, 0xF9ED69)),
+        AppTheme("pastel", "Пастель", c(0xFFF7F0), c(0xFFFFFF), c(0x3D3A4B), c(0x8E8A9C), c(0xE88FB0), c(0x3D3A4B), c(0x3D3A4B), true,
+            p(0xFFADAD, 0xFFD6A5, 0xFDFFB6, 0xCAFFBF, 0x9BF6FF, 0xA0C4FF, 0xBDB2FF, 0xFFC6FF)),
+        AppTheme("forest", "Лес", c(0x102016), c(0x1B3324), c(0xEEF6E8), c(0x9DB59F), c(0xA7C957), c(0x102016), c(0xEEF6E8), false,
+            p(0x386641, 0x6A994E, 0xA7C957, 0xF2E8CF, 0xBC4749, 0xDDA15E, 0x606C38, 0x8AB17D)),
+        AppTheme("mono", "Монохром", c(0x000000), c(0x1A1A1A), c(0xFFFFFF), c(0x8C8C8C), c(0xFFFFFF), c(0x000000), c(0xFFFFFF), false,
+            p(0x2B2B2B, 0x4A4A4A, 0x6E6E6E, 0x939393, 0xB8B8B8, 0xDCDCDC)),
+    )
+
+    fun byId(id: String?) = all.firstOrNull { it.id == id } ?: all[0]
+}
