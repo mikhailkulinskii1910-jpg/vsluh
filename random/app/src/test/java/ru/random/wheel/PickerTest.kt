@@ -2,6 +2,7 @@ package ru.random.wheel
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
 
@@ -16,6 +17,21 @@ class PickerTest {
 
     @Test fun normalized() {
         assertArrayEquals(doubleArrayOf(0.75, 0.25, 0.0), Picker.probabilities(listOf(75, 25, 0), true), 1e-9)
+    }
+
+    @Test fun hundredAlwaysWinsEvenAgainstOthers() {
+        val rnd = Random(7)
+        repeat(10_000) { assertEquals(2, Picker.pick(listOf(99, 50, 100, 1, 0), true, rnd.nextDouble())) }
+    }
+
+    @Test fun severalHundredsShareAndOthersNeverWin() {
+        assertArrayEquals(doubleArrayOf(0.5, 0.0, 0.5, 0.0), Picker.probabilities(listOf(100, 90, 100, 0), true), 1e-9)
+    }
+
+    @Test fun zeroNeverWinsAmongOthers() {
+        val rnd = Random(3)
+        repeat(10_000) { assertTrue(Picker.pick(listOf(0, 1, 0, 1), true, rnd.nextDouble()) in setOf(1, 3)) }
+        assertEquals(3, Picker.pick(listOf(0, 1, 0, 1), true, 0.9999999999))
     }
 
     @Test fun zeroNeverWins_hundredAlwaysWins() {

@@ -607,6 +607,8 @@ class MainActivity : Activity() {
                     override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
                         if (!fromUser) return
                         item.chance = p
+                        // ползунок тронули — подкрутка включается сама
+                        if (!rigged) { rigged = true; riggedSwitch.isChecked = true; save() }
                         refreshOdds()
                     }
                     override fun onStartTrackingTouch(sb: SeekBar) {}
@@ -629,12 +631,14 @@ class MainActivity : Activity() {
             oddsLabels.getOrNull(i)?.text =
                 if (k < 0) "${item.chance}%  ·  не на колесе" else "${item.chance}%  →  выпадет ${fmt(p[k] * 100)}%"
         }
-        val sum = active.sumOf { it.chance }
+        val sure = active.count { it.chance >= 100 }
         oddsHint.text = when {
-            !rigged -> "Подкрутка выключена: у всех вариантов равные шансы."
-            sum == 0 -> "У всех 0% — шансы считаются равными."
-            else -> "Реальный шанс = значение ÷ сумма всех значений. 0% — не выпадет никогда, " +
-                "100% при остальных 0% — выпадет всегда. Сектора на колесе остаются одинаковыми."
+            !rigged -> "Подкрутка выключена: у всех вариантов равные шансы. Сдвиньте любой ползунок — она включится."
+            active.isNotEmpty() && active.all { it.chance == 0 } -> "У всех 0% — выбирать не из чего, шансы считаются равными."
+            sure > 1 -> "100% у нескольких вариантов — выпадает только один из них (поровну). 0% — никогда."
+            sure == 1 -> "100% — этот вариант выпадает всегда. 0% — никогда."
+            else -> "100% — выпадает всегда, 0% — никогда. Остальные: шанс пропорционален значению. " +
+                "Сектора на колесе остаются одинаковыми."
         }
     }
 
