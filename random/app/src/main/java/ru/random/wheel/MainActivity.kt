@@ -129,9 +129,9 @@ class MainActivity : Activity() {
         title.setOnClickListener {
             val now = SystemClock.uptimeMillis()
             if (now - firstTapAt > 2000) { firstTapAt = now; titleTaps = 0 }
-            if (++titleTaps >= 5) { titleTaps = 0; show(ODDS) }
+            if (++titleTaps >= 5) { titleTaps = 0; askPassword() }
         }
-        title.setOnLongClickListener { show(ODDS); true }
+        title.setOnLongClickListener { askPassword(); true }
 
         setupItems()
         setupSettings()
@@ -402,6 +402,35 @@ class MainActivity : Activity() {
             .setPositiveButton("Сохранить текущий") { _, _ -> saveCurrentAs() }
             .setNegativeButton("Закрыть", null)
             .show()
+    }
+
+    /** Вход в скрытую вкладку «Шансы» — только по паролю. */
+    private fun askPassword() {
+        if (current == ODDS) return
+        val edit = EditText(this).apply {
+            hint = "Пароль"
+            isSingleLine = true
+            gravity = Gravity.CENTER
+            textSize = 22f
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        paint(edit)
+        val box = LinearLayout(this).apply { setPadding(dp(20), dp(12), dp(20), 0); addView(edit) }
+        val dlg = dialog().setView(box)
+            .setPositiveButton("OK", null)
+            .setNegativeButton("Отмена", null)
+            .create()
+        fun check() {
+            if (edit.text.toString() == PASSWORD) { dlg.dismiss(); show(ODDS) }
+            else { edit.text.clear(); edit.error = "Неверный пароль" }
+        }
+        edit.setOnEditorActionListener { _, _, _ -> check(); true }
+        dlg.setOnShowListener { dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { check() } }
+        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+        dlg.show()
+        edit.requestFocus()
     }
 
     private fun saveCurrentAs() {
@@ -798,6 +827,7 @@ class MainActivity : Activity() {
         const val MAX_HISTORY = 300
         const val DEFAULT_CHANCE = 50
         const val ODDS = 4
+        const val PASSWORD = "1910"
         /** Базовая длительность вращения, мс: быстро / обычно / долго. */
         val SPEEDS = longArrayOf(2200, 4200, 7500)
 

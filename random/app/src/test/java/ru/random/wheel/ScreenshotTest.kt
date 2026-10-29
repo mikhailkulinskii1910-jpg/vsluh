@@ -75,8 +75,27 @@ class ScreenshotTest {
         dlg.listView.performItemClick(dlg.listView.getChildAt(5), 5, 5); idle(150)
         assertEquals(8, wheel.labels.size)
 
-        root.findViewById<View>(R.id.title).performLongClick(); idle(150); shot("12-odds")
+        // скрытая вкладка: без верного пароля не открывается
+        val odds = root.findViewById<View>(R.id.panelOdds)
+        fun enter(pin: String) {
+            root.findViewById<View>(R.id.title).performLongClick(); idle(150)
+            val d = ShadowDialog.getLatestDialog() as AlertDialog
+            findEdit(d.window!!.decorView)!!.setText(pin)
+            d.getButton(DialogInterface.BUTTON_POSITIVE).performClick(); idle(150)
+            if (d.isShowing) d.dismiss()
+        }
+        enter("1234")
+        assertEquals(View.GONE, odds.visibility)
+        enter("1910")
+        assertEquals(View.VISIBLE, odds.visibility)
+        shot("12-odds")
         click(R.id.rigged); shot("13-odds-on")
+    }
+
+    private fun findEdit(v: View): android.widget.EditText? {
+        if (v is android.widget.EditText) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) findEdit(v.getChildAt(i))?.let { return it }
+        return null
     }
 
     private fun findText(v: View, s: String): View? {
