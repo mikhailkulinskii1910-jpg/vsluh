@@ -40,6 +40,16 @@ class PickerTest {
         assertEquals(1, Picker.pick(listOf(0, 100, 0), true, 0.9999999999))
     }
 
+    @Test fun sizesSetChanceWithoutRig() {
+        assertArrayEquals(doubleArrayOf(0.6, 0.2, 0.2), Picker.probabilities(listOf(0, 100, 50), false, listOf(3, 1, 1)), 1e-9)
+    }
+
+    @Test fun sizesMultiplyHiddenChance() {
+        // 50%×3 против 50%×1 → 75/25; 0% остаётся «никогда», 100% — «всегда»
+        assertArrayEquals(doubleArrayOf(0.75, 0.25, 0.0), Picker.probabilities(listOf(50, 50, 0), true, listOf(3, 1, 10)), 1e-9)
+        assertArrayEquals(doubleArrayOf(0.0, 1.0), Picker.probabilities(listOf(99, 100), true, listOf(10, 1)), 1e-9)
+    }
+
     @Test fun distributionFollowsWeights() {
         val rnd = Random(42)
         val hits = IntArray(3)

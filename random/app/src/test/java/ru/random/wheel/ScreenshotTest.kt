@@ -75,6 +75,34 @@ class ScreenshotTest {
         dlg.listView.performItemClick(dlg.listView.getChildAt(5), 5, 5); idle(150)
         assertEquals(8, wheel.labels.size)
 
+        // копирование варианта (⧉) и лимит 100
+        click(R.id.tabItems)
+        val list = root.findViewById<ViewGroup>(R.id.itemsList)
+        (list.getChildAt(0) as ViewGroup).getChildAt(4).performClick(); idle(150)
+        assertEquals(9, wheel.labels.size)
+        assertEquals(wheel.labels[0], wheel.labels[1])
+        repeat(120) { root.findViewById<View>(R.id.plus).performClick() }
+        idle(150)
+        assertEquals(100, wheel.labels.size)
+        click(R.id.tabWheel); shot("14-wheel-100")
+        click(R.id.tabItems); click(R.id.clearAll)
+        (ShadowDialog.getLatestDialog() as AlertDialog).getButton(DialogInterface.BUTTON_POSITIVE).performClick(); idle(150)
+        click(R.id.templates)
+        (ShadowDialog.getLatestDialog() as AlertDialog).let { it.listView.performItemClick(it.listView.getChildAt(5), 5, 5) }; idle(150)
+
+        // размер сектора: кнопка ×N открывает окно с предпросмотром
+        (list.getChildAt(0) as ViewGroup).getChildAt(3).performClick(); idle(150)
+        val sizeDlg = ShadowDialog.getLatestDialog() as AlertDialog
+        val bar = findSeek(sizeDlg.window!!.decorView)!!
+        shadowOf(bar).onSeekBarChangeListener.onProgressChanged(bar, 4, true); idle(150)
+        val bmpD = Bitmap.createBitmap(sizeDlg.window!!.decorView.width, sizeDlg.window!!.decorView.height, Bitmap.Config.ARGB_8888)
+        sizeDlg.window!!.decorView.draw(Canvas(bmpD))
+        File(out, "15-size-dialog.png").outputStream().use { bmpD.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        sizeDlg.getButton(DialogInterface.BUTTON_POSITIVE).performClick(); idle(150)
+        assertEquals(listOf(5, 1, 1, 1, 1, 1, 1, 1), wheel.sizes)
+        shot("16-items-sized")
+        click(R.id.tabWheel); shot("17-wheel-sized")
+
         // скрытая вкладка: без верного пароля не открывается
         val odds = root.findViewById<View>(R.id.panelOdds)
         fun enter(pin: String) {
@@ -90,6 +118,12 @@ class ScreenshotTest {
         assertEquals(View.VISIBLE, odds.visibility)
         shot("12-odds")
         click(R.id.rigged); shot("13-odds-on")
+    }
+
+    private fun findSeek(v: View): android.widget.SeekBar? {
+        if (v is android.widget.SeekBar) return v
+        if (v is ViewGroup) for (i in 0 until v.childCount) findSeek(v.getChildAt(i))?.let { return it }
+        return null
     }
 
     private fun findEdit(v: View): android.widget.EditText? {

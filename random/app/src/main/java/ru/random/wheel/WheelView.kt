@@ -17,11 +17,22 @@ import android.view.animation.DecelerateInterpolator
 import kotlin.math.min
 import kotlin.random.Random
 
-/** Колесо фортуны: равные сектора, указатель сверху. */
+/** Колесо фортуны: сектора пропорциональны размерам [sizes], указатель сверху. */
 class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
     var labels: List<String> = emptyList()
+        set(value) { field = value; recalc(); invalidate() }
+
+    /** Размеры секторов (по умолчанию все 1). Доля сектора = размер / сумма размеров. */
+    var sizes: List<Int> = emptyList()
+        set(value) { field = value; recalc(); invalidate() }
+
+    /** Выделенный сектор (обводка) — для окна изменения размера; -1 — нет. */
+    var highlight = -1
         set(value) { field = value; invalidate() }
+
+    /** Начало каждого сектора в градусах от указателя по часовой стрелке; последний элемент — 360. */
+    private var starts = FloatArray(1)
 
     var theme: AppTheme = Themes.all[0]
         set(value) {
@@ -59,6 +70,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         style = Paint.Style.STROKE; strokeWidth = dp(3f)
         pathEffect = android.graphics.DashPathEffect(floatArrayOf(dp(10f), dp(8f)), 0f)
     }
+    private val hlPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val oval = RectF()
     private val pointer = Path()
 
@@ -70,20 +82,58 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         return pal[k]
     }
 
-    /** Индекс сектора под указателем. */
-    fun indexUnderPointer(): Int {
+    private fun recalc() {
+        val n = labels.size
+        val w = FloatArray(n) { (sizes.getOrNull(it) ?: 1).coerceAtLeast(1).toFloat() }
+        val sum = w.sum()
+        starts = FloatArray(n + 1)
+        for (i in 0 until n) starts[i + 1] = starts[i] + 360f * w[i] / sum
+        if (n > 0) starts[n] = 360f
+    }
+
+    /** Сектор по углу колеса (0 — начало первого сектора, по часовой стрелке). */
+    private fun indexAtAngle(deg: Float): Int {
         val n = labels.size
         if (n == 0) return -1
-        val a = ((-rotationDeg) % 360 + 360) % 360
-        return (a / (360f / n)).toInt().coerceIn(0, n - 1)
+        val a = (deg % 360 + 360) % 360
+        for (i in 0 until n) if (a < starts[i + 1]) return i
+        return n - 1
+    }
+
+    /** Индекс сектора под указателем. */
+    fun indexUnderPointer() = indexAtAngle(-rotationDeg)
+
+    /** Индекс сектора в точке экрана (x, y) или -1 вне колеса. */
+    fun indexAt(x: Float, y: Float): Int {
+        val (cx, cy, r) = geometry()
+        val dx = x - cx; val dy = y - cy
+        if (dx * dx + dy * dy > r * r) return -1
+        val a = Math.toDegrees(kotlin.math.atan2(dx.toDouble(), -dy.toDouble())).toFloat() // 0 — вверх, по часовой
+        return indexAtAngle(a - rotationDeg)
+    }
+
+    /** Последнее касание — чтобы по долгому нажатию узнать, какой сектор держат. */
+    var lastTouchX = 0f; private set
+    var lastTouchY = 0f; private set
+
+    override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
+        if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) { lastTouchX = e.x; lastTouchY = e.y }
+        return super.onTouchEvent(e)
+    }
+
+    private fun geometry(): Triple<Float, Float, Float> {
+        val cx = width / 2f
+        val cy = height / 2f + dp(8f)
+        val r = min(width / 2f, height / 2f - dp(8f)) - dp(10f)
+        return Triple(cx, cy, r)
     }
 
     /** Крутит колесо так, чтобы указатель остановился в случайном месте сектора [index]. */
     fun spinTo(index: Int, durationMs: Long, onEnd: () -> Unit) {
         val n = labels.size
         if (n == 0 || spinning) return
-        val s = 360f / n
-        val target = index * s + s * (0.12f + 0.76f * Random.nextFloat()) // угол внутри сектора
+        val from = starts[index]; val span = starts[index + 1] - from
+        val target = from + span * (0.12f + 0.76f * Random.nextFloat()) // угол внутри сектора
         val start = (rotationDeg % 360 + 360) % 360
         val delta = ((-target - start) % 360 + 720) % 360
         val turns = (durationMs / 800).toInt().coerceAtLeast(2)
@@ -113,9 +163,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
 
     override fun onDraw(canvas: Canvas) {
         val n = labels.size
-        val cx = width / 2f
-        val cy = height / 2f + dp(8f)
-        val r = min(width / 2f, height / 2f - dp(8f)) - dp(10f)
+        val (cx, cy, r) = geometry()
         if (r <= 0) return
         if (n == 0) {
             emptyRing.color = theme.muted
@@ -127,23 +175,32 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             return
         }
         oval.set(cx - r, cy - r, cx + r, cy + r)
-        val s = 360f / n
+        fun from(i: Int) = -90f + starts[i] + rotationDeg
+        fun span(i: Int) = starts[i + 1] - starts[i]
 
         for (i in 0 until n) {
             sectorPaint.color = colorOf(i)
-            canvas.drawArc(oval, -90f + i * s + rotationDeg, s, true, sectorPaint)
+            canvas.drawArc(oval, from(i), span(i), true, sectorPaint)
         }
-        if (n > 1) for (i in 0 until n) canvas.drawArc(oval, -90f + i * s + rotationDeg, s, true, linePaint)
+        if (n > 1) for (i in 0 until n) canvas.drawArc(oval, from(i), span(i), true, linePaint)
 
-        textPaint.textSize = min(r * 0.13f, r * 2.2f / n + dp(6f)).coerceAtLeast(dp(9f))
         val maxW = r * 0.62f
         for (i in 0 until n) {
+            // шрифт по ширине сектора: узкие сектора — мельче, совсем узкие — без подписи
+            val size = min(r * 0.13f, r * 2.2f * span(i) / 360f + dp(6f))
+            if (size < dp(7f)) continue
+            textPaint.textSize = size
             canvas.save()
-            canvas.rotate(-90f + (i + 0.5f) * s + rotationDeg, cx, cy)
+            canvas.rotate(from(i) + span(i) / 2, cx, cy)
             textPaint.color = if (isLight(colorOf(i))) 0xFF15161C.toInt() else Color.WHITE
             val t = TextUtils.ellipsize(labels[i].ifBlank { "—" }, textPaint, maxW, TextUtils.TruncateAt.END)
             canvas.drawText(t, 0, t.length, cx + r * 0.58f, cy - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
             canvas.restore()
+        }
+
+        if (highlight in 0 until n) {
+            hlPaint.color = theme.rim; hlPaint.strokeWidth = dp(4f)
+            canvas.drawArc(oval, from(highlight), span(highlight), true, hlPaint)
         }
 
         rimPaint.strokeWidth = dp(5f)

@@ -47,7 +47,9 @@ import kotlin.random.Random
 class MainActivity : Activity() {
 
     /** [on] — вариант на колесе (снимается вручную или при выбывании). */
-    private class Item(var name: String, var chance: Int = DEFAULT_CHANCE, var on: Boolean = true)
+    private class Item(var name: String, var chance: Int = DEFAULT_CHANCE, var on: Boolean = true, var size: Int = 1) {
+        fun copy() = Item(name, chance, on, size)
+    }
 
     private class Hit(val name: String, val time: Long)
 
@@ -117,6 +119,12 @@ class MainActivity : Activity() {
 
         findViewById<Button>(R.id.spin).setOnClickListener { spin() }
         wheel.setOnClickListener { spin() }
+        // долгое нажатие на сектор — изменить его размер
+        wheel.setOnLongClickListener {
+            val idx = wheel.indexAt(wheel.lastTouchX, wheel.lastTouchY)
+            if (idx >= 0 && !wheel.spinning) { applyPendingOut(); active().getOrNull(idx)?.let { editSize(it) } }
+            true
+        }
         wheel.onTick = {
             if (vibroOn) wheel.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
             if (soundOn) tick()
@@ -202,7 +210,7 @@ class MainActivity : Activity() {
         result.text = ""
         resultNote.text = ""
         resultActions.visibility = View.INVISIBLE
-        val idx = Picker.pick(active.map { it.chance }, rigged, Random.nextDouble())
+        val idx = Picker.pick(active.map { it.chance }, rigged, Random.nextDouble(), active.map { it.size })
         wheel.spinTo(idx, SPEEDS[speed]) { onResult(active[idx], idx) }
     }
 
@@ -260,7 +268,9 @@ class MainActivity : Activity() {
     }
 
     private fun updateWheel() {
-        wheel.labels = active().map { it.name }
+        val a = active()
+        wheel.sizes = a.map { it.size }
+        wheel.labels = a.map { it.name }
         if (::countView.isInitialized) countView.text = items.size.toString()
     }
 
@@ -290,6 +300,77 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.sort).setOnClickListener {
             items.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }); itemsChanged()
         }
+        findViewById<Button>(R.id.copyAll).setOnClickListener {
+            if (items.isEmpty()) return@setOnClickListener
+            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("random", items.joinToString("\n") { it.name }))
+            toast("Список скопирован (${items.size}) — его можно вставить в «Списком»")
+        }
+    }
+
+    /** Окно размера сектора: живой предпросмотр колеса, ползунок ×1…×10, переход между вариантами. */
+    private fun editSize(start: Item) {
+        var item = start
+        val preview = WheelView(this).apply {
+            theme = this@MainActivity.theme
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(250))
+        }
+        val name = text("", 18f, null, bold = true).apply {
+            gravity = Gravity.CENTER; isSingleLine = true
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val info = text("", 14f, "muted").apply { gravity = Gravity.CENTER }
+        val bar = SeekBar(this).apply { max = MAX_SIZE - 1; setPadding(dp(16), dp(10), dp(16), dp(10)) }
+        fun refresh() {
+            val a = active()
+            preview.sizes = a.map { it.size }
+            preview.labels = a.map { it.name }
+            preview.highlight = a.indexOf(item)
+            name.text = item.name.ifBlank { "—" }
+            val share = if (item.on) item.size * 100.0 / a.sumOf { it.size } else 0.0
+            info.text = if (item.on) "Размер ×${item.size} · ${fmt(share)}% колеса — такой же шанс выпасть"
+                else "Размер ×${item.size} · вариант сейчас снят с колеса"
+            bar.progress = item.size - 1
+        }
+        bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                if (!fromUser) return
+                item.size = p + 1; updateWheel(); refresh()
+            }
+            override fun onStartTrackingTouch(sb: SeekBar) {}
+            override fun onStopTrackingTouch(sb: SeekBar) { save() }
+        })
+        fun step(d: Int) {
+            val list = active().ifEmpty { items }
+            val i = list.indexOf(item)
+            item = list[((if (i < 0) 0 else i + d) % list.size + list.size) % list.size]
+            refresh()
+        }
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, 0)
+            fun arrow(t: String, d: Int) = Button(this@MainActivity, null, 0, R.style.Btn).apply {
+                text = t; setPadding(0, 0, 0, 0)
+                layoutParams = LinearLayout.LayoutParams(dp(48), dp(44))
+                setOnClickListener { step(d) }
+            }
+            addView(arrow("◀", -1)); addView(name); addView(arrow("▶", 1))
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), 0)
+            addView(preview); addView(nav); addView(bar); addView(info)
+        }
+        paint(box)
+        refresh()
+        dialog().setView(box)
+            .setPositiveButton("Готово") { _, _ -> save(); if (current == 1) buildItems() }
+            .setNeutralButton("Все ×1") { _, _ ->
+                items.forEach { it.size = 1 }; save(); updateWheel(); if (current == 1) buildItems()
+            }
+            .setOnCancelListener { save(); if (current == 1) buildItems() }
+            .show()
     }
 
     private fun buildItems() {
@@ -337,13 +418,20 @@ class MainActivity : Activity() {
                     }
                 })
             }
-            val del = Button(this, null, 0, R.style.Btn).apply {
-                text = "✕"
-                layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginStart = dp(8) }
+            fun small(label: String, w: Int, click: () -> Unit) = Button(this, null, 0, R.style.Btn).apply {
+                text = label
+                textSize = 15f
+                layoutParams = LinearLayout.LayoutParams(dp(w), dp(44)).apply { marginStart = dp(5) }
                 setPadding(0, 0, 0, 0)
-                setOnClickListener { items.remove(item); itemsChanged() }
+                setOnClickListener { click() }
             }
-            row.addView(check); row.addView(dot); row.addView(edit); row.addView(del)
+            val size = small("×${item.size}", 46) { editSize(item) }
+            val copy = small("⧉", 42) {
+                if (items.size >= MAX_ITEMS) toast("Не больше $MAX_ITEMS вариантов")
+                else { items.add(items.indexOf(item) + 1, item.copy()); itemsChanged(); toast("Скопировано: «${item.name}»") }
+            }
+            val del = small("✕", 42) { items.remove(item); itemsChanged() }
+            row.addView(check); row.addView(dot); row.addView(edit); row.addView(size); row.addView(copy); row.addView(del)
             paint(row)
             itemsList.addView(row)
         }
@@ -654,7 +742,7 @@ class MainActivity : Activity() {
     /** Подписи: заданное значение 0–100% и реальный шанс выпадения (только среди вариантов на колесе). */
     private fun refreshOdds() {
         val active = active()
-        val p = Picker.probabilities(active.map { it.chance }, rigged)
+        val p = Picker.probabilities(active.map { it.chance }, rigged, active.map { it.size })
         items.forEachIndexed { i, item ->
             val k = active.indexOf(item)
             oddsLabels.getOrNull(i)?.text =
@@ -662,12 +750,12 @@ class MainActivity : Activity() {
         }
         val sure = active.count { it.chance >= 100 }
         oddsHint.text = when {
-            !rigged -> "Подкрутка выключена: у всех вариантов равные шансы. Сдвиньте любой ползунок — она включится."
-            active.isNotEmpty() && active.all { it.chance == 0 } -> "У всех 0% — выбирать не из чего, шансы считаются равными."
-            sure > 1 -> "100% у нескольких вариантов — выпадает только один из них (поровну). 0% — никогда."
+            !rigged -> "Подкрутка выключена: шанс = размер сектора на колесе. Сдвиньте любой ползунок — она включится."
+            active.isNotEmpty() && active.all { it.chance == 0 } -> "У всех 0% — выбирать не из чего, шанс = размер сектора."
+            sure > 1 -> "100% у нескольких вариантов — выпадает только один из них (по размеру сектора). 0% — никогда."
             sure == 1 -> "100% — этот вариант выпадает всегда. 0% — никогда."
-            else -> "100% — выпадает всегда, 0% — никогда. Остальные: шанс пропорционален значению. " +
-                "Сектора на колесе остаются одинаковыми."
+            else -> "100% — выпадает всегда, 0% — никогда. Остальные: шанс пропорционален значению × размер сектора. " +
+                "Вид колеса подкрутка не меняет."
         }
     }
 
@@ -758,12 +846,13 @@ class MainActivity : Activity() {
     private fun prefs() = getSharedPreferences("wheel", Context.MODE_PRIVATE)
 
     private fun itemsJson() = JSONArray().apply {
-        items.forEach { put(JSONObject().put("name", it.name).put("chance", it.chance).put("on", it.on)) }
+        items.forEach { put(JSONObject().put("name", it.name).put("chance", it.chance).put("on", it.on).put("size", it.size)) }
     }
 
     private fun parseItems(arr: JSONArray) = (0 until arr.length()).map {
         val o = arr.getJSONObject(it)
-        Item(o.optString("name"), o.optInt("chance", DEFAULT_CHANCE).coerceIn(0, 100), o.optBoolean("on", true))
+        Item(o.optString("name"), o.optInt("chance", DEFAULT_CHANCE).coerceIn(0, 100), o.optBoolean("on", true),
+            o.optInt("size", 1).coerceIn(1, MAX_SIZE))
     }
 
     private fun loadSaved(): Map<String, JSONArray> = try {
@@ -823,7 +912,8 @@ class MainActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).roundToInt()
 
     companion object {
-        const val MAX_ITEMS = 50
+        const val MAX_ITEMS = 100
+        const val MAX_SIZE = 10
         const val MAX_HISTORY = 300
         const val DEFAULT_CHANCE = 50
         const val ODDS = 4
