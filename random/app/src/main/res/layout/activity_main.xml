@@ -322,26 +322,12 @@
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
+                <!-- кнопки режимов создаются в коде (SpinMode), по три в ряд -->
                 <LinearLayout
                     android:id="@+id/modeRow"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <Button
-                        style="@style/Btn"
-                        android:layout_width="0dp"
-                        android:layout_weight="1"
-                        android:text="Колесо" />
-
-                    <Button
-                        style="@style/Btn"
-                        android:layout_width="0dp"
-                        android:layout_marginStart="6dp"
-                        android:layout_weight="1"
-                        android:text="Стрелка" />
-                </LinearLayout>
+                    android:orientation="vertical" />
 
                 <TextView
                     android:layout_width="match_parent"
@@ -422,7 +408,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
                     android:tag="muted"
-                    android:text="random 1.8"
+                    android:text="random 1.9"
                     android:textSize="12sp" />
             </LinearLayout>
         </ScrollView>
