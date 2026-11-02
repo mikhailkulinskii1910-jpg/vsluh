@@ -55,7 +55,7 @@ class ScreenshotTest {
 
         // темы
         click(R.id.tabSettings)
-        for ((i, t) in listOf("Неон", "День", "Пастель", "Океан").withIndex()) {
+        for ((i, t) in listOf("Неон", "День", "Пастель", "Океан", "Малина", "Песок", "Радуга", "Лимонад").withIndex()) {
             clickText(t); click(R.id.tabWheel); shot("06-theme-$i-$t"); click(R.id.tabSettings)
         }
         clickText("Ночь")

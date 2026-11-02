@@ -13,16 +13,34 @@
     android:orientation="vertical">
 
     <!-- Нажатие на заголовок — подкрутка вкл/выкл; долгое нажатие + пароль — скрытая вкладка «Шансы». -->
-    <TextView
-        android:id="@+id/title"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:paddingTop="14dp"
-        android:paddingBottom="6dp"
-        android:text="@string/app_name"
-        android:textSize="28sp"
-        android:textStyle="bold" />
+        android:layout_height="wrap_content">
+
+        <TextView
+            android:id="@+id/title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:paddingTop="14dp"
+            android:paddingBottom="6dp"
+            android:text="@string/app_name"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <!-- подпись автора в углу; перекрашивается под тему, касания проходят к заголовку -->
+        <ImageView
+            android:id="@+id/signature"
+            android:layout_width="112dp"
+            android:layout_height="30dp"
+            android:layout_gravity="end|center_vertical"
+            android:layout_marginTop="4dp"
+            android:layout_marginEnd="12dp"
+            android:contentDescription="KM 37"
+            android:scaleType="fitCenter"
+            android:src="@drawable/signature"
+            android:tag="keep" />
+    </FrameLayout>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -408,7 +426,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
                     android:tag="muted"
-                    android:text="random 2.0"
+                    android:text="random 2.1"
                     android:textSize="12sp" />
             </LinearLayout>
         </ScrollView>

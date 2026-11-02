@@ -855,6 +855,11 @@ class MainActivity : Activity() {
             View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
         val root = findViewById<View>(R.id.root)
         root.setBackgroundColor(t.bg)
+        // подпись — силуэт цвета текста темы
+        findViewById<android.widget.ImageView>(R.id.signature).apply {
+            setColorFilter(t.text, android.graphics.PorterDuff.Mode.SRC_IN)
+            alpha = 0.75f
+        }
         wheel.theme = t
         paint(root)
         result.setTextColor(wheel.colorOf(lastResultIdx))
