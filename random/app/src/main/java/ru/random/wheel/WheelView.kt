@@ -42,7 +42,13 @@ enum class SpinMode(val id: String, val title: String) {
     DARTS("darts", "Дартс"),
     PLINKO("plinko", "Плинко"),
     REVERSE("reverse", "Обратное"),
-    TRIPLE("triple", "Тройной");
+    TRIPLE("triple", "Тройной"),
+    TWO_ARROWS("two", "Две стрелы"),
+    FIVE_ARROWS("five", "Пять стрел"),
+    BOOMERANG("boomerang", "Бумеранг");
+
+    /** Сколько указателей — столько результатов за одно вращение. */
+    val pointers get() = when (this) { TRIPLE -> 3; TWO_ARROWS -> 2; FIVE_ARROWS -> 5; else -> 1 }
 
     /** Указатель нарисован сверху и стоит на месте — крутится само колесо. */
     val topPointer get() = this == WHEEL || this == SPRING || this == SUSPENSE || this == REVERSE
@@ -176,12 +182,63 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     fun indexUnderPointer() = when {
         mode == SpinMode.FLASH && flashIdx >= 0 -> flashIdx
         mode == SpinMode.TRIPLE -> indexAtAngle(-rotationDeg)
+        mode.pointers > 1 -> indexAtAngle(multiDeg[0] - rotationDeg)
         else -> indexAtAngle(cursorDeg - rotationDeg)
     }
 
     /** «Тройной»: что выпало у колеса (указатель сверху), стрелки и кометы. */
     fun tripleIndices() = intArrayOf(
         indexAtAngle(-rotationDeg), indexAtAngle(cursorDeg - rotationDeg), indexAtAngle(cometDeg - rotationDeg))
+
+    /** Что выпало у каждого указателя (колесо/стрелы/комета) — для режимов с несколькими результатами. */
+    fun multiIndices(): IntArray = when (mode) {
+        SpinMode.TRIPLE -> tripleIndices()
+        else -> IntArray(mode.pointers) { indexAtAngle(multiDeg[it] - rotationDeg) }
+    }
+
+    /** Углы стрел в «Двух стрелах» / «Пяти стрелах»; разные направления и скорости. */
+    private val multiDeg = FloatArray(5) { it * 72f }
+    private val multiColors get() = intArrayOf(theme.rim, theme.accent, 0xFF4FC3F7.toInt(), 0xFFFF6E6E.toInt(), 0xFF9CFF57.toInt())
+
+    /** Несколько результатов за раз: «Тройной» или стрелы. [idx] — что должно выпасть у каждого указателя. */
+    fun spinMulti(idx: IntArray, durationMs: Long, onEnd: () -> Unit) {
+        if (mode == SpinMode.TRIPLE) { spinTriple(idx, durationMs, onEnd); return }
+        val n = labels.size
+        if (n == 0 || spinning) return
+        val k = mode.pointers
+        val turns = (durationMs / 800).toInt().coerceAtLeast(2)
+        val rot = rotationDeg
+        val a0 = FloatArray(k) { norm(multiDeg[it]) }
+        val a1 = FloatArray(k)
+        val stop = FloatArray(k)
+        for (i in 0 until k) {
+            val f = starts[idx[i]]
+            val target = f + (starts[idx[i] + 1] - f) * (0.15f + 0.7f * Random.nextFloat())
+            val dir = if (i % 2 == 0) 1 else -1                // чётные — по часовой, нечётные — против
+            val laps = 360f * (turns + i % 3 + (if (k == 2) i else 0)) // разная скорость
+            a1[i] = if (dir > 0) a0[i] + laps + norm(target + rot - a0[i]) else a0[i] - laps - norm(a0[i] - (target + rot))
+            stop[i] = if (k == 1) 1f else 0.62f + 0.38f * i / (k - 1)   // встают по очереди
+        }
+        val frame: (Float) -> Unit = { t ->
+            for (i in 0 until k) multiDeg[i] = a0[i] + (a1[i] - a0[i]) * ease(min(1f, t / stop[i]), 3f)
+        }
+        lastFrame = frame
+        var last = multiIndices().contentHashCode()
+        animator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = durationMs + 1200L + Random.nextLong(durationMs / 4 + 1)
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener {
+                frame(it.animatedValue as Float)
+                val h = multiIndices().contentHashCode()
+                if (h != last) { last = h; onTick?.invoke() }
+                invalidate()
+            }
+            addListener(object : AnimatorListenerAdapter() {
+                override fun onAnimationEnd(a: Animator) { frame(1f); invalidate(); onEnd() }
+            })
+            start()
+        }
+    }
 
     /** Угол кометы в «Тройном» (0 — вверх, по часовой) и её скорость за кадр. */
     private var cometDeg = 0f
@@ -357,6 +414,15 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
                     else { val u = (t - 0.7f) / 0.3f; r1 + over * (1 - u) * (1 - u) * cos((Math.PI * 1.5 * u).toFloat()) }
                 }
             }
+            SpinMode.BOOMERANG -> {
+                // улетает далеко за цель, разворачивается и возвращается
+                val c1 = c0 + laps() + norm(target + r0 - c0)
+                val fly = 120f + Random.nextFloat() * 120f;
+                { t ->
+                    cursorDeg = if (t < 0.62f) c0 + (c1 + fly - c0) * ease(t / 0.62f, 2.6f)
+                    else { val u = (t - 0.62f) / 0.38f; c1 + fly * (1 - u * u * (3 - 2 * u)) }
+                }
+            }
             SpinMode.PENDULUM -> {
                 // затухающие качания вокруг цели; старт — из текущего положения
                 val c1 = c0 + ((norm(target + r0 - c0) + 180f) % 360f - 180f)
@@ -473,7 +539,8 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             SpinMode.PLINKO -> { drawPlinko(canvas, cx, cy, r); return }
             // у шарика снаружи дорожка, колесо чуть меньше
             SpinMode.BALL -> drawSectors(canvas, cx, cy, r * 0.84f, ring = false)
-            SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM, SpinMode.CLOCK, SpinMode.BOTTLE, SpinMode.TRIPLE ->
+            SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM, SpinMode.CLOCK, SpinMode.BOTTLE, SpinMode.TRIPLE,
+            SpinMode.TWO_ARROWS, SpinMode.FIVE_ARROWS, SpinMode.BOOMERANG ->
                 drawSectors(canvas, cx, cy, r, ring = true)
             else -> drawSectors(canvas, cx, cy, r, ring = false)
         }
@@ -491,7 +558,12 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             SpinMode.BOTTLE -> drawBottle(canvas, cx, cy, r)
             SpinMode.SNAKE -> drawSnake(canvas, cx, cy, r)
             SpinMode.COMET -> drawComet(canvas, cx, cy, r)
-            SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM -> drawArrow(canvas, cx, cy, r, cursorDeg)
+            SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM, SpinMode.BOOMERANG -> drawArrow(canvas, cx, cy, r, cursorDeg)
+            SpinMode.TWO_ARROWS, SpinMode.FIVE_ARROWS -> {
+                val cols = multiColors
+                // последние рисуем первыми, чтобы первая стрела была сверху; чем дальше — тем тоньше
+                for (i in mode.pointers - 1 downTo 0) drawArrow(canvas, cx, cy, r, multiDeg[i], cols[i], 1f - 0.12f * i, hub = i == 0)
+            }
             SpinMode.CLOCK -> drawClock(canvas, cx, cy, r)
             SpinMode.BALL -> drawBall(canvas, cx, cy, r)
             SpinMode.LIGHTS, SpinMode.FLASH -> drawLights(canvas, cx, cy, r)
@@ -586,14 +658,15 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     }
 
     /** Стрелка на оси в пустом центре кольца. */
-    private fun drawArrow(canvas: Canvas, cx: Float, cy: Float, r: Float, deg: Float) {
+    private fun drawArrow(canvas: Canvas, cx: Float, cy: Float, r: Float, deg: Float,
+                          color: Int = theme.rim, thick: Float = 1f, hub: Boolean = true) {
         val inner = r * ringInner
         canvas.save()
         canvas.rotate(deg, cx, cy)
         val tip = cy - r * (ringInner + 0.06f) // остриё упирается в кольцо, подписи не закрывает
         val head = r * 0.16f         // длина наконечника
-        val hw = r * 0.09f           // полуширина наконечника
-        val sw = r * 0.035f          // полуширина древка
+        val hw = r * 0.09f * thick           // полуширина наконечника
+        val sw = r * 0.035f * thick          // полуширина древка
         val tail = cy + inner * 0.45f
         arrowPath.reset()
         arrowPath.moveTo(cx, tip)
@@ -606,10 +679,11 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         arrowPath.lineTo(cx - sw, tip + head * 0.8f)
         arrowPath.lineTo(cx - hw, tip + head)
         arrowPath.close()
-        pointerPaint.color = theme.rim
+        pointerPaint.color = color
         canvas.drawPath(arrowPath, pointerPaint)
         canvas.restore()
 
+        if (!hub) return
         canvas.drawCircle(cx, cy, r * 0.09f, hubPaint)
         sectorPaint.color = theme.accent
         canvas.drawCircle(cx, cy, r * 0.05f, sectorPaint)

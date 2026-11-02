@@ -9,7 +9,7 @@ enum class Font(val family: String) {
 enum class Sectors { SOLID, GRADIENT, OUTLINE }
 
 /** Фон экрана. */
-enum class Backdrop { SOLID, GRADIENT, DOTS, STARS }
+enum class Backdrop { SOLID, GRADIENT, DOTS, STARS, PHOTO }
 
 /**
  * Тема оформления: цвета интерфейса, палитра секторов и стиль — шрифт, скругление кнопок,
@@ -32,6 +32,8 @@ data class AppTheme(
     val sectors: Sectors = Sectors.SOLID,
     val backdrop: Backdrop = Backdrop.SOLID,
     val rimWidth: Float = 5f,
+    /** Фото для фона [Backdrop.PHOTO] (ресурс drawable). */
+    val photo: Int = 0,
 )
 
 object Themes {
@@ -98,6 +100,9 @@ object Themes {
         // комикс: светлый фон, жирные чёрные обводки, яркие основные цвета
         AppTheme("comic", "Комикс", c(0xFFF8DC), c(0xFFFFFF), c(0x111111), c(0x555555), c(0xFF3B30), c(0xFFFFFF), c(0x111111), true,
             p(0xFF3B30, 0xFFD60A, 0x0A84FF, 0x34C759, 0xFF9F0A, 0xBF5AF2)),
+        // «Осенний лес»: фото присланного леса на фоне, палитра — с той же картинки (тёмные сине-серые, бурые, ржавая листва)
+        AppTheme("autumn", "Осенний лес", c(0x15141C), c(0x243142), c(0xF0E6DA), c(0x8F96A3), c(0xD98A3A), c(0x15141C), c(0xE8D9C4), false,
+            p(0xC8782F, 0x414A59, 0x735442, 0x273445, 0xE0A04A, 0x463838, 0xA05E38, 0x5C6B80)),
         // бумага: тетрадный лист, засечки, тонкие цветные контуры
         AppTheme("paper", "Бумага", c(0xFAF7F0), c(0xFFFFFF), c(0x2B2B2B), c(0x8A8578), c(0x2B59C3), c(0xFFFFFF), c(0x2B2B2B), true,
             p(0x2B59C3, 0xC8323C, 0x2E8B57, 0xD98E04, 0x6A4C93, 0x1B998B)),
@@ -133,6 +138,8 @@ object Themes {
         "terminal" -> t.copy(font = Font.MONO, corners = 0, sectors = Sectors.OUTLINE, backdrop = Backdrop.DOTS, rimWidth = 2f)
         "comic" -> t.copy(font = Font.CONDENSED, corners = 0, rimWidth = 10f, backdrop = Backdrop.DOTS)
         "paper" -> t.copy(font = Font.SERIF, corners = 4, sectors = Sectors.OUTLINE, backdrop = Backdrop.DOTS, rimWidth = 2f)
+        "autumn" -> t.copy(font = Font.SERIF, corners = 12, sectors = Sectors.GRADIENT, backdrop = Backdrop.PHOTO,
+            rimWidth = 4f, photo = R.drawable.forest)
         else -> t
     }
 
@@ -142,7 +149,8 @@ object Themes {
 }
 
 /** Фон экрана по теме: однотонный, градиент, точки (сетка) или звёзды. */
-class BackdropDrawable(private val t: AppTheme, private val density: Float) : android.graphics.drawable.Drawable() {
+class BackdropDrawable(private val t: AppTheme, private val res: android.content.res.Resources) : android.graphics.drawable.Drawable() {
+    private val density = res.displayMetrics.density
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
 
     override fun draw(canvas: android.graphics.Canvas) {
@@ -170,6 +178,22 @@ class BackdropDrawable(private val t: AppTheme, private val density: Float) : an
                     y += step
                 }
             }
+            Backdrop.PHOTO -> {
+                val bmp = photo(res, t.photo) ?: return
+                // по центру с обрезкой краёв, как centerCrop
+                val k = maxOf(b.width() / bmp.width.toFloat(), b.height() / bmp.height.toFloat())
+                val w = bmp.width * k; val h = bmp.height * k
+                val dst = android.graphics.RectF(b.exactCenterX() - w / 2, b.exactCenterY() - h / 2, b.exactCenterX() + w / 2, b.exactCenterY() + h / 2)
+                paint.isFilterBitmap = true
+                canvas.drawBitmap(bmp, null, dst, paint)
+                // затемнение, чтобы колесо и текст читались: сверху легче, книзу плотнее
+                val base = t.bg and 0x00FFFFFF
+                paint.shader = android.graphics.LinearGradient(0f, b.top.toFloat(), 0f, b.bottom.toFloat(),
+                    intArrayOf(base or 0x8C000000.toInt(), base or 0xB0000000.toInt(), base or 0xE6000000.toInt()),
+                    floatArrayOf(0f, 0.45f, 1f), android.graphics.Shader.TileMode.CLAMP)
+                canvas.drawRect(b, paint)
+                paint.shader = null
+            }
             Backdrop.STARS -> {
                 val rnd = java.util.Random(37)
                 repeat(140) {
@@ -180,6 +204,15 @@ class BackdropDrawable(private val t: AppTheme, private val density: Float) : an
                     canvas.drawCircle(x, y, (0.6f + rnd.nextFloat() * 1.4f) * density, paint)
                 }
             }
+        }
+    }
+
+    companion object {
+        private val cache = HashMap<Int, android.graphics.Bitmap>()
+        /** Фото фона, уменьшенное до разумного размера; загружается один раз. */
+        fun photo(res: android.content.res.Resources, id: Int): android.graphics.Bitmap? {
+            if (id == 0) return null
+            return cache.getOrPut(id) { android.graphics.BitmapFactory.decodeResource(res, id) ?: return null }
         }
     }
 

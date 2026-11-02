@@ -207,24 +207,27 @@ class MainActivity : Activity() {
         resultNote.text = ""
         resultActions.visibility = View.INVISIBLE
         fun pick() = Picker.pick(active.map { it.chance }, rigged, Random.nextDouble(), active.map { it.size })
-        if (wheel.mode == SpinMode.TRIPLE) {
-            // у колеса, стрелки и кометы — по своему результату с теми же шансами (при 100% совпадут)
-            val picks = IntArray(3) { pick() }
-            wheel.spinTriple(picks, SPEEDS[speed]) { onTriple(active, picks) }
+        if (wheel.mode.pointers > 1) {
+            // у каждого указателя (колесо, стрелы, комета) свой результат с теми же шансами — при 100% совпадут
+            val picks = IntArray(wheel.mode.pointers) { pick() }
+            wheel.spinMulti(picks, SPEEDS[speed]) { onMulti(active, picks) }
             return
         }
         val idx = pick()
         wheel.spinTo(idx, SPEEDS[speed]) { onResult(active[idx], idx) }
     }
 
-    /** Итог «Тройного»: до трёх разных вариантов или все три на одном. */
-    private fun onTriple(active: List<Item>, picks: IntArray) {
+    /** Итог режима с несколькими указателями: до N разных вариантов или все на одном. */
+    private fun onMulti(active: List<Item>, picks: IntArray) {
+        val who = if (wheel.mode == SpinMode.TRIPLE) listOf("колесо", "стрелка", "комета")
+            else List(picks.size) { "стрела ${it + 1}" }
         val names = picks.map { active[it].name.ifBlank { "—" } }
         val distinct = picks.distinct()
         if (distinct.size == 1) {
             result.setTextColor(readable(wheel.colorOf(picks[0])))
             result.text = names[0]
-            resultNote.text = "Колесо, стрелка и комета совпали!"
+            resultNote.text = if (wheel.mode == SpinMode.TRIPLE) "Колесо, стрелка и комета совпали!"
+                else "Все ${picks.size} ${if (picks.size < 5) "стрелы" else "стрел"} совпали!"
         } else {
             val sb = android.text.SpannableStringBuilder()
             distinct.forEachIndexed { k, i ->
@@ -234,7 +237,7 @@ class MainActivity : Activity() {
                 sb.setSpan(android.text.style.ForegroundColorSpan(readable(wheel.colorOf(i))), st, sb.length, 0)
             }
             result.text = sb
-            resultNote.text = "Колесо — ${names[0]} · стрелка — ${names[1]} · комета — ${names[2]}"
+            resultNote.text = who.indices.joinToString(" · ") { "${who[it].replaceFirstChar(Char::uppercase)} — ${names[it]}" }
         }
         lastResultIdx = picks[0]
         lastResult = distinct.joinToString(", ") { active[it].name.ifBlank { "—" } }
@@ -895,7 +898,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = if (t.light)
             View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
         val root = findViewById<View>(R.id.root)
-        root.background = BackdropDrawable(t, resources.displayMetrics.density)
+        root.background = BackdropDrawable(t, resources)
         // подпись — силуэт цвета текста темы
         findViewById<android.widget.ImageView>(R.id.signature).apply {
             setColorFilter(t.text, android.graphics.PorterDuff.Mode.SRC_IN)
@@ -955,10 +958,16 @@ class MainActivity : Activity() {
     private fun ripple(color: Int, r: Float): Drawable =
         RippleDrawable(ColorStateList.valueOf(if (theme.light) 0x22000000 else 0x33FFFFFF), round(color, r), null)
 
-    /** Цвет сектора для текста результата: на светлой теме слишком светлый затемняем, чтобы читался. */
+    /** Цвет сектора для текста результата: слишком светлый на светлой теме затемняем, слишком тёмный на тёмной — осветляем. */
     private fun readable(c: Int): Int {
-        if (!theme.light) return c
         val lum = android.graphics.Color.red(c) * 0.299 + android.graphics.Color.green(c) * 0.587 + android.graphics.Color.blue(c) * 0.114
+        if (!theme.light) {
+            // на тёмной теме слишком тёмный цвет осветляем к белому
+            if (lum >= 110) return c
+            val f = ((110 - lum) / 110 * 0.75).toFloat().coerceIn(0.35f, 0.75f)
+            fun ch(v: Int) = (v + (255 - v) * f).toInt()
+            return android.graphics.Color.rgb(ch(android.graphics.Color.red(c)), ch(android.graphics.Color.green(c)), ch(android.graphics.Color.blue(c)))
+        }
         if (lum < 150) return c
         val k = 150 / lum
         return android.graphics.Color.rgb((android.graphics.Color.red(c) * k).toInt(),
