@@ -102,6 +102,8 @@ class ScreenshotTest {
         assertEquals(listOf(5, 10, 10, 10, 10, 10, 10, 10), wheel.sizes) // «Пицца» уменьшена до ×0.5
         shot("16-items-sized")
         click(R.id.tabWheel); shot("17-wheel-sized")
+        click(R.id.tabHistory); shot("19-history-chances")
+        assertTrue(findText(root, "Шансы выпадения") != null)
 
         // скрытая вкладка: без верного пароля не открывается
         val odds = root.findViewById<View>(R.id.panelOdds)

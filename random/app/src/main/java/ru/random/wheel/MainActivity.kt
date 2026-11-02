@@ -546,38 +546,91 @@ class MainActivity : Activity() {
 
     // --- История -------------------------------------------------------------
 
+    /**
+     * Шансы выпадения по размерам секторов — то, что видно на колесе. Скрытая подкрутка здесь
+     * намеренно не показывается, чтобы вкладку можно было спокойно открыть при других.
+     */
+    private fun visibleChances(): List<Pair<Item, Double>> {
+        val a = active()
+        val p = Picker.probabilities(a.map { it.chance }, false, a.map { it.size })
+        return a.mapIndexed { i, it -> it to p[i] }
+    }
+
+    /** Строка «название … значение» и полоска под ней. */
+    private fun barRow(name: String, nameColor: Int?, value: String, share: Float, color: Int) {
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, dp(10), 0, dp(4))
+        }
+        head.addView(text(name, 15f, if (nameColor != null) "keep" else null).apply {
+            isSingleLine = true
+            nameColor?.let { setTextColor(it) }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        })
+        head.addView(text(value, 15f, "muted"))
+        historyList.addView(head)
+        historyList.addView(LinearLayout(this).apply {
+            tag = "keep"
+            background = round(theme.panel, dp(4).toFloat())
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8))
+            weightSum = 1f
+            addView(View(context).apply {
+                tag = "keep"
+                background = round(color, dp(4).toFloat())
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, share.coerceIn(0.005f, 1f))
+            })
+        })
+    }
+
+    /** «вращения» / «вращений» после числа: «за 21 вращение», «за 34 вращения», «за 15 вращений». */
+    private fun spins(n: Int) = when {
+        n % 100 in 11..14 -> "вращений"
+        n % 10 == 1 -> "вращение"
+        n % 10 in 2..4 -> "вращения"
+        else -> "вращений"
+    }
+
     private fun buildHistory() {
         historyList.removeAllViews()
+
+        // шансы выпадения сейчас
+        val chances = visibleChances()
+        historyList.addView(text("Шансы выпадения", 18f, null, bold = true))
+        if (chances.isEmpty()) {
+            historyList.addView(text("На колесе нет вариантов.", 14f, "muted").apply { setPadding(0, dp(6), 0, 0) })
+        } else {
+            historyList.addView(text("По размеру секторов на колесе: чем больше сектор, тем выше шанс.", 13f, "muted")
+                .apply { setPadding(0, dp(4), 0, 0) })
+            val top = chances.maxOf { it.second }
+            chances.sortedByDescending { it.second }.forEach { (item, p) ->
+                val color = wheel.colorOf(active().indexOf(item))
+                barRow(item.name.ifBlank { "—" }, color, "${sizeLabel(item.size)} · ${fmt(p * 100)}%",
+                    (p / top).toFloat(), color)
+            }
+            // вероятность, что каждый выпадет хотя бы раз за N вращений — для самого редкого варианта
+            val rare = chances.minByOrNull { it.second }!!
+            if (chances.size > 1 && rare.second > 0) {
+                val n = kotlin.math.ceil(kotlin.math.ln(0.1) / kotlin.math.ln(1 - rare.second)).toInt()
+                historyList.addView(text("Реже всех — «${rare.first.name}»: в среднем 1 раз из ${fmt(1 / rare.second)}; " +
+                    "с вероятностью 90% выпадет хотя бы раз за $n ${spins(n)}.", 13f, "muted").apply { setPadding(0, dp(10), 0, 0) })
+            }
+        }
+
+        historyList.addView(text("Статистика", 18f, null, bold = true).apply { setPadding(0, dp(24), 0, 0) })
         if (history.isEmpty()) {
-            historyList.addView(text("Пока пусто. Покрутите колесо — здесь появятся результаты и статистика.", 15f, "muted"))
+            historyList.addView(text("Пока пусто. Покрутите колесо — здесь появятся результаты: сколько раз выпал " +
+                "каждый вариант и сколько ожидалось по шансам.", 14f, "muted").apply { setPadding(0, dp(6), 0, 0) })
             paint(historyList)
             return
         }
-        historyList.addView(text("Статистика · всего вращений: ${history.size}", 18f, null, bold = true))
+        historyList.addView(text("Всего вращений: ${history.size} · выпало / ожидалось по шансам", 13f, "muted")
+            .apply { setPadding(0, dp(4), 0, 0) })
+        val expected = chances.groupBy { it.first.name.ifBlank { "—" } }.mapValues { e -> e.value.sumOf { it.second } }
         val counts = history.groupingBy { it.name }.eachCount().entries.sortedByDescending { it.value }
         val max = counts.first().value
         counts.forEach { (name, n) ->
-            val head = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, dp(10), 0, dp(4))
-            }
-            head.addView(text(name, 15f, null).apply {
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            })
-            head.addView(text("$n · ${fmt(n * 100.0 / history.size)}%", 15f, "muted"))
-            historyList.addView(head)
-            val track = LinearLayout(this).apply {
-                tag = "keep"
-                background = round(theme.panel, dp(4).toFloat())
-                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(8))
-                weightSum = max.toFloat()
-                addView(View(context).apply {
-                    tag = "keep"
-                    background = round(theme.accent, dp(4).toFloat())
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, n.toFloat())
-                })
-            }
-            historyList.addView(track)
+            val exp = expected[name]?.let { " · ожидалось ${fmt(it * 100)}%" } ?: ""
+            barRow(name, null, "$n · ${fmt(n * 100.0 / history.size)}%$exp", n.toFloat() / max, theme.accent)
         }
         historyList.addView(text("Последние", 18f, null, bold = true).apply { setPadding(0, dp(22), 0, dp(4)) })
         val fmtTime = SimpleDateFormat("d MMM, HH:mm", Locale("ru"))
