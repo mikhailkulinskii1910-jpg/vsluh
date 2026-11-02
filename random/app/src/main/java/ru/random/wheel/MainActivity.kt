@@ -89,7 +89,7 @@ class MainActivity : Activity() {
     private var lastResult: String? = null
     private var lastResultIdx = 0
     /** Выпавший вариант в режиме выбывания: уходит с колеса перед следующим вращением. */
-    private var pendingOut: Item? = null
+    private val pendingOut = mutableListOf<Item>()
     private var tone: ToneGenerator? = null
     private var lastShake = 0L
 
@@ -206,21 +206,61 @@ class MainActivity : Activity() {
         result.text = ""
         resultNote.text = ""
         resultActions.visibility = View.INVISIBLE
-        val idx = Picker.pick(active.map { it.chance }, rigged, Random.nextDouble(), active.map { it.size })
+        fun pick() = Picker.pick(active.map { it.chance }, rigged, Random.nextDouble(), active.map { it.size })
+        if (wheel.mode == SpinMode.TRIPLE) {
+            // у колеса, стрелки и кометы — по своему результату с теми же шансами (при 100% совпадут)
+            val picks = IntArray(3) { pick() }
+            wheel.spinTriple(picks, SPEEDS[speed]) { onTriple(active, picks) }
+            return
+        }
+        val idx = pick()
         wheel.spinTo(idx, SPEEDS[speed]) { onResult(active[idx], idx) }
+    }
+
+    /** Итог «Тройного»: до трёх разных вариантов или все три на одном. */
+    private fun onTriple(active: List<Item>, picks: IntArray) {
+        val names = picks.map { active[it].name.ifBlank { "—" } }
+        val distinct = picks.distinct()
+        if (distinct.size == 1) {
+            result.setTextColor(readable(wheel.colorOf(picks[0])))
+            result.text = names[0]
+            resultNote.text = "Колесо, стрелка и комета совпали!"
+        } else {
+            val sb = android.text.SpannableStringBuilder()
+            distinct.forEachIndexed { k, i ->
+                if (k > 0) sb.append(" · ")
+                val st = sb.length
+                sb.append(active[i].name.ifBlank { "—" })
+                sb.setSpan(android.text.style.ForegroundColorSpan(readable(wheel.colorOf(i))), st, sb.length, 0)
+            }
+            result.text = sb
+            resultNote.text = "Колесо — ${names[0]} · стрелка — ${names[1]} · комета — ${names[2]}"
+        }
+        lastResultIdx = picks[0]
+        lastResult = distinct.joinToString(", ") { active[it].name.ifBlank { "—" } }
+        distinct.forEach { history.add(0, Hit(active[it].name.ifBlank { "—" }, System.currentTimeMillis())) }
+        while (history.size > MAX_HISTORY) history.removeAt(history.lastIndex)
+        saveHistory()
+        if (eliminate) {
+            pendingOut.clear(); distinct.forEach { pendingOut.add(active[it]) }
+            resultNote.text = "${resultNote.text}\nВыбывают: ${distinct.size} · осталось ${active().size - distinct.size}"
+        }
+        updateRestore()
+        resultActions.visibility = View.VISIBLE
+        if (confettiOn) confetti.burst(theme.palette)
     }
 
     private fun onResult(item: Item, idx: Int) {
         val name = item.name.ifBlank { "—" }
         lastResult = name
         lastResultIdx = idx
-        result.setTextColor(wheel.colorOf(idx))
+        result.setTextColor(readable(wheel.colorOf(idx)))
         result.text = name
         history.add(0, Hit(name, System.currentTimeMillis()))
         while (history.size > MAX_HISTORY) history.removeAt(history.lastIndex)
         saveHistory()
         if (eliminate) {
-            pendingOut = item
+            pendingOut.clear(); pendingOut.add(item)
             val left = active().size - 1
             resultNote.text = if (left <= 1) "Выбывает. Остался последний: ${active().firstOrNull { it !== item }?.name ?: ""}"
             else "Выбывает. Осталось вариантов: $left"
@@ -231,14 +271,14 @@ class MainActivity : Activity() {
     }
 
     private fun applyPendingOut() {
-        val p = pendingOut ?: return
-        pendingOut = null
-        p.on = false
+        if (pendingOut.isEmpty()) return
+        pendingOut.forEach { it.on = false }
+        pendingOut.clear()
         save(); updateWheel()
     }
 
     private fun restoreAll() {
-        pendingOut = null
+        pendingOut.clear()
         items.forEach { it.on = true }
         save(); updateWheel(); updateRestore()
         resultNote.text = ""
@@ -246,7 +286,7 @@ class MainActivity : Activity() {
     }
 
     private fun updateRestore() {
-        restoreBtn.visibility = if (pendingOut != null || items.any { !it.on }) View.VISIBLE else View.GONE
+        restoreBtn.visibility = if (pendingOut.isNotEmpty() || items.any { !it.on }) View.VISIBLE else View.GONE
     }
 
     private fun share() {
@@ -271,7 +311,7 @@ class MainActivity : Activity() {
     }
 
     private fun itemsChanged() {
-        pendingOut = null
+        pendingOut.clear()
         save(); updateWheel(); buildItems(); result.text = ""; resultNote.text = ""
         resultActions.visibility = View.INVISIBLE
     }
@@ -399,7 +439,7 @@ class MainActivity : Activity() {
                 layoutParams = LinearLayout.LayoutParams(dp(40), dp(48))
                 setOnCheckedChangeListener { _, on ->
                     item.on = on
-                    if (pendingOut === item) pendingOut = null
+                    pendingOut.remove(item)
                     save(); updateWheel(); buildItems()
                 }
             }
@@ -658,7 +698,7 @@ class MainActivity : Activity() {
                 setOnCheckedChangeListener { _, on -> set(on); saveSettings() }
             }
         }
-        opt(R.id.optEliminate, eliminate) { eliminate = it; if (!it) pendingOut = null }
+        opt(R.id.optEliminate, eliminate) { eliminate = it; if (!it) pendingOut.clear() }
         opt(R.id.optConfetti, confettiOn) { confettiOn = it }
         opt(R.id.optSound, soundOn) { soundOn = it }
         opt(R.id.optVibro, vibroOn) { vibroOn = it }
@@ -712,7 +752,7 @@ class MainActivity : Activity() {
                     orientation = LinearLayout.VERTICAL
                     setPadding(dp(12), dp(10), dp(12), dp(10))
                     background = GradientDrawable().apply {
-                        setColor(t.bg); cornerRadius = dp(14).toFloat()
+                        setColor(t.bg); cornerRadius = dp(minOf(t.corners, 20)).toFloat()
                         setStroke(dp(if (t === theme) 3 else 1), if (t === theme) t.accent else t.panel)
                     }
                     layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
@@ -733,6 +773,7 @@ class MainActivity : Activity() {
                     tag = "keep"
                     text = if (t === theme) "✓ ${t.title}" else t.title
                     setTextColor(t.text); textSize = 15f
+                    typeface = android.graphics.Typeface.create(t.font.family, android.graphics.Typeface.BOLD)
                     setPadding(0, dp(6), 0, 0)
                 })
                 row.addView(chip)
@@ -854,7 +895,7 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = if (t.light)
             View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
         val root = findViewById<View>(R.id.root)
-        root.setBackgroundColor(t.bg)
+        root.background = BackdropDrawable(t, resources.displayMetrics.density)
         // подпись — силуэт цвета текста темы
         findViewById<android.widget.ImageView>(R.id.signature).apply {
             setColorFilter(t.text, android.graphics.PorterDuff.Mode.SRC_IN)
@@ -862,7 +903,7 @@ class MainActivity : Activity() {
         }
         wheel.theme = t
         paint(root)
-        result.setTextColor(wheel.colorOf(lastResultIdx))
+        result.setTextColor(readable(wheel.colorOf(lastResultIdx)))
         buildThemes()
         styleSpeed()
         tabs.forEachIndexed { i, b -> styleButton(b, i == current) }
@@ -875,6 +916,8 @@ class MainActivity : Activity() {
     private fun paint(v: View) {
         val t = theme
         if (v.tag == "keep") { if (v is ViewGroup) for (i in 0 until v.childCount) paint(v.getChildAt(i)); return }
+        // шрифт темы, жирность сохраняем
+        if (v is TextView) v.typeface = android.graphics.Typeface.create(t.font.family, v.typeface?.style ?: 0)
         val accentList = ColorStateList.valueOf(t.accent)
         when (v) {
             is Switch -> {
@@ -887,7 +930,7 @@ class MainActivity : Activity() {
             is CompoundButton -> { v.buttonTintList = accentList; v.setTextColor(t.text) }
             is EditText -> {
                 v.setTextColor(t.text); v.setHintTextColor(t.muted)
-                v.background = round(t.panel, dp(12).toFloat())
+                v.background = round(t.panel, dp(minOf(t.corners, 16)).toFloat())
                 v.backgroundTintList = null
             }
             is Button -> styleButton(v, v.tag == "accent")
@@ -902,7 +945,7 @@ class MainActivity : Activity() {
 
     private fun styleButton(b: Button, accent: Boolean) {
         val t = theme
-        b.background = ripple(if (accent) t.accent else t.panel, dp(if (b.id == R.id.spin) 16 else 14).toFloat())
+        b.background = ripple(if (accent) t.accent else t.panel, dp(t.corners + if (b.id == R.id.spin) 2 else 0).toFloat())
         b.setTextColor(if (accent) t.onAccent else t.text)
         if (!b.isEnabled) b.alpha = 0.4f
     }
@@ -911,6 +954,16 @@ class MainActivity : Activity() {
 
     private fun ripple(color: Int, r: Float): Drawable =
         RippleDrawable(ColorStateList.valueOf(if (theme.light) 0x22000000 else 0x33FFFFFF), round(color, r), null)
+
+    /** Цвет сектора для текста результата: на светлой теме слишком светлый затемняем, чтобы читался. */
+    private fun readable(c: Int): Int {
+        if (!theme.light) return c
+        val lum = android.graphics.Color.red(c) * 0.299 + android.graphics.Color.green(c) * 0.587 + android.graphics.Color.blue(c) * 0.114
+        if (lum < 150) return c
+        val k = 150 / lum
+        return android.graphics.Color.rgb((android.graphics.Color.red(c) * k).toInt(),
+            (android.graphics.Color.green(c) * k).toInt(), (android.graphics.Color.blue(c) * k).toInt())
+    }
 
     /** «×0.5», «×1», «×2.5». */
     private fun sizeLabel(tenths: Int) = "×" + fmt(tenths / 10.0)

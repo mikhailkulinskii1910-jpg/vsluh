@@ -55,7 +55,7 @@ class ScreenshotTest {
 
         // темы
         click(R.id.tabSettings)
-        for ((i, t) in listOf("Неон", "День", "Пастель", "Океан", "Малина", "Песок", "Радуга", "Лимонад", "Гроза").withIndex()) {
+        for ((i, t) in listOf("Неон", "День", "Пастель", "Океан", "Малина", "Песок", "Радуга", "Лимонад", "Гроза", "Кибер", "Ретро", "Космос", "Терминал", "Комикс", "Бумага", "Золото").withIndex()) {
             clickText(t); click(R.id.tabWheel); shot("06-theme-$i-$t"); click(R.id.tabSettings)
         }
         clickText("Ночь")
@@ -140,6 +140,20 @@ class ScreenshotTest {
                 if (m in setOf("Пружина", "Колесо", "Интрига", "Обратное")) assertEquals("$m: под верхним указателем", wheel.labels[wheel.indexAtTop()], res)
             }
         }
+        // «Тройной»: у колеса, стрелки и кометы свои результаты — текст совпадает с тем, куда они указывают
+        click(R.id.tabSettings); clickText("Тройной"); click(R.id.tabWheel)
+        var seenDifferent = false
+        repeat(8) { k ->
+            root.findViewById<View>(R.id.spin).performClick()
+            if (k == 0) { idle(1); wheel.seek(0.5f); shot("32-triple-spin"); wheel.seek(1f) }
+            idle(11000)
+            val ix = wheel.tripleIndices()
+            val names = ix.map { wheel.labels[it] }
+            val res = root.findViewById<TextView>(R.id.result).text.toString()
+            assertEquals(names.distinct().joinToString(" · "), res)
+            if (names.distinct().size > 1) { seenDifferent = true; shot("33-triple-diff") }
+        }
+        assertTrue("за 8 вращений на двух вариантах хоть раз должны разойтись", seenDifferent)
         // «Змейка» на двух вариантах: не выпавший сектор должен быть притушен
         click(R.id.tabSettings); clickText("Змейка"); click(R.id.tabWheel)
         root.findViewById<View>(R.id.spin).performClick(); idle(1); wheel.seek(0.5f); shot("30-snake-2"); wheel.seek(1f); idle(9000)
@@ -174,6 +188,21 @@ class ScreenshotTest {
         assertTrue(!rig.isChecked)
         shot("12-odds")
         click(R.id.rigged); shot("13-odds-on")
+
+        // 100% у «Test»: в «Тройном» все трое обязаны встать на «Test»
+        val testBar = findSeek(root.findViewById(R.id.oddsList))!!
+        testBar.progress = 100
+        shadowOf(testBar).onSeekBarChangeListener.onProgressChanged(testBar, 100, true)
+        shadowOf(testBar).onSeekBarChangeListener.onStopTrackingTouch(testBar)
+        assertTrue(rig.isChecked)
+        click(R.id.oddsClose)
+        click(R.id.tabSettings); clickText("Тройной"); click(R.id.tabWheel)
+        repeat(6) {
+            root.findViewById<View>(R.id.spin).performClick(); idle(11000)
+            assertEquals(listOf("Test", "Test", "Test"), wheel.tripleIndices().map { wheel.labels[it] })
+            assertEquals("Test", root.findViewById<TextView>(R.id.result).text.toString())
+        }
+        shot("34-triple-100")
     }
 
     private fun findSeek(v: View): android.widget.SeekBar? {

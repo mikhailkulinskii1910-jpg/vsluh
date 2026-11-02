@@ -1,7 +1,21 @@
 package ru.random.wheel
 
-/** Тема оформления: цвета интерфейса и палитра секторов колеса. */
-class AppTheme(
+/** Шрифт темы. */
+enum class Font(val family: String) {
+    SANS("sans-serif"), SERIF("serif"), MONO("monospace"), CONDENSED("sans-serif-condensed")
+}
+
+/** Как рисуются сектора: заливка, объёмный градиент или неоновый контур. */
+enum class Sectors { SOLID, GRADIENT, OUTLINE }
+
+/** Фон экрана. */
+enum class Backdrop { SOLID, GRADIENT, DOTS, STARS }
+
+/**
+ * Тема оформления: цвета интерфейса, палитра секторов и стиль — шрифт, скругление кнопок,
+ * вид секторов, фон, толщина обода. Стиль делает темы разными не только по цвету.
+ */
+data class AppTheme(
     val id: String,
     val title: String,
     val bg: Int,
@@ -13,13 +27,18 @@ class AppTheme(
     val rim: Int,
     val light: Boolean,
     val palette: IntArray,
+    val font: Font = Font.SANS,
+    val corners: Int = 14,
+    val sectors: Sectors = Sectors.SOLID,
+    val backdrop: Backdrop = Backdrop.SOLID,
+    val rimWidth: Float = 5f,
 )
 
 object Themes {
     private fun c(hex: Long) = (0xFF000000 or hex).toInt()
     private fun p(vararg hex: Long) = IntArray(hex.size) { c(hex[it]) }
 
-    val all = listOf(
+    private val base = listOf(
         AppTheme("night", "Ночь", c(0x15161C), c(0x22242E), c(0xF2F2F5), c(0x9A9CA8), c(0xFFC93C), c(0x15161C), c(0xF2F2F5), false,
             p(0xE84A5F, 0xFF8C42, 0xFFC93C, 0x8AC926, 0x2EC4B6, 0x3A86FF, 0x8338EC, 0xFF5DA2, 0x06D6A0, 0x118AB2, 0xF15BB5, 0xB5838D)),
         AppTheme("day", "День", c(0xF4F5F8), c(0xFFFFFF), c(0x1B1C22), c(0x6B6E7B), c(0x3A6FF7), c(0xFFFFFF), c(0x2B2D38), true,
@@ -73,7 +92,104 @@ object Themes {
         // «Гроза над полем»: грозовое небо, пшеница, палитра с присланной картинки
         AppTheme("storm", "Гроза", c(0x1A1F29), c(0x262D3A), c(0xF6ECD6), c(0x9C9A9E), c(0xE7A922), c(0x1A1F29), c(0xF6ECD6), false,
             p(0xE7A922, 0x123D4E, 0xF38001, 0x4F4E56, 0xDA851B, 0x796F70, 0xF2C14E, 0x2E5A73)),
+        // зелёный терминал: моноширинный шрифт, контуры, квадратные кнопки
+        AppTheme("terminal", "Терминал", c(0x020A04), c(0x0A1A0E), c(0x39FF7A), c(0x1F9A4A), c(0x39FF7A), c(0x020A04), c(0x39FF7A), false,
+            p(0x39FF7A, 0x1FD15E, 0x9BFFB8, 0x12A847, 0x63FF97, 0x0E8A3A)),
+        // комикс: светлый фон, жирные чёрные обводки, яркие основные цвета
+        AppTheme("comic", "Комикс", c(0xFFF8DC), c(0xFFFFFF), c(0x111111), c(0x555555), c(0xFF3B30), c(0xFFFFFF), c(0x111111), true,
+            p(0xFF3B30, 0xFFD60A, 0x0A84FF, 0x34C759, 0xFF9F0A, 0xBF5AF2)),
+        // бумага: тетрадный лист, засечки, тонкие цветные контуры
+        AppTheme("paper", "Бумага", c(0xFAF7F0), c(0xFFFFFF), c(0x2B2B2B), c(0x8A8578), c(0x2B59C3), c(0xFFFFFF), c(0x2B2B2B), true,
+            p(0x2B59C3, 0xC8323C, 0x2E8B57, 0xD98E04, 0x6A4C93, 0x1B998B)),
     )
 
+    /** Стиль каждой темы: шрифт, кнопки, сектора, фон, обод. */
+    private fun style(t: AppTheme): AppTheme = when (t.id) {
+        "day" -> t.copy(corners = 24, backdrop = Backdrop.GRADIENT, rimWidth = 3f)
+        "neon" -> t.copy(font = Font.MONO, corners = 0, sectors = Sectors.OUTLINE, backdrop = Backdrop.GRADIENT, rimWidth = 2f)
+        "ocean" -> t.copy(sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT, corners = 20)
+        "sunset" -> t.copy(font = Font.CONDENSED, sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT, corners = 10)
+        "pastel" -> t.copy(corners = 30, sectors = Sectors.GRADIENT, backdrop = Backdrop.DOTS, rimWidth = 8f)
+        "forest" -> t.copy(font = Font.SERIF, corners = 6, backdrop = Backdrop.DOTS)
+        "mono" -> t.copy(font = Font.MONO, corners = 0, sectors = Sectors.OUTLINE, rimWidth = 2f)
+        "sakura" -> t.copy(font = Font.SERIF, corners = 30, backdrop = Backdrop.DOTS, rimWidth = 4f)
+        "space" -> t.copy(font = Font.CONDENSED, sectors = Sectors.GRADIENT, backdrop = Backdrop.STARS, corners = 22)
+        "cyber" -> t.copy(font = Font.MONO, corners = 0, sectors = Sectors.OUTLINE, backdrop = Backdrop.DOTS, rimWidth = 3f)
+        "mint" -> t.copy(corners = 26, rimWidth = 3f, backdrop = Backdrop.GRADIENT)
+        "coffee" -> t.copy(font = Font.SERIF, corners = 8, sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT)
+        "lava" -> t.copy(font = Font.CONDENSED, corners = 4, sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT, rimWidth = 7f)
+        "arctic" -> t.copy(font = Font.CONDENSED, corners = 18, backdrop = Backdrop.GRADIENT, rimWidth = 3f)
+        "gold" -> t.copy(font = Font.SERIF, corners = 2, sectors = Sectors.GRADIENT, rimWidth = 6f)
+        "retro" -> t.copy(font = Font.SERIF, corners = 4, backdrop = Backdrop.DOTS, rimWidth = 9f)
+        "raspberry" -> t.copy(corners = 30, sectors = Sectors.GRADIENT)
+        "emerald" -> t.copy(font = Font.SERIF, corners = 12, sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT)
+        "amethyst" -> t.copy(corners = 24, sectors = Sectors.OUTLINE, backdrop = Backdrop.STARS, rimWidth = 3f)
+        "sand" -> t.copy(font = Font.SERIF, corners = 10, backdrop = Backdrop.DOTS)
+        "graphite" -> t.copy(font = Font.MONO, corners = 6, rimWidth = 3f)
+        "rainbow" -> t.copy(corners = 30, backdrop = Backdrop.GRADIENT, rimWidth = 7f)
+        "lemonade" -> t.copy(font = Font.CONDENSED, corners = 30, sectors = Sectors.GRADIENT)
+        "cherry" -> t.copy(font = Font.SERIF, corners = 16, sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT)
+        "storm" -> t.copy(font = Font.CONDENSED, corners = 8, sectors = Sectors.GRADIENT, backdrop = Backdrop.GRADIENT)
+        "terminal" -> t.copy(font = Font.MONO, corners = 0, sectors = Sectors.OUTLINE, backdrop = Backdrop.DOTS, rimWidth = 2f)
+        "comic" -> t.copy(font = Font.CONDENSED, corners = 0, rimWidth = 10f, backdrop = Backdrop.DOTS)
+        "paper" -> t.copy(font = Font.SERIF, corners = 4, sectors = Sectors.OUTLINE, backdrop = Backdrop.DOTS, rimWidth = 2f)
+        else -> t
+    }
+
+    val all = base.map(::style)
+
     fun byId(id: String?) = all.firstOrNull { it.id == id } ?: all[0]
+}
+
+/** Фон экрана по теме: однотонный, градиент, точки (сетка) или звёзды. */
+class BackdropDrawable(private val t: AppTheme, private val density: Float) : android.graphics.drawable.Drawable() {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+    override fun draw(canvas: android.graphics.Canvas) {
+        val b = bounds
+        paint.shader = null
+        paint.color = t.bg
+        canvas.drawRect(b, paint)
+        when (t.backdrop) {
+            Backdrop.SOLID -> {}
+            Backdrop.GRADIENT -> {
+                // сверху — фон, книзу — к цвету панели и акценту
+                val bottom = blend(t.panel, t.accent, 0.12f)
+                paint.shader = android.graphics.LinearGradient(0f, b.top.toFloat(), 0f, b.bottom.toFloat(),
+                    t.bg, bottom, android.graphics.Shader.TileMode.CLAMP)
+                canvas.drawRect(b, paint)
+                paint.shader = null
+            }
+            Backdrop.DOTS -> {
+                paint.color = (t.muted and 0x00FFFFFF) or 0x30000000
+                val step = 22 * density
+                var y = b.top + step / 2
+                while (y < b.bottom) {
+                    var x = b.left + step / 2
+                    while (x < b.right) { canvas.drawCircle(x, y, 1.4f * density, paint); x += step }
+                    y += step
+                }
+            }
+            Backdrop.STARS -> {
+                val rnd = java.util.Random(37)
+                repeat(140) {
+                    val x = b.left + rnd.nextFloat() * b.width()
+                    val y = b.top + rnd.nextFloat() * b.height()
+                    val a = 60 + rnd.nextInt(170)
+                    paint.color = (t.text and 0x00FFFFFF) or (a shl 24)
+                    canvas.drawCircle(x, y, (0.6f + rnd.nextFloat() * 1.4f) * density, paint)
+                }
+            }
+        }
+    }
+
+    private fun blend(a: Int, b: Int, f: Float): Int {
+        fun ch(s: Int) = (((a shr s) and 0xFF) * (1 - f) + ((b shr s) and 0xFF) * f).toInt() shl s
+        return (0xFF shl 24) or ch(16) or ch(8) or ch(0)
+    }
+
+    override fun setAlpha(alpha: Int) {}
+    override fun setColorFilter(cf: android.graphics.ColorFilter?) {}
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity() = android.graphics.PixelFormat.OPAQUE
 }
