@@ -103,11 +103,20 @@ class ScreenshotTest {
         shot("16-items-sized")
         click(R.id.tabWheel); shot("17-wheel-sized")
         // все режимы вращения: результат — сектор под стрелкой / шариком / огоньком / линией барабана
-        for ((k, m) in listOf("Стрелка", "Шарик", "Огоньки", "Встречное", "Барабан").withIndex()) {
+        click(R.id.tabSettings); click(R.id.optEliminate) // выбывание выкл, иначе вариантов не хватит
+        click(R.id.tabWheel); root.findViewById<View>(R.id.restore).performClick(); idle(150)
+        for ((k, m) in listOf("Стрелка", "Шарик", "Огоньки", "Встречное", "Барабан", "Маятник", "Часы", "Лента", "Вспышки").withIndex()) {
             click(R.id.tabSettings); clickText(m)
             click(R.id.tabWheel); shot("2${k}a-mode-$k")
-            click(R.id.spin); idle(1500); shot("2${k}b-mode-$k-spin")
-            idle(9000); shot("2${k}c-mode-$k-result")
+            root.findViewById<View>(R.id.spin).performClick()
+            if (m == "Шарик") {
+                // кадры полёта шарика: дорожка → спираль → отскоки → лунка
+                for (t in listOf(0.2f, 0.55f, 0.68f, 0.76f, 0.8f, 0.85f, 0.9f, 1f)) {
+                    idle(1); wheel.seek(t); shot("ball-${(t * 100).toInt()}")
+                }
+                idle(9000)
+            } else { idle(1500); shot("2${k}b-mode-$k-spin"); idle(9000) }
+            shot("2${k}c-mode-$k-result")
             val res = root.findViewById<TextView>(R.id.result).text.toString()
             assertEquals(m, wheel.labels[wheel.indexUnderPointer()], res)
         }
