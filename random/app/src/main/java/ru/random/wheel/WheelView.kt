@@ -47,6 +47,15 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
 
     /** Поворот колеса по часовой стрелке, градусы. */
     private var rotationDeg = 0f
+
+    /**
+     * Режим «Стрелка»: колесо стоит, сектора — кольцом по краю, в центре вращается стрелка.
+     * [arrowDeg] — куда смотрит стрелка: 0 — вверх, по часовой стрелке.
+     */
+    var arrowMode = false
+        set(value) { field = value; invalidate() }
+    private var arrowDeg = 0f
+    private val ringInner = 0.5f // внутренний радиус кольца секторов в режиме стрелки, доля r
     private var animator: ValueAnimator? = null
     val spinning get() = animator?.isRunning == true
 
@@ -101,7 +110,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     }
 
     /** Индекс сектора под указателем. */
-    fun indexUnderPointer() = indexAtAngle(-rotationDeg)
+    fun indexUnderPointer() = if (arrowMode) indexAtAngle(arrowDeg - rotationDeg) else indexAtAngle(-rotationDeg)
 
     /** Индекс сектора в точке экрана (x, y) или -1 вне колеса. */
     fun indexAt(x: Float, y: Float): Int {
@@ -128,23 +137,26 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         return Triple(cx, cy, r)
     }
 
-    /** Крутит колесо так, чтобы указатель остановился в случайном месте сектора [index]. */
+    /** Крутит колесо (или стрелку) так, чтобы указатель остановился в случайном месте сектора [index]. */
     fun spinTo(index: Int, durationMs: Long, onEnd: () -> Unit) {
         val n = labels.size
         if (n == 0 || spinning) return
         val from = starts[index]; val span = starts[index + 1] - from
         val target = from + span * (0.12f + 0.76f * Random.nextFloat()) // угол внутри сектора
-        val start = (rotationDeg % 360 + 360) % 360
-        val delta = ((-target - start) % 360 + 720) % 360
+        val arrow = arrowMode
+        // колесо: поворот r даёт под указателем угол −r; стрелка под углом a смотрит на угол a − r
+        val start = ((if (arrow) arrowDeg else rotationDeg) % 360 + 360) % 360
+        val want = if (arrow) target + rotationDeg else -target
+        val delta = ((want - start) % 360 + 720) % 360
         val turns = (durationMs / 800).toInt().coerceAtLeast(2)
         val end = start + 360f * Random.nextInt(turns, turns + 3) + delta
-        rotationDeg = start
+        if (arrow) arrowDeg = start else rotationDeg = start
         var lastIdx = indexUnderPointer()
         animator = ValueAnimator.ofFloat(start, end).apply {
             duration = durationMs + Random.nextLong(durationMs / 4 + 1)
             interpolator = DecelerateInterpolator(2.2f)
             addUpdateListener {
-                rotationDeg = it.animatedValue as Float
+                if (arrow) arrowDeg = it.animatedValue as Float else rotationDeg = it.animatedValue as Float
                 val idx = indexUnderPointer()
                 if (idx != lastIdx) { lastIdx = idx; onTick?.invoke() }
                 invalidate()
@@ -184,17 +196,23 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         }
         if (n > 1) for (i in 0 until n) canvas.drawArc(oval, from(i), span(i), true, linePaint)
 
-        val maxW = r * 0.62f
+        // в режиме стрелки середина — пустой круг, подписи в кольце
+        val textAt = if (arrowMode) r * (1 + ringInner) / 2 else r * 0.58f
+        val maxW = if (arrowMode) r * (1 - ringInner) * 0.88f else r * 0.62f
         for (i in 0 until n) {
             // шрифт по ширине сектора: узкие сектора — мельче, совсем узкие — без подписи
-            val size = min(r * 0.13f, r * 2.2f * span(i) / 360f + dp(6f))
+            val size = min(r * (if (arrowMode) 0.11f else 0.13f), textAt * 3.8f * span(i) / 360f + dp(6f))
             if (size < dp(7f)) continue
             textPaint.textSize = size
             canvas.save()
-            canvas.rotate(from(i) + span(i) / 2, cx, cy)
+            val mid = from(i) + span(i) / 2
+            canvas.rotate(mid, cx, cy)
+            // колесо в режиме стрелки не крутится — подписи слева переворачиваем, чтобы читались
+            val m = (mid % 360 + 360) % 360
+            if (arrowMode && m > 90 && m < 270) canvas.rotate(180f, cx + textAt, cy)
             textPaint.color = if (isLight(colorOf(i))) 0xFF15161C.toInt() else Color.WHITE
             val t = TextUtils.ellipsize(labels[i].ifBlank { "—" }, textPaint, maxW, TextUtils.TruncateAt.END)
-            canvas.drawText(t, 0, t.length, cx + r * 0.58f, cy - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
+            canvas.drawText(t, 0, t.length, cx + textAt, cy - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
             canvas.restore()
         }
 
@@ -205,6 +223,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
 
         rimPaint.strokeWidth = dp(5f)
         canvas.drawCircle(cx, cy, r, rimPaint)
+        if (arrowMode) { drawArrow(canvas, cx, cy, r); return }
         canvas.drawCircle(cx, cy, r * 0.12f, hubPaint)
         canvas.drawCircle(cx, cy, r * 0.07f, hubInner)
 
@@ -215,6 +234,43 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         pointer.lineTo(cx, cy - r + dp(18f))
         pointer.close()
         canvas.drawPath(pointer, pointerPaint)
+    }
+
+    private val arrowPath = Path()
+
+    /** Пустой центр с кольцом секторов вокруг и стрелка на оси. */
+    private fun drawArrow(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        val inner = r * ringInner
+        sectorPaint.color = theme.bg
+        canvas.drawCircle(cx, cy, inner, sectorPaint)
+        rimPaint.strokeWidth = dp(3f)
+        canvas.drawCircle(cx, cy, inner, rimPaint)
+
+        canvas.save()
+        canvas.rotate(arrowDeg, cx, cy)
+        val tip = cy - r * (ringInner + 0.06f) // остриё упирается в кольцо, подписи не закрывает
+        val head = r * 0.16f         // длина наконечника
+        val hw = r * 0.09f           // полуширина наконечника
+        val sw = r * 0.035f          // полуширина древка
+        val tail = cy + inner * 0.45f
+        arrowPath.reset()
+        arrowPath.moveTo(cx, tip)
+        arrowPath.lineTo(cx + hw, tip + head)
+        arrowPath.lineTo(cx + sw, tip + head * 0.8f)
+        arrowPath.lineTo(cx + sw, tail)
+        arrowPath.lineTo(cx + hw * 0.8f, tail + head * 0.45f)
+        arrowPath.lineTo(cx - hw * 0.8f, tail + head * 0.45f)
+        arrowPath.lineTo(cx - sw, tail)
+        arrowPath.lineTo(cx - sw, tip + head * 0.8f)
+        arrowPath.lineTo(cx - hw, tip + head)
+        arrowPath.close()
+        pointerPaint.color = theme.rim
+        canvas.drawPath(arrowPath, pointerPaint)
+        canvas.restore()
+
+        canvas.drawCircle(cx, cy, r * 0.09f, hubPaint)
+        sectorPaint.color = theme.accent
+        canvas.drawCircle(cx, cy, r * 0.05f, sectorPaint)
     }
 
     private fun isLight(c: Int) =

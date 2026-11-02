@@ -318,6 +318,35 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
+                    android:text="Что вращается"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/modeRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:orientation="horizontal">
+
+                    <Button
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:text="Колесо" />
+
+                    <Button
+                        style="@style/Btn"
+                        android:layout_width="0dp"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:text="Стрелка" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
                     android:text="Скорость вращения"
                     android:textSize="18sp"
                     android:textStyle="bold" />
@@ -393,7 +422,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
                     android:tag="muted"
-                    android:text="random 1.7"
+                    android:text="random 1.8"
                     android:textSize="12sp" />
             </LinearLayout>
         </ScrollView>

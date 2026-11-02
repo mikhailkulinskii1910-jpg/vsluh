@@ -102,6 +102,18 @@ class ScreenshotTest {
         assertEquals(listOf(5, 10, 10, 10, 10, 10, 10, 10), wheel.sizes) // «Пицца» уменьшена до ×0.5
         shot("16-items-sized")
         click(R.id.tabWheel); shot("17-wheel-sized")
+        // режим «Стрелка»: колесо стоит, крутится стрелка; результат — сектор под остриём
+        click(R.id.tabSettings)
+        clickText("Стрелка")
+        click(R.id.tabWheel); shot("20-arrow")
+        click(R.id.spin); idle(1200); shot("21-arrow-spinning")
+        idle(9000); shot("22-arrow-result")
+        val res = root.findViewById<TextView>(R.id.result).text.toString()
+        assertEquals(wheel.labels[wheel.indexUnderPointer()], res)
+        for (t in listOf("Сакура", "Космос")) {
+            click(R.id.tabSettings); clickText(t); click(R.id.tabWheel); shot("23-arrow-$t")
+        }
+        click(R.id.tabSettings); clickText("Ночь"); clickText("Колесо")
         click(R.id.tabHistory); shot("19-history-chances")
         assertTrue(findText(root, "Шансы выпадения") != null)
 

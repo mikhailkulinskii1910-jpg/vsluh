@@ -60,6 +60,7 @@ class MainActivity : Activity() {
     // настройки
     private var theme = Themes.all[0]
     private var speed = 1 // 0 быстро, 1 обычно, 2 долго
+    private var arrowMode = false // вращается стрелка, а не колесо
     private var eliminate = false
     private var confettiOn = true
     private var soundOn = true
@@ -665,6 +666,13 @@ class MainActivity : Activity() {
         opt(R.id.optAwake, keepAwake) { keepAwake = it; applyAwake() }
         applyAwake()
 
+        val modeRow = findViewById<LinearLayout>(R.id.modeRow)
+        for (i in 0 until modeRow.childCount) modeRow.getChildAt(i).setOnClickListener {
+            if (wheel.spinning) return@setOnClickListener
+            arrowMode = i == 1; wheel.arrowMode = arrowMode; saveSettings(); styleSpeed()
+        }
+        wheel.arrowMode = arrowMode
+
         val speedRow = findViewById<LinearLayout>(R.id.speedRow)
         for (i in 0 until speedRow.childCount) speedRow.getChildAt(i).setOnClickListener {
             speed = i; saveSettings(); styleSpeed()
@@ -674,6 +682,8 @@ class MainActivity : Activity() {
     private fun styleSpeed() {
         val row = findViewById<LinearLayout>(R.id.speedRow)
         for (i in 0 until row.childCount) styleButton(row.getChildAt(i) as Button, i == speed)
+        val mode = findViewById<LinearLayout>(R.id.modeRow)
+        for (i in 0 until mode.childCount) styleButton(mode.getChildAt(i) as Button, (i == 1) == arrowMode)
     }
 
     private fun buildThemes() {
@@ -936,7 +946,7 @@ class MainActivity : Activity() {
 
     private fun saveSettings() {
         prefs().edit()
-            .putString("theme", theme.id).putInt("speed", speed)
+            .putString("theme", theme.id).putInt("speed", speed).putBoolean("arrow", arrowMode)
             .putBoolean("eliminate", eliminate).putBoolean("confetti", confettiOn)
             .putBoolean("sound", soundOn).putBoolean("vibro", vibroOn)
             .putBoolean("shake", shakeOn).putBoolean("awake", keepAwake)
@@ -948,6 +958,7 @@ class MainActivity : Activity() {
         rigged = p.getBoolean("rigged", false)
         theme = Themes.byId(p.getString("theme", null))
         speed = p.getInt("speed", 1).coerceIn(0, SPEEDS.lastIndex)
+        arrowMode = p.getBoolean("arrow", false)
         eliminate = p.getBoolean("eliminate", false)
         confettiOn = p.getBoolean("confetti", true)
         soundOn = p.getBoolean("sound", true)
