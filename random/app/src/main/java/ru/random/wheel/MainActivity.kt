@@ -47,7 +47,7 @@ import kotlin.random.Random
 class MainActivity : Activity() {
 
     /** [on] — вариант на колесе (снимается вручную или при выбывании). */
-    private class Item(var name: String, var chance: Int = DEFAULT_CHANCE, var on: Boolean = true, var size: Int = 1) {
+    private class Item(var name: String, var chance: Int = DEFAULT_CHANCE, var on: Boolean = true, var size: Int = SIZE_ONE) {
         fun copy() = Item(name, chance, on, size)
     }
 
@@ -89,8 +89,6 @@ class MainActivity : Activity() {
     private var lastResultIdx = 0
     /** Выпавший вариант в режиме выбывания: уходит с колеса перед следующим вращением. */
     private var pendingOut: Item? = null
-    private var titleTaps = 0
-    private var firstTapAt = 0L
     private var tone: ToneGenerator? = null
     private var lastShake = 0L
 
@@ -132,13 +130,10 @@ class MainActivity : Activity() {
         findViewById<Button>(R.id.share).setOnClickListener { share() }
         restoreBtn.setOnClickListener { restoreAll() }
 
-        // Скрытый вход в «Шансы»: 5 быстрых нажатий или долгое нажатие на заголовок.
+        // Нажатие на заголовок — подкрутка вкл/выкл (незаметный сигнал),
+        // долгое нажатие — вход в скрытую вкладку «Шансы» по паролю.
         val title = findViewById<TextView>(R.id.title)
-        title.setOnClickListener {
-            val now = SystemClock.uptimeMillis()
-            if (now - firstTapAt > 2000) { firstTapAt = now; titleTaps = 0 }
-            if (++titleTaps >= 5) { titleTaps = 0; askPassword() }
-        }
+        title.setOnClickListener { toggleRig(title) }
         title.setOnLongClickListener { askPassword(); true }
 
         setupItems()
@@ -320,7 +315,7 @@ class MainActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         val info = text("", 14f, "muted").apply { gravity = Gravity.CENTER }
-        val bar = SeekBar(this).apply { max = MAX_SIZE - 1; setPadding(dp(16), dp(10), dp(16), dp(10)) }
+        val bar = SeekBar(this).apply { max = SIZE_STEPS.lastIndex; setPadding(dp(16), dp(10), dp(16), dp(10)) }
         fun refresh() {
             val a = active()
             preview.sizes = a.map { it.size }
@@ -328,14 +323,14 @@ class MainActivity : Activity() {
             preview.highlight = a.indexOf(item)
             name.text = item.name.ifBlank { "—" }
             val share = if (item.on) item.size * 100.0 / a.sumOf { it.size } else 0.0
-            info.text = if (item.on) "Размер ×${item.size} · ${fmt(share)}% колеса — такой же шанс выпасть"
-                else "Размер ×${item.size} · вариант сейчас снят с колеса"
-            bar.progress = item.size - 1
+            info.text = if (item.on) "Размер ${sizeLabel(item.size)} · ${fmt(share)}% колеса — такой же шанс выпасть"
+                else "Размер ${sizeLabel(item.size)} · вариант сейчас снят с колеса"
+            bar.progress = SIZE_STEPS.indexOfFirst { it >= item.size }.let { if (it < 0) SIZE_STEPS.lastIndex else it }
         }
         bar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
                 if (!fromUser) return
-                item.size = p + 1; updateWheel(); refresh()
+                item.size = SIZE_STEPS[p]; updateWheel(); refresh()
             }
             override fun onStartTrackingTouch(sb: SeekBar) {}
             override fun onStopTrackingTouch(sb: SeekBar) { save() }
@@ -345,6 +340,18 @@ class MainActivity : Activity() {
             val i = list.indexOf(item)
             item = list[((if (i < 0) 0 else i + d) % list.size + list.size) % list.size]
             refresh()
+        }
+        // точная подстройка: шаг ±0.1 в обе стороны
+        fun nudge(d: Int) { item.size = (item.size + d).coerceIn(1, MAX_SIZE); updateWheel(); refresh(); save() }
+        val fine = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            fun b(t: String, d: Int) = Button(this@MainActivity, null, 0, R.style.Btn).apply {
+                text = t; textSize = 18f; setPadding(0, 0, 0, 0)
+                layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f).apply { marginStart = dp(4); marginEnd = dp(4) }
+                setOnClickListener { nudge(d) }
+            }
+            addView(b("− меньше", -1)); addView(b("больше +", 1))
         }
         val nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -360,14 +367,14 @@ class MainActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), 0)
-            addView(preview); addView(nav); addView(bar); addView(info)
+            addView(preview); addView(nav); addView(bar); addView(fine); addView(info)
         }
         paint(box)
         refresh()
         dialog().setView(box)
             .setPositiveButton("Готово") { _, _ -> save(); if (current == 1) buildItems() }
             .setNeutralButton("Все ×1") { _, _ ->
-                items.forEach { it.size = 1 }; save(); updateWheel(); if (current == 1) buildItems()
+                items.forEach { it.size = SIZE_ONE }; save(); updateWheel(); if (current == 1) buildItems()
             }
             .setOnCancelListener { save(); if (current == 1) buildItems() }
             .show()
@@ -425,7 +432,7 @@ class MainActivity : Activity() {
                 setPadding(0, 0, 0, 0)
                 setOnClickListener { click() }
             }
-            val size = small("×${item.size}", 46) { editSize(item) }
+            val size = small(sizeLabel(item.size), 52) { editSize(item) }.apply { textSize = 13f }
             val copy = small("⧉", 42) {
                 if (items.size >= MAX_ITEMS) toast("Не больше $MAX_ITEMS вариантов")
                 else { items.add(items.indexOf(item) + 1, item.copy()); itemsChanged(); toast("Скопировано: «${item.name}»") }
@@ -490,6 +497,22 @@ class MainActivity : Activity() {
             .setPositiveButton("Сохранить текущий") { _, _ -> saveCurrentAs() }
             .setNegativeButton("Закрыть", null)
             .show()
+    }
+
+    /**
+     * Быстрое включение/выключение подкрутки нажатием на заголовок. Посторонним сигнал не виден:
+     * включение — одна короткая вибрация и точка у «m» на миг, выключение — две вибрации.
+     */
+    private fun toggleRig(title: TextView) {
+        rigged = !rigged
+        save()
+        if (current == ODDS) { riggedSwitch.isChecked = rigged; refreshOdds() }
+        title.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
+        if (!rigged) title.postDelayed({
+            title.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS, HapticFeedbackConstants.FLAG_IGNORE_GLOBAL_SETTING)
+        }, 180)
+        title.text = if (rigged) "random." else "random"
+        title.postDelayed({ title.text = getString(R.string.app_name) }, 700)
     }
 
     /** Вход в скрытую вкладку «Шансы» — только по паролю. */
@@ -822,6 +845,9 @@ class MainActivity : Activity() {
     private fun ripple(color: Int, r: Float): Drawable =
         RippleDrawable(ColorStateList.valueOf(if (theme.light) 0x22000000 else 0x33FFFFFF), round(color, r), null)
 
+    /** «×0.5», «×1», «×2.5». */
+    private fun sizeLabel(tenths: Int) = "×" + fmt(tenths / 10.0)
+
     private fun text(s: String, size: Float, tag: String?, bold: Boolean = false) = TextView(this).apply {
         text = s; textSize = size; this.tag = tag
         if (bold) setTypeface(typeface, android.graphics.Typeface.BOLD)
@@ -846,13 +872,14 @@ class MainActivity : Activity() {
     private fun prefs() = getSharedPreferences("wheel", Context.MODE_PRIVATE)
 
     private fun itemsJson() = JSONArray().apply {
-        items.forEach { put(JSONObject().put("name", it.name).put("chance", it.chance).put("on", it.on).put("size", it.size)) }
+        items.forEach { put(JSONObject().put("name", it.name).put("chance", it.chance).put("on", it.on).put("size10", it.size)) }
     }
 
     private fun parseItems(arr: JSONArray) = (0 until arr.length()).map {
         val o = arr.getJSONObject(it)
         Item(o.optString("name"), o.optInt("chance", DEFAULT_CHANCE).coerceIn(0, 100), o.optBoolean("on", true),
-            o.optInt("size", 1).coerceIn(1, MAX_SIZE))
+            // size10 — десятые доли (×0.1…×10); старое поле size хранило целые ×1…×10
+            (if (o.has("size10")) o.optInt("size10", SIZE_ONE) else o.optInt("size", 1) * SIZE_ONE).coerceIn(1, MAX_SIZE))
     }
 
     private fun loadSaved(): Map<String, JSONArray> = try {
@@ -913,7 +940,11 @@ class MainActivity : Activity() {
 
     companion object {
         const val MAX_ITEMS = 100
-        const val MAX_SIZE = 10
+        /** Размер сектора хранится в десятых: 10 = ×1, 1 = ×0.1, 100 = ×10. */
+        const val SIZE_ONE = 10
+        const val MAX_SIZE = 100
+        /** Шаги ползунка размера: мельче ×1 — по 0.1, крупнее — по 0.5/1. */
+        val SIZE_STEPS = intArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90, 100)
         const val MAX_HISTORY = 300
         const val DEFAULT_CHANCE = 50
         const val ODDS = 4

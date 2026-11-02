@@ -12,7 +12,7 @@
     android:fitsSystemWindows="true"
     android:orientation="vertical">
 
-    <!-- 5 быстрых нажатий или долгое нажатие на заголовок открывают скрытую вкладку «Шансы». -->
+    <!-- Нажатие на заголовок — подкрутка вкл/выкл; долгое нажатие + пароль — скрытая вкладка «Шансы». -->
     <TextView
         android:id="@+id/title"
         android:layout_width="match_parent"
@@ -393,7 +393,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="18dp"
                     android:tag="muted"
-                    android:text="random 1.4"
+                    android:text="random 1.5"
                     android:textSize="12sp" />
             </LinearLayout>
         </ScrollView>

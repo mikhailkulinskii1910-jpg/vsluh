@@ -99,7 +99,7 @@ class ScreenshotTest {
         sizeDlg.window!!.decorView.draw(Canvas(bmpD))
         File(out, "15-size-dialog.png").outputStream().use { bmpD.compress(Bitmap.CompressFormat.PNG, 100, it) }
         sizeDlg.getButton(DialogInterface.BUTTON_POSITIVE).performClick(); idle(150)
-        assertEquals(listOf(5, 1, 1, 1, 1, 1, 1, 1), wheel.sizes)
+        assertEquals(listOf(5, 10, 10, 10, 10, 10, 10, 10), wheel.sizes) // «Пицца» уменьшена до ×0.5
         shot("16-items-sized")
         click(R.id.tabWheel); shot("17-wheel-sized")
 
@@ -112,10 +112,15 @@ class ScreenshotTest {
             d.getButton(DialogInterface.BUTTON_POSITIVE).performClick(); idle(150)
             if (d.isShowing) d.dismiss()
         }
+        root.findViewById<View>(R.id.title).performClick(); idle(1000) // нажатие на заголовок — подкрутка вкл
         enter("1234")
         assertEquals(View.GONE, odds.visibility)
         enter("1910")
         assertEquals(View.VISIBLE, odds.visibility)
+        val rig = root.findViewById<android.widget.Switch>(R.id.rigged)
+        assertTrue(rig.isChecked)
+        root.findViewById<View>(R.id.title).performClick(); idle(1000) // и снова выкл
+        assertTrue(!rig.isChecked)
         shot("12-odds")
         click(R.id.rigged); shot("13-odds-on")
     }
