@@ -37,10 +37,17 @@ enum class SpinMode(val id: String, val title: String) {
     BOTTLE("bottle", "Бутылочка"),
     SNAKE("snake", "Змейка"),
     SPRING("spring", "Пружина"),
-    COMET("comet", "Комета");
+    COMET("comet", "Комета"),
+    SUSPENSE("suspense", "Интрига"),
+    DARTS("darts", "Дартс"),
+    PLINKO("plinko", "Плинко"),
+    REVERSE("reverse", "Обратное");
 
     /** Указатель нарисован сверху и стоит на месте — крутится само колесо. */
-    val topPointer get() = this == WHEEL || this == SPRING
+    val topPointer get() = this == WHEEL || this == SPRING || this == SUSPENSE || this == REVERSE
+
+    /** Само колесо крутится — подписи не переворачиваем. */
+    val wheelSpins get() = topPointer || this == COUNTER || this == DARTS
 
     companion object { fun byId(id: String?) = entries.firstOrNull { it.id == id } ?: WHEEL }
 }
@@ -95,6 +102,9 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     private var cursorSpeed = 0f
     /** Режим «Вспышки»: какой сектор подсвечен (−1 — по курсору). */
     private var flashIdx = -1
+    /** Дартс: 0 — дротик ждёт внизу, 1 — летит (dartFly 0…1), 2 — воткнулся. */
+    private var dartState = 0
+    private var dartFly = 0f
     private val ringInner = 0.5f // внутренний радиус кольца секторов в режимах со стрелкой, доля r
     private var animator: ValueAnimator? = null
     val spinning get() = animator?.isRunning == true
@@ -168,6 +178,11 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             if (!rect.contains(x, y)) return -1
             return indexAtAngle(cursorDeg - rotationDeg + (y - rect.centerY()) / reelPxPerDeg(rect))
         }
+        if (mode == SpinMode.PLINKO) {
+            plinkoBoard(cx, cy, r)
+            if (!rect.contains(x, y)) return -1
+            return indexAtAngle((x - rect.left) / rect.width() * 360f)
+        }
         if (mode == SpinMode.STRIP) {
             stripWindow(cx, cy, r)
             if (!rect.contains(x, y)) return -1
@@ -230,6 +245,51 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
                 { t -> val e = ease(t); rotationDeg = r0 + (r1 - r0) * e; cursorDeg = c0 + (c1 - c0) * e }
             }
             SpinMode.BALL -> ballFrame(r0, target, span, turns)
+            SpinMode.REVERSE -> {
+                val r1 = r0 - laps() - norm(r0 - (c0 - target)); // против часовой
+                { t -> rotationDeg = r0 + (r1 - r0) * ease(t) }
+            }
+            SpinMode.SUSPENSE -> {
+                // почти встаёт на следующем по ходу секторе у самой границы, замирает и переползает на цель
+                val next = (index + 1) % n
+                val edge = starts[index + 1] + min(3f, (starts[next + 1] - starts[next]) * 0.4f)
+                val rMid = r0 + laps() + norm(c0 - edge - r0)
+                val rEnd = rMid + norm((c0 - target) - rMid);
+                { t ->
+                    rotationDeg = when {
+                        t < 0.72f -> r0 + (rMid - r0) * ease(t / 0.72f, 3f)
+                        t < 0.86f -> rMid + 0.4f * sin((t - 0.72f) * 120f) * (1 - (t - 0.72f) / 0.14f) // дрожит
+                        else -> { val u = (t - 0.86f) / 0.14f; rMid + (rEnd - rMid) * u * u * (3 - 2 * u) }
+                    }
+                }
+            }
+            SpinMode.DARTS -> {
+                // колесо замедляется; в момент hit дротик втыкается сверху — там должна быть цель
+                val hit = 0.55f
+                val big = (laps() + norm(-target - r0)) / ease(hit, 2.2f)
+                dartState = 0;
+                { t ->
+                    rotationDeg = r0 + big * ease(t, 2.2f)
+                    when {
+                        t < 0.38f -> { dartState = 0; cursorDeg = 0f }
+                        t < hit -> { dartState = 1; dartFly = (t - 0.38f) / (hit - 0.38f); cursorDeg = 0f }
+                        else -> { dartState = 2; cursorDeg = target + rotationDeg }
+                    }
+                }
+            }
+            SpinMode.PLINKO -> {
+                // шарик падает из середины сквозь штырьки и попадает в лунку цели
+                val start = 180f
+                val amp = min(28f, 360f / n)
+                val rows = 8
+                val ph = Random.nextFloat() * 6.28f;
+                { t ->
+                    val p = start + (target - start) * ease(t, 1.6f) +
+                        amp * (1 - t) * sin(2 * Math.PI.toFloat() * rows * t / 2 + ph) * sin(Math.PI.toFloat() * t)
+                    cursorDeg = p.coerceIn(0.5f, 359.5f) + rotationDeg
+                    dartFly = t // доля падения для высоты шарика
+                }
+            }
             SpinMode.SPRING -> {
                 // колесо проскакивает цель на O градусов и пружинисто возвращается
                 val r1 = r0 + laps() + norm(c0 - target - r0)
@@ -352,6 +412,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         when (mode) {
             SpinMode.REEL -> { drawReel(canvas, cx, cy, r); return }
             SpinMode.STRIP -> { drawStrip(canvas, cx, cy, r); return }
+            SpinMode.PLINKO -> { drawPlinko(canvas, cx, cy, r); return }
             // у шарика снаружи дорожка, колесо чуть меньше
             SpinMode.BALL -> drawSectors(canvas, cx, cy, r * 0.84f, ring = false)
             SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM, SpinMode.CLOCK, SpinMode.BOTTLE ->
@@ -359,7 +420,9 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             else -> drawSectors(canvas, cx, cy, r, ring = false)
         }
         when (mode) {
-            SpinMode.WHEEL, SpinMode.SPRING -> { drawHub(canvas, cx, cy, r); drawTopPointer(canvas, cx, cy, r) }
+            SpinMode.WHEEL, SpinMode.SPRING, SpinMode.SUSPENSE, SpinMode.REVERSE ->
+                { drawHub(canvas, cx, cy, r); drawTopPointer(canvas, cx, cy, r) }
+            SpinMode.DARTS -> { drawHub(canvas, cx, cy, r); drawDart(canvas, cx, cy, r) }
             SpinMode.RADAR -> drawRadar(canvas, cx, cy, r)
             SpinMode.BOTTLE -> drawBottle(canvas, cx, cy, r)
             SpinMode.SNAKE -> drawSnake(canvas, cx, cy, r)
@@ -388,7 +451,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         val textAt = if (ring) r * (1 + ringInner) / 2 else r * 0.58f
         val maxW = if (ring) r * (1 - ringInner) * 0.88f else r * 0.62f
         // подписи читаются, если колесо в этом режиме стоит на месте
-        val upright = mode != SpinMode.WHEEL && mode != SpinMode.COUNTER && mode != SpinMode.SPRING
+        val upright = !mode.wheelSpins
         for (i in 0 until n) {
             // шрифт по ширине сектора: узкие сектора — мельче, совсем узкие — без подписи
             val size = min(r * (if (ring) 0.11f else 0.13f), textAt * 3.8f * span(i) / 360f + dp(6f))
@@ -589,6 +652,125 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         hlPaint.color = theme.rim; hlPaint.strokeWidth = dp(4f)
         canvas.drawArc(rect, -90f + starts[head] + rotationDeg + 1f, starts[head + 1] - starts[head] - 2f, false, hlPaint)
         drawHub(canvas, cx, cy, r)
+    }
+
+    /** Дротик: ждёт под колесом, летит вверх и втыкается; дальше крутится вместе с колесом. */
+    private fun drawDart(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        val hitR = r * 0.62f
+        val waitY = min(cy + r + dp(36f), height - dp(30f))
+        canvas.save()
+        when (dartState) {
+            2 -> {
+                canvas.rotate(cursorDeg, cx, cy)
+                drawDartShape(canvas, cx, cy - hitR, r * 0.38f, stuck = true)
+            }
+            1 -> {
+                val f = dartFly * dartFly
+                val y = waitY + (cy - hitR - waitY) * f
+                drawDartShape(canvas, cx, y, r * (0.42f - 0.16f * f), stuck = false)
+            }
+            else -> drawDartShape(canvas, cx, waitY, r * 0.42f, stuck = false)
+        }
+        canvas.restore()
+    }
+
+    /** Дротик остриём вверх; (x, y) — остриё, [len] — длина. */
+    private fun drawDartShape(canvas: Canvas, x: Float, y: Float, len: Float, stuck: Boolean) {
+        val w = len * 0.11f
+        // тень
+        if (stuck) { sectorPaint.color = 0x55000000; canvas.drawCircle(x + dp(2f), y + dp(2f), w * 1.3f, sectorPaint) }
+        // остриё
+        sectorPaint.color = 0xFFCFD3DA.toInt()
+        arrowPath.reset()
+        arrowPath.moveTo(x, y); arrowPath.lineTo(x + w * 0.45f, y + len * 0.22f); arrowPath.lineTo(x - w * 0.45f, y + len * 0.22f); arrowPath.close()
+        canvas.drawPath(arrowPath, sectorPaint)
+        // корпус
+        sectorPaint.color = theme.accent
+        canvas.drawRoundRect(x - w, y + len * 0.22f, x + w, y + len * 0.5f, w, w, sectorPaint)
+        // хвостовик
+        hlPaint.color = theme.rim; hlPaint.strokeWidth = w * 0.5f
+        canvas.drawLine(x, y + len * 0.5f, x, y + len * 0.86f, hlPaint)
+        // оперение
+        pointerPaint.color = theme.rim
+        arrowPath.reset()
+        arrowPath.moveTo(x, y + len * 0.66f); arrowPath.lineTo(x + w * 2.4f, y + len * 0.92f); arrowPath.lineTo(x + w * 2.2f, y + len)
+        arrowPath.lineTo(x, y + len * 0.88f); arrowPath.lineTo(x - w * 2.2f, y + len); arrowPath.lineTo(x - w * 2.4f, y + len * 0.92f); arrowPath.close()
+        canvas.drawPath(arrowPath, pointerPaint)
+    }
+
+    // --- Плинко -------------------------------------------------------------
+
+    private fun plinkoBoard(cx: Float, cy: Float, r: Float) {
+        rect.set(dp(10f), cy - r, width - dp(10f), cy + r)
+    }
+
+    /** Доска со штырьками; внизу лунки — их ширина пропорциональна размеру варианта. */
+    private fun drawPlinko(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        val n = labels.size
+        plinkoBoard(cx, cy, r)
+        val b = RectF(rect)
+        val radius = dp(18f)
+        sectorPaint.color = theme.panel
+        canvas.drawRoundRect(b, radius, radius, sectorPaint)
+        val slotTop = b.bottom - b.height() * 0.26f
+        fun xAt(deg: Float) = b.left + deg / 360f * b.width()
+        // лунки
+        canvas.save()
+        canvas.clipPath(Path().apply { addRoundRect(b, radius, radius, Path.Direction.CW) })
+        for (i in 0 until n) {
+            val l = xAt(starts[i]); val rr = xAt(starts[i + 1])
+            sectorPaint.color = colorOf(i)
+            canvas.drawRect(l, slotTop, rr, b.bottom, sectorPaint)
+            canvas.drawLine(l, slotTop - dp(10f), l, b.bottom, linePaint)
+            val wSlot = rr - l
+            textPaint.color = if (isLight(colorOf(i))) 0xFF15161C.toInt() else Color.WHITE
+            val h = b.bottom - slotTop
+            if (wSlot >= dp(44f)) { // широкая лунка — подпись поперёк
+                textPaint.textSize = min(dp(17f), wSlot * 0.3f)
+                val t = TextUtils.ellipsize(labels[i].ifBlank { "—" }, textPaint, wSlot - dp(8f), TextUtils.TruncateAt.END)
+                canvas.drawText(t, 0, t.length, (l + rr) / 2, slotTop + h * 0.62f, textPaint)
+            } else if (wSlot >= dp(12f)) { // узкая — вдоль
+                textPaint.textSize = min(dp(15f), wSlot * 0.7f)
+                canvas.save()
+                canvas.rotate(-90f, (l + rr) / 2, slotTop + h / 2)
+                val t = TextUtils.ellipsize(labels[i].ifBlank { "—" }, textPaint, h - dp(10f), TextUtils.TruncateAt.END)
+                canvas.drawText(t, 0, t.length, (l + rr) / 2, slotTop + h / 2 - (textPaint.ascent() + textPaint.descent()) / 2, textPaint)
+                canvas.restore()
+            }
+        }
+        canvas.restore()
+        // штырьки в шахматном порядке
+        val rows = 8
+        val top = b.top + b.height() * 0.12f
+        val rowH = (slotTop - dp(16f) - top) / (rows - 1)
+        val cols = 9
+        val colW = b.width() / cols
+        sectorPaint.color = theme.rim
+        for (row in 0 until rows) {
+            val shift = if (row % 2 == 0) colW / 2 else 0f
+            var x = b.left + shift + (if (shift == 0f) colW else 0f)
+            while (x < b.right - colW * 0.3f) {
+                canvas.drawCircle(x, top + row * rowH, dp(3.5f), sectorPaint)
+                x += colW
+            }
+        }
+        rimPaint.strokeWidth = dp(4f)
+        canvas.drawRoundRect(b, radius, radius, rimPaint)
+        // шарик: падает сверху с подскоками на штырьках, в конце лежит в лунке
+        val p = norm(cursorDeg - rotationDeg)
+        val bx = xAt(p)
+        val f = if (spinning) dartFly else 1f
+        val yStart = b.top + b.height() * 0.05f
+        val yEnd = slotTop + (b.bottom - slotTop) * 0.25f
+        val hop = dp(14f) * kotlin.math.abs(sin(Math.PI.toFloat() * rows * f)) * (1 - f)
+        val by = yStart + (yEnd - yStart) * Math.pow(f.toDouble(), 1.15).toFloat() - hop
+        val ballR = dp(9f)
+        sectorPaint.color = 0x55000000
+        canvas.drawCircle(bx + dp(2f), by + dp(3f), ballR, sectorPaint)
+        sectorPaint.color = 0xFFF5F5F5.toInt()
+        canvas.drawCircle(bx, by, ballR, sectorPaint)
+        sectorPaint.color = 0xCCFFFFFF.toInt()
+        canvas.drawCircle(bx - ballR * 0.35f, by - ballR * 0.35f, ballR * 0.3f, sectorPaint)
     }
 
     /** Комета летит по ободу; на скорости хвост длиннее. */
