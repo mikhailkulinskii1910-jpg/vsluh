@@ -105,15 +105,21 @@ class ScreenshotTest {
 
         // скрытая вкладка: без верного пароля не открывается
         val odds = root.findViewById<View>(R.id.panelOdds)
-        fun enter(pin: String) {
+        fun enter(pin: String, shotName: String? = null) {
             root.findViewById<View>(R.id.title).performLongClick(); idle(150)
-            val d = ShadowDialog.getLatestDialog() as AlertDialog
-            findEdit(d.window!!.decorView)!!.setText(pin)
-            d.getButton(DialogInterface.BUTTON_POSITIVE).performClick(); idle(150)
+            val d = ShadowDialog.getLatestDialog()
+            val dv = d.window!!.decorView
+            pin.forEach { c -> findText(dv, c.toString())!!.performClick(); idle(60) }
+            idle(400)
+            if (shotName != null) {
+                val b = Bitmap.createBitmap(dv.width, dv.height, Bitmap.Config.ARGB_8888)
+                dv.draw(Canvas(b))
+                File(out, "$shotName.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
             if (d.isShowing) d.dismiss()
         }
         root.findViewById<View>(R.id.title).performClick(); idle(1000) // нажатие на заголовок — подкрутка вкл
-        enter("1234")
+        enter("1234", "18-pin-wrong")
         assertEquals(View.GONE, odds.visibility)
         enter("1910")
         assertEquals(View.VISIBLE, odds.visibility)

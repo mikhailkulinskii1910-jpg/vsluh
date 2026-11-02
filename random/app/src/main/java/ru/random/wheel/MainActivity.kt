@@ -518,31 +518,11 @@ class MainActivity : Activity() {
     /** Вход в скрытую вкладку «Шансы» — только по паролю. */
     private fun askPassword() {
         if (current == ODDS) return
-        val edit = EditText(this).apply {
-            hint = "Пароль"
-            isSingleLine = true
-            gravity = Gravity.CENTER
-            textSize = 22f
-            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-            imeOptions = EditorInfo.IME_ACTION_DONE
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-        }
-        paint(edit)
-        val box = LinearLayout(this).apply { setPadding(dp(20), dp(12), dp(20), 0); addView(edit) }
-        val dlg = dialog().setView(box)
-            .setPositiveButton("OK", null)
-            .setNegativeButton("Отмена", null)
-            .create()
-        fun check() {
-            if (edit.text.toString() == PASSWORD) { dlg.dismiss(); show(ODDS) }
-            else { edit.text.clear(); edit.error = "Неверный пароль" }
-        }
-        edit.setOnEditorActionListener { _, _, _ -> check(); true }
-        dlg.setOnShowListener { dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { check() } }
-        dlg.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
-        dlg.show()
-        edit.requestFocus()
+        PinDialog(this, theme, PASSWORD, pinLock) { show(ODDS) }.show()
     }
+
+    /** Ошибки ввода пароля и блокировка (общие для всех открытий окна, до перезапуска приложения). */
+    private val pinLock = PinDialog.Lock()
 
     private fun saveCurrentAs() {
         if (items.isEmpty()) { toast("Список пуст"); return }
@@ -679,6 +659,10 @@ class MainActivity : Activity() {
                 })
                 row.addView(chip)
             }
+            // нечётная последняя тема — половина ширины, как остальные
+            if (pair.size == 1) row.addView(View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(0, 1, 1f).apply { marginStart = dp(8) }
+            })
             grid.addView(row)
         }
     }
