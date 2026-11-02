@@ -32,7 +32,12 @@ enum class SpinMode(val id: String, val title: String) {
     PENDULUM("pendulum", "Маятник"),
     CLOCK("clock", "Часы"),
     STRIP("strip", "Лента"),
-    FLASH("flash", "Вспышки");
+    FLASH("flash", "Вспышки"),
+    RADAR("radar", "Радар"),
+    BOTTLE("bottle", "Бутылочка"),
+    SNAKE("snake", "Змейка"),
+    SPRING("spring", "Пружина"),
+    COMET("comet", "Комета");
 
     companion object { fun byId(id: String?) = entries.firstOrNull { it.id == id } ?: WHEEL }
 }
@@ -83,6 +88,8 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
     private var cursorDeg = 0f
     /** Радиус шарика (доля r) — по дорожке, по спирали внутрь, отскоки, лунка. */
     private var ballRadius = 0.92f
+    /** Скорость курсора за последний кадр, градусы — длина хвоста кометы. */
+    private var cursorSpeed = 0f
     /** Режим «Вспышки»: какой сектор подсвечен (−1 — по курсору). */
     private var flashIdx = -1
     private val ringInner = 0.5f // внутренний радиус кольца секторов в режимах со стрелкой, доля r
@@ -215,6 +222,15 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
                 { t -> val e = ease(t); rotationDeg = r0 + (r1 - r0) * e; cursorDeg = c0 + (c1 - c0) * e }
             }
             SpinMode.BALL -> ballFrame(r0, target, span, turns)
+            SpinMode.SPRING -> {
+                // колесо проскакивает цель на O градусов и пружинисто возвращается
+                val r1 = r0 + laps() + norm(c0 - target - r0)
+                val over = 25f + Random.nextFloat() * 20f
+                { t ->
+                    rotationDeg = if (t < 0.7f) r0 + (r1 + over - r0) * ease(t / 0.7f, 3f)
+                    else { val u = (t - 0.7f) / 0.3f; r1 + over * (1 - u) * (1 - u) * cos((Math.PI * 1.5 * u).toFloat()) }
+                }
+            }
             SpinMode.PENDULUM -> {
                 // затухающие качания вокруг цели; старт — из текущего положения
                 val c1 = c0 + ((norm(target + r0 - c0) + 180f) % 360f - 180f)
@@ -250,7 +266,9 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             duration = durationMs + Random.nextLong(durationMs / 4 + 1)
             interpolator = android.view.animation.LinearInterpolator()
             addUpdateListener {
+                val prev = cursorDeg
                 frame(it.animatedValue as Float)
+                cursorSpeed = kotlin.math.abs(cursorDeg - prev)
                 val idx = indexUnderPointer()
                 if (idx != lastIdx) { lastIdx = idx; onTick?.invoke() }
                 invalidate()
@@ -258,6 +276,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             addListener(object : AnimatorListenerAdapter() {
                 override fun onAnimationEnd(a: Animator) {
                     frame(1f)
+                    cursorSpeed = 0f
                     if (mode == SpinMode.FLASH) { flashIdx = index; cursorDeg = rotationDeg + target }
                     invalidate(); onEnd()
                 }
@@ -327,11 +346,16 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
             SpinMode.STRIP -> { drawStrip(canvas, cx, cy, r); return }
             // у шарика снаружи дорожка, колесо чуть меньше
             SpinMode.BALL -> drawSectors(canvas, cx, cy, r * 0.84f, ring = false)
-            SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM, SpinMode.CLOCK -> drawSectors(canvas, cx, cy, r, ring = true)
+            SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM, SpinMode.CLOCK, SpinMode.BOTTLE ->
+                drawSectors(canvas, cx, cy, r, ring = true)
             else -> drawSectors(canvas, cx, cy, r, ring = false)
         }
         when (mode) {
-            SpinMode.WHEEL -> { drawHub(canvas, cx, cy, r); drawTopPointer(canvas, cx, cy, r) }
+            SpinMode.WHEEL, SpinMode.SPRING -> { drawHub(canvas, cx, cy, r); drawTopPointer(canvas, cx, cy, r) }
+            SpinMode.RADAR -> drawRadar(canvas, cx, cy, r)
+            SpinMode.BOTTLE -> drawBottle(canvas, cx, cy, r)
+            SpinMode.SNAKE -> drawSnake(canvas, cx, cy, r)
+            SpinMode.COMET -> drawComet(canvas, cx, cy, r)
             SpinMode.ARROW, SpinMode.COUNTER, SpinMode.PENDULUM -> drawArrow(canvas, cx, cy, r, cursorDeg)
             SpinMode.CLOCK -> drawClock(canvas, cx, cy, r)
             SpinMode.BALL -> drawBall(canvas, cx, cy, r)
@@ -356,7 +380,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         val textAt = if (ring) r * (1 + ringInner) / 2 else r * 0.58f
         val maxW = if (ring) r * (1 - ringInner) * 0.88f else r * 0.62f
         // подписи читаются, если колесо в этом режиме стоит на месте
-        val upright = mode != SpinMode.WHEEL && mode != SpinMode.COUNTER
+        val upright = mode != SpinMode.WHEEL && mode != SpinMode.COUNTER && mode != SpinMode.SPRING
         for (i in 0 until n) {
             // шрифт по ширине сектора: узкие сектора — мельче, совсем узкие — без подписи
             val size = min(r * (if (ring) 0.11f else 0.13f), textAt * 3.8f * span(i) / 360f + dp(6f))
@@ -467,6 +491,108 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         canvas.drawCircle(bx + ballR * 0.2f, by + ballR * 0.2f, ballR * 0.75f, sectorPaint)
         sectorPaint.color = 0xCCFFFFFF.toInt()
         canvas.drawCircle(bx - ballR * 0.35f, by - ballR * 0.35f, ballR * 0.3f, sectorPaint)
+    }
+
+    /** Радар: колесо притушено, по нему бежит луч со светящимся шлейфом. */
+    private fun drawRadar(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        oval.set(cx - r, cy - r, cx + r, cy + r)
+        dimPaint.color = if (theme.light) 0x88FFFFFF.toInt() else 0x99000000.toInt()
+        canvas.drawCircle(cx, cy, r, dimPaint)
+        hlPaint.color = (theme.accent and 0x00FFFFFF) or 0x55000000; hlPaint.strokeWidth = dp(1.5f)
+        for (k in 1..3) canvas.drawCircle(cx, cy, r * k / 4f, hlPaint)
+        canvas.drawLine(cx - r, cy, cx + r, cy, hlPaint); canvas.drawLine(cx, cy - r, cx, cy + r, hlPaint)
+        // сектор под лучом подсвечен
+        val i = indexUnderPointer()
+        sectorPaint.color = (colorOf(i) and 0x00FFFFFF) or 0x99000000.toInt()
+        canvas.drawArc(oval, -90f + starts[i] + rotationDeg, starts[i + 1] - starts[i], true, sectorPaint)
+        // шлейф: 70° позади луча, от прозрачного к яркому
+        canvas.save()
+        canvas.rotate(cursorDeg - 90f, cx, cy)
+        val a = theme.accent and 0x00FFFFFF
+        dimPaint.shader = android.graphics.SweepGradient(cx, cy,
+            intArrayOf(a, a, a or 0x22000000, a or 0xAA000000.toInt()), floatArrayOf(0f, 0.8f, 0.9f, 1f))
+        canvas.drawArc(oval, -70f, 70f, true, dimPaint)
+        dimPaint.shader = null
+        hlPaint.color = theme.accent; hlPaint.strokeWidth = dp(3f)
+        canvas.drawLine(cx, cy, cx + r, cy, hlPaint)
+        canvas.restore()
+        sectorPaint.color = theme.accent
+        canvas.drawCircle(cx, cy, dp(6f), sectorPaint)
+    }
+
+    /** Бутылочка в центре: горлышко указывает на вариант. */
+    private fun drawBottle(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        val inner = r * ringInner
+        canvas.save()
+        canvas.rotate(cursorDeg, cx, cy)
+        val bw = inner * 0.36f          // полуширина корпуса
+        val bodyTop = cy - inner * 0.15f
+        val bodyBottom = cy + inner * 0.78f
+        val neckW = bw * 0.38f
+        val neckTop = cy - inner * 0.92f
+        val glass = Path().apply {
+            moveTo(cx - neckW, neckTop)
+            lineTo(cx + neckW, neckTop)
+            lineTo(cx + neckW, bodyTop - inner * 0.22f)
+            quadTo(cx + bw, bodyTop - inner * 0.12f, cx + bw, bodyTop + inner * 0.05f)
+            lineTo(cx + bw, bodyBottom - bw * 0.3f)
+            quadTo(cx + bw, bodyBottom, cx + bw * 0.7f, bodyBottom)
+            lineTo(cx - bw * 0.7f, bodyBottom)
+            quadTo(cx - bw, bodyBottom, cx - bw, bodyBottom - bw * 0.3f)
+            lineTo(cx - bw, bodyTop + inner * 0.05f)
+            quadTo(cx - bw, bodyTop - inner * 0.12f, cx - neckW, bodyTop - inner * 0.22f)
+            close()
+        }
+        pointerPaint.color = 0xFF2E7D32.toInt()   // бутылочное стекло
+        canvas.drawPath(glass, pointerPaint)
+        sectorPaint.color = 0xFF66BB6A.toInt()    // этикетка
+        canvas.drawRect(cx - bw, cy + inner * 0.12f, cx + bw, cy + inner * 0.45f, sectorPaint)
+        sectorPaint.color = 0x66FFFFFF            // блик
+        canvas.drawRoundRect(cx - bw * 0.7f, bodyTop + inner * 0.05f, cx - bw * 0.45f, bodyBottom - inner * 0.1f,
+            dp(3f), dp(3f), sectorPaint)
+        sectorPaint.color = theme.accent          // крышечка
+        canvas.drawRoundRect(cx - neckW * 1.15f, neckTop - inner * 0.08f, cx + neckW * 1.15f, neckTop + inner * 0.04f,
+            dp(2f), dp(2f), sectorPaint)
+        canvas.restore()
+    }
+
+    /** Змейка: голова — текущий сектор, за ней два затухающих хвостовых, остальные притушены. */
+    private fun drawSnake(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        val n = labels.size
+        val head = indexUnderPointer()
+        oval.set(cx - r, cy - r, cx + r, cy + r)
+        val base = if (theme.light) 0x00FFFFFF else 0x00000000
+        for (i in 0 until n) {
+            val back = ((head - i) % n + n) % n // сколько секторов позади головы
+            val alpha = when (back) { 0 -> 0; 1 -> 0x55; 2 -> 0x88; else -> 0xB0 }
+            if (n <= 3 && back > 0) continue
+            if (alpha == 0) continue
+            dimPaint.color = base or (alpha shl 24)
+            canvas.drawArc(oval, -90f + starts[i] + rotationDeg, starts[i + 1] - starts[i], true, dimPaint)
+        }
+        hlPaint.color = theme.rim; hlPaint.strokeWidth = dp(5f)
+        canvas.drawArc(oval, -90f + starts[head] + rotationDeg, starts[head + 1] - starts[head], true, hlPaint)
+        drawHub(canvas, cx, cy, r)
+    }
+
+    /** Комета летит по ободу; на скорости хвост длиннее. */
+    private fun drawComet(canvas: Canvas, cx: Float, cy: Float, r: Float) {
+        drawHub(canvas, cx, cy, r)
+        val cr = r * 0.88f
+        val tail = (cursorSpeed * 6f).coerceIn(4f, 110f)
+        val parts = 24
+        for (k in parts downTo 0) {
+            val f = k / parts.toFloat()
+            val a = Math.toRadians((cursorDeg - tail * f - 90).toDouble())
+            sectorPaint.color = (theme.rim and 0x00FFFFFF) or (((1 - f) * 200).toInt() shl 24)
+            canvas.drawCircle(cx + cr * cos(a).toFloat(), cy + cr * sin(a).toFloat(), r * 0.05f * (1 - f * 0.8f), sectorPaint)
+        }
+        val a = Math.toRadians((cursorDeg - 90).toDouble())
+        val hx = cx + cr * cos(a).toFloat(); val hy = cy + cr * sin(a).toFloat()
+        pointerPaint.color = theme.accent
+        canvas.drawCircle(hx, hy, r * 0.06f, pointerPaint)
+        sectorPaint.color = 0xCCFFFFFF.toInt()
+        canvas.drawCircle(hx, hy, r * 0.03f, sectorPaint)
     }
 
     /** Часы: стрелка прыгает с деления на деление — смотрит в середину текущего сектора. */
