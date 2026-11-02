@@ -39,6 +39,9 @@ enum class SpinMode(val id: String, val title: String) {
     SPRING("spring", "Пружина"),
     COMET("comet", "Комета");
 
+    /** Указатель нарисован сверху и стоит на месте — крутится само колесо. */
+    val topPointer get() = this == WHEEL || this == SPRING
+
     companion object { fun byId(id: String?) = entries.firstOrNull { it.id == id } ?: WHEEL }
 }
 
@@ -66,7 +69,7 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         set(value) {
             if (spinning) return
             field = value
-            if (value == SpinMode.WHEEL) cursorDeg = 0f
+            if (value.topPointer) cursorDeg = 0f
             invalidate()
         }
 
@@ -150,6 +153,9 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         return n - 1
     }
 
+    /** Сектор под неподвижным указателем сверху (для проверки режимов «Колесо» и «Пружина»). */
+    fun indexAtTop() = indexAtAngle(-rotationDeg)
+
     /** Индекс выпавшего / текущего сектора. */
     fun indexUnderPointer() =
         if (mode == SpinMode.FLASH && flashIdx >= 0) flashIdx else indexAtAngle(cursorDeg - rotationDeg)
@@ -208,6 +214,8 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         val turns = (durationMs / 800).toInt().coerceAtLeast(2)
         fun laps() = 360f * Random.nextInt(turns, turns + 3)
         // в конце нужно: cursor − rotation ≡ target (mod 360)
+        // в режимах с указателем сверху курсор всегда там (0), даже если остался от прошлого режима
+        if (mode.topPointer) cursorDeg = 0f
         val r0 = norm(rotationDeg); val c0 = norm(cursorDeg)
         rotationDeg = r0; cursorDeg = c0
         flashIdx = -1
@@ -564,14 +572,22 @@ class WheelView(context: Context, attrs: AttributeSet? = null) : View(context, a
         val base = if (theme.light) 0x00FFFFFF else 0x00000000
         for (i in 0 until n) {
             val back = ((head - i) % n + n) % n // сколько секторов позади головы
-            val alpha = when (back) { 0 -> 0; 1 -> 0x55; 2 -> 0x88; else -> 0xB0 }
-            if (n <= 3 && back > 0) continue
-            if (alpha == 0) continue
+            // хвост из двух затухающих секторов — только если вариантов хватает, иначе просто притушены
+            val alpha = when {
+                back == 0 -> continue
+                n > 3 && back == 1 -> 0x55
+                n > 3 && back == 2 -> 0x88
+                else -> 0xB8
+            }
             dimPaint.color = base or (alpha shl 24)
             canvas.drawArc(oval, -90f + starts[i] + rotationDeg, starts[i + 1] - starts[i], true, dimPaint)
         }
-        hlPaint.color = theme.rim; hlPaint.strokeWidth = dp(5f)
+        // голова: обводка цветом акцента и светлая кромка по ободу
+        hlPaint.color = theme.accent; hlPaint.strokeWidth = dp(6f)
         canvas.drawArc(oval, -90f + starts[head] + rotationDeg, starts[head + 1] - starts[head], true, hlPaint)
+        rect.set(cx - r * 0.93f, cy - r * 0.93f, cx + r * 0.93f, cy + r * 0.93f)
+        hlPaint.color = theme.rim; hlPaint.strokeWidth = dp(4f)
+        canvas.drawArc(rect, -90f + starts[head] + rotationDeg + 1f, starts[head + 1] - starts[head] - 2f, false, hlPaint)
         drawHub(canvas, cx, cy, r)
     }
 

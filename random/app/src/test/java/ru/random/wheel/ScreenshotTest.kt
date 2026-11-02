@@ -123,6 +123,27 @@ class ScreenshotTest {
             val res = root.findViewById<TextView>(R.id.result).text.toString()
             assertEquals(m, wheel.labels[wheel.indexUnderPointer()], res)
         }
+        // как на фото пользователя: 2 варианта, один огромный, «Пружина» после режима с курсором
+        click(R.id.tabItems); click(R.id.bulk)
+        (ShadowDialog.getLatestDialog() as AlertDialog).let {
+            findEdit(it.window!!.decorView)!!.setText("Test\nNo test")
+            it.getButton(DialogInterface.BUTTON_NEUTRAL).performClick()
+        }
+        idle(150)
+        assertEquals(listOf("Test", "No test"), wheel.labels)
+        for (m in listOf("Стрелка", "Пружина", "Комета", "Пружина", "Колесо")) {
+            click(R.id.tabSettings); clickText(m); click(R.id.tabWheel)
+            repeat(4) {
+                root.findViewById<View>(R.id.spin).performClick(); idle(9000)
+                val res = root.findViewById<TextView>(R.id.result).text.toString()
+                assertEquals(m, wheel.labels[wheel.indexUnderPointer()], res)
+                if (m == "Пружина" || m == "Колесо") assertEquals("$m: под верхним указателем", wheel.labels[wheel.indexAtTop()], res)
+            }
+        }
+        // «Змейка» на двух вариантах: не выпавший сектор должен быть притушен
+        click(R.id.tabSettings); clickText("Змейка"); click(R.id.tabWheel)
+        root.findViewById<View>(R.id.spin).performClick(); idle(1); wheel.seek(0.5f); shot("30-snake-2"); wheel.seek(1f); idle(9000)
+        shot("31-snake-2-result")
         click(R.id.tabSettings); clickText("Колесо")
         click(R.id.tabHistory); shot("19-history-chances")
         assertTrue(findText(root, "Шансы выпадения") != null)
