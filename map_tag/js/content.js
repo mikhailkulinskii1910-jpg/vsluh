@@ -1,0 +1,137 @@
+// Бонусы, шаги обучения, список изменений
+import { getLang } from './i18n.js';
+
+const L = (o) => o[getLang()] ?? o.ru;
+
+export const POWERUPS = [
+  { id: 'revealBoost', icon: 'revealBoost', cls: 'h', side: 'hunter',
+    n: { ru: 'Ускоритель раскрытия', en: 'Reveal boost' },
+    d: { ru: 'Снимает половину полной перезарядки «Раскрытия» с оставшегося ожидания.', en: 'Takes half of the full Reveal cooldown off the remaining wait.' } },
+  { id: 'freezeBoost', icon: 'freezeBoost', cls: 'h', side: 'hunter',
+    n: { ru: 'Ускоритель заморозки', en: 'Freeze boost' },
+    d: { ru: 'Снимает половину полной перезарядки «Заморозки» с оставшегося ожидания.', en: 'Takes half of the full Freeze cooldown off the remaining wait.' } },
+  { id: 'ghost', icon: 'ghost', cls: 'd', side: 'hider',
+    n: { ru: 'Призрак', en: 'Ghost' },
+    d: { ru: '60 секунд бег не оставляет следов.', en: 'Running leaves no footprints for 60 seconds.' } },
+  { id: 'ward', icon: 'shield', cls: 'd', side: 'hider',
+    n: { ru: 'Оберег', en: 'Ward' },
+    d: { ru: 'Один раз защищает от заморозки. Несколько оберегов складываются.', en: 'Blocks one freeze aimed at you. Several wards stack.' } },
+  { id: 'lookout', icon: 'eye', cls: 'b', side: 'hider',
+    n: { ru: 'Дозор', en: 'Lookout' },
+    d: { ru: 'Показывает всех охотников на 20 секунд.', en: 'Shows every Hunter for 20 seconds.' } },
+  { id: 'decoy', icon: 'copy', cls: 'd', side: 'hider',
+    n: { ru: 'Приманка', en: 'Decoy' },
+    d: { ru: 'Прокладывает ложную цепочку следов в другом месте зоны.', en: 'Lays a fake trail of footprints elsewhere in the zone.' } },
+  { id: 'smoke', icon: 'cloud', cls: 'd', side: 'hider',
+    n: { ru: 'Дымовая завеса', en: 'Smoke screen' },
+    d: { ru: '60 секунд «Раскрытие» вас не находит.', en: 'Reveals cannot find you for 60 seconds.' } },
+  { id: 'silence', icon: 'mute', cls: 'd', side: 'hider',
+    n: { ru: 'Тишина', en: 'Hush' },
+    d: { ru: '90 секунд «Раскрытие» проходит мимо, пока вы стоите на месте.', en: 'For 90 seconds reveals miss you while you stand still.' } },
+  { id: 'jam', icon: 'jam', cls: 'd', side: 'hider',
+    n: { ru: 'Помехи', en: 'Static' },
+    d: { ru: 'Одно следующее «Раскрытие» проходит мимо. Несколько складываются.', en: 'The next reveal misses you. Several stack.' } },
+  { id: 'misdirect', icon: 'swap', cls: 'd', side: 'hider',
+    n: { ru: 'Обманка', en: 'Mislead' },
+    d: { ru: 'Следующее «Раскрытие» рисует круг в 150 м от вас.', en: 'The next reveal draws its circle 150 m away from you.' } },
+  { id: 'flare', icon: 'flare', cls: 'b', side: 'both',
+    n: { ru: 'Сигнальная ракета', en: 'Flare' },
+    d: { ru: 'Запоминает позиции всех игроков и через 10 секунд показывает их всем.', en: 'Captures every player’s position and shows it to everyone 10 seconds later.' } },
+  { id: 'scan', icon: 'scan', cls: 'b', side: 'both',
+    n: { ru: 'Сканер', en: 'Scanner' },
+    d: { ru: 'Считает игроков другой команды в выбранном радиусе.', en: 'Counts the other team within the radius you choose.' } },
+];
+export const pwName = (p) => L(p.n);
+export const pwDesc = (p) => L(p.d);
+export const pwById = (id) => POWERUPS.find((p) => p.id === id);
+
+// ---------- иллюстрации обучения (своя «карта» на SVG) ----------
+function base(extra = '') {
+  return `<svg viewBox="0 0 360 380" xmlns="http://www.w3.org/2000/svg">
+  <rect width="360" height="380" fill="#e4ebe1"/>
+  <path d="M300 0h60v380h-90c10-60 40-90 20-160S290 60 300 0z" fill="#a9c4f0"/>
+  <rect x="20" y="40" width="70" height="50" rx="4" fill="#d5d9d3"/><rect x="110" y="30" width="60" height="70" rx="4" fill="#d5d9d3"/>
+  <rect x="30" y="250" width="80" height="60" rx="4" fill="#d5d9d3"/><rect x="190" y="270" width="60" height="70" rx="4" fill="#d5d9d3"/>
+  <ellipse cx="200" cy="150" rx="60" ry="40" fill="#c8e0bc"/><ellipse cx="80" cy="170" rx="40" ry="30" fill="#c8e0bc"/>
+  <path d="M0 210C80 200 140 230 200 210S290 180 320 190" stroke="#f3d27b" stroke-width="10" fill="none"/>
+  <path d="M140 0c10 80-20 160 0 240s-10 100 0 140" stroke="#f3d27b" stroke-width="9" fill="none"/>
+  <path d="M0 120h300M60 0v380" stroke="#fff" stroke-width="4" stroke-dasharray="2 6" fill="none" opacity=".9"/>
+  ${extra}</svg>`;
+}
+const zone = (cx = 170, cy = 200, r = 160) => `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#2c7a4b" stroke-width="4" stroke-dasharray="12 9"/>`;
+const me = (x, y, c = '#5fd38d') => `<circle cx="${x}" cy="${y}" r="10" fill="${c}" stroke="#0d1a14" stroke-width="4"/>`;
+const dia = (x, y, f = '#b9a3ff', s = '#1d1240') => `<rect x="${x - 10}" y="${y - 10}" width="20" height="20" rx="3" transform="rotate(45 ${x} ${y})" fill="${f}" stroke="${s}" stroke-width="3"/>`;
+const red = (x, y, r = 60) => `<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(220,80,90,.22)" stroke="#b8323f" stroke-width="3"/>`;
+const yel = (x, y, r = 55) => `<circle cx="${x}" cy="${y}" r="${r}" fill="rgba(243,193,58,.18)" stroke="#e8b52a" stroke-width="4"/>`;
+const feet = (pts) => pts.map(([x, y, a]) => `<ellipse cx="${x}" cy="${y}" rx="4" ry="7" transform="rotate(${a} ${x} ${y})" fill="#111"/>`).join('');
+const num = (x, y, n) => `<circle cx="${x}" cy="${y}" r="16" fill="#111" stroke="#fff" stroke-width="2"/><text x="${x}" y="${y + 6}" fill="#fff" font-size="17" font-weight="700" text-anchor="middle" font-family="sans-serif">${n}</text>`;
+const hold = (x, y, n) => `<circle cx="${x}" cy="${y}" r="22" fill="#111" stroke="rgba(243,193,58,.6)" stroke-width="8"/><text x="${x}" y="${y + 6}" fill="#fff" font-size="16" font-weight="700" text-anchor="middle" font-family="sans-serif">${n}</text>`;
+const hunterDot = (x, y) => `<circle cx="${x}" cy="${y}" r="10" fill="#f26d7d" stroke="#fff" stroke-width="3"/>`;
+const banner = (txt, col = '#f26d7d') => `<rect x="12" y="12" width="336" height="44" rx="10" fill="rgba(20,20,24,.92)"/><rect x="22" y="20" width="28" height="28" rx="7" fill="${col}"/><text x="62" y="40" fill="#fff" font-size="14" font-family="sans-serif">${txt}</text>`;
+const trail = feet([[232, 300, 20], [226, 285, 10], [222, 268, 15], [216, 252, 5], [214, 236, 10], [208, 220, 0]]);
+
+export function tutorialSteps() {
+  const ru = getLang() === 'ru';
+  return [
+    { t: ru ? 'Прятки. В реальной жизни.' : 'Hide-and-seek. For real.',
+      html: ru
+        ? `<p>Вы играете на улице. Телефон показывает зону, подсказки и таймеры.</p><p><b>Поймать — значит легко коснуться другого игрока, как в салках. Затем отметьте поимку в приложении.</b></p><p>Прячущиеся уходят первыми. Охотники ждут начала охоты.</p>`
+        : `<p>You play outdoors. Your phone shows the zone, clues and timers.</p><p><b>A catch is a light touch, like in tag. Then record it in the app.</b></p><p>Hiders get a head start. Hunters wait for the hunt to begin.</p>`,
+      cards: true },
+    { t: ru ? 'Прячущимся: не попадитесь.' : 'Hiders: stay free.',
+      html: ru
+        ? `<ol><li>Ваш маркер показывает, где вы. Охотников на карте обычно не видно.</li><li>Оставайтесь внутри пунктира. Зона сужается по ходу раунда.</li><li>Приложение подскажет, когда остановиться или уйти.</li></ol>`
+        : `<ol><li>Your marker shows where you are. Hunters are usually hidden on your map.</li><li>Stay inside the dashed line. The zone shrinks during the round.</li><li>The app tells you when to stop or move on.</li></ol>`,
+      art: base(zone() + yel(90, 150) + dia(90, 150, '#ffd66b', '#3a2a00') + dia(70, 200) + me(110, 330) + num(150, 330, 1) + num(240, 360, 2) + num(300, 90, 3) + banner(ru ? 'Вас засекли — у охотников есть круг.' : 'You were revealed — Hunters have a circle.')),
+      cap: ru ? '1 Вы · 2 Зона · 3 Оповещения' : '1 You · 2 Zone · 3 Alerts' },
+    { t: ru ? 'Охотникам: найдите прячущихся.' : 'Hunters: find the Hiders.',
+      html: ru
+        ? `<ul><li>Других охотников видно. Прячущихся — нет: ищите по подсказкам.</li><li>Коснитесь прячущегося, затем нажмите «Поймал» и выберите игрока.</li><li>Пойманный становится охотником и играет дальше.</li></ul>`
+        : `<ul><li>You see the other Hunters. Hiders are hidden: use the clues.</li><li>Touch the Hider, then tap Catch and pick them.</li><li>A caught Hider joins the Hunters and keeps playing.</li></ul>`,
+      art: base(zone(120, 190, 190) + red(230, 80) + red(250, 220) + red(110, 300) + hunterDot(200, 70) + dia(160, 60) + trail),
+      cap: ru ? '«Раскрытие», «Заморозка» и «Поймал» — внизу экрана.' : 'Reveal, Freeze and Catch sit at the bottom.' },
+    { t: ru ? 'Охотникам: «Раскрытие»' : 'Hunter power: Reveal',
+      html: ru
+        ? `<ul><li>«Раскрытие» показывает охотникам красные круги. Прячущийся был где-то внутри — центр круга не его точка.</li><li>Круг остаётся на месте, а прячущийся уходит. Обыщите круг и ищите свежие следы.</li><li>Перезарядка общая на всех охотников.</li></ul>`
+        : `<ul><li>Reveal shows red circles to the Hunters. A Hider was somewhere inside — the centre is not their spot.</li><li>The circle stays put while the Hider moves. Search it and look for fresh trails.</li><li>All Hunters share the cooldown.</li></ul>`,
+      art: base(red(190, 220, 90) + hunterDot(320, 150) + feet([[80, 160, 10], [84, 178, 15], [86, 196, 5], [90, 214, 10], [92, 232, 0]]) + banner(ru ? 'Раскрытие отправлено — круги на карте.' : 'Reveal sent — circles are on your map.', '#8fd0ff')),
+      cap: ru ? 'Прячущийся был где-то в красном круге.' : 'The Hider was somewhere in the red circle.' },
+    { t: ru ? 'Охотникам: «Заморозка»' : 'Hunter power: Freeze',
+      html: ru
+        ? `<p>Действует на прячущихся рядом с любым охотником.</p><ol><li>Предупреждение: ещё можно двигаться — найдите укрытие.</li><li>Заморозка: стойте, пока таймер не закончится.</li><li>Свобода: снова можно двигаться.</li></ol>`
+        : `<p>Hits Hiders near any Hunter.</p><ol><li>Warning: you can still move — find cover.</li><li>Frozen: hold still until the timer ends.</li><li>Free: you can move again.</li></ol>`,
+      art: base(zone() + `<rect x="12" y="12" width="336" height="60" rx="12" fill="rgba(42,54,74,.95)"/><text x="26" y="38" fill="#fff" font-size="14" font-weight="700" font-family="sans-serif">${ru ? 'ВЫ ЗАМОРОЖЕНЫ — НЕ ДВИГАЙТЕСЬ' : 'FROZEN — HOLD STILL'}</text><text x="26" y="58" fill="#c8d1e0" font-size="12" font-family="sans-serif">${ru ? 'Стойте до нуля.' : 'Stay still until zero.'}</text><text x="335" y="56" fill="#fff" font-size="34" font-weight="700" text-anchor="end" font-family="sans-serif">21</text>` + me(170, 230) + `<circle cx="170" cy="230" r="70" fill="rgba(160,200,255,.18)" stroke="#8fb6ff" stroke-width="3" stroke-dasharray="6 6"/>` + hunterDot(220, 260)),
+      cap: ru ? 'Заморозка — осталась 21 секунда.' : 'Frozen — 21 seconds left.' },
+    { t: ru ? 'Как двигаться прячущимся' : 'How Hiders move',
+      html: ru
+        ? `<ul><li>Бег тратит выносливость и оставляет следы, по которым идут охотники.</li><li>Шаг восстанавливает выносливость. Когда приложение просит перестать бежать — переходите на шаг.</li></ul>`
+        : `<ul><li>Running drains stamina and leaves footprints Hunters can follow.</li><li>Walking restores stamina. When the app says stop running, walk.</li></ul>`,
+      art: base(red(330, 60, 200) + feet([[150, 360, 15], [146, 330, 10], [150, 300, 5], [146, 270, 0], [150, 240, 10], [146, 210, 5], [150, 180, 0], [146, 150, 10]]) + dia(70, 120)),
+      cap: ru ? 'Охотники видят ваши беговые следы.' : 'Hunters can follow your running trail.' },
+    { t: ru ? 'Прячущимся: задания' : 'Hiders: missions', sub: ru ? 'Если включено' : 'When enabled',
+      html: ru
+        ? `<ul><li>Хотя бы один прячущийся должен начать задание до срока и оставаться в жёлтом круге до конца.</li><li>За задание даются бонусы. Охотники видят, что задание выполняется, — осторожно.</li><li>Если никто не успел или последний ушёл раньше времени, все прячущиеся видны охотникам 1 минуту.</li></ul>`
+        : `<ul><li>At least one Hider must start the mission before the deadline and stay in the yellow circle until it ends.</li><li>Missions earn power-ups. Hunters can see a mission in progress — careful.</li><li>If nobody makes it, or the last holder leaves early, every Hider is shown to Hunters for 1 minute.</li></ul>`,
+      art: base(zone() + yel(90, 150) + dia(90, 150, '#ffd66b', '#3a2a00') + `<rect x="78" y="172" width="26" height="18" rx="4" fill="#111"/><text x="91" y="185" fill="#fff" font-size="11" text-anchor="middle" font-family="sans-serif">×2</text>` + yel(280, 260) + hold(280, 260, 101) + me(110, 340)),
+      cap: ru ? 'Справа задание уже выполняется.' : 'A mission is in progress on the right.' },
+    { t: ru ? 'Бонусы' : 'Power-ups', sub: ru ? 'Если включено' : 'When enabled',
+      html: ru
+        ? `<ul><li>Фиолетовый ромб — тайник. Дойдите до него после начала охоты, чтобы получить бонус.</li><li>Нажмите бонус внизу, прочитайте описание и выберите «Использовать», когда придёт время.</li></ul><p>Запоминать все бонусы не нужно.</p>`
+        : `<ul><li>A purple diamond is a cache. Walk to it once the hunt starts to get a power-up.</li><li>Tap a power-up at the bottom, read it and choose Use when the time is right.</li></ul><p>No need to memorise them all.</p>`,
+      art: base(dia(200, 120) + dia(40, 140) + red(150, 300, 70) + me(205, 125) + banner(ru ? 'Подобрано: Дозор · тайник' : 'Picked up: Lookout · cache', '#5fd38d')),
+      cap: ru ? 'Зелёное оповещение подтверждает находку.' : 'The green alert confirms the pickup.' },
+    { t: ru ? 'Честно и безопасно.' : 'Play fair. Stay safe.',
+      html: ru
+        ? `<ul><li>Играйте на улице и пешком. Не заходите на частную территорию.</li><li>Не заходите в здания и транспорт. Никогда не лезьте на крыши.</li><li>Не толкайтесь, не хватайте и не сбивайте с ног.</li><li>Обходите опасные места и соблюдайте ПДД.</li><li>Честно отмечайте поимки и соблюдайте договорённости.</li></ul><h3>Что взять с собой</h3><ul><li>Заряженный телефон</li><li>Удобную одежду и обувь</li></ul><p>Хорошей игры!</p>`
+        : `<ul><li>Play outdoors and on foot. Keep off private property.</li><li>Stay out of buildings and vehicles. Never climb onto roofs.</li><li>No tackling, pushing or grabbing.</li><li>Avoid dangerous spots and follow traffic rules.</li><li>Be honest about catches and stick to what you agreed.</li></ul><h3>Bring</h3><ul><li>A charged phone</li><li>Comfortable clothes and shoes</li></ul><p>Have fun!</p>` },
+  ];
+}
+
+export const PATCH_NOTES = {
+  ru: [
+    ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
+  ],
+  en: [
+    ['1.0', ['First release: hosting, lobby code and QR, game shaping.', 'Map with a shrinking zone, Reveal, Freeze and Catch.', 'Stamina and footprints, missions, caches and 12 power-ups.', 'Bots fill in for other players; tap-to-walk demo mode.', 'Profile with stats and replays, Russian and English.']],
+  ],
+};
