@@ -44,8 +44,10 @@ export function chatHandle(d, from) {
 
 function post(data) {
   if (ctx.canTalk && !ctx.canTalk()) { ctx.toast(t('deadMute')); return; }
-  const me = ctx.me();
-  const m = { id: Math.random().toString(36).slice(2, 10), name: me.name, ch: CHAT.ch, team: me.role, ...data };
+  const me = ctx.me(), mk = CHAT.masked && ctx.mask && ctx.mask();
+  const mask = mk ? { name: mk.names.includes(CHAT.maskName) ? CHAT.maskName : mk.names[0] } : null;
+  const m = { id: Math.random().toString(36).slice(2, 10), name: mask ? mask.name : me.name, ch: mask ? 'all' : CHAT.ch, team: mask ? 'hider' : me.role, ...data };
+  if (mask) { m.ch = 'all'; m.team = 'hider'; m.mask = 1; }
   ctx.send(m);
   CHAT.msgs.push({ ...m, from: me.id, at: Date.now() });
   if (CHAT.open) CHAT.open.redraw();
@@ -122,8 +124,9 @@ export function openChat(modal) {
       const list = CHAT.msgs.filter((m) => (CHAT.ch === 'all' ? m.ch === 'all' : m.ch === 'team' && (m.team === me.role || m.from === me.id)));
       box.innerHTML = `<div class="mhead"><span class="k">${t('chat')}</span><button class="icon-btn" data-x>${I.close}</button></div>
         ${voiceBar(me)}
+        ${ctx.mask && ctx.mask() ? `<div class="mask-row ${CHAT.masked ? 'on' : ''}"><label><input type="checkbox" id="chMask" ${CHAT.masked ? 'checked' : ''}><span>🎭 ${t('maskAs')}</span></label><select class="input" id="chMaskN">${ctx.mask().names.map((n) => `<option ${n === CHAT.maskName ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></div>` : ''}
         <div class="seg" style="display:flex;margin-bottom:10px"><button data-ch="all" class="${CHAT.ch === 'all' ? 'on' : ''}" style="flex:1">${t('chatAll')}</button><button data-ch="team" class="${CHAT.ch === 'team' ? 'on' : ''}" style="flex:1">${t('chatTeam')}: ${t(me.role === 'hunter' ? 'huntersPl' : 'hidersPl')}</button></div>
-        <div class="chat-list" id="chList">${list.length ? list.map((m) => `<div class="msg ${m.from === me.id ? 'mine' : ''}"><div class="who">${esc(m.name)} · ${fmtT(m.at)}</div>
+        <div class="chat-list" id="chList">${list.length ? list.map((m) => `<div class="msg ${m.from === me.id ? 'mine' : ''}"><div class="who">${esc(m.name)}${m.mask && m.from === me.id ? ' 🎭' : ''} · ${fmtT(m.at)}</div>
           ${m.kind === 'voice' ? `<button class="vmsg" data-play="${m.id}">${I.play}<span>${t('chatVoice')} · ${m.dur}${t('sec')}</span></button>` : m.kind === 'loc' ? `<div class="bub">📍 ${t('chatLoc')}</div>` : m.kind === 'sos' ? `<div class="bub sos">🆘 SOS — ${t('sosMsg')}${m.link ? `<br><a href="${esc(m.link)}" target="_blank" rel="noopener">${t('sosMap')}</a>` : ''}</div>` : m.kind === 'fx' ? `<div class="bub" style="font-size:22px">${FX_ICON[m.fx] || '🔊'} <span style="font-size:14px">${t('fx_' + m.fx)}</span></div>` : `<div class="bub">${esc(m.text)}</div>`}</div>`).join('') : `<div class="empty" style="padding:20px">${t('chatEmpty')}</div>`}</div>
         <div class="chips quick">${(QUICK[getLang()] || QUICK.ru).map((q) => `<button class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
         <div class="fxrow">${FX.map((f) => `<button class="fxb" data-fx="${f}" title="${t('fx_' + f)}">${FX_ICON[f]}</button>`).join('')}</div>
@@ -133,6 +136,8 @@ export function openChat(modal) {
           ${g ? `<button class="btn" id="chLoc" style="flex:none">📍 ${t('chatWhere')}</button>` : ''}
         </div>
         <label class="row" style="margin-top:10px;color:var(--muted);font-size:14px;gap:8px;flex-wrap:nowrap"><input type="checkbox" id="chAuto" ${CHAT.autoplay ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--accent)">${t('chatAutoplay')}</label>`;
+      const mk = box.querySelector('#chMask'); if (mk) mk.onchange = () => { CHAT.masked = mk.checked; draw(); };
+      const mn = box.querySelector('#chMaskN'); if (mn) { if (!CHAT.maskName) CHAT.maskName = mn.value; mn.onchange = () => { CHAT.maskName = mn.value; CHAT.masked = true; draw(); }; }
       const lst = box.querySelector('#chList'); lst.scrollTop = lst.scrollHeight;
       const vj = box.querySelector('#vJoin'); if (vj) vj.onclick = async () => { vj.disabled = true; await voiceJoin(CHAT.ch); draw(); };
       const vm = box.querySelector('#vMic'); if (vm) vm.onclick = () => { voiceMute(); };

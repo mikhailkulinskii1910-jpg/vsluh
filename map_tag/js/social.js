@@ -41,7 +41,13 @@ export const socialMixin = {
     if (p.role === 'hunter') return { name: p.name, color: p.color, avatar: p.avatar, role: 'hider' };
     return null;
   },
-  canTalk() { return !(this.social() && this.me.role === 'dead'); },
+  canTalk() { return this.me.role !== 'dead'; },
+  /** Мимик пишет в чат чужим именем: его облик или любой живой прячущийся. */
+  chatMask() {
+    if (this.gmode !== 'mimic' || this.me.role !== 'hunter') return null;
+    const names = [...new Set([...(this.mimic ? [this.mimic.name] : []), ...this.hiders().map((h) => h.name)])];
+    return names.length ? { names } : null;
+  },
 
   // ---------- поимка ----------
   preCatchSocial(hunter, h) {

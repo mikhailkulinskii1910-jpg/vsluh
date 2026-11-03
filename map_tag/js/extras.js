@@ -10,7 +10,8 @@ const TRAP_R = 8, STUN_R = 40, STUN_S = 8, TRAP_STUN = 6;
 const inPoly = (x, y, P) => { let ins = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i].y > y) !== (P[j].y > y) && x < (P[j].x - P[i].x) * (y - P[i].y) / (P[j].y - P[i].y) + P[i].x) ins = !ins; return ins; };
 
 export const extrasMixin = {
-  extrasInit() {
+  /** Стены строим до расстановки игроков и предметов. */
+  wallsInit() {
     const cfg = this.cfg;
     // стены: здания из OpenStreetMap + барьеры из редактора; сетка для быстрых проверок
     this.walls = (cfg.walls || []).filter((w) => w.length >= 3).map((w) => {
@@ -23,7 +24,10 @@ export const extrasMixin = {
         const k = gx + ',' + gy; if (!this.wallGrid.has(k)) this.wallGrid.set(k, []); this.wallGrid.get(k).push(i);
       }
     });
-    this.zc = { x: 0, y: 0 }; this.zcTarget = null;
+  },
+  extrasInit() {
+    const cfg = this.cfg;
+    this.zcTarget = null;
     this.drone = null; this.droneReadyAt = 0; this.droneCtl = false;
     this.traps = []; this.tel = []; this.lastTelT = -10; this.battery = null;
     if (navigator.getBattery) navigator.getBattery().then((b) => { this.batteryObj = b; }).catch(() => {});
@@ -40,9 +44,10 @@ export const extrasMixin = {
   },
   /** Шаг с учётом стен: если впереди стена — скользим вдоль неё, иначе стоим. */
   tryMove(p, nx, ny) {
-    if (!this.walls.length || !this.inWall({ x: nx, y: ny }) || this.inWall(p)) { this.moveTo(p, nx, ny); return true; }
-    if (!this.inWall({ x: nx, y: p.y })) { this.moveTo(p, nx, p.y); return true; }
-    if (!this.inWall({ x: p.x, y: ny })) { this.moveTo(p, p.x, ny); return true; }
+    const B = (q) => this.blockedFor(p, q);
+    if ((!this.walls.length && !this.killZ.length) || !B({ x: nx, y: ny }) || B(p)) { this.moveTo(p, nx, ny); return true; }
+    if (!B({ x: nx, y: p.y })) { this.moveTo(p, nx, p.y); return true; }
+    if (!B({ x: p.x, y: ny })) { this.moveTo(p, p.x, ny); return true; }
     p.target = null; p.running = false;   // упёрлись — бот выберет новую цель
     return false;
   },
@@ -178,8 +183,10 @@ export const extrasMixin = {
   indoorPanel() {
     if (!this.indoor()) return '';
     const me = this.me, alive = this.hiders().length, hunters = this.hunters().length;
-    return `<div class="indoor"><div class="ic">🏠</div><h2>${t('gm_indoor')}</h2><p>${t('indoorHint')}</p>
-      <div class="duo" style="margin-top:12px"><div class="tile"><div class="v" style="color:var(--hider)">${alive}</div><div class="l">${t('hider')}</div></div><div class="tile"><div class="v" style="color:var(--hunter)">${hunters}</div><div class="l">${t('hunters')}</div></div></div>
+    let plan = '';
+    if (this.poly) { const P = this.poly, x0 = Math.min(...P.map((q) => q.x)), x1 = Math.max(...P.map((q) => q.x)), y0 = Math.min(...P.map((q) => q.y)), y1 = Math.max(...P.map((q) => q.y)), s = 200 / Math.max(1, x1 - x0, y1 - y0); plan = `<svg class="bld-plan" viewBox="-10 -10 ${(x1 - x0) * s + 20} ${(y1 - y0) * s + 20}"><polygon points="${P.map((q) => `${((q.x - x0) * s).toFixed(1)},${((y1 - q.y) * s).toFixed(1)}`).join(' ')}"/></svg><div class="bld-name">${this.cfg.buildingName ? this.cfg.buildingName.replace(/[<>&"]/g, '') : ''} · ${Math.round(x1 - x0)}×${Math.round(y1 - y0)} ${t('m')}</div>`; }
+    return `<div class="indoor">${plan || '<div class="ic">🏠</div>'}<h2>${t('gm_indoor')}</h2><p>${t('indoorHint')}</p>
+      <div class="duo" style="margin-top:12px"><div class="tile"><div class="v" style="color:var(--hider)">${alive}</div><div class="l">${t('hidersPl')}</div></div><div class="tile"><div class="v" style="color:var(--hunter)">${hunters}</div><div class="l">${t('huntersPl')}</div></div></div>
       <div class="role-big ${me.role}">${t(me.role)}</div></div>`;
   },
 

@@ -9,6 +9,7 @@ import { modesMixin } from './modes.js';
 import { catchCodeMixin } from './catchcode.js';
 import { extrasMixin } from './extras.js';
 import { socialMixin } from './social.js';
+import { worldMixin } from './world.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -66,9 +67,11 @@ export class Game {
     this.lastPlayerReveal = 0;
     this.lastPlayerFreeze = 0;
     this.shrinkWarned = false;
+    this.nogo = []; this.walls = []; this.zc = { x: 0, y: 0 }; this.gmode = cfg.gmode || 'classic';
+    this.wallsInit(); this.worldInit();
     this.makePlayers();
     if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
-    this.nogo = []; this.walls = []; this.zc = { x: 0, y: 0 }; this.modesInit(); this.extrasInit(); this.socialInit();
+    this.modesInit(); this.extrasInit(); this.socialInit();
     if (this.hasPowerups && !this.isClient) for (let i = 0, n = this.ptSupply.length || 6 + Math.round(this.R / 150); i < n; i++) this.supplies.push(this.newSupply());
     if (this.isClient) this.nextMissionAt = Infinity;
     if (this.net) this.netInit();
@@ -89,7 +92,7 @@ export class Game {
   }
   randZone(fMax, fMin = 0) {
     const c = this.zc || { x: 0, y: 0 };
-    for (let i = 0; i < 30; i++) { const q = this.randZone0(fMax, fMin); const pt = { x: q.x + c.x, y: q.y + c.y }; if (!(this.walls && this.walls.length && this.inWall(pt))) return pt; }
+    for (let i = 0; i < 30; i++) { const q = this.randZone0(fMax, fMin); const pt = { x: q.x + c.x, y: q.y + c.y }; if (this.spotOk(pt)) return pt; }
     const q = this.randZone0(fMax, fMin); return { x: q.x + c.x, y: q.y + c.y };
   }
   randZone0(fMax, fMin = 0) {
@@ -318,7 +321,7 @@ export class Game {
     if (d < 1.5) { p.running = false; return true; }
     const canRun = run && p.stamina > 3;
     p.running = canRun;
-    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1);
+    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1) * (this.t < (p.boostUntil || 0) ? 1.6 : 1);
     const s = Math.min(d, v * dt);
     if (this.isStunned(p)) { p.speed = 0; p.running = false; return false; }
     this.tryMove(p, p.x + dx / d * s, p.y + dy / d * s);
@@ -376,6 +379,8 @@ export class Game {
     this.extrasLocal(dt);
     this.announceTick();
     if (ph !== 'end' && !this.indoor()) this.checkZone(dt);   // стрелка к зоне — и во время пряток
+    if (!this.isClient) { this.worldStep(dt); if (this.ended) return; }
+    this.worldLocal(dt);
 
     if (ph === 'hunt') {
       if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); this.modesStep(dt); this.extrasStep(dt); this.socialStep(); if (this.ended) return; }
@@ -436,7 +441,7 @@ export class Game {
     const me = this.me, zr = this.zoneR();
     const out = !this.inZone(me);
     if (out) {
-      if (me.outSince == null) { me.outSince = this.t; if (me.role === 'hider') this.alert('red', t('outZone'), 'target'); }
+      if (me.outSince == null) { me.outSince = this.t; if (me.role === 'hider' && this.phase() !== 'hunt') this.alert('red', t('outZone'), 'target'); }
       if (me.role === 'hider' && this.phase() === 'hunt' && this.t - me.outSince > 20) {
         if (me.exposedUntil < this.t + 1) this.alert('red', t('outExposed'), 'eye');
         me.exposedUntil = this.t + 15;
@@ -498,7 +503,7 @@ export class Game {
         const ang = d > 0.5 ? Math.atan2(p.y - h.y, p.x - h.x) : rnd(0, 6.28);
         const away = { x: p.x + Math.cos(ang) * 60, y: p.y + Math.sin(ang) * 60 };
         for (let k = 0; k < 12 && !this.inZone(away, 0.95); k++) { away.x *= 0.8; away.y *= 0.8; }
-        p.target = away; p.flee = true;
+        p.target = this.botRefuge(p) || away; p.flee = true;
         if (p.powerups.includes('ghost') && p.stamina > 30) this.botUse(p, 'ghost');
       } else if (p.think <= 0) {
         p.think = rnd(4, 9); p.flee = false;
@@ -523,7 +528,7 @@ export class Game {
     // охотник-бот
     if (ph === 'hide' || this.t < (p.frozenUntil || 0) || this.isStunned(p)) { p.speed = 0; return; }
     p.think -= dt;
-    const seen = this.hiders().filter((h) => !(h === this.me && this.ch.stealth)).map((h) => [h, dist(h, p)]).filter(([h, d]) => d < this.botK().sight || this.t < h.exposedUntil || this.flareShows(h)).sort((a, b) => a[1] - b[1])[0];
+    const seen = this.hiders().filter((h) => !(h === this.me && this.ch.stealth)).map((h) => [h, dist(h, p)]).filter(([h, d]) => (d < this.botK().sight || this.t < h.exposedUntil || this.flareShows(h)) && !this.hiddenInBush(h, d)).sort((a, b) => a[1] - b[1])[0];
     if (seen) { p.target = { x: seen[0].x, y: seen[0].y }; p.chase = true; }
     else if (p.think <= 0 || !p.target) {
       p.think = rnd(3, 6); p.chase = false;
@@ -569,7 +574,7 @@ export class Game {
       if (h === this.me && this.ch.immune) continue;
       if (h.remote && h.netCh && h.netCh.i) continue;
       let miss = false;
-      if (this.t < h.smokeUntil) miss = true;
+      if (this.t < h.smokeUntil || this.inBush(h)) miss = true;
       else if (h.jams > 0) { h.jams--; miss = true; }
       else if (this.t < h.silenceUntil && h.speed < 0.4) miss = true;
       if (miss) { if (h === this.me) this.alert('green', t('revealMissed'), 'shield'); continue; }
@@ -609,7 +614,7 @@ export class Game {
   catchPlayer(hunter, h, fromNet) {
     if (h.role !== 'hider') return;
     if (h === this.me) this.hideCode();
-    if (!fromNet && (this.preCatchExtras(hunter, h) || this.preCatchSocial(hunter, h))) return;
+    if (!fromNet && (this.preCatchWorld(hunter, h) || this.preCatchExtras(hunter, h) || this.preCatchSocial(hunter, h))) return;
     if (this.social()) { if (this.isHost && !fromNet) this.netSend('caught', { a: hunter.id, b: h.id }); this.socialCatch(hunter, h); return; }
     if (this.gmode === 'tag' && hunter.noTagBack && hunter.noTagBack.id === h.id && this.t < hunter.noTagBack.until) return;   // обратно сразу нельзя
     if (this.isHost && !fromNet) this.netSend('caught', { a: hunter.id, b: h.id });
@@ -836,10 +841,10 @@ export class Game {
       if (p === me) continue;
       const d = dist(p, me);
       let show = false;
-      if (me.role === 'spectator') show = true;
+      if (me.role === 'spectator' || me.role === 'dead') show = true;
       else if (me.role === 'hunter') show = p.role === 'hunter' || d < 25 || T < p.exposedUntil;
       else show = p.role === 'hider' || d < 40 || T < this.showHuntersUntil;
-      show = this.visSocial(p, d, this.visExtras(p, show));
+      show = this.visWorld(p, d, this.visSocial(p, d, this.visExtras(p, show)));
       if (show || this.ch.wall) vis.add(p.id);
     }
     for (const p of this.players) {
@@ -909,7 +914,7 @@ export class Game {
 
     this.drawPings();
     this.modesRender();
-    this.extrasRender();
+    this.extrasRender(); this.worldRender();
     this.socialRender();
     this.drawFog();
     this.renderHud(false);
@@ -949,7 +954,7 @@ export class Game {
 
     const alive = this.hiders().length, hcount = this.hunters().length;
     const frozenNow = this.isFrozen(me), warnNow = T < me.warnUntil && T < me.frozenUntil;
-    const sig = [full, this.alertsDirty, this.moreOpen, frozenNow, warnNow, me.role, this.cfg.mode, alive, !!me.jailed, me.outSince != null, !!this.paused, this.isStunned(me) ? Math.ceil(me.stunUntil - T) : 0, me.shield || 0, !!this.evac, this.social() && this.t < this.killReadyAt ? Math.ceil(this.killReadyAt - T) : 0].join('|');
+    const sig = [full, this.alertsDirty, this.moreOpen, frozenNow, warnNow, me.role, this.cfg.mode, alive, !!me.jailed, me.outSince != null, !!this.paused, this.isStunned(me) ? Math.ceil(me.stunUntil - T) : 0, me.shield || 0, !!this.evac, this.worldSig(), this.social() && this.t < this.killReadyAt ? Math.ceil(this.killReadyAt - T) : 0].join('|');
     if (full || sig !== this.topSig) {
       this.topSig = sig; this.alertsDirty = false;
       top.innerHTML = `
@@ -965,18 +970,19 @@ export class Game {
           <button class="hb" data-a="more">${this.moreOpen ? I.chevU : I.chevD}</button>
         </div>
         ${this.moreOpen ? `<div class="hud-more">
-          <div class="line-row"><span>${t('role')}</span><b style="color:${hunter ? 'var(--hunter)' : 'var(--hider)'}">${hunter ? t('hunter') : t('hider')}</b></div>
+          <div class="line-row"><span>${t('role')}</span><b style="color:${hunter ? 'var(--hunter)' : me.role === 'hider' ? 'var(--hider)' : 'var(--muted)'}">${t(me.role)}</b></div>
           <div class="line-row"><span>${t('alive')}</span><b>${t('hider')}: ${alive} · ${t('hunters')}: ${hcount}</b></div>
           <div class="line-row"><span>${t('zoneR')}</span><b id="zR"></b></div>
           <div class="line-row"><span>${t('moveMode')}</span><div class="seg"><button data-a="gps" class="${this.cfg.mode === 'gps' ? 'on' : ''}">${t('gps')}</button><button data-a="demo" class="${this.cfg.mode === 'demo' ? 'on' : ''}">${t('demo')}</button></div></div>
-          <div class="row" style="gap:8px;flex-wrap:nowrap"><button class="btn" data-a="cheats" style="flex:1;color:var(--hunter)">${I.lock}${t('cheats')}</button><button class="btn" data-a="sos" style="flex:1;color:#fff;background:#c0392b;border-color:#c0392b">🆘 SOS</button></div>
+          <div class="row" style="gap:8px;flex-wrap:nowrap"><button class="btn" data-a="legend" style="flex:1">🗺 ${t('legend')}</button><button class="btn" data-a="cheats" style="flex:1;color:var(--hunter)">${I.lock}${t('cheats')}</button><button class="btn" data-a="sos" style="flex:1;color:#fff;background:#c0392b;border-color:#c0392b">🆘 SOS</button></div>
           ${this.isClient ? '' : `<button class="btn block" data-a="pause">${this.paused ? '▶ ' + t('resume') : '⏸ ' + t('pause')}</button>`}
           <button class="btn danger block" data-a="leave">${I.leave}${t('leaveGame')}</button>
         </div>` : ''}
         ${this.modesBanner()}
         ${this.extrasBanner()}
         ${this.socialBanner()}
-        ${me.outSince != null && me.role !== 'spectator' ? `<div class="banner red out-banner"><div class="bi"><span id="outArrow" style="display:inline-block">⬆</span></div><div>${t('outZoneShort')} · <b id="outDist"></b></div></div>` : ''}
+        ${this.worldBanner()}
+        ${me.outSince != null && this.outLeft == null && me.role !== 'spectator' && me.role !== 'dead' ? `<div class="banner red out-banner"><div class="bi"><span id="outArrow" style="display:inline-block">⬆</span></div><div>${t('outZoneShort')} · <b id="outDist"></b></div></div>` : ''}
         ${warnNow ? `<div class="frozen warn"><div><div class="t1">${t('freezeWarn')}</div><div class="t2">${t('freezeWarnS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
         ${frozenNow ? `<div class="frozen"><div><div class="t1">${t('frozenT')}</div><div class="t2">${t('frozenS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
         ${this.alerts.map((a) => `<div class="banner ${a.kind}"><div class="bi">${I[a.icon] || I.signal}</div><div>${esc(a.text)}</div></div>`).join('')}
@@ -1014,18 +1020,18 @@ export class Game {
       const chatBtn = this.net && !this.hasPowerups ? `<div class="side-col">${chatSq}</div>` : '';
       const side = this.hasPowerups ? `<div class="side-col">${chatSq}<button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
       if (me.role === 'spectator' || me.role === 'dead' || me.role === 'escaped') {
-        if (me.role !== 'spectator') { bot.innerHTML = `<div class="act-row">${chatBtn || (chatSq ? `<div class="side-col">${chatSq}</div>` : '')}${this.socialButtons()}</div>`; } else {
+        if (me.role !== 'spectator') { bot.innerHTML = `<div class="act-row">${chatBtn || (chatSq ? `<div class="side-col">${chatSq}</div>` : '')}${this.socialButtons()}${this.worldButtons()}</div>`; } else {
         bot.innerHTML = `<div class="act-row">${chatBtn || (chatSq ? `<div class="side-col">${chatSq}</div>` : '')}<div class="ab" style="cursor:default">👁<span class="t">${t('spectator')}</span><span class="s">${t('spectatorS')}</span></div></div>`;
         }
       } else if (hunter) {
         bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${chatBtn}${side}
-          ${this.extraButtons()}${this.socialButtons()}
+          ${this.extraButtons()}${this.socialButtons()}${this.worldButtons()}
           ${this.gmode === 'ghosts' || this.social() || this.indoor() ? '' : `<button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>`}
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}
           <button class="ab catch" data-a="catch">${I.crosshair}<span class="t">${t('catch')}</span><span class="s">${t('choosePlayer')}</span></button>
         </div>`;
       } else {
-        bot.innerHTML = `${this.cfg.mode === 'demo' || this.ch.spoof ? `<div class="demo-hint">${this.ch.spoof ? t('spoofHint') : t('demoTap')}</div>` : ''}${tray}
+        bot.innerHTML = `${(this.cfg.mode === 'demo' || this.ch.spoof) && !this.indoor() ? `<div class="demo-hint">${this.ch.spoof ? t('spoofHint') : t('demoTap')}</div>` : ''}${tray}
           ${this.seekHtml()}<div class="stamina" id="stBox"><span>${t('stamina')}</span><div class="bar"><i id="stBar"></i></div></div>
           <div class="act-row">${chatBtn}${side}
             ${this.socialButtons()}
@@ -1058,6 +1064,8 @@ export class Game {
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
       case 'heading': this.askHeading(); break;
       case 'pause': this.togglePause(); break;
+      case 'bell': if (this.isClient) this.netSend('bellreq', {}); else this.ringBell(me); break;
+      case 'legend': this.opts.openLegend && this.opts.openLegend(); break;
       case 'drone': this.droneToggle(); break;
       case 'noise': this.noise(); break;
       case 'meet': this.callMeeting(); break;
@@ -1108,6 +1116,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin);
+Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin);
 
 export { fmt };

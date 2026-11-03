@@ -8,11 +8,12 @@ import { checkPass, renderCheats, openWheel, openGameCheats, applyPrank } from '
 import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
-import { renderMapEditor, drawMapExtras, mapPoints } from './mapeditor.js';
+import { renderMapEditor, drawMapExtras, mapPoints, buildingAt } from './mapeditor.js';
+import { OBJ, OBJ_KINDS, OUT_LIMIT } from './world.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.3';
+const VERSION = '2.4';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -218,7 +219,7 @@ function presetsBlock() {
     <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
 }
 function bindPresets(el, lb) {
-  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'chaos', 'drone', 'drift', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'chaos', 'drone', 'drift', 'objects', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
   const sv = el.querySelector('#psave');
   if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
     b.querySelector('[data-x]').onclick = close;
@@ -455,7 +456,7 @@ const SCREENS = {
       <div class="sect">${t('helpers')}<button class="qbtn" data-q="helpers">${I.help}</button></div>
       <div class="card" style="padding:4px 16px">
         ${['compass', 'detector', 'fog'].map((k) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap">${I[k === 'compass' ? 'north' : k === 'fog' ? 'cloud' : 'scan'].replace('<svg', '<svg width="22" height="22" style="color:var(--accent)"')}<b>${t(k)}</b></span><div class="seg">${['off', 'hunters', 'all'].map((v) => `<button data-hk="${k}:${v}" class="${(lb[k] || 'off') === v ? 'on' : ''}">${t('hv_' + v)}</button>`).join('')}</div></div>`).join('')}
-        ${[['drone', '🛸'], ['drift', '🌀']].map(([k, ic]) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="font-size:20px">${ic}</span><b>${t('opt_' + k)}</b></span><div class="seg">${['off', 'on'].map((v) => `<button data-opt="${k}:${v}" class="${(lb[k] ? 'on' : 'off') === v ? 'on' : ''}">${t(v === 'on' ? 'chaosOn' : 'hv_off')}</button>`).join('')}</div></div>`).join('')}
+        ${[['objects', '🎁'], ['drone', '🛸'], ['drift', '🌀']].map(([k, ic]) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="font-size:20px">${ic}</span><b>${t('opt_' + k)}</b></span><div class="seg">${['off', 'on'].map((v) => `<button data-opt="${k}:${v}" class="${((k === 'objects' ? lb[k] !== false : lb[k]) ? 'on' : 'off') === v ? 'on' : ''}">${t(v === 'on' ? 'chaosOn' : 'hv_off')}</button>`).join('')}</div></div>`).join('')}
         <div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="font-size:20px">🎲</span><b>${t('chaos')}</b></span><div class="seg">${['off', 'on'].map((v) => `<button data-chaos="${v}" class="${(lb.chaos ? 'on' : 'off') === v ? 'on' : ''}">${t(v === 'on' ? 'chaosOn' : 'hv_off')}</button>`).join('')}</div></div>
       </div>
       ${S.dev ? presetsBlock() : ''}
@@ -473,6 +474,7 @@ const SCREENS = {
     const step2 = `
       <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : []), ...(lb.fog && lb.fog !== 'off' ? [t('fog')] : []), ...(lb.chaos ? ['🎲 ' + t('chaos')] : [])].join(' · ')}</span></button>
       ${summary}
+      ${lb.gmode === 'indoor' ? `<div class="card bld-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span style="font-size:30px">🏢</span><div style="flex:1;min-width:0"><div class="kicker2">${t('bldTitle')}</div><b>${lb.building ? esc(lb.building.name || t('bldNoName')) : t('bldNone')}</b></div><button class="btn" id="bldAuto" style="flex:none">${I.crosshair}${t('bldAuto')}</button></div><p style="color:var(--muted);font-size:14px;margin:8px 0 0">${t('bldHint')}</p></div>` : ''}
       <div class="map-card">
         <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button><button class="btn" id="mapEd" style="min-height:48px;padding:0 12px">✏️ ${t('mapEditor')}</button>
           <div class="seg" style="margin-left:auto">${['circle', 'custom'].map((z) => `<button data-zs="${z}" class="${(lb.shape || 'circle') === z ? 'on' : ''}">${t(z === 'circle' ? 'shapeCircle' : 'shapeCustom')}</button>`).join('')}</div></div>
@@ -616,6 +618,25 @@ const SCREENS = {
     }, () => { if (!quiet) toast(t('noGps').split('—')[0]); }, { enableHighAccuracy: true, timeout: 15000 });
     el.querySelector('#myloc').onclick = () => locate(false);
     if (!lb.center) locate(true);
+    // «В помещении»: здание под точкой — сразу граница карты
+    const pickBuilding = async (lat, lng, quiet) => {
+      if (!quiet) toast(t('bldSearch'));
+      try {
+        const b = await buildingAt(lat, lng);
+        if (!b) { if (!quiet) toast(t('bldNotFound')); return; }
+        lb.shape = 'custom'; lb.poly = b.poly; lb.building = { name: b.name, lat, lng }; save(); rerender();
+        toast(t('bldPicked', { n: b.name || t('bldNoName') }));
+      } catch { if (!quiet) toast(t('edBuildingsFail')); }
+    };
+    const ba = el.querySelector('#bldAuto');
+    if (ba) {
+      ba.onclick = () => {
+        const c0 = lb.center || center;
+        if (navigator.geolocation) navigator.geolocation.getCurrentPosition((p) => pickBuilding(p.coords.latitude, p.coords.longitude), () => pickBuilding(c0.lat, c0.lng), { enableHighAccuracy: true, timeout: 8000 });
+        else pickBuilding(c0.lat, c0.lng);
+      };
+      if (!lb.building && !lb._bldTried) { lb._bldTried = true; const c0 = lb.center || center; pickBuilding(c0.lat, c0.lng, true); }
+    }
 
     if (S._autoStart) { delete S._autoStart; setTimeout(() => { const b = el.querySelector('#start'); if (b) b.click(); }, 700); }
     el.querySelector('#start').onclick = () => {
@@ -641,7 +662,9 @@ const SCREENS = {
         bots: players.filter((p) => p.bot).length, hunters: players.filter((p) => p.role === 'hunter').length,
         roles: players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || [])].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '',
+        safeZones: zoneArr((lb.map || {}).safe), killZones: zoneArr((lb.map || {}).kill), graveZones: zoneArr((lb.map || {}).grave),
+        objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || [])].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
       };
       base.avatar = S.avatar || null;
@@ -763,9 +786,10 @@ const SCREENS = {
     game = new Game({ ...cfg, eco: !!S.eco, announce: S.announce !== false }, {
       lang: getLang(), modal, toast, confirm: confirmBox,
       openRules: () => openRules(),
+      openLegend: () => openLegend(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
       openChat: () => openChat(modal),
-      onDead: () => { voiceLeave(); toast(t('deadMute')); },
+      onDead: () => { voiceLeave(); },
       ping: (x, y) => sendPing(x, y),
       sos: () => confirmBox(t('sosConfirm'), async () => {
         const g = game; if (!g) return;
@@ -957,6 +981,20 @@ function endGame(res, cfg) {
 function openReplay(r) { if (r) go('replay', r); }
 
 // ---------- модальные окна ----------
+/** Многоугольники зон из редактора → [[lat, lng], …]. */
+function zoneArr(a) { return (a || []).filter((w) => w && w.length >= 3).map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])); }
+
+/** Легенда: объекты и зоны на карте. */
+function openLegend() {
+  const row = (ic, n, d) => `<div class="leg-row"><span class="leg-ic">${ic}</span><div><b>${n}</b><div class="leg-d">${d}</div></div></div>`;
+  modal(`<div class="mhead"><span class="k">🗺 ${t('legend')}</span><button class="icon-btn" data-x>${I.close}</button></div>
+    <h3 class="h-sect" style="margin-top:4px">${t('legObjs')}</h3>
+    ${OBJ_KINDS.map((k) => row(OBJ[k].ic, t('obj_' + k), t('objD_' + k))).join('')}
+    <h3 class="h-sect">${t('legZones')}</h3>
+    ${row('🛡', t('ed_safe'), t('zoneD_safe'))}${row('☠', t('ed_kill'), t('zoneD_kill'))}${row('🪦', t('ed_grave'), t('zoneD_grave'))}${row('🧱', t('ed_barrier'), t('zoneD_barrier'))}
+    ${row('⏱', t('legOut'), t('legOutD', { s: OUT_LIMIT }))}`, (b, close) => { b.querySelector('[data-x]').onclick = close; });
+}
+
 function openRules(startAt = 0) {
   const steps = tutorialSteps();
   let i = startAt;
@@ -1156,6 +1194,7 @@ applyPrefs();
 chatInit({
   send: (m) => NET && NET.room.send('chat', m),
   me: () => ({ id: myNetId(), name: S.name, role: myRoleNow() }),
+  mask: () => (game && game.chatMask ? game.chatMask() : null),
   inGame: () => (game && game.net ? game : null),
   canTalk: () => !game || !game.canTalk || game.canTalk(),
   toast, onUnread: chatBadges,
@@ -1175,4 +1214,4 @@ else go(S.onboarded ? 'home' : 'onboarding');
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.host.includes('appassets')) navigator.serviceWorker.register('sw.js').catch(() => {});
 document.addEventListener('backbutton-press', () => { if (document.querySelector('.modal-wrap')) document.querySelector('.modal-wrap').remove(); else if (current !== 'home') go('home'); else window.MapTagNative && window.MapTagNative.exit(); });
 // для отладки из консоли
-window.__mt = { get game() { return game; }, go };
+window.__mt = { get game() { return game; }, get S() { return S; }, go };
