@@ -4,12 +4,12 @@ import { t } from './i18n.js';
 import { I } from './icons.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const TOOLS = [['zone', '⬡'], ['nogo', '⛔'], ['supply', '◆'], ['mission', '★'], ['jail', '⛓'], ['treasure', '🪙'], ['erase', '✕']];
-const emptyMap = () => ({ nogo: [], supply: [], mission: [], jail: null, treasure: [] });
+const TOOLS = [['zone', '⬡'], ['nogo', '⛔'], ['supply', '◆'], ['mission', '★'], ['jail', '⛓'], ['hill', '⛰'], ['treasure', '🪙'], ['erase', '✕']];
+const emptyMap = () => ({ nogo: [], supply: [], mission: [], jail: null, hill: null, treasure: [] });
 
 export function mapPoints(lb) {
   const m = lb.map || {};
-  return { supply: m.supply || [], mission: m.mission || [], jail: m.jail || null, treasure: m.treasure || [] };
+  return { supply: m.supply || [], mission: m.mission || [], jail: m.jail || null, hill: m.hill || null, treasure: m.treasure || [] };
 }
 
 /** Элементы своей карты на карте лобби (только просмотр). */
@@ -22,6 +22,7 @@ export function drawMapExtras(map, lb) {
   (m.mission || []).forEach((q) => pin(q, '<div class="ed-pt" style="background:#f3c13a">★</div>'));
   (m.treasure || []).forEach((q) => pin(q, '<div class="ed-pt" style="background:#ffd66b">🪙</div>'));
   if (m.jail) pin(m.jail, '<div class="mk-jail">⛓</div>');
+  if (m.hill) pin(m.hill, '<div class="mk-jail" style="border-color:#c08a3e">⛰</div>');
 }
 
 export function renderMapEditor(el, { S, save, go, toast, modal }) {
@@ -49,7 +50,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   const layer = L.layerGroup().addTo(map);
   const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08, interactive: false };
 
-  const counts = () => `${t('ed_zone')}: ${lb.shape === 'custom' && lb.poly.length >= 3 ? lb.poly.length + ' ' + t('edPts') : t('shapeCircle')} · ⛔ ${lb.map.nogo.length} · ◆ ${lb.map.supply.length} · ★ ${lb.map.mission.length} · ⛓ ${lb.map.jail ? 1 : 0} · 🪙 ${lb.map.treasure.length}`;
+  const counts = () => `${t('ed_zone')}: ${lb.shape === 'custom' && lb.poly.length >= 3 ? lb.poly.length + ' ' + t('edPts') : t('shapeCircle')} · ⛔ ${lb.map.nogo.length} · ◆ ${lb.map.supply.length} · ★ ${lb.map.mission.length} · ⛓ ${lb.map.jail ? 1 : 0} · ⛰ ${lb.map.hill ? 1 : 0} · 🪙 ${lb.map.treasure.length}`;
   function draw() {
     layer.clearLayers();
     if (lb.shape === 'custom' && lb.poly.length) {
@@ -89,6 +90,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     const near = (q) => map.latLngToContainerPoint([q.lat, q.lng]).distanceTo(pt) < 30;
     for (const k of ['supply', 'mission', 'treasure']) { const i = lb.map[k].findIndex(near); if (i >= 0) return () => lb.map[k].splice(i, 1); }
     if (lb.map.jail && near(lb.map.jail)) return () => { lb.map.jail = null; };
+    if (lb.map.hill && near(lb.map.hill)) return () => { lb.map.hill = null; };
     for (let i = 0; i < lb.map.nogo.length; i++) {
       const poly = L.polygon(lb.map.nogo[i].map((q) => [q.lat, q.lng]));
       if (poly.getBounds().contains(latlng)) return () => lb.map.nogo.splice(i, 1);
@@ -102,6 +104,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (tool === 'zone') { lb.shape = 'custom'; lb.poly.push(q); }
     else if (tool === 'nogo') draft.push(q);
     else if (tool === 'jail') lb.map.jail = q;
+    else if (tool === 'hill') lb.map.hill = q;
     else if (tool === 'erase') { const f = nearest(e.latlng); if (f) f(); else toast(t('edNothing')); }
     else lb.map[tool].push(q);
     save(); draw();
@@ -150,7 +153,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     save(); draw(); fit();
   }
   function fit() {
-    const pts = [...lb.poly, ...(lb.center ? [lb.center] : []), ...lb.map.supply, ...lb.map.mission, ...lb.map.treasure, ...(lb.map.jail ? [lb.map.jail] : []), ...lb.map.nogo.flat()];
+    const pts = [...lb.poly, ...(lb.center ? [lb.center] : []), ...lb.map.supply, ...lb.map.mission, ...lb.map.treasure, ...(lb.map.jail ? [lb.map.jail] : []), ...(lb.map.hill ? [lb.map.hill] : []), ...lb.map.nogo.flat()];
     if (pts.length >= 2) map.fitBounds(L.latLngBounds(pts.map((q) => [q.lat, q.lng])), { padding: [60, 60] });
     else if (pts.length) map.setView([pts[0].lat, pts[0].lng], 16);
   }

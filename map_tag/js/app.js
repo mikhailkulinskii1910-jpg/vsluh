@@ -9,10 +9,10 @@ import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
 import { renderMapEditor, drawMapExtras, mapPoints } from './mapeditor.js';
-import { CHAT, chatInit, chatHandle, chatReset, openChat } from './chat.js';
+import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '1.9';
+const VERSION = '2.0';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -441,7 +441,7 @@ const SCREENS = {
 
     const step1 = `
       <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button></div>
-      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -613,6 +613,7 @@ const SCREENS = {
     el.querySelector('#myloc').onclick = () => locate(false);
     if (!lb.center) locate(true);
 
+    if (S._autoStart) { delete S._autoStart; setTimeout(() => { const b = el.querySelector('#start'); if (b) b.click(); }, 700); }
     el.querySelector('#start').onclick = () => {
       const cc = calc(lb);
       if (!lb.players.some((p) => p.role === 'hider')) return toast(t('needHider'));
@@ -724,12 +725,13 @@ const SCREENS = {
         <div class="line-row"><span>${t('powersSpent')}</span><b>${g.powers}</b></div></div>
       <div class="bottom-bar"><div class="in">
         <button class="btn primary big block" id="rWatch">${I.play}${t('watchReplay')}</button>
-        <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn" id="rLobby" style="flex:1">${t('toLobby')}</button>${cfg.net ? '' : `<button class="btn" id="rAgain" style="flex:1">${t('again')}</button>`}<button class="btn" id="rMenu" style="flex:1">${t('toMenu')}</button></div>
+        <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn" id="rLobby" style="flex:1">${t('toLobby')}</button>${cfg.net ? (cfg.net.role === 'host' ? `<button class="btn" id="rRematch" style="flex:1">🔁 ${t('rematch')}</button>` : '') : `<button class="btn" id="rAgain" style="flex:1">${t('again')}</button>`}<button class="btn" id="rMenu" style="flex:1">${t('toMenu')}</button></div>
       </div></div>`;
     el.classList.add('has-bar', 'res');
     el.querySelector('#rWatch').onclick = () => go('replay', { ...rep, _back: ['results', { res, cfg, rep }] });
     el.querySelector('#rLobby').onclick = () => go(NET && NET.role === 'client' ? 'clientLobby' : S.lobby ? 'lobby' : 'home');
     const ag = el.querySelector('#rAgain'); if (ag) ag.onclick = () => go('game', cfg);
+    const rm = el.querySelector('#rRematch'); if (rm) rm.onclick = () => { S._autoStart = true; go('lobby'); };
     el.querySelector('#rMenu').onclick = () => go('home');
   },
 
@@ -744,6 +746,7 @@ const SCREENS = {
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
       openChat: () => openChat(modal),
+      ping: (x, y) => sendPing(x, y),
       voice: () => ({ on: VOICE.on, mic: VOICE.mic, talk: VOICE.speaking.size > 0 }),
       voiceMute: () => voiceMute(),
       chatUnread: () => CHAT.unread,
@@ -775,6 +778,7 @@ const SCREENS = {
             <div><div class="l">${t('timeRunning')}</div><div class="v" style="color:#5fd38d">${fmtLong(st.timeHide)}</div></div>
             <div><div class="l">${t('timesCaught')}</div><div class="v">${st.timesCaught}</div></div></div></div></div>
       <div class="story">${st.games ? t('storyGo') : t('storyStart')}</div>
+      ${Object.keys(S.board || {}).length ? `<h3 class="h-sect">🏅 ${t('boardTitle')}</h3><div class="card" style="padding:4px 16px">${Object.entries(S.board).sort((a, b) => b[1].wins - a[1].wins || b[1].catches - a[1].catches).slice(0, 10).map(([n, b], i) => `<div class="line-row"><span>${['🥇', '🥈', '🥉'][i] || (i + 1) + '.'} <b>${esc(n)}</b></span><span style="color:var(--muted);font-size:14px">${t('boardRow', { w: b.wins, g: b.games, c: b.catches })}</span></div>`).join('')}</div>` : ''}
       <h3 class="h-sect">${t('achTitle')} · ${Object.keys(S.ach || {}).length}/${ACH.length}</h3>
       <div class="ach">${ACH.map(([id, ic]) => `<div class="a ${(S.ach || {})[id] ? 'on' : ''}"><span class="i">${ic}</span>${t('ach_' + id)}</div>`).join('')}</div>
       <h3 class="row" style="font-size:24px;margin-bottom:10px">${S.avatar ? `<span style="font-size:30px">${S.avatar}</span>` : I.user.replace('<svg', '<svg width="30" height="30"')} ${esc(S.name || '—')}</h3>
@@ -876,6 +880,16 @@ function endGame(res, cfg) {
   st.dist += g.dist; st.games++; st.time += res.duration; st.caught += g.caught; st.missions += g.missions; st.supplies += g.supplies;
   st.powers += g.powers; st.timeHunt += g.timeHunt; st.timeHide += g.timeHide; st.timesCaught += g.timesCaught; if (res.won) st.wins++;
   const rep = { ...res.replay, won: res.won, role: res.role, duration: res.duration, dist: g.dist, winner: res.winner, players: res.players, stats: g };
+  // рейтинг друзей: живые игроки онлайн-игр (без ботов)
+  if (cfg.net && Array.isArray(res.players)) {
+    S.board = S.board || {};
+    for (const p of res.players) {
+      if (p.bot || p.startRole === 'spectator') continue;
+      const won = (res.winner === 'hiders' && p.role === 'hider') || (res.winner === 'hunters' && p.role === 'hunter');
+      const b = S.board[p.name] = S.board[p.name] || { games: 0, wins: 0, catches: 0 };
+      b.games++; if (won) b.wins++; b.catches += p.catches || 0;
+    }
+  }
   const freshAch = checkAch({ ...res, blitz: cfg.blitz || (S.lobby && S.lobby.gmode === 'blitz'), online: !!cfg.net });
   setTimeout(() => { if (res.won) confetti(); freshAch.forEach((id, i) => setTimeout(() => toast(`${ACH.find((a) => a[0] === id)[1]} ${t('achNew')}: ${t('ach_' + id)}`), 600 + i * 1600)); }, 300);
   if (S.saveReplays !== false) {
@@ -935,6 +949,7 @@ function openSettings() {
         <div class="lang"><button class="opt ${getLang() === 'ru' ? 'on' : ''}" data-l="ru">${FLAG_RU}<span class="t">Русский</span></button><button class="opt ${getLang() === 'en' ? 'on' : ''}" data-l="en">${FLAG_EN}<span class="t">English</span></button></div>
         <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
         ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
+        <label class="set-row"><div><div class="tt">${t('darkMap')}</div><div class="ss">${t('darkMapS')}</div></div><input type="checkbox" id="dkm" ${S.darkMap ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('bigText')}</div><div class="ss">${t('bigTextS')}</div></div><input type="checkbox" id="bigT" ${S.bigText ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('eco')}</div><div class="ss">${t('ecoS')}</div></div><input type="checkbox" id="eco" ${S.eco ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('sound')}</div><div class="ss">${t('soundS')}</div></div><input type="checkbox" id="snd" ${soundOn() ? 'checked' : ''}></label>
@@ -948,6 +963,7 @@ function openSettings() {
       box.querySelectorAll('[data-l]').forEach((b) => b.onclick = () => { setLang(b.dataset.l); draw(); });
       themePicker(box.querySelector('#thp'));
       box.querySelector('#dev').onchange = (e) => { S.dev = e.target.checked; save(); };
+      box.querySelector('#dkm').onchange = (e) => { S.darkMap = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#bigT').onchange = (e) => { S.bigText = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#eco').onchange = (e) => { S.eco = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#snd').onchange = (e) => { setSound(e.target.checked); if (e.target.checked) beep('green'); };
@@ -1080,7 +1096,7 @@ function scanQr(onCode) {
 // ---------- старт ----------
 setLang(getLang());
 applyTheme();
-function applyPrefs() { document.documentElement.classList.toggle('big-text', !!S.bigText); document.documentElement.classList.toggle('eco', !!S.eco); }
+function applyPrefs() { document.documentElement.classList.toggle('big-text', !!S.bigText); document.documentElement.classList.toggle('eco', !!S.eco); document.documentElement.classList.toggle('dark-map', !!S.darkMap); }
 applyPrefs();
 chatInit({
   send: (m) => NET && NET.room.send('chat', m),

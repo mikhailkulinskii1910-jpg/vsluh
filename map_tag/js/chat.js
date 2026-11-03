@@ -30,7 +30,7 @@ export function chatHandle(d, from) {
   const g = ctx.inGame();
   if (m.kind === 'voice' && CHAT.autoplay) playVoice(m);
   if (m.kind === 'fx') playFx(m.fx);
-  if (m.kind === 'loc' && g && g.showPing) g.showPing(m.x, m.y, m.name);
+  if (m.kind === 'loc' && g && g.showPing) g.showPing(m.x, m.y, m.here ? `${m.name}: ${t('pingHere')}` : m.name);
   if (CHAT.open) CHAT.open.redraw();
   else {
     CHAT.unread++;
@@ -93,6 +93,13 @@ export function playVoice(m) {
     const a = new Audio(`data:${m.mime || 'audio/webm'};base64,${m.a}`);
     playing = a; a.play().catch(() => {});
   } catch {}
+}
+
+/** «Сюда!»: метка в любой точке карты (долгое нажатие) — только своей команде. */
+export function sendPing(x, y) {
+  if (!ctx.inGame()) return;
+  post({ kind: 'loc', x, y, ch: 'team', here: 1 });
+  const g = ctx.inGame(); g.showPing(x, y, t('pingHere'));
 }
 
 /** «Где я»: точка на карте у собеседников на 30 секунд (только в игре). */

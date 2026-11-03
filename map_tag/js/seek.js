@@ -27,6 +27,8 @@ export const seekMixin = {
   seekOn(kind) {
     const v = this.cfg[kind] || 'off';
     if (this.ch.radar) return true;
+    // «Невидимки» и «Зомби»: у охотников всегда детектор
+    if (kind === 'detector' && (this.cfg.gmode === 'ghosts' || this.cfg.gmode === 'zombie') && this.me.role === 'hunter') return true;
     return v === 'all' || (v === 'hunters' && this.me.role === 'hunter');
   },
   seekActive() { return this.me.role !== 'spectator' && this.phase() === 'hunt' && (this.seekOn('compass') || this.seekOn('detector')); },

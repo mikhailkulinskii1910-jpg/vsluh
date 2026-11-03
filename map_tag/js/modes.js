@@ -7,7 +7,7 @@
 import { t } from './i18n.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const RESCUE_R = 25, RESCUE_NEED = 8, TREASURE_R = 15;
+const RESCUE_R = 25, RESCUE_NEED = 8, TREASURE_R = 15, HILL_R = 30;
 const inPoly = (x, y, P) => { let ins = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i].y > y) !== (P[j].y > y) && x < (P[j].x - P[i].x) * (y - P[i].y) / (P[j].y - P[i].y) + P[i].x) ins = !ins; return ins; };
 
 export const modesMixin = {
@@ -20,6 +20,8 @@ export const modesMixin = {
     // без точки из редактора тюрьма — у северного края зоны (у всех одинаково), а не в центре, где все стартуют
     this.jail = this.gmode === 'jail' ? (pts.jail ? this.xy(pts.jail.lat, pts.jail.lng) : { x: 0, y: this.R * (this.poly ? 0.45 : 0.65) }) : null;
     this.rescue = 0;
+    this.hill = this.gmode === 'hill' ? (pts.hill ? this.xy(pts.hill.lat, pts.hill.lng) : { x: 0, y: 0 }) : null;
+    this.hillProg = 0; this.hillNeed = Math.round(Math.min(180, Math.max(60, (cfg.huntSec || 1200) * 0.2)));
     this.treasures = [];
     this.treasureGot = 0;
     if (this.gmode === 'treasure') {
@@ -64,6 +66,16 @@ export const modesMixin = {
         if (this.rescue >= RESCUE_NEED) { this.freeAll(savers[0]); this.netSend('freed', { by: savers[0].id }); }
       } else this.rescue = Math.max(0, this.rescue - dt * 2);
     }
+    if (this.gmode === 'hill') {
+      const inside = this.hiders().filter((h) => dist(h, this.hill) <= HILL_R).length;
+      const guards = this.hunters().filter((h) => dist(h, this.hill) <= HILL_R).length;
+      if (inside && !guards) {
+        const before = Math.floor(this.hillProg / 30);
+        this.hillProg += dt;
+        if (Math.floor(this.hillProg / 30) > before) { this.netSend('hillp', { p: this.hillProg }); this.modesNet('hillp', { p: this.hillProg }); }
+      }
+      if (this.hillProg >= this.hillNeed) { this.finish('hiders'); return; }
+    }
     if (this.gmode === 'sardines' && this.hunters().length <= 1 && this.players.length > 2) { this.finish('hiders'); return; }
     if (this.gmode === 'treasure') {
       for (const tr of [...this.treasures]) {
@@ -91,6 +103,13 @@ export const modesMixin = {
     this.events.push({ k: 'fr', t: Math.round(this.t), n: freed.length });
     this.renderHud(true);
   },
+  /** Кто побеждает, когда вышло время. */
+  timeoutWinner() {
+    if (this.gmode === 'treasure' || this.gmode === 'hill') return 'hunters';   // не успели собрать / удержать
+    if (this.gmode === 'sardines') return 'hiders';
+    return this.hiders().length > 0 ? 'hiders' : 'hunters';
+  },
+
   /** Случайное событие («хаос»). host — эффекты, которые решает организатор. */
   chaosApply(k, host) {
     const T = this.t;
@@ -136,6 +155,11 @@ export const modesMixin = {
   /** Цель бота с учётом режима (или null). */
   modeBotTarget(p) {
     if (this.phase() !== 'hunt') return null;
+    if (this.gmode === 'hill') {
+      const r = (Math.random() - 0.5) * HILL_R;
+      if (p.role === 'hider' && Math.random() < 0.45) return { x: this.hill.x + r, y: this.hill.y + r };
+      if (p.role === 'hunter' && Math.random() < 0.35) return { x: this.hill.x + r * 2, y: this.hill.y - r * 2 };
+    }
     if (this.gmode === 'sardines' && p.role === 'hider' && p.sardine) {
       const first = this.players.find((q) => q.role === 'hider' && !q.sardine);
       if (first) return { x: first.x + (Math.random() - 0.5) * 8, y: first.y + (Math.random() - 0.5) * 8 };
@@ -154,9 +178,10 @@ export const modesMixin = {
 
   // ---------- сеть ----------
   modesState() {
-    return { jl: this.players.map((p) => (p.jailed ? 1 : 0)).join(''), rs: Math.round(this.rescue * 10) / 10, tr: this.treasures.map((q) => [q.id, Math.round(q.x), Math.round(q.y)]), tg: this.treasureGot };
+    return { hp: Math.round(this.hillProg), jl: this.players.map((p) => (p.jailed ? 1 : 0)).join(''), rs: Math.round(this.rescue * 10) / 10, tr: this.treasures.map((q) => [q.id, Math.round(q.x), Math.round(q.y)]), tg: this.treasureGot };
   },
   modesApply(d) {
+    if (d.hp != null && this.hill) this.hillProg = d.hp;
     if (d.jl != null) [...d.jl].forEach((c, i) => { const p = this.players[i]; if (p) p.jailed = c === '1'; });
     if (d.rs != null) this.rescue = d.rs;
     if (d.tr) this.treasures = d.tr.map(([id, x, y]) => ({ id, x, y }));
@@ -167,6 +192,7 @@ export const modesMixin = {
     if (type === 'tpick') { this.treasures = this.treasures.filter((x) => x.id !== d.id); this.treasureGot++; const h = P(d.by); if (h) this.onTreasure(h); return true; }
     if (type === 'freed') { const h = P(d.by); this.freeAll(h || { name: '?' }); return true; }
     if (type === 'chaos') { this.chaosApply(d.k, false); return true; }
+    if (type === 'hillp') { this.hillProg = d.p; this.alert(this.me.role === 'hider' ? 'green' : 'red', t('hillProg', { a: Math.floor(d.p), b: this.hillNeed }), 'mountain'); return true; }
     if (type === 'rescuing') { if (this.me.role === 'hunter') this.alert('yellow', t('jailRescuing'), 'lock'); else if (this.me.jailed) this.alert('green', t('jailRescuingYou'), 'lock'); return true; }
     return false;
   },
@@ -182,6 +208,14 @@ export const modesMixin = {
         this.jailMark = L.marker(this.ll(this.jail), { interactive: false, icon: L.divIcon({ className: '', iconSize: [34, 34], iconAnchor: [17, 17], html: '<div class="mk-jail">⛓</div>' }) }).addTo(this.modeLayer);
       }
       this.trLayer = L.layerGroup().addTo(map);
+      if (this.hill) {
+        L.circle(this.ll(this.hill), { radius: HILL_R, color: '#c08a3e', weight: 3, fillColor: '#f6c453', fillOpacity: 0.18, interactive: false }).addTo(this.modeLayer);
+        this.hillMark = L.marker(this.ll(this.hill), { interactive: false }).addTo(this.modeLayer);
+      }
+    }
+    if (this.hillMark) {
+      const html = `<div class="mk-jail" style="border-color:#c08a3e">⛰ ${Math.floor(this.hillProg)}/${this.hillNeed}</div>`;
+      if (html !== this.hillHtml) { this.hillHtml = html; this.hillMark.setIcon(L.divIcon({ className: '', iconSize: [70, 34], iconAnchor: [35, 17], html })); }
     }
     const key = this.treasures.map((q) => q.id).join(',');
     if (key !== this.trKey) {
@@ -199,6 +233,7 @@ export const modesMixin = {
     if (this.gmode === 'treasure') return { k: t('trCell'), v: `${this.treasureGot}/${this.treasureNeed}` };
     if (this.gmode === 'jail') { const n = this.players.filter((p) => p.jailed).length; return n ? { k: t('jailCell'), v: String(n) } : null; }
     if (this.gmode === 'sardines') return { k: t('sardCell'), v: String(this.hunters().length) };
+    if (this.gmode === 'hill') return { k: t('hillCell'), v: `${Math.floor(this.hillProg)}/${this.hillNeed}` };
     return null;
   },
   modesBanner() {

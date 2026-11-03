@@ -153,6 +153,11 @@ export class Game {
       const keep = hiders.find((p) => p === this.me) || hiders[0] || this.players[0];
       this.players.forEach((p) => { p.role = p === keep ? 'hider' : 'hunter'; });
     }
+    if (this.cfg.gmode === 'zombie' && !this.isClient && !(this.cfg.roles && this.cfg.roles[0] && this.cfg.roles[0].id)) {
+      const hunters = this.players.filter((p) => p.role === 'hunter');
+      const zero = hunters.find((p) => p === this.me) || hunters[Math.floor(Math.random() * hunters.length)] || this.players[1] || this.players[0];
+      this.players.forEach((p) => { p.role = p === zero ? 'hunter' : 'hider'; });
+    }
     this.players.forEach((p) => { p.startRole = p.role; p.sim = p === this.me || (p.bot && !this.isClient); });
     // все стартуют у центра одинаково (позиции остальных придут по сети)
     if (this.net) this.players.forEach((p, i) => { p.x = Math.cos(i * 2.4) * 10; p.y = Math.sin(i * 2.4) * 10; p.nx = p.x; p.ny = p.y; });
@@ -172,6 +177,7 @@ export class Game {
     this.meMarker = L.marker(this.ll(this.me), { icon: this.meIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
     map.fitBounds(this.zoneLayer.getBounds(), { padding: [20, 20] });
     map.on('click', (e) => this.onMapTap(e));
+    map.on('contextmenu', (e) => { if (this.net && this.opts.ping) { const q = this.xy(e.latlng.lat, e.latlng.lng); this.opts.ping(Math.round(q.x), Math.round(q.y)); } });
     map.on('dragstart', () => { this.follow = false; });
 
     if (this.cfg.mode === 'gps') this.startGps();
@@ -328,8 +334,8 @@ export class Game {
     this.t += dt;
     const ph = this.phase();
     if (ph === 'end') {
-      if (this.isClient) { if (this.t > this.cfg.hideSec + this.cfg.huntSec + 25) this.finish(this.hiders().length > 0 ? 'hiders' : 'hunters'); if (draw) this.render(); return; }
-      this.finish(this.hiders().length > 0 ? 'hiders' : 'hunters'); return;
+      if (this.isClient) { if (this.t > this.cfg.hideSec + this.cfg.huntSec + 25) this.finish(this.timeoutWinner()); if (draw) this.render(); return; }
+      this.finish(this.timeoutWinner()); return;
     }
 
     // перемещение игрока
@@ -482,7 +488,7 @@ export class Game {
     if (!bots.length) return;
     const meHunter = this.hunters().some((h) => !h.bot);
     // «Раскрытие»: если игрок охотник — ждём его 45 с после готовности
-    if (this.t >= this.revealReadyAt + (meHunter ? 45 : rnd(3, 12) * this.botK().delay)) this.doReveal(bots[0]);
+    if (this.gmode !== 'ghosts' && this.t >= this.revealReadyAt + (meHunter ? 45 : rnd(3, 12) * this.botK().delay)) this.doReveal(bots[0]);
     if (this.hasFreeze && this.t >= this.freezeReadyAt + (meHunter ? 60 : 5)) {
       const range = this.freezeRange();
       const any = this.hiders().some((h) => this.hunters().some((u) => dist(u, h) < range * 0.8));
@@ -496,6 +502,7 @@ export class Game {
 
   // ---------- способности ----------
   doReveal(by) {
+    if (this.gmode === 'ghosts') return;
     if (this.phase() !== 'hunt' || this.t < this.revealReadyAt) return;
     this.revealReadyAt = this.t + this.revealCd;
     const r = Math.min(110, Math.max(50, this.R * 0.16));
@@ -774,7 +781,7 @@ export class Game {
         const col = p.role === 'hunter' ? '#f26d7d' : p.color;
         const key = p.role + (T < p.frozenUntil ? 'f' : '');
         if (!m) { m = L.marker(this.ll(p), { interactive: false }).addTo(map); this.layers.players.set(p.id, m); }
-        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${esc(p.name)}</div></div>` })); }
+        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${esc(p.name)}</div></div>` })); }
         m.setLatLng(this.ll(p));
       } else if (m) { m.remove(); this.layers.players.delete(p.id); }
     }
@@ -932,7 +939,7 @@ export class Game {
         bot.innerHTML = `<div class="act-row">${chatBtn || (chatSq ? `<div class="side-col">${chatSq}</div>` : '')}<div class="ab" style="cursor:default">👁<span class="t">${t('spectator')}</span><span class="s">${t('spectatorS')}</span></div></div>`;
       } else if (hunter) {
         bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${chatBtn}${side}
-          <button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>
+          ${this.gmode === 'ghosts' ? '' : `<button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>`}
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}
           <button class="ab catch" data-a="catch">${I.crosshair}<span class="t">${t('catch')}</span><span class="s">${t('choosePlayer')}</span></button>
         </div>`;
