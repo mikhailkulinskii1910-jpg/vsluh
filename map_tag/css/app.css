@@ -510,3 +510,18 @@ html.prank-blind body::before { content: ''; position: fixed; inset: 0; z-index:
 .menu-btn.m-quick .mi { background: rgba(0,0,0,.2); font-size: 28px; }
 .menu-btn small { font-size: 13px; font-weight: 500; color: var(--muted); }
 html[data-theme] .menu-btn.m-quick { background: var(--card); color: var(--text); border-color: var(--line); }
+.fog { position: absolute; pointer-events: none; transition: background .3s; }
+#edPanel.mini > :not(:first-child) { display: none; }
+.rbadge.spectator { background: #9aa6bd; color: #10141f; }
+.avatars { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.av-b { width: 44px; height: 44px; border-radius: 14px; border: 2px solid var(--line); background: var(--card2); font-size: 22px; cursor: pointer; color: var(--muted); }
+.av-b.on { border-color: var(--accent); background: var(--accent-soft); }
+.mk-av { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -62%); font-size: 18px; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.mk-pl, .mk-me { position: relative; }
+html.big-text body { font-size: 18px; }
+html.big-text .hud-bar .tm .v { font-size: 26px; }
+html.big-text .banner { font-size: 17px; }
+html.big-text .ab .t { font-size: 19px; }
+html.big-text .opt .t, html.big-text .btn { font-size: 17px; }
+html.eco *, html.eco *::before, html.eco *::after { animation: none !important; transition: none !important; }
+html.eco .theme-bg, html.eco #matrix { display: none !important; }

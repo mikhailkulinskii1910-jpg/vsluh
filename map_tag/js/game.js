@@ -128,6 +128,7 @@ export class Game {
       for (const r of this.cfg.roles) {
         const mine = r.id === this.cfg.myId;
         const p = mk(r.id, r.name, r.role, !!r.bot, mine ? '#ffffff' : COLORS[bi++ % COLORS.length]);
+        p.avatar = r.avatar || null;
         p.remote = !mine && !r.bot;
         this.players.push(p);
         if (mine) this.me = p;
@@ -178,7 +179,7 @@ export class Game {
     this.requestWakeLock();
     if (this.cfg.compass && this.cfg.compass !== 'off') this.startHeading();
     this.renderHud(true);
-    this.timer = setInterval(() => this.tick(), 250);
+    this.timer = setInterval(() => this.tick(), this.cfg.eco ? 1000 : 250);   // экономия батареи: экран обновляется раз в секунду
     this.alert('blue', this.me.role === 'hunter' ? t('waitHint') : (this.cfg.mode === 'demo' ? t('demoTap') : t('hideTime') + '!'), 'map');
   }
 
@@ -263,6 +264,7 @@ export class Game {
   isFrozen(p) { return this.t < p.frozenUntil && this.t >= p.warnUntil; }
 
   moveTo(p, x, y) {
+    if (!isFinite(x) || !isFinite(y)) { p.target = null; return; }
     const d = Math.hypot(x - p.x, y - p.y);
     if (p === this.me) {
       this.stats.dist += d;
@@ -298,7 +300,7 @@ export class Game {
     if (d < 1.5) { p.running = false; return true; }
     const canRun = run && p.stamina > 3;
     p.running = canRun;
-    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1);
+    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1);
     const s = Math.min(d, v * dt);
     this.moveTo(p, p.x + dx / d * s, p.y + dy / d * s);
     p.speed = s / dt;
@@ -381,7 +383,7 @@ export class Game {
 
   /** Скорость как у транспорта (> 7 м/с дольше 8 с): прячущимся нельзя, охотникам — если выключено в настройках. */
   checkVehicle(dt) {
-    const me = this.me, banned = me.role === 'hider' || this.cfg.transport === false;
+    const me = this.me, banned = me.role === 'hider' || (me.role === 'hunter' && this.cfg.transport === false);
     if (!banned || this.phase() === 'end' || this.ch.spoof) { this.vehT = 0; return; }
     this.vehT = me.speed > 7 ? (this.vehT || 0) + dt : Math.max(0, (this.vehT || 0) - dt);
     if (this.vehT > 8) {
@@ -425,11 +427,13 @@ export class Game {
       if (!p.alive) return;
       if (this.isFrozen(p)) { p.running = false; p.speed = 0; return; }
       const threats = this.hunters().filter((h) => !(h.bot === false && ph === 'hide'));
-      const near = ph === 'hunt' ? threats.map((h) => [h, dist(h, p)]).filter(([, d]) => d < 35).sort((a, b) => a[1] - b[1])[0] : null;
+      const near = ph === 'hunt' ? threats.map((h) => [h, dist(h, p)]).filter(([, d]) => d < 35 * this.botK().sight / 25).sort((a, b) => a[1] - b[1])[0] : null;
       p.think -= dt;
       if (near) {
         const [h, d] = near;
-        const away = { x: p.x + (p.x - h.x) / d * 60, y: p.y + (p.y - h.y) / d * 60 };
+        // если стоят в одной точке — убегаем в случайную сторону (иначе деление на ноль ломает координаты)
+        const ang = d > 0.5 ? Math.atan2(p.y - h.y, p.x - h.x) : rnd(0, 6.28);
+        const away = { x: p.x + Math.cos(ang) * 60, y: p.y + Math.sin(ang) * 60 };
         for (let k = 0; k < 12 && !this.inZone(away, 0.95); k++) { away.x *= 0.8; away.y *= 0.8; }
         p.target = away; p.flee = true;
         if (p.powerups.includes('ghost') && p.stamina > 30) this.botUse(p, 'ghost');
@@ -456,7 +460,7 @@ export class Game {
     // охотник-бот
     if (ph === 'hide') { p.speed = 0; return; }
     p.think -= dt;
-    const seen = this.hiders().map((h) => [h, dist(h, p)]).filter(([h, d]) => d < 25 || this.t < h.exposedUntil || this.flareShows(h)).sort((a, b) => a[1] - b[1])[0];
+    const seen = this.hiders().map((h) => [h, dist(h, p)]).filter(([h, d]) => d < this.botK().sight || this.t < h.exposedUntil || this.flareShows(h)).sort((a, b) => a[1] - b[1])[0];
     if (seen) { p.target = { x: seen[0].x, y: seen[0].y }; p.chase = true; }
     else if (p.think <= 0 || !p.target) {
       p.think = rnd(3, 6); p.chase = false;
@@ -478,7 +482,7 @@ export class Game {
     if (!bots.length) return;
     const meHunter = this.hunters().some((h) => !h.bot);
     // «Раскрытие»: если игрок охотник — ждём его 45 с после готовности
-    if (this.t >= this.revealReadyAt + (meHunter ? 45 : rnd(3, 12))) this.doReveal(bots[0]);
+    if (this.t >= this.revealReadyAt + (meHunter ? 45 : rnd(3, 12) * this.botK().delay)) this.doReveal(bots[0]);
     if (this.hasFreeze && this.t >= this.freezeReadyAt + (meHunter ? 60 : 5)) {
       const range = this.freezeRange();
       const any = this.hiders().some((h) => this.hunters().some((u) => dist(u, h) < range * 0.8));
@@ -561,7 +565,7 @@ export class Game {
   }
 
   checkCatches() {
-    const cr = this.cfg.mode === 'gps' ? 12 : 9;
+    const cr = (this.cfg.mode === 'gps' ? 12 : 9) * this.botK().reach;
     for (const u of this.hunters()) {
       if (!u.bot) continue;
       for (const h of this.hiders()) if (dist(u, h) < cr && !(h === this.me && this.ch.untouch) && !(h.remote && h.netCh && h.netCh.u)) this.catchPlayer(u, h);
@@ -735,9 +739,14 @@ export class Game {
   }
 
   // ---------- отрисовка ----------
+  /** Сложность ботов: обзор (м), скорость, дальность поимки, задержка способностей. */
+  botK() {
+    return { easy: { sight: 15, speed: 0.8, reach: 0.7, delay: 3 }, normal: { sight: 25, speed: 1, reach: 1, delay: 1 }, hard: { sight: 40, speed: 1.15, reach: 1.25, delay: 0.4 } }[this.cfg.botLevel || 'normal'] || { sight: 25, speed: 1, reach: 1, delay: 1 };
+  }
   meIcon() {
-    const c = this.me.role === 'hunter' ? '#f26d7d' : '#5fd38d';
-    return L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: `<div class="mk-me" style="background:${c}"></div>` });
+    const c = this.me.role === 'hunter' ? '#f26d7d' : this.me.role === 'spectator' ? '#9aa6bd' : '#5fd38d';
+    const av = this.cfg.avatar;
+    return L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: `<div class="mk-me" style="background:${c}">${av ? `<span class="mk-av">${av}</span>` : ''}</div>` });
   }
 
   render() {
@@ -753,7 +762,8 @@ export class Game {
       if (p === me) continue;
       const d = dist(p, me);
       let show = false;
-      if (me.role === 'hunter') show = p.role === 'hunter' || d < 25 || T < p.exposedUntil;
+      if (me.role === 'spectator') show = true;
+      else if (me.role === 'hunter') show = p.role === 'hunter' || d < 25 || T < p.exposedUntil;
       else show = p.role === 'hider' || d < 40 || T < this.showHuntersUntil;
       if (show || this.ch.wall) vis.add(p.id);
     }
@@ -764,13 +774,13 @@ export class Game {
         const col = p.role === 'hunter' ? '#f26d7d' : p.color;
         const key = p.role + (T < p.frozenUntil ? 'f' : '');
         if (!m) { m = L.marker(this.ll(p), { interactive: false }).addTo(map); this.layers.players.set(p.id, m); }
-        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}"></div><div class="mk-name">${esc(p.name)}</div></div>` })); }
+        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${esc(p.name)}</div></div>` })); }
         m.setLatLng(this.ll(p));
       } else if (m) { m.remove(); this.layers.players.delete(p.id); }
     }
 
     // круги «Раскрытия» и следы — только охотникам
-    const huntView = me.role === 'hunter' || this.ch.wall;
+    const huntView = me.role === 'hunter' || me.role === 'spectator' || this.ch.wall;
     const cIds = new Set(huntView ? this.circles.map((c) => c.id) : []);
     for (const [id, l] of this.layers.circles) if (!cIds.has(id)) { l.remove(); this.layers.circles.delete(id); }
     if (huntView) for (const c of this.circles) {
@@ -823,6 +833,7 @@ export class Game {
 
     this.drawPings();
     this.modesRender();
+    this.drawFog();
     this.renderHud(false);
   }
 
@@ -917,7 +928,9 @@ export class Game {
       const chatSq = this.net ? `${voiceSq}<button class="sq" data-a="chat" aria-label="chat" style="color:var(--teal)">${I.mail}${unread ? `<span class="cnt" style="background:var(--hunter)">${unread}</span>` : ''}</button>` : '';
       const chatBtn = this.net && !this.hasPowerups ? `<div class="side-col">${chatSq}</div>` : '';
       const side = this.hasPowerups ? `<div class="side-col">${chatSq}<button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
-      if (hunter) {
+      if (me.role === 'spectator') {
+        bot.innerHTML = `<div class="act-row">${chatBtn || (chatSq ? `<div class="side-col">${chatSq}</div>` : '')}<div class="ab" style="cursor:default">👁<span class="t">${t('spectator')}</span><span class="s">${t('spectatorS')}</span></div></div>`;
+      } else if (hunter) {
         bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${chatBtn}${side}
           <button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}

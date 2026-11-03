@@ -109,8 +109,8 @@ function hostPublish(status) {
     const c = calc(lb);
     NET.room.setLobby({
       status: NET.lobbyStatus || 'lobby', hostId: NET.myId, host: S.name, code: lb.code,
-      set: { gmode: lb.gmode || 'classic', size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false, compass: lb.compass || 'off', detector: lb.detector || 'off' },
-      players: lb.players.map((p) => ({ id: p.id, name: p.bot ? p.name : p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, host: !p.bot && !p.remote })),
+      set: { gmode: lb.gmode || 'classic', map: lb.map || null, size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false, compass: lb.compass || 'off', detector: lb.detector || 'off' },
+      players: lb.players.map((p) => ({ id: p.id, name: p.bot ? p.name : p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, host: !p.bot && !p.remote, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
     });
   }, 250);
 }
@@ -133,6 +133,7 @@ function hostOnMsg(type, d, from) {
     }
     if (!p) { if (type === 'ping') NET.room.send('who', {}, from); return; }
     if (d.name) p.name = String(d.name).slice(0, 16);
+    if (d.avatar !== undefined) p.avatar = d.avatar ? String(d.avatar).slice(0, 4) : null;
     p.seen = Date.now();
     if (type === 'hello') { save(); hostPublish(); if (current === 'lobby') rerenderLobby(); }
   } else if (type === 'bye') {
@@ -153,7 +154,7 @@ async function clientJoin(code, name) {
   if (snap.status === 'playing') { netClose(); return { err: 'playing' }; }
   NET.hostId = snap.hostId; NET.lobby = snap;
   if (NET.room.lobbyTs) netSample(NET.room.lobbyTs);
-  NET.room.send('hello', { name });
+  NET.room.send('hello', { name, avatar: S.avatar || null });
   NET.ping = setInterval(() => { if (NET && NET.role === 'client') NET.room.send('ping', { name: S.name }); }, 8000);
   return { ok: true };
 }
@@ -167,7 +168,7 @@ function clientOnMsg(type, d, from, ts) {
   else if (type === 'abort' && !game) { netClose(); toast(t('hostLeft')); go('home'); }
   else if (type === 'start' && from === NET.hostId) {
     netSample(ts);
-    const cfg = { ...d.cfg, myId: NET.myId, name: S.name, mode: S.clientMode || 'gps', cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {} };
+    const cfg = { ...d.cfg, avatar: S.avatar || null, myId: NET.myId, name: S.name, mode: S.clientMode || 'gps', cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {} };
     go('game', { ...cfg, net: { room: NET.room, role: 'client', myId: NET.myId, hostId: NET.hostId, startAt: d.startAt, offset: netOffset() } });
   }
 }
@@ -181,6 +182,7 @@ function advancedBlock(lb, c) {
     ${hint ? `<div class="adv-hint">${hint}</div>` : ''}</div>`;
   return `<label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('shrinkArea')}</b><br><span class="adv-hint">${t('shrinkAreaS')}</span></span><input type="checkbox" id="advShrink" ${shrink ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
     <label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('transportOk')}</b><br><span class="adv-hint">${t('transportOkS')}</span></span><input type="checkbox" id="advTransport" ${lb.transport !== false ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
+    <div class="adv-row"><b>${t('botLevel')}</b><div class="seg" style="display:flex;margin-top:8px">${['easy', 'normal', 'hard'].map((v) => `<button data-bl="${v}" class="${(lb.botLevel || 'normal') === v ? 'on' : ''}" style="flex:1">${t('bl_' + v)}</button>`).join('')}</div></div>
     ${row('radius', t('areaRadius'), c.radius, 100, 2000, 10, c.radius + ' ' + t('m'), t('m'))}
     ${shrink ? row('final', t('finalRadius'), Math.round(c.shrinkTo * 100), 30, 100, 1, Math.round(c.shrinkTo * 100) + '%', '%', t('finalRadiusS')) : ''}
     ${row('total', t('totalLen'), c.huntSec, 180, 5400, 30, fmt(c.huntSec), 'time', t('timeFmt'))}
@@ -199,6 +201,7 @@ function bindAdvanced(el, lb, rerender) {
     const lim = { radius: [50, 5000], final: [10, 100], total: [60, 4 * 3600], head: [0, 3600] }[k];
     set(k, Math.max(lim[0], Math.min(lim[1], v))); rerender();
   });
+  el.querySelectorAll('[data-bl]').forEach((b) => b.onclick = () => { lb.botLevel = b.dataset.bl; rerender(); });
   const tr = el.querySelector('#advTransport'); if (tr) tr.onchange = () => { lb.transport = tr.checked; save(); };
   const sh = el.querySelector('#advShrink'); if (sh) sh.onchange = () => { set('shrink', sh.checked); rerender(); };
   const rs = el.querySelector('#advReset'); if (rs) rs.onclick = () => { lb.adv = {}; rerender(); };
@@ -213,7 +216,7 @@ function presetsBlock() {
     <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
 }
 function bindPresets(el, lb) {
-  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
   const sv = el.querySelector('#psave');
   if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
     b.querySelector('[data-x]').onclick = close;
@@ -406,7 +409,7 @@ const SCREENS = {
       <div class="card crew">
         <div class="kicker2">${t('yourCrew')}</div>
         <h2 class="row" style="font-size:28px">${I.users.replace('<svg', '<svg width="26" height="26"')} ${t('playersN', { n: (L0.players || []).length })}</h2>
-        <div class="crew-list" style="margin-top:12px">${(L0.players || []).map((p) => `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.name)} <span class="tag">· ${p.id === NET.myId ? t('you') : p.host ? t('netHostTag') : p.bot ? t('bot') : t('netOnlineTag')}</span></span></div>`).join('')}</div>
+        <div class="crew-list" style="margin-top:12px">${(L0.players || []).map((p) => `<div class="crew-row">${badge(p.role)}<span class="nm">${p.avatar ? p.avatar + ' ' : ''}${esc(p.name)} <span class="tag">· ${p.id === NET.myId ? t('you') : p.host ? t('netHostTag') : p.bot ? t('bot') : t('netOnlineTag')}</span></span></div>`).join('')}</div>
         <div class="line-row" style="margin-top:8px"><span>${t('moveMode')}</span><div class="seg">${['gps', 'demo'].map((r) => `<button data-cm="${r}" class="${(S.clientMode || 'gps') === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
       </div>`;
     bindCommon(el);
@@ -418,7 +421,7 @@ const SCREENS = {
       m.attributionControl.setPrefix(false);
       const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
       const z = st.poly && st.poly.length >= 3 ? L.polygon(st.poly.map((q) => [q.lat, q.lng]), zst).addTo(m) : null;
-      setTimeout(() => { m.invalidateSize(); m.fitBounds(z ? z.getBounds() : L.latLng(st.center.lat, st.center.lng).toBounds(st.radius * 2)); if (!z) L.circle([st.center.lat, st.center.lng], { radius: st.radius, ...zst }).addTo(m); }, 60);
+      setTimeout(() => { m.invalidateSize(); m.fitBounds(z ? z.getBounds() : L.latLng(st.center.lat, st.center.lng).toBounds(st.radius * 2)); if (!z) L.circle([st.center.lat, st.center.lng], { radius: st.radius, ...zst }).addTo(m); if (st.map) drawMapExtras(m, { map: st.map }); }, 60);
     } else el.querySelector('#cmap').innerHTML = `<div class="empty">${t('netNoPlace')}</div>`;
   },
 
@@ -449,22 +452,22 @@ const SCREENS = {
       <div class="opts c3">${opt('extra', 'tutorial', 'book', t('tutorial'), '', lb.extra === 'tutorial')}${opt('extra', 'simple', 'sparkle', t('simple'), '', lb.extra === 'simple')}${opt('extra', 'spice', 'pepper', t('spice'), '', lb.extra === 'spice')}</div>
       <div class="sect">${t('helpers')}<button class="qbtn" data-q="helpers">${I.help}</button></div>
       <div class="card" style="padding:4px 16px">
-        ${['compass', 'detector'].map((k) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap">${I[k === 'compass' ? 'north' : 'scan'].replace('<svg', '<svg width="22" height="22" style="color:var(--accent)"')}<b>${t(k)}</b></span><div class="seg">${['off', 'hunters', 'all'].map((v) => `<button data-hk="${k}:${v}" class="${(lb[k] || 'off') === v ? 'on' : ''}">${t('hv_' + v)}</button>`).join('')}</div></div>`).join('')}
+        ${['compass', 'detector', 'fog'].map((k) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap">${I[k === 'compass' ? 'north' : k === 'fog' ? 'cloud' : 'scan'].replace('<svg', '<svg width="22" height="22" style="color:var(--accent)"')}<b>${t(k)}</b></span><div class="seg">${['off', 'hunters', 'all'].map((v) => `<button data-hk="${k}:${v}" class="${(lb[k] || 'off') === v ? 'on' : ''}">${t('hv_' + v)}</button>`).join('')}</div></div>`).join('')}
       </div>
       ${S.dev ? presetsBlock() : ''}
       ${summary}
       <button class="btn primary big block next-btn" data-step="2"><span>${t('next')}</span>${I.arrowR}</button>`;
 
-    const hunters = lb.players.filter((p) => p.role === 'hunter').length, hiders = lb.players.length - hunters;
+    const hunters = lb.players.filter((p) => p.role === 'hunter').length, hiders = lb.players.filter((p) => p.role === 'hider').length;
     const badge = (r) => `<span class="rbadge ${r}">${t(r)}</span>`;
     const crewRows = lb.players.map((p, i) => lb.manage
       ? `<div class="crew-row manage"><div class="row" style="justify-content:space-between;width:100%">${badge(p.role)}${p.bot || p.remote ? `<button class="btn" data-rm="${i}" style="min-height:36px;padding:0 10px">${I.close.replace('<svg', '<svg width="16" height="16"')}</button>` : ''}</div>
           <div class="nm">${p.bot ? `<input class="input" data-pn="${i}" value="${esc(p.name)}" maxlength="16" style="min-height:40px;font-size:16px">` : p.remote ? `${esc(p.name)} <span class="tag">· ${t('netOnlineTag')}</span>` : `${esc(S.name)} <span class="tag">· ${t('hostYou')}</span>`}</div>
-          <div class="row" style="justify-content:flex-end;width:100%"><button class="btn ${p.role === 'hunter' ? 'primary' : ''}" data-pr="${i}:hunter" style="min-height:40px">${t('hunter')}</button><button class="btn ${p.role === 'hider' ? 'primary' : ''}" data-pr="${i}:hider" style="min-height:40px">${t('hider')}</button></div></div>`
-      : `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.bot || p.remote ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : p.remote ? `<span style="color:var(--hider)">●</span> ${t('netOnlineTag')}` : t('hostYou')}</span></span></div>`).join('');
+          <div class="row" style="justify-content:flex-end;width:100%"><button class="btn ${p.role === 'hunter' ? 'primary' : ''}" data-pr="${i}:hunter" style="min-height:40px">${t('hunter')}</button><button class="btn ${p.role === 'hider' ? 'primary' : ''}" data-pr="${i}:hider" style="min-height:40px">${t('hider')}</button>${p.bot ? '' : `<button class="btn ${p.role === 'spectator' ? 'primary' : ''}" data-pr="${i}:spectator" style="min-height:40px">👁</button>`}</div></div>`
+      : `<div class="crew-row">${badge(p.role)}<span class="nm">${p.bot ? '' : (p.remote ? p.avatar || '' : S.avatar || '') + ' '}${esc(p.bot || p.remote ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : p.remote ? `<span style="color:var(--hider)">●</span> ${t('netOnlineTag')}` : t('hostYou')}</span></span></div>`).join('');
 
     const step2 = `
-      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : [])].join(' · ')}</span></button>
+      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : []), ...(lb.fog && lb.fog !== 'off' ? [t('fog')] : [])].join(' · ')}</span></button>
       ${summary}
       <div class="map-card">
         <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button><button class="btn" id="mapEd" style="min-height:48px;padding:0 12px">✏️ ${t('mapEditor')}</button>
@@ -622,11 +625,12 @@ const SCREENS = {
         huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
         features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
         bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
-        roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot })),
+        roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off',
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal',
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
       };
+      base.avatar = S.avatar || null;
       if (!online) return go('game', { ...base, roles: lb.players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
       const startAt = Date.now() + 5000;
       NET.room.send('start', { cfg: base, startAt });
@@ -647,7 +651,7 @@ const SCREENS = {
         <div class="pw-item"><div class="pw-ico" style="color:var(--hunter);background:none;border:0">${I.target}</div><div><h3>${t('hunter')}</h3><p>${ru ? 'Найдите и поймайте всех прячущихся.' : 'Find and catch every Hider.'}</p></div></div>
         <button class="btn block" id="fullRules">${I.book}${t('fullRules')}</button>`;
       else if (i === 2) body = `<h2>${t('perms')}</h2><p>${t('permsS')}</p><div style="color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:8px">${t('needs')}</div><div id="permList">…</div>`;
-      else if (i === 3) { body = `<h2>${t('onbSafety')}</h2>${tutorialSteps()[8].html}<label class="agree"><input type="checkbox" id="agree" ${S.agreed ? 'checked' : ''}><b>${t('agreeSafety')}</b></label>`; canNext = !!S.agreed; }
+      else if (i === 3) { body = `<h2>${t('onbSafety')}</h2>${tutorialSteps().slice(-1)[0].html}<label class="agree"><input type="checkbox" id="agree" ${S.agreed ? 'checked' : ''}><b>${t('agreeSafety')}</b></label>`; canNext = !!S.agreed; }
       else if (i === 4) body = `<h2>${t('onbData')}</h2><p>${t('onbDataS')}</p><label class="agree"><input type="checkbox" id="saveRep" ${S.saveReplays !== false ? 'checked' : ''}><b>${t('saveReplays')}</b></label>`;
       else body = `<h2>${t('onbName')}</h2><p>${t('onbNameS')}</p><input class="input" id="onbName" maxlength="20" placeholder="${t('namePh')}" value="${esc(S.name)}">`;
       el.innerHTML = `<div class="onb">
@@ -697,7 +701,7 @@ const SCREENS = {
         <div class="ic">${I.trophy}</div>
         <div class="k">${t('endT')} · ${fmt(res.duration)}</div>
         <h1>${res.gmode === 'sardines' ? (res.lastSeeker ? t('sardEnd', { n: esc(res.lastSeeker) }) : t('sardEndAll')) : res.gmode === 'treasure' && hidersWin ? t('trWin') : hidersWin ? t('endHiders') : t('endHunters')}</h1>
-        <div class="you ${res.won ? 'w' : 'l'}">${res.won ? t('resYouWon') : t('resYouLost')} · ${t(res.role)}</div>
+        <div class="you ${res.won ? 'w' : 'l'}">${res.role === 'spectator' ? t('resWatched') : `${res.won ? t('resYouWon') : t('resYouLost')} · ${t(res.role)}`}</div>
       </div>
       <div class="duo">
         <div class="tile"><span style="color:var(--hider)">${I.run}</span><div class="v">${survivors.length}</div><div class="l">${t('resSurvivors')}</div></div>
@@ -733,7 +737,7 @@ const SCREENS = {
   },
 
   game(el, cfg) {
-    game = new Game(cfg, {
+    game = new Game({ ...cfg, eco: !!S.eco }, {
       lang: getLang(), modal, toast, confirm: confirmBox,
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
@@ -771,7 +775,8 @@ const SCREENS = {
       <div class="story">${st.games ? t('storyGo') : t('storyStart')}</div>
       <h3 class="h-sect">${t('achTitle')} · ${Object.keys(S.ach || {}).length}/${ACH.length}</h3>
       <div class="ach">${ACH.map(([id, ic]) => `<div class="a ${(S.ach || {})[id] ? 'on' : ''}"><span class="i">${ic}</span>${t('ach_' + id)}</div>`).join('')}</div>
-      <h3 class="row" style="font-size:24px;margin-bottom:14px">${I.user.replace('<svg', '<svg width="30" height="30"')} ${esc(S.name || '—')}</h3>
+      <h3 class="row" style="font-size:24px;margin-bottom:10px">${S.avatar ? `<span style="font-size:30px">${S.avatar}</span>` : I.user.replace('<svg', '<svg width="30" height="30"')} ${esc(S.name || '—')}</h3>
+      <div class="avatars">${['🦊','🐼','🐸','🐯','🦁','🐵','🐙','🦄','🐧','🐢','👽','🤖','👻','🥷','🦸','🧙'].map((a) => `<button class="av-b ${S.avatar === a ? 'on' : ''}" data-av="${a}">${a}</button>`).join('')}<button class="av-b ${!S.avatar ? 'on' : ''}" data-av="">✕</button></div>
       <details class="acc"><summary>${I.gear}${t('privacy')}<span class="chev">${I.chevD}</span></summary><div class="in"><p>${t('privacyText')}</p>
         <div class="row"><button class="btn" id="exp">${t('exportData')}</button><button class="btn danger" id="rst">${t('resetStats')}</button></div></div></details>
       <hr style="border:0;border-top:1px solid var(--line);margin:26px 0">
@@ -784,6 +789,7 @@ const SCREENS = {
       ${supportBlock()}`;
     bindCommon(el);
     el.querySelector('#refresh').onclick = () => go('stats');
+    el.querySelectorAll('[data-av]').forEach((b) => b.onclick = () => { S.avatar = b.dataset.av || null; save(); const y = window.scrollY; go('stats'); window.scrollTo(0, y); });
     el.querySelector('#rst').onclick = () => confirmBox(t('resetConfirm'), () => { S.stats = { ...DEF.stats }; S.replays = []; save(); go('stats'); });
     el.querySelector('#exp').onclick = () => {
       const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
@@ -927,6 +933,8 @@ function openSettings() {
         <div class="lang"><button class="opt ${getLang() === 'ru' ? 'on' : ''}" data-l="ru">${FLAG_RU}<span class="t">Русский</span></button><button class="opt ${getLang() === 'en' ? 'on' : ''}" data-l="en">${FLAG_EN}<span class="t">English</span></button></div>
         <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
         ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
+        <label class="set-row"><div><div class="tt">${t('bigText')}</div><div class="ss">${t('bigTextS')}</div></div><input type="checkbox" id="bigT" ${S.bigText ? 'checked' : ''}></label>
+        <label class="set-row"><div><div class="tt">${t('eco')}</div><div class="ss">${t('ecoS')}</div></div><input type="checkbox" id="eco" ${S.eco ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('sound')}</div><div class="ss">${t('soundS')}</div></div><input type="checkbox" id="snd" ${soundOn() ? 'checked' : ''}></label>
         <button class="set-row" data-s="turn"><div><div class="tt">${t('turn')}</div><div class="ss">${t('turnS')}</div></div></button>
         <label class="set-row"><div><div class="tt">${t('devSettings')}</div><div class="ss">${t('devSettingsS')}</div></div><input type="checkbox" id="dev" ${S.dev ? 'checked' : ''}></label>
@@ -938,6 +946,8 @@ function openSettings() {
       box.querySelectorAll('[data-l]').forEach((b) => b.onclick = () => { setLang(b.dataset.l); draw(); });
       themePicker(box.querySelector('#thp'));
       box.querySelector('#dev').onchange = (e) => { S.dev = e.target.checked; save(); };
+      box.querySelector('#bigT').onchange = (e) => { S.bigText = e.target.checked; save(); applyPrefs(); };
+      box.querySelector('#eco').onchange = (e) => { S.eco = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#snd').onchange = (e) => { setSound(e.target.checked); if (e.target.checked) beep('green'); };
       box.querySelector('[data-x]').onclick = () => { close(); if (current !== 'game') go(current); };
       box.querySelectorAll('[data-s]').forEach((b) => b.onclick = (e) => {
@@ -1068,6 +1078,8 @@ function scanQr(onCode) {
 // ---------- старт ----------
 setLang(getLang());
 applyTheme();
+function applyPrefs() { document.documentElement.classList.toggle('big-text', !!S.bigText); document.documentElement.classList.toggle('eco', !!S.eco); }
+applyPrefs();
 chatInit({
   send: (m) => NET && NET.room.send('chat', m),
   me: () => ({ id: myNetId(), name: S.name, role: myRoleNow() }),

@@ -104,9 +104,10 @@ export function renderReplay(el, r, { onBack }) {
       : e.k === 'f' ? `${I.snow}<span>${t('freezeSent', { n: e.n })}</span>`
       : e.k === 'm' ? `${I.diamond}<span>${ru ? 'Новое задание' : 'New mission'}</span>`
       : e.k === 'md' ? `${I.trophy}<span>${ru ? 'Задание выполнено' : 'Mission complete'}</span>`
+      : e.k === 'fr' ? `${I.shield}<span>${ru ? 'Пленников выручили: ' + e.n : 'Prisoners freed: ' + e.n}</span>`
       : `${I.eye}<span>${ru ? 'Задание провалено' : 'Mission failed'}</span>`;
     const box = el.querySelector('#rEv');
-    const html = shown.slice(-2).map((e) => `<div class="banner ${e.k === 'c' || e.k === 'mf' ? 'red' : e.k === 'm' || e.k === 'md' ? 'yellow' : 'blue'}"><div class="bi">${txt(e).split('<span>')[0]}</div><div>${txt(e).split('<span>')[1].replace('</span>', '')}</div></div>`).join('');
+    const html = shown.slice(-2).map((e) => `<div class="banner ${e.k === 'c' || e.k === 'mf' ? 'red' : e.k === 'm' || e.k === 'md' ? 'yellow' : e.k === 'fr' ? 'green' : 'blue'}"><div class="bi">${txt(e).split('<span>')[0]}</div><div>${txt(e).split('<span>')[1].replace('</span>', '')}</div></div>`).join('');
     if (box.innerHTML !== html) box.innerHTML = html;
   }
 

@@ -6,13 +6,30 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const BANDS = [[50, 'veryHot', '#ff3b30'], [150, 'hot', '#ff8a3d'], [300, 'warm', '#f6c453'], [Infinity, 'cold', '#6fb7ff']];
 const COMPASS_EVERY = 20, DETECTOR_EVERY = 3;
 
+const FOG_R = 120;
+
 export const seekMixin = {
+  fogOn() { const v = this.cfg.fog || 'off'; return !this.ch.wall && this.me.role !== 'spectator' && (v === 'all' || (v === 'hunters' && this.me.role === 'hunter')); },
+  /** «Туман войны»: карта видна только рядом с игроком. Отдельная панель Leaflet под кругами и маркерами. */
+  drawFog() {
+    if (!this.fogOn()) { if (this.fogEl) this.fogEl.style.display = 'none'; return; }
+    if (!this.fogEl) {
+      const pane = this.map.createPane('fog'); pane.style.zIndex = 350; pane.style.pointerEvents = 'none';
+      this.fogEl = document.createElement('div'); this.fogEl.className = 'fog'; pane.appendChild(this.fogEl);
+    }
+    const c = this.map.latLngToLayerPoint(this.ll(this.me));
+    const e = this.map.latLngToLayerPoint(this.ll({ x: this.me.x + FOG_R, y: this.me.y }));
+    const r = Math.max(30, Math.abs(e.x - c.x)), S = 8000;
+    Object.assign(this.fogEl.style, { display: '', left: (c.x - S / 2) + 'px', top: (c.y - S / 2) + 'px', width: S + 'px', height: S + 'px',
+      background: `radial-gradient(circle at 50% 50%, transparent ${r * 0.75}px, rgba(8,10,16,.93) ${r}px)` });
+  },
+
   seekOn(kind) {
     const v = this.cfg[kind] || 'off';
     if (this.ch.radar) return true;
     return v === 'all' || (v === 'hunters' && this.me.role === 'hunter');
   },
-  seekActive() { return this.phase() === 'hunt' && (this.seekOn('compass') || this.seekOn('detector')); },
+  seekActive() { return this.me.role !== 'spectator' && this.phase() === 'hunt' && (this.seekOn('compass') || this.seekOn('detector')); },
   seekTarget() {
     const me = this.me;
     const others = me.role === 'hunter' ? this.hiders() : this.hunters().filter((p) => p !== me);

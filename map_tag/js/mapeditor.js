@@ -70,7 +70,8 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
 
   function panel() {
     const p = el.querySelector('#edPanel');
-    p.innerHTML = `<div style="font-size:15px">${t('edHint_' + tool)}</div>
+    p.classList.toggle('mini', !!S._edMini);
+    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}</div><button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
       <div style="color:var(--muted);font-size:13px;margin-top:6px">${counts()}</div>
       ${tool === 'zone' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoZone" style="flex:1">${t('undoPt')}</button><button class="btn" data-ed="circle" style="flex:1">${t('edToCircle')}</button></div>` : ''}
       ${tool === 'nogo' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoDraft" style="flex:1" ${draft.length ? '' : 'disabled'}>${t('undoPt')}</button><button class="btn primary" data-ed="closeNogo" style="flex:1" ${draft.length >= 3 ? '' : 'disabled'}>${t('edClose')}</button></div>` : ''}
@@ -107,6 +108,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   });
 
   function action(a) {
+    if (a === 'mini') { S._edMini = !S._edMini; panel(); return; }
     if (a === 'undoZone') lb.poly.pop();
     if (a === 'circle') { lb.shape = 'circle'; if (lb.poly.length >= 3 && !lb.center) lb.center = lb.poly[0]; }
     if (a === 'undoDraft') draft.pop();

@@ -118,8 +118,8 @@ const ru = {
   netHostIs: 'Организатор', netWaiting: 'Ждём, когда организатор начнёт игру', netYourRole: 'Ваша роль: {r}', netNotListed: 'Подключаемся к лобби…',
   netAreaCap: 'Площадка игры. Её выбирает организатор.', netHostTag: 'организатор', netOnlineTag: 'в сети', netNoPlace: 'Организатор ещё не выбрал площадку',
   transportShort: 'водящим можно транспорт', startIn: 'Старт через', hostLeft: 'Организатор закрыл лобби', playerLeft: '{n} вышел(ла) из игры',
-  helpers: 'Помощники поиска', compass: 'Компас', detector: 'Детектор', hv_off: 'Выкл', hv_hunters: 'Охотникам', hv_all: 'Всем',
-  helpersHelp: '<b>Компас</b> — стрелка на ближайшего соперника: охотнику на прячущегося, прячущемуся на охотника. Направление обновляется раз в 20 секунд. Если у телефона есть датчик компаса, стрелка учитывает, куда вы смотрите.<br><b>Детектор</b> — «холодно / тепло / горячо / очень горячо» до ближайшего соперника (больше 300 м, 150–300, 50–150, меньше 50 м), со звуком и вибрацией, когда становится ближе.',
+  helpers: 'Помощники поиска', compass: 'Компас', detector: 'Детектор', fog: 'Туман войны', hv_off: 'Выкл', hv_hunters: 'Охотникам', hv_all: 'Всем',
+  helpersHelp: '<b>Компас</b> — стрелка на ближайшего соперника: охотнику на прячущегося, прячущемуся на охотника. Направление обновляется раз в 20 секунд. Если у телефона есть датчик компаса, стрелка учитывает, куда вы смотрите.<br><b>Детектор</b> — «холодно / тепло / горячо / очень горячо» до ближайшего соперника (больше 300 м, 150–300, 50–150, меньше 50 м), со звуком и вибрацией, когда становится ближе.<br><b>Туман войны</b> — карта видна только примерно на 120 м вокруг вас, дальше темно. Круги, следы и метки видны поверх тумана.',
   seekToHider: 'Ближайший прячущийся', seekToHunter: 'Ближайший охотник', seekNone: 'Соперников рядом нет', seekNext: 'новое направление через {s} с', seekNorth: 'стрелка от севера',
   det_veryHot: 'Очень горячо', det_hot: 'Горячо', det_warm: 'Тепло', det_cold: 'Холодно',
   chat: 'Чат', chatAll: 'Все', chatTeam: 'Команда', hidersPl: 'прячущиеся', huntersPl: 'охотники', chatPh: 'Сообщение…', chatEmpty: 'Пока тихо. Напишите первым или зажмите рацию.',
@@ -145,6 +145,7 @@ const ru = {
   ach_first: 'Первая игра', ach_win: 'Первая победа', ach_catch1: 'Первая поимка', ach_catch10: 'Ястреб: 10 поимок', ach_survivor: 'Ниндзя: победа без поимки',
   ach_missions5: '5 заданий', ach_caches10: '10 тайников', ach_km5: '5 км пешком', ach_treasure: 'Кладоискатель', ach_blitz: 'Победа в блице', ach_online: 'Игра с друзьями', ach_games10: '10 игр',
   quickGame: 'Быстрая игра', quickGameS: 'блиц с ботами за одно касание',
+  resWatched: 'Вы смотрели игру 👁', spectator: 'Зритель', spectatorS: 'видите всех, не играете',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -260,8 +261,8 @@ const en = {
   netHostIs: 'Host', netWaiting: 'Waiting for the host to start', netYourRole: 'Your role: {r}', netNotListed: 'Joining the lobby…',
   netAreaCap: 'The play area. The host picks it.', netHostTag: 'host', netOnlineTag: 'online', netNoPlace: 'The host has not picked a place yet',
   transportShort: 'hunters may use transport', startIn: 'Starting in', hostLeft: 'The host closed the lobby', playerLeft: '{n} left the game',
-  helpers: 'Search helpers', compass: 'Compass', detector: 'Detector', hv_off: 'Off', hv_hunters: 'Hunters', hv_all: 'Everyone',
-  helpersHelp: '<b>Compass</b> — an arrow to the nearest opponent: Hunters see the nearest Hider, Hiders the nearest Hunter. The direction refreshes every 20 seconds and follows your phone’s heading when it has a compass sensor.<br><b>Detector</b> — cold / warm / hot / very hot to the nearest opponent (over 300 m, 150–300, 50–150, under 50 m), with a beep and buzz as it gets closer.',
+  helpers: 'Search helpers', compass: 'Compass', detector: 'Detector', fog: 'Fog of war', hv_off: 'Off', hv_hunters: 'Hunters', hv_all: 'Everyone',
+  helpersHelp: '<b>Compass</b> — an arrow to the nearest opponent: Hunters see the nearest Hider, Hiders the nearest Hunter. The direction refreshes every 20 seconds and follows your phone’s heading when it has a compass sensor.<br><b>Detector</b> — cold / warm / hot / very hot to the nearest opponent (over 300 m, 150–300, 50–150, under 50 m), with a beep and buzz as it gets closer.<br><b>Fog of war</b> — the map is visible only about 120 m around you, beyond that it is dark. Circles, footprints and markers show on top of the fog.',
   seekToHider: 'Nearest Hider', seekToHunter: 'Nearest Hunter', seekNone: 'No opponents', seekNext: 'new bearing in {s} s', seekNorth: 'arrow from north',
   det_veryHot: 'Very hot', det_hot: 'Hot', det_warm: 'Warm', det_cold: 'Cold',
   chat: 'Chat', chatAll: 'Everyone', chatTeam: 'Team', hidersPl: 'hiders', huntersPl: 'hunters', chatPh: 'Message…', chatEmpty: 'Quiet so far. Say something or hold the radio.',
@@ -287,6 +288,7 @@ const en = {
   ach_first: 'First game', ach_win: 'First win', ach_catch1: 'First catch', ach_catch10: 'Hawk: 10 catches', ach_survivor: 'Ninja: win uncaught',
   ach_missions5: '5 missions', ach_caches10: '10 caches', ach_km5: '5 km on foot', ach_treasure: 'Treasure hunter', ach_blitz: 'Blitz win', ach_online: 'Played with friends', ach_games10: '10 games',
   quickGame: 'Quick game', quickGameS: 'blitz with bots in one tap',
+  resWatched: 'You watched the game 👁', spectator: 'Spectator', spectatorS: 'you see everyone, not playing',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 
