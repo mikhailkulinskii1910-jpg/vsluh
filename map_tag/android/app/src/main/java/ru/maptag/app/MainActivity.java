@@ -86,9 +86,15 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(PermissionRequest req) {
                 runOnUiThread(() -> {
-                    if (hasPerm(Manifest.permission.CAMERA)) { req.grant(req.getResources()); return; }
+                    // камера (QR) и/или микрофон (рация): спрашиваем то, что страница запросила
+                    java.util.List<String> need = new java.util.ArrayList<>();
+                    for (String r : req.getResources()) {
+                        if (PermissionRequest.RESOURCE_VIDEO_CAPTURE.equals(r) && !hasPerm(Manifest.permission.CAMERA)) need.add(Manifest.permission.CAMERA);
+                        if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(r) && !hasPerm(Manifest.permission.RECORD_AUDIO)) need.add(Manifest.permission.RECORD_AUDIO);
+                    }
+                    if (need.isEmpty()) { req.grant(req.getResources()); return; }
                     camRequest = req;
-                    requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAM);
+                    requestPermissions(need.toArray(new String[0]), REQ_CAM);
                 });
             }
         });
@@ -112,7 +118,8 @@ public class MainActivity extends Activity {
         if (code == REQ_LOC && geoCallback != null) { geoCallback.invoke(geoOrigin, ok, false); geoCallback = null; }
         web.evaluateJavascript("window.__permChanged&&__permChanged()", null);
         if (code == REQ_CAM && camRequest != null) {
-            if (ok) camRequest.grant(camRequest.getResources()); else camRequest.deny();
+            boolean all = res.length > 0; for (int g : res) all &= g == PackageManager.PERMISSION_GRANTED;
+            if (all) camRequest.grant(camRequest.getResources()); else camRequest.deny();
             camRequest = null;
         }
     }

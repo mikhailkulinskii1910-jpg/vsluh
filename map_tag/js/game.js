@@ -801,7 +801,21 @@ export class Game {
       this.layers.flare.push(L.marker(this.ll(q), { interactive: false, icon: L.divIcon({ className: '', iconSize: [18, 18], iconAnchor: [9, 9], html: `<div class="mk"><div class="mk-ghost" style="border-color:${q.role === 'hunter' ? '#f26d7d' : '#5fd38d'}"></div><div class="mk-name">${esc(q.name)}</div></div>` }) }).addTo(map));
     }
 
+    this.drawPings();
     this.renderHud(false);
+  }
+
+  showPing(x, y, name) {
+    (this.pings = this.pings || []).push({ x, y, name, until: this.t + 30 });
+    this.alert('blue', `📍 ${name}`, 'locate');
+  }
+  drawPings() {
+    if (!this.pingLayer) this.pingLayer = L.layerGroup().addTo(this.map);
+    this.pings = (this.pings || []).filter((p) => p.until > this.t);
+    const key = this.pings.map((p) => p.x + ',' + p.y).join('|');
+    if (key === this.pingKey) return;
+    this.pingKey = key; this.pingLayer.clearLayers();
+    for (const p of this.pings) L.marker(this.ll(p), { interactive: false, icon: L.divIcon({ className: '', iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="mk"><div class="mk-ping"></div><div class="mk-name">📍 ${esc(p.name)}</div></div>` }) }).addTo(this.pingLayer);
   }
 
   clearMission() { if (this.misLayer) { this.misLayer.remove(); this.misMark.remove(); this.misLayer = null; this.misMark = null; } }
@@ -869,14 +883,17 @@ export class Game {
 
     // нижняя панель
     const rLeft = this.revealReadyAt - T, fLeft = this.freezeReadyAt - T;
-    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof, this.seekActive(), !!this.ch.radar].join('|');
+    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof, this.seekActive(), !!this.ch.radar, this.net && this.opts.chatUnread ? this.opts.chatUnread() : 0].join('|');
     if (full || bsig !== this.botSig) {
       this.botSig = bsig;
       const counts = {}; me.powerups.forEach((id) => counts[id] = (counts[id] || 0) + 1);
       const tray = this.trayOpen && me.powerups.length ? `<div class="tray">${Object.keys(counts).map((id) => { const p = pwById(id); return `<button class="pw" data-pw="${id}">${counts[id] > 1 ? `<span class="x">×${counts[id]}</span>` : ''}${I[p.icon]}${esc(pwName(p))}</button>`; }).join('')}</div>` : '';
-      const side = this.hasPowerups ? `<div class="side-col"><button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
+      const unread = this.opts.chatUnread ? this.opts.chatUnread() : 0;
+      const chatSq = this.net ? `<button class="sq" data-a="chat" aria-label="chat" style="color:var(--teal)">${I.mail}${unread ? `<span class="cnt" style="background:var(--hunter)">${unread}</span>` : ''}</button>` : '';
+      const chatBtn = this.net && !this.hasPowerups ? `<div class="side-col">${chatSq}</div>` : '';
+      const side = this.hasPowerups ? `<div class="side-col">${chatSq}<button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
       if (hunter) {
-        bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${side}
+        bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${chatBtn}${side}
           <button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}
           <button class="ab catch" data-a="catch">${I.crosshair}<span class="t">${t('catch')}</span><span class="s">${t('choosePlayer')}</span></button>
@@ -884,7 +901,7 @@ export class Game {
       } else {
         bot.innerHTML = `${this.cfg.mode === 'demo' || this.ch.spoof ? `<div class="demo-hint">${this.ch.spoof ? t('spoofHint') : t('demoTap')}</div>` : ''}${tray}
           ${this.seekHtml()}<div class="stamina" id="stBox"><span>${t('stamina')}</span><div class="bar"><i id="stBar"></i></div></div>
-          <div class="act-row">${side}
+          <div class="act-row">${chatBtn}${side}
             ${this.cfg.mode === 'demo'
               ? `<button class="ab run ${this.runToggle ? 'on' : ''}" data-a="run">${I.run}<span class="t">${this.runToggle ? t('run') : t('walk')}</span><span class="s">${this.runToggle ? t('walk') + ' ↔' : t('run') + ' ↔'}</span></button>`
               : `<div class="ab run" id="runInfo">${I.run}<span class="t" id="runT"></span></div>`}
@@ -913,6 +930,7 @@ export class Game {
       case 'gps': if (this.cfg.mode !== 'gps') { this.cfg.mode = 'gps'; this.pace = 1; this.gpsPrev = null; this.startGps(); this.renderHud(true); } break;
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
       case 'heading': this.askHeading(); break;
+      case 'chat': this.opts.openChat && this.opts.openChat(); break;
       case 'secret': {
         const now = Date.now();
         this.secTaps = now - (this.secLast || 0) < 1500 ? (this.secTaps || 0) + 1 : 1; this.secLast = now;

@@ -122,6 +122,9 @@ const ru = {
   helpersHelp: '<b>Компас</b> — стрелка на ближайшего соперника: охотнику на прячущегося, прячущемуся на охотника. Направление обновляется раз в 20 секунд. Если у телефона есть датчик компаса, стрелка учитывает, куда вы смотрите.<br><b>Детектор</b> — «холодно / тепло / горячо / очень горячо» до ближайшего соперника (больше 300 м, 150–300, 50–150, меньше 50 м), со звуком и вибрацией, когда становится ближе.',
   seekToHider: 'Ближайший прячущийся', seekToHunter: 'Ближайший охотник', seekNone: 'Соперников рядом нет', seekNext: 'новое направление через {s} с', seekNorth: 'стрелка от севера',
   det_veryHot: 'Очень горячо', det_hot: 'Горячо', det_warm: 'Тепло', det_cold: 'Холодно',
+  chat: 'Чат', chatAll: 'Все', chatTeam: 'Команда', hidersPl: 'прячущиеся', huntersPl: 'охотники', chatPh: 'Сообщение…', chatEmpty: 'Пока тихо. Напишите первым или зажмите рацию.',
+  chatHold: 'Держите и говорите', chatRec: 'Запись', chatVoice: 'голосовое', chatLoc: 'отметил(а) место на карте', chatWhere: 'Где я', chatLocSent: 'Ваше место видно вашей команде 30 секунд',
+  chatNoMic: 'Нет доступа к микрофону', chatAutoplay: 'Сразу проигрывать голосовые (как рация)',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -241,6 +244,9 @@ const en = {
   helpersHelp: '<b>Compass</b> — an arrow to the nearest opponent: Hunters see the nearest Hider, Hiders the nearest Hunter. The direction refreshes every 20 seconds and follows your phone’s heading when it has a compass sensor.<br><b>Detector</b> — cold / warm / hot / very hot to the nearest opponent (over 300 m, 150–300, 50–150, under 50 m), with a beep and buzz as it gets closer.',
   seekToHider: 'Nearest Hider', seekToHunter: 'Nearest Hunter', seekNone: 'No opponents', seekNext: 'new bearing in {s} s', seekNorth: 'arrow from north',
   det_veryHot: 'Very hot', det_hot: 'Hot', det_warm: 'Warm', det_cold: 'Cold',
+  chat: 'Chat', chatAll: 'Everyone', chatTeam: 'Team', hidersPl: 'hiders', huntersPl: 'hunters', chatPh: 'Message…', chatEmpty: 'Quiet so far. Say something or hold the radio.',
+  chatHold: 'Hold to talk', chatRec: 'Recording', chatVoice: 'voice', chatLoc: 'marked a spot on the map', chatWhere: 'Where I am', chatLocSent: 'Your spot is visible to your team for 30 seconds',
+  chatNoMic: 'No microphone access', chatAutoplay: 'Play voice messages right away (radio style)',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 

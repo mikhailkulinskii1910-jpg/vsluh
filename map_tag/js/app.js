@@ -8,8 +8,9 @@ import { checkPass, renderCheats, openWheel, openGameCheats } from './cheats.js'
 import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
+import { CHAT, chatInit, chatHandle, chatReset, openChat } from './chat.js';
 
-const VERSION = '1.6';
+const VERSION = '1.7';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -66,12 +67,20 @@ function netStatusHtml() {
   return `<span class="net-pill" id="netPill"><i style="background:${c}"></i>${txt}</span>`;
 }
 function netRefreshPill() { const el = document.getElementById('netPill'); if (el) el.outerHTML = netStatusHtml(); }
-function netClose() { if (!NET) return; clearInterval(NET.ping); try { NET.room.disconnect(); } catch {} NET = null; }
+function netClose() { if (!NET) return; clearInterval(NET.ping); try { NET.room.disconnect(); } catch {} NET = null; chatReset(); }
+function myRoleNow() {
+  if (game) return game.me.role;
+  if (NET && NET.role === 'client') { const p = ((NET.lobby || {}).players || []).find((x) => x.id === NET.myId); return p ? p.role : 'hider'; }
+  const p = S.lobby && (S.lobby.players || []).find((x) => !x.bot && !x.remote); return p ? p.role : 'hider';
+}
+function chatBadges() { document.querySelectorAll('.chat-badge').forEach((b) => { b.textContent = CHAT.unread || ''; b.style.display = CHAT.unread ? '' : 'none'; }); }
+const chatBtnHtml = () => `<button class="btn block chat-btn" data-chat>💬 ${t('chat')} <span class="chat-badge" style="display:${CHAT.unread ? '' : 'none'}">${CHAT.unread}</span></button>`;
 
 /** Сообщения комнаты: в игре — движку, иначе — лобби. */
 function netRoute(type, d, from, ts) {
   if (!NET) return;
   if (NET.role === 'client' && from === NET.hostId) netSample(ts);
+  if (type === 'chat') { chatHandle(d, from); return; }
   if (game && game.net) { if (type !== 'lobby' && type !== 'hello' && type !== 'ping') game.netHandle(type, d, from, ts); if (type === 'lobby') return; }
   if (NET.role === 'host') hostOnMsg(type, d, from, ts); else clientOnMsg(type, d, from, ts);
 }
@@ -249,6 +258,7 @@ function bindCommon(root) {
     const a = b.dataset.top;
     if (a === 'notes') openNotes(); else if (a === 'rules') openRules(); else openSettings();
   });
+  root.querySelectorAll('[data-chat]').forEach((b) => b.onclick = () => openChat(modal));
   // секретный вход: 5 касаний по логотипу
   const brand = root.querySelector('.brand');
   if (brand) brand.onclick = () => {
@@ -363,6 +373,7 @@ const SCREENS = {
         <button class="icon-btn" data-top="settings" aria-label="settings">${I.gear}</button>
       </div>
       <div class="make-yours"><div><div class="k">${t('netHostIs')}</div><h2>${esc(L0.host || '—')}</h2></div></div>
+      ${chatBtnHtml()}
       <div class="card wait-card">${I.clock}<div><b>${t('netWaiting')}</b><div style="color:var(--muted);font-size:15px;margin-top:4px">${meP ? t('netYourRole', { r: t(meP.role) }) : t('netNotListed')}</div></div></div>
       <div class="set-sum" style="cursor:default">${I.gear}<b>${t('settings')}</b><span>${[t(st.size || 'medium'), t(st.vis === 'city' ? 'openCity' : st.vis || 'mixed'), t(st.light || 'day'), t(st.extra || 'spice'), ...(st.compass && st.compass !== 'off' ? [t('compass') + ': ' + t('hv_' + st.compass)] : []), ...(st.detector && st.detector !== 'off' ? [t('detector') + ': ' + t('hv_' + st.detector)] : [])].join(' · ')}</span></div>
       <div class="summary"><div class="l">${t('radius')}</div><div class="l">${t('huntDur')}</div>
@@ -459,6 +470,7 @@ const SCREENS = {
       <div class="lobby-code-lbl" style="margin-top:8px">${t('lobbyCodeLbl')}</div>
       <div class="lobby-code">${lb.code}</div>
       <div style="margin:-6px 0 12px">${netStatusHtml()}</div>
+      ${lb.players.some((p) => p.remote) ? chatBtnHtml() : ''}
       <div class="row lobby-btns">
         <button class="btn danger" id="leave">${I.leave}${t('leave')}</button>
         <button class="btn" id="share">${t('share')}</button>
@@ -696,6 +708,8 @@ const SCREENS = {
       lang: getLang(), modal, toast, confirm: confirmBox,
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
+      openChat: () => openChat(modal),
+      chatUnread: () => CHAT.unread,
       openCheats: () => { const open = () => { game && openGameCheats(modal, S, save, game); game && game.renderHud(true); }; if (S.cheatsUnlocked) open(); else askPassword(open); },
       onLeave: () => go(NET && NET.role === 'client' ? (NET.lobby ? 'clientLobby' : 'home') : 'lobby'),
       onEnd: (res) => endGame(res, cfg),
@@ -982,6 +996,12 @@ function scanQr(onCode) {
 // ---------- старт ----------
 setLang(getLang());
 applyTheme();
+chatInit({
+  send: (m) => NET && NET.room.send('chat', m),
+  me: () => ({ id: myNetId(), name: S.name, role: myRoleNow() }),
+  inGame: () => (game && game.net ? game : null),
+  toast, onUnread: chatBadges,
+});
 const hash = /#join=([A-Z0-9]{6})/i.exec(location.hash);
 if (hash) { history.replaceState(null, '', location.pathname); go('join', hash[1].toUpperCase()); }
 else go(S.onboarded ? 'home' : 'onboarding');

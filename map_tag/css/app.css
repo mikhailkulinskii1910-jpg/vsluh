@@ -438,3 +438,24 @@ html[data-theme] .res-hero { background: var(--card); }
 .helper-row { flex-wrap: wrap; }
 .helper-row .seg { flex: 1 1 100%; display: flex; }
 .helper-row .seg button { flex: 1; }
+
+/* ---------- чат и рация ---------- */
+.chat-btn { margin: 0 0 14px; }
+.chat-badge { min-width: 22px; height: 22px; padding: 0 7px; border-radius: 11px; background: var(--hunter); color: #fff; font-size: 13px; display: inline-grid; place-items: center; }
+.chat-list { height: 42vh; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 6px 2px; border-radius: 16px; background: var(--bg2); border: 1px solid var(--line); padding: 10px; }
+.msg { max-width: 82%; align-self: flex-start; }
+.msg.mine { align-self: flex-end; text-align: right; }
+.msg .who { font-size: 12px; color: var(--muted); margin: 0 6px 2px; }
+.msg .bub { display: inline-block; padding: 8px 12px; border-radius: 16px; background: var(--card2); text-align: left; word-break: break-word; }
+.msg.mine .bub { background: var(--accent); color: var(--accent-ink); }
+.vmsg { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--card2); color: var(--text); cursor: pointer; font: inherit; }
+.vmsg svg { width: 18px; height: 18px; }
+.msg.mine .vmsg { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.chips.quick { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 8px; margin: 10px 0; }
+.chips.quick .chip { flex: none; min-height: 40px; padding: 0 12px; font-size: 14px; }
+.chat-in { display: flex; gap: 8px; }
+.chat-in .input { min-height: 50px; font-size: 16px; }
+.ptt { flex: 1; min-height: 58px; font-size: 17px; user-select: none; -webkit-user-select: none; touch-action: none; }
+.ptt.rec { background: var(--hunter); color: #fff; border-color: transparent; animation: tblink 1s ease-in-out infinite; }
+.mk-ping { width: 26px; height: 26px; border-radius: 50%; background: rgba(79,209,197,.35); border: 3px solid var(--teal); animation: pingp 1.4s ease-out infinite; }
+@keyframes pingp { 0% { box-shadow: 0 0 0 0 rgba(79,209,197,.7); } 100% { box-shadow: 0 0 0 18px rgba(79,209,197,0); } }
