@@ -1,6 +1,6 @@
 // Офлайн-кэш оболочки приложения (тайлы карты не кэшируются)
-const CACHE = 'map-tag-v4';
-const FILES = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/game.js', 'js/i18n.js', 'js/icons.js', 'js/content.js', 'js/themes.js', 'js/cheats.js', 'js/sound.js', 'js/replay.js', 'css/themes.css',
+const CACHE = 'map-tag-v5';
+const FILES = ['./', 'index.html', 'css/app.css', 'js/app.js', 'js/game.js', 'js/i18n.js', 'js/icons.js', 'js/content.js', 'js/themes.js', 'js/cheats.js', 'js/sound.js', 'js/replay.js', 'js/net.js', 'js/gamenet.js', 'lib/mqtt.min.js', 'css/themes.css',
   'lib/leaflet.js', 'lib/leaflet.css', 'lib/qrcode.js', 'lib/jsQR.js', 'lib/fonts.css', 'manifest.webmanifest', 'icons/icon-192.png'];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));

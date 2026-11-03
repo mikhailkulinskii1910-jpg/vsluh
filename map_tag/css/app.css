@@ -414,3 +414,7 @@ html[data-theme] .res-hero { background: var(--card); }
 .quick-add { display: flex; gap: 8px; margin-bottom: 10px; }
 .quick-add .input { min-height: 48px; font-size: 16px; flex: 1; }
 .quick-add .btn { flex: none; }
+.net-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-size: 14px; color: var(--muted); white-space: nowrap; }
+.net-pill i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.wait-card { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+.wait-card > svg { width: 34px; height: 34px; color: var(--accent); flex: none; animation: tblink 2s ease-in-out infinite; }

@@ -7,8 +7,9 @@ import { applyTheme, themePicker } from './themes.js';
 import { checkPass, renderCheats, openWheel, openGameCheats } from './cheats.js';
 import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
+import { Room, newId } from './net.js';
 
-const VERSION = '1.4';
+const VERSION = '1.5';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -46,10 +47,116 @@ function calc(lb) {
 }
 /** Список игроков лобби: вы + боты с ролями. */
 function ensurePlayers(lb) {
-  if (Array.isArray(lb.players) && lb.players.some((p) => !p.bot)) return;
+  if (Array.isArray(lb.players) && lb.players.some((p) => !p.bot && !p.remote)) { lb.players.forEach((p) => { if (!p.id) p.id = p.bot ? 'b' + newId() : myNetId(); }); return; }
   const names = BOT_NAMES[getLang()] || BOT_NAMES.ru;
   const n = lb.bots ?? 5, h = Math.max(1, Math.min(lb.hunters ?? 2, n));
-  lb.players = [{ role: 'hider', bot: false }, ...Array.from({ length: n }, (_, i) => ({ name: names[i % names.length], role: i < h ? 'hunter' : 'hider', bot: true }))];
+  lb.players = [{ id: myNetId(), role: 'hider', bot: false }, ...Array.from({ length: n }, (_, i) => ({ id: 'b' + newId(), name: names[i % names.length], role: i < h ? 'hunter' : 'hider', bot: true }))];
+}
+function myNetId() { if (!S.netId) { S.netId = newId(); save(); } return S.netId; }
+
+// ================= онлайн =================
+// NET: { room, role: 'host'|'client', code, myId, hostId, offs[], status }
+let NET = null;
+const netOffset = () => (NET && NET.offs && NET.offs.length ? Math.max(...NET.offs) : 0);
+function netSample(ts) { if (!NET) return; NET.offs = NET.offs || []; NET.offs.push(ts - Date.now()); if (NET.offs.length > 20) NET.offs.shift(); }
+function netStatusHtml() {
+  const st = NET ? NET.room.status : 'off';
+  const map = { online: ['var(--hider)', t('netOnline')], connecting: ['var(--gold)', t('netConnecting')], error: ['var(--hunter)', t('netError')], off: ['var(--muted)', t('netOff')] };
+  const [c, txt] = map[st] || map.off;
+  return `<span class="net-pill" id="netPill"><i style="background:${c}"></i>${txt}</span>`;
+}
+function netRefreshPill() { const el = document.getElementById('netPill'); if (el) el.outerHTML = netStatusHtml(); }
+function netClose() { if (!NET) return; clearInterval(NET.ping); try { NET.room.disconnect(); } catch {} NET = null; }
+
+/** Сообщения комнаты: в игре — движку, иначе — лобби. */
+function netRoute(type, d, from, ts) {
+  if (!NET) return;
+  if (NET.role === 'client' && from === NET.hostId) netSample(ts);
+  if (game && game.net) { if (type !== 'lobby' && type !== 'hello' && type !== 'ping') game.netHandle(type, d, from, ts); if (type === 'lobby') return; }
+  if (NET.role === 'host') hostOnMsg(type, d, from, ts); else clientOnMsg(type, d, from, ts);
+}
+
+// ---------- организатор ----------
+async function hostEnsure(lb) {
+  if (NET && NET.role === 'host' && NET.code === lb.code) return;
+  netClose();
+  NET = { role: 'host', code: lb.code, myId: myNetId(), hostId: myNetId(), offs: [] };
+  NET.room = new Room(lb.code, NET.myId, netRoute);
+  NET.room.onStatus = netRefreshPill;
+  try { await NET.room.host(); hostPublish(); } catch { netRefreshPill(); }
+  NET.ping = setInterval(() => { if (!NET || NET.role !== 'host' || !S.lobby) return; hostPrune(); }, 10000);
+}
+let pubTimer = 0;
+function hostPublish(status) {
+  if (!NET || NET.role !== 'host' || !S.lobby) return;
+  if (status) NET.lobbyStatus = status;
+  clearTimeout(pubTimer);
+  pubTimer = setTimeout(() => {
+    const lb = S.lobby; if (!lb || !NET) return;
+    const c = calc(lb);
+    NET.room.setLobby({
+      status: NET.lobbyStatus || 'lobby', hostId: NET.myId, host: S.name, code: lb.code,
+      set: { size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false },
+      players: lb.players.map((p) => ({ id: p.id, name: p.bot ? p.name : p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, host: !p.bot && !p.remote })),
+    });
+  }, 250);
+}
+function hostPrune() {
+  const lb = S.lobby; if (!lb) return;
+  const now = Date.now(), before = lb.players.length;
+  lb.players = lb.players.filter((p) => !p.remote || now - (p.seen || 0) < 45000);
+  if (lb.players.length !== before) { save(); hostPublish(); if (current === 'lobby') rerenderLobby(); }
+}
+function rerenderLobby() { const y = window.scrollY; go('lobby'); window.scrollTo(0, y); }
+function hostOnMsg(type, d, from) {
+  const lb = S.lobby; if (!lb) return;
+  if (type === 'hello' || type === 'ping') {
+    let p = lb.players.find((x) => x.id === from);
+    if (!p && type === 'hello') {
+      if (NET.lobbyStatus === 'playing') return;
+      const n = lb.players.length + 1, hunt = lb.players.filter((x) => x.role === 'hunter').length;
+      p = { id: from, name: String(d.name || '?').slice(0, 16), role: hunt < Math.max(1, Math.round(n / 3)) ? 'hunter' : 'hider', bot: false, remote: true };
+      lb.players.push(p); toast(t('netJoined', { n: p.name }));
+    }
+    if (!p) { if (type === 'ping') NET.room.send('who', {}, from); return; }
+    if (d.name) p.name = String(d.name).slice(0, 16);
+    p.seen = Date.now();
+    if (type === 'hello') { save(); hostPublish(); if (current === 'lobby') rerenderLobby(); }
+  } else if (type === 'bye') {
+    const i = lb.players.findIndex((x) => x.id === from && x.remote);
+    if (i >= 0) { toast(t('playerLeft', { n: lb.players[i].name })); lb.players.splice(i, 1); save(); hostPublish(); if (current === 'lobby') rerenderLobby(); }
+  }
+}
+
+// ---------- участник ----------
+async function clientJoin(code, name) {
+  netClose();
+  NET = { role: 'client', code, myId: myNetId(), offs: [] };
+  NET.room = new Room(code, NET.myId, netRoute);
+  NET.room.onStatus = netRefreshPill;
+  let snap = null;
+  try { snap = await NET.room.join(); } catch { snap = null; }
+  if (!snap) { netClose(); return { err: 'notFound' }; }
+  if (snap.status === 'playing') { netClose(); return { err: 'playing' }; }
+  NET.hostId = snap.hostId; NET.lobby = snap;
+  if (NET.room.lobbyTs) netSample(NET.room.lobbyTs);
+  NET.room.send('hello', { name });
+  NET.ping = setInterval(() => { if (NET && NET.role === 'client') NET.room.send('ping', { name: S.name }); }, 8000);
+  return { ok: true };
+}
+function clientOnMsg(type, d, from, ts) {
+  if (type === 'lobby') {
+    if (d.status === 'closed') { netClose(); toast(t('hostLeft')); if (current === 'clientLobby') go('home'); return; }
+    NET.lobby = d; if (from === NET.hostId) netSample(ts);
+    if (current === 'clientLobby') { const y = window.scrollY; go('clientLobby'); window.scrollTo(0, y); }
+  } else if (type === 'who') NET.room.send('hello', { name: S.name });
+  else if (type === 'kick' && (!d.id || d.id === NET.myId)) { netClose(); toast(t('netKicked')); go('home'); }
+  else if (type === 'abort' && !game) { netClose(); toast(t('hostLeft')); go('home'); }
+  else if (type === 'start' && from === NET.hostId) {
+    netSample(ts);
+    const cfg = { ...d.cfg, myId: NET.myId, name: S.name, mode: S.clientMode || 'gps', cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {} };
+    go('game', { ...cfg, net: { room: NET.room, role: 'client', myId: NET.myId, hostId: NET.hostId, startAt: d.startAt, offset: netOffset() } });
+  }
 }
 const parseTime = (s) => { s = String(s).trim(); if (!s) return null; const p = s.split(':').map(Number); if (p.some(isNaN)) return null; return p.length === 1 ? p[0] * 60 : p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]; };
 
@@ -228,11 +335,57 @@ const SCREENS = {
       if (cd.value.length !== 6) return toast(t('enterCode'));
       S.name = n; save();
       if (S.lobby && S.lobby.code === cd.value) return go('lobby');
-      modal(`<p style="font-size:18px">${t('noLobby', { c: esc(cd.value) })}</p><div class="row" style="margin-top:16px"><button class="btn" data-n style="flex:1">${t('cancel')}</button><button class="btn violet" data-y style="flex:1">${t('host')}</button></div>`, (b, close) => {
+      const btn = el.querySelector('#go'); btn.disabled = true; btn.textContent = t('netSearching');
+      clientJoin(cd.value, n).then((r) => {
+        btn.disabled = false; btn.textContent = t('joinLobby');
+        if (r.ok) return go('clientLobby');
+        if (r.err === 'playing') return toast(t('netPlaying'));
+      modal(`<p style="font-size:18px">${t('noLobbyNet', { c: esc(cd.value) })}</p><div class="row" style="margin-top:16px"><button class="btn" data-n style="flex:1">${t('cancel')}</button><button class="btn violet" data-y style="flex:1">${t('host')}</button></div>`, (b, close) => {
         b.querySelector('[data-n]').onclick = close;
         b.querySelector('[data-y]').onclick = () => { close(); S.lobby = defaultLobby(); save(); go('lobby'); };
       });
+      });
     };
+  },
+
+  clientLobby(el) {
+    if (!NET || NET.role !== 'client' || !NET.lobby) return go('home');
+    const L0 = NET.lobby, st = L0.set || {}, ru = getLang() === 'ru';
+    const meP = (L0.players || []).find((p) => p.id === NET.myId);
+    const badge = (r) => `<span class="rbadge ${r}">${t(r)}</span>`;
+    el.innerHTML = `
+      <div class="lobby-code-lbl" style="margin-top:8px">${t('lobbyCodeLbl')}</div>
+      <div class="lobby-code">${esc(L0.code || NET.code)}</div>
+      <div class="row lobby-btns">
+        <button class="btn danger" id="cLeave">${I.leave}${t('leave')}</button>
+        ${netStatusHtml()}
+        <button class="icon-btn" data-top="rules" aria-label="rules" style="margin-left:auto">${I.help}</button>
+        <button class="icon-btn" data-top="settings" aria-label="settings">${I.gear}</button>
+      </div>
+      <div class="make-yours"><div><div class="k">${t('netHostIs')}</div><h2>${esc(L0.host || '—')}</h2></div></div>
+      <div class="card wait-card">${I.clock}<div><b>${t('netWaiting')}</b><div style="color:var(--muted);font-size:15px;margin-top:4px">${meP ? t('netYourRole', { r: t(meP.role) }) : t('netNotListed')}</div></div></div>
+      <div class="set-sum" style="cursor:default">${I.gear}<b>${t('settings')}</b><span>${[t(st.size || 'medium'), t(st.vis === 'city' ? 'openCity' : st.vis || 'mixed'), t(st.light || 'day'), t(st.extra || 'spice')].join(' · ')}</span></div>
+      <div class="summary"><div class="l">${t('radius')}</div><div class="l">${t('huntDur')}</div>
+        <div class="v">${Math.round(st.radius || 0)} ${t('m')}</div><div class="v">${fmt(st.huntSec || 0)}</div>
+        <div class="sub">${t('toHide', { t: fmt(st.hideSec || 0) })} · ${st.shrinkTo < 1 ? t('shrinks', { p: Math.round(st.shrinkTo * 100) }) : t('noShrink')}${st.transport !== false ? ' · ' + t('transportShort') : ''}</div></div>
+      <div class="map-card"><div class="pick-map" id="cmap"></div><div class="map-cap">${t('netAreaCap')}</div></div>
+      <div class="card crew">
+        <div class="kicker2">${t('yourCrew')}</div>
+        <h2 class="row" style="font-size:28px">${I.users.replace('<svg', '<svg width="26" height="26"')} ${t('playersN', { n: (L0.players || []).length })}</h2>
+        <div class="crew-list" style="margin-top:12px">${(L0.players || []).map((p) => `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.name)} <span class="tag">· ${p.id === NET.myId ? t('you') : p.host ? t('netHostTag') : p.bot ? t('bot') : t('netOnlineTag')}</span></span></div>`).join('')}</div>
+        <div class="line-row" style="margin-top:8px"><span>${t('moveMode')}</span><div class="seg">${['gps', 'demo'].map((r) => `<button data-cm="${r}" class="${(S.clientMode || 'gps') === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
+      </div>`;
+    bindCommon(el);
+    el.querySelector('#cLeave').onclick = () => { if (NET) NET.room.send('bye', {}); setTimeout(netClose, 300); go('home'); };
+    el.querySelectorAll('[data-cm]').forEach((b) => b.onclick = () => { S.clientMode = b.dataset.cm; save(); const y = window.scrollY; go('clientLobby'); window.scrollTo(0, y); });
+    if (st.center) {
+      const m = L.map(el.querySelector('#cmap'), { zoomControl: false, dragging: true }).setView([st.center.lat, st.center.lng], 15);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
+      m.attributionControl.setPrefix(false);
+      const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
+      const z = st.poly && st.poly.length >= 3 ? L.polygon(st.poly.map((q) => [q.lat, q.lng]), zst).addTo(m) : null;
+      setTimeout(() => { m.invalidateSize(); m.fitBounds(z ? z.getBounds() : L.latLng(st.center.lat, st.center.lng).toBounds(st.radius * 2)); if (!z) L.circle([st.center.lat, st.center.lng], { radius: st.radius, ...zst }).addTo(m); }, 60);
+    } else el.querySelector('#cmap').innerHTML = `<div class="empty">${t('netNoPlace')}</div>`;
   },
 
   lobby(el) {
@@ -265,10 +418,10 @@ const SCREENS = {
     const hunters = lb.players.filter((p) => p.role === 'hunter').length, hiders = lb.players.length - hunters;
     const badge = (r) => `<span class="rbadge ${r}">${t(r)}</span>`;
     const crewRows = lb.players.map((p, i) => lb.manage
-      ? `<div class="crew-row manage"><div class="row" style="justify-content:space-between;width:100%">${badge(p.role)}${p.bot ? `<button class="btn" data-rm="${i}" style="min-height:36px;padding:0 10px">${I.close.replace('<svg', '<svg width="16" height="16"')}</button>` : ''}</div>
-          <div class="nm">${p.bot ? `<input class="input" data-pn="${i}" value="${esc(p.name)}" maxlength="16" style="min-height:40px;font-size:16px">` : `${esc(S.name)} <span class="tag">· ${t('hostYou')}</span>`}</div>
+      ? `<div class="crew-row manage"><div class="row" style="justify-content:space-between;width:100%">${badge(p.role)}${p.bot || p.remote ? `<button class="btn" data-rm="${i}" style="min-height:36px;padding:0 10px">${I.close.replace('<svg', '<svg width="16" height="16"')}</button>` : ''}</div>
+          <div class="nm">${p.bot ? `<input class="input" data-pn="${i}" value="${esc(p.name)}" maxlength="16" style="min-height:40px;font-size:16px">` : p.remote ? `${esc(p.name)} <span class="tag">· ${t('netOnlineTag')}</span>` : `${esc(S.name)} <span class="tag">· ${t('hostYou')}</span>`}</div>
           <div class="row" style="justify-content:flex-end;width:100%"><button class="btn ${p.role === 'hunter' ? 'primary' : ''}" data-pr="${i}:hunter" style="min-height:40px">${t('hunter')}</button><button class="btn ${p.role === 'hider' ? 'primary' : ''}" data-pr="${i}:hider" style="min-height:40px">${t('hider')}</button></div></div>`
-      : `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.bot ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : t('hostYou')}</span></span></div>`).join('');
+      : `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.bot || p.remote ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : p.remote ? `<span style="color:var(--hider)">●</span> ${t('netOnlineTag')}` : t('hostYou')}</span></span></div>`).join('');
 
     const step2 = `
       <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra)].join(' · ')}</span></button>
@@ -301,6 +454,7 @@ const SCREENS = {
     el.innerHTML = `
       <div class="lobby-code-lbl" style="margin-top:8px">${t('lobbyCodeLbl')}</div>
       <div class="lobby-code">${lb.code}</div>
+      <div style="margin:-6px 0 12px">${netStatusHtml()}</div>
       <div class="row lobby-btns">
         <button class="btn danger" id="leave">${I.leave}${t('leave')}</button>
         <button class="btn" id="share">${t('share')}</button>
@@ -314,11 +468,13 @@ const SCREENS = {
       ${lb.step === 1 ? step1 : step2}`;
     bindCommon(el);
 
-    const rerender = () => { save(); const y = window.scrollY; go('lobby'); window.scrollTo(0, y); };
+    const rerender = () => { save(); hostPublish(); const y = window.scrollY; go('lobby'); window.scrollTo(0, y); };
+    hostEnsure(lb).then(() => { if (NET && NET.lobbyStatus === 'playing' && !game) hostPublish('lobby'); });
+    hostPublish();
     el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => { lb.step = +b.dataset.step; save(); go('lobby'); });
     el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
-    el.querySelector('#leave').onclick = () => { S.lobby = null; save(); go('home'); };
+    el.querySelector('#leave').onclick = () => { if (NET && NET.role === 'host') { NET.room.send('abort', {}); NET.room.clearLobby(); setTimeout(netClose, 500); } S.lobby = null; save(); go('home'); };
     el.querySelector('#share').onclick = () => shareLobby(lb.code);
     el.querySelector('#qr').onclick = () => { lb.showQr = !lb.showQr; rerender(); };
     el.querySelector('#howrun').onclick = () => modal(`<h2>${t('runGame')}</h2><ol>${t('runGameList').map((x) => `<li>${esc(x)}</li>`).join('')}</ol><p style="color:var(--muted)">${t('firstGame')}</p><button class="btn primary big block" data-x>${t('letsSet')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = () => { close(); lb.step = 1; save(); go('lobby'); });
@@ -328,7 +484,7 @@ const SCREENS = {
     // --- игроки ---
     el.querySelector('#manage').onclick = () => { lb.manage = !lb.manage; rerender(); };
     el.querySelectorAll('[data-pr]').forEach((b) => b.onclick = () => { const [i, r] = b.dataset.pr.split(':'); lb.players[+i].role = r; rerender(); });
-    el.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { lb.players.splice(+b.dataset.rm, 1); rerender(); });
+    el.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const [rm] = lb.players.splice(+b.dataset.rm, 1); if (rm && rm.remote && NET) NET.room.send('kick', { id: rm.id }, rm.id); rerender(); });
     el.querySelectorAll('[data-pn]').forEach((inp) => inp.onchange = () => { lb.players[+inp.dataset.pn].name = inp.value.trim() || lb.players[+inp.dataset.pn].name; save(); });
     // быстрое добавление: имена через запятую / с новой строки, роли балансируются автоматически (≈ треть охотников)
     const addPlayers = (names) => {
@@ -415,14 +571,20 @@ const SCREENS = {
         if (lb.poly.length < 3) return toast(t('ptsNeed', { n: lb.poly.length }));
         const g = polyGeo(lb.poly); zc = g.center; zr = g.radius; polygon = lb.poly.slice();
       }
-      go('game', {
-        center: zc, radius: zr, polygon, cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {},
+      const online = NET && NET.role === 'host' && NET.room.status === 'online' && lb.players.some((p) => p.remote);
+      const base = {
+        center: zc, radius: zr, polygon,
         huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
         features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
         bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
-        roles: lb.players.map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })),
-        myRole: (lb.players.find((p) => !p.bot) || {}).role || 'hider', mode: lb.mode, name: S.name, transport: lb.transport !== false,
-      });
+        roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot })),
+        myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
+      };
+      if (!online) return go('game', { ...base, roles: lb.players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
+      const startAt = Date.now() + 5000;
+      NET.room.send('start', { cfg: base, startAt });
+      hostPublish('playing');
+      go('game', { ...base, myId: NET.myId, name: S.name, mode: lb.mode, cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, net: { room: NET.room, role: 'host', myId: NET.myId, hostId: NET.myId, startAt } });
     };
   },
 
@@ -509,12 +671,12 @@ const SCREENS = {
         <div class="line-row"><span>${t('powersSpent')}</span><b>${g.powers}</b></div></div>
       <div class="bottom-bar"><div class="in">
         <button class="btn primary big block" id="rWatch">${I.play}${t('watchReplay')}</button>
-        <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn" id="rLobby" style="flex:1">${t('toLobby')}</button><button class="btn" id="rAgain" style="flex:1">${t('again')}</button><button class="btn" id="rMenu" style="flex:1">${t('toMenu')}</button></div>
+        <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn" id="rLobby" style="flex:1">${t('toLobby')}</button>${cfg.net ? '' : `<button class="btn" id="rAgain" style="flex:1">${t('again')}</button>`}<button class="btn" id="rMenu" style="flex:1">${t('toMenu')}</button></div>
       </div></div>`;
     el.classList.add('has-bar', 'res');
     el.querySelector('#rWatch').onclick = () => go('replay', { ...rep, _back: ['results', { res, cfg, rep }] });
-    el.querySelector('#rLobby').onclick = () => go(S.lobby ? 'lobby' : 'home');
-    el.querySelector('#rAgain').onclick = () => go('game', cfg);
+    el.querySelector('#rLobby').onclick = () => go(NET && NET.role === 'client' ? 'clientLobby' : S.lobby ? 'lobby' : 'home');
+    const ag = el.querySelector('#rAgain'); if (ag) ag.onclick = () => go('game', cfg);
     el.querySelector('#rMenu').onclick = () => go('home');
   },
 
@@ -529,7 +691,7 @@ const SCREENS = {
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
       openCheats: () => { const open = () => { game && openGameCheats(modal, S, save, game); game && game.renderHud(true); }; if (S.cheatsUnlocked) open(); else askPassword(open); },
-      onLeave: () => go('lobby'),
+      onLeave: () => go(NET && NET.role === 'client' ? (NET.lobby ? 'clientLobby' : 'home') : 'lobby'),
       onEnd: (res) => endGame(res, cfg),
     });
     game.mount(el);

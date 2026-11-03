@@ -3,6 +3,7 @@ import { t } from './i18n.js';
 import { I } from './icons.js';
 import { POWERUPS, pwById, pwName, pwDesc } from './content.js';
 import { beep } from './sound.js';
+import { netMixin } from './gamenet.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -27,6 +28,10 @@ export class Game {
     this.poly = cfg.polygon && cfg.polygon.length >= 3 ? cfg.polygon.map((q) => this.xy(q.lat, q.lng)) : null;
     if (this.poly) this.pbox = { x0: Math.min(...this.poly.map((q) => q.x)), x1: Math.max(...this.poly.map((q) => q.x)), y0: Math.min(...this.poly.map((q) => q.y)), y1: Math.max(...this.poly.map((q) => q.y)) };
     this.ch = cfg.cheats || {};
+    this.net = cfg.net || null;                       // { room, role: 'host'|'client', myId, startAt }
+    this.isHost = !!(this.net && this.net.role === 'host');
+    this.isClient = !!(this.net && this.net.role === 'client');
+    if (this.net) this.ch.skiphide = false;
     this.t = cfg.cheats && cfg.cheats.skiphide ? cfg.hideSec : 0;
     this.last = performance.now();
     this.alerts = [];
@@ -58,7 +63,9 @@ export class Game {
     this.shrinkWarned = false;
     this.makePlayers();
     if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
-    if (this.hasPowerups) for (let i = 0; i < 6 + Math.round(this.R / 150); i++) this.supplies.push(this.newSupply());
+    if (this.hasPowerups && !this.isClient) for (let i = 0; i < 6 + Math.round(this.R / 150); i++) this.supplies.push(this.newSupply());
+    if (this.isClient) this.nextMissionAt = Infinity;
+    if (this.net) this.netInit();
   }
 
   // ---------- координаты ----------
@@ -111,7 +118,19 @@ export class Game {
       warnUntil: 0, frozenUntil: 0, powerups: [], target: null, think: 0, lastPrint: null, speed: 0, outSince: null,
       wasCaught: false, holdMission: false,
     });
-    if (Array.isArray(this.cfg.roles) && this.cfg.roles.length) {
+    if (Array.isArray(this.cfg.roles) && this.cfg.roles.length && this.cfg.roles[0].id) {
+      // онлайн: у каждого id; ботов считает организатор
+      this.players = [];
+      let bi = 0;
+      for (const r of this.cfg.roles) {
+        const mine = r.id === this.cfg.myId;
+        const p = mk(r.id, r.name, r.role, !!r.bot, mine ? '#ffffff' : COLORS[bi++ % COLORS.length]);
+        p.remote = !mine && !r.bot;
+        this.players.push(p);
+        if (mine) this.me = p;
+      }
+      myRole = this.me.role;
+    } else if (Array.isArray(this.cfg.roles) && this.cfg.roles.length) {
       // роли назначены вручную в «Ваша команда»: [{ name, role, bot }]
       const meR = this.cfg.roles.find((r) => !r.bot);
       myRole = meR ? meR.role : myRole;
@@ -125,7 +144,9 @@ export class Game {
       roles.forEach((r, i) => this.players.push(mk('b' + i, names[i % names.length], r, true, COLORS[i % COLORS.length])));
     }
     this.me.startRole = myRole;
-    this.players.forEach((p) => { p.startRole = p.role; });
+    this.players.forEach((p) => { p.startRole = p.role; p.sim = p === this.me || (p.bot && !this.isClient); });
+    // все стартуют у центра одинаково (позиции остальных придут по сети)
+    if (this.net) this.players.forEach((p, i) => { p.x = Math.cos(i * 2.4) * 10; p.y = Math.sin(i * 2.4) * 10; p.nx = p.x; p.ny = p.y; });
   }
 
   // ---------- запуск ----------
@@ -174,7 +195,7 @@ export class Game {
       const now = this.t;
       if (first) {
         first = false;
-        if (!this.poly && Math.hypot(p.x, p.y) > this.R * 2) {
+        if (!this.poly && !this.net && Math.hypot(p.x, p.y) > this.R * 2) {
           // центр игры далеко — переносим зону к игроку
           this.c0 = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           this.zoneLayer.setLatLng(this.ll({ x: 0, y: 0 }));
@@ -254,8 +275,9 @@ export class Game {
     p.x = x; p.y = y;
   }
 
-  addPrint(pr) {
-    pr.id = 'f' + Math.random().toString(36).slice(2, 9); pr.t = this.t;
+  addPrint(pr, fromNet) {
+    if (this.net && !fromNet) (this.outPrints = this.outPrints || []).push(pr);
+    if (!fromNet) { pr.id = 'f' + Math.random().toString(36).slice(2, 9); pr.t = this.t; }
     this.prints.push(pr);
     if (this.prints.length > 500) this.prints.shift();
   }
@@ -278,6 +300,12 @@ export class Game {
     const now = performance.now();
     let total = Math.min(600, (now - this.last) / 1000);
     this.last = now;
+    if (this.net) {
+      const target = this.netClockT();
+      if (target < 0) { this.renderCountdown(-target); return; }
+      total = Math.min(600, target - this.t);
+      if (total < 0) return;
+    }
     // в фоне браузер может вызывать таймер реже — прогоняем пропущенное время шагами по секунде
     while (total > 1 && !this.ended) { this.stepSim(1, false); total -= 1; }
     if (!this.ended) this.stepSim(total, true);
@@ -287,7 +315,10 @@ export class Game {
     if (this.ended) return;
     this.t += dt;
     const ph = this.phase();
-    if (ph === 'end') { this.finish(this.hiders().length > 0 ? 'hiders' : 'hunters'); return; }
+    if (ph === 'end') {
+      if (this.isClient) { if (this.t > this.cfg.hideSec + this.cfg.huntSec + 25) this.finish(this.hiders().length > 0 ? 'hiders' : 'hunters'); if (draw) this.render(); return; }
+      this.finish(this.hiders().length > 0 ? 'hiders' : 'hunters'); return;
+    }
 
     // перемещение игрока
     const me = this.me;
@@ -305,17 +336,15 @@ export class Game {
     if (this.ch.allpw && ph === 'hunt' && !this.allGiven) { this.allGiven = true; for (const id of this.enabledPw) { const pw = pwById(id); if (pw && (pw.side === 'both' || pw.side === me.role)) me.powerups.push(id, id); } this.renderHud(true); }
 
     // боты
-    for (const p of this.players) if (p.bot) this.botThink(p, dt, ph);
-    for (const p of this.players) if (p.bot) this.updateStamina(p, dt);
+    for (const p of this.players) if (p.bot && p.sim) this.botThink(p, dt, ph);
+    for (const p of this.players) if (p.bot && p.sim) this.updateStamina(p, dt);
+    if (this.net) this.netStep(dt);
 
     if (ph === 'hunt') {
-      this.checkCatches();
-      this.checkSupplies();
-      this.updateMission(dt);
-      this.botAbilities();
+      if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); }
       this.checkZone(dt);
       if (!this.shrinkWarned && this.t > this.cfg.hideSec + 5) { this.shrinkWarned = true; this.alert('green', t('zoneShrink'), 'target'); }
-      if (this.hiders().length === 0) { this.finish('hunters'); return; }
+      if (!this.isClient && this.hiders().length === 0) { this.finish('hunters'); return; }
     }
     if (this.flare && this.t >= this.flare.at && !this.flare.shown) { this.flare.shown = true; this.alert('blue', t('flareShow'), 'flare'); }
     if (this.flare && this.t > this.flare.at + 30) this.flare = null;
@@ -434,7 +463,7 @@ export class Game {
   botAbilities() {
     const bots = this.hunters().filter((h) => h.bot);
     if (!bots.length) return;
-    const meHunter = this.me.role === 'hunter';
+    const meHunter = this.hunters().some((h) => !h.bot);
     // «Раскрытие»: если игрок охотник — ждём его 45 с после готовности
     if (this.t >= this.revealReadyAt + (meHunter ? 45 : rnd(3, 12))) this.doReveal(bots[0]);
     if (this.hasFreeze && this.t >= this.freezeReadyAt + (meHunter ? 60 : 5)) {
@@ -454,8 +483,10 @@ export class Game {
     this.revealReadyAt = this.t + this.revealCd;
     const r = Math.min(110, Math.max(50, this.R * 0.16));
     let n = 0;
+    const made = [];
     for (const h of this.hiders()) {
       if (h === this.me && this.ch.immune) continue;
+      if (h.remote && h.netCh && h.netCh.i) continue;
       let miss = false;
       if (this.t < h.smokeUntil) miss = true;
       else if (h.jams > 0) { h.jams--; miss = true; }
@@ -464,12 +495,14 @@ export class Game {
       let cx = h.x, cy = h.y;
       if (h.misdirect) { h.misdirect = false; const a = rnd(0, 6.28); cx += Math.cos(a) * 150; cy += Math.sin(a) * 150; }
       const o = this.randIn(r * 0.75);
-      this.circles.push({ id: 'c' + Math.random().toString(36).slice(2, 8), x: cx + o.x, y: cy + o.y, r, t: this.t, owner: h.id });
+      const c = { id: 'c' + Math.random().toString(36).slice(2, 8), x: cx + o.x, y: cy + o.y, r, t: this.t, owner: h.id };
+      this.circles.push(c); made.push(c);
       this.events.push({ k: 'r', t: Math.round(this.t), x: Math.round(cx + o.x), y: Math.round(cy + o.y), r: Math.round(r), p: this.players.indexOf(h) });
       n++;
       if (h === this.me) { this.alert('red', t('revealedYou'), 'signal'); this.vibrate([200, 80, 200]); }
     }
     if (this.me.role === 'hunter') this.alert('blue', n ? t('revealSent') : t('revealNone'), 'signal');
+    if (this.isHost) this.netSend('reveal', { c: made.map((c) => [c.id, Math.round(c.x), Math.round(c.y), Math.round(c.r), c.owner]), rr: this.revealReadyAt });
   }
 
   doFreeze(by) {
@@ -477,19 +510,23 @@ export class Game {
     this.freezeReadyAt = this.t + this.freezeCd;
     const range = this.freezeRange();
     let n = 0;
+    const ids = [], warded = [];
     for (const h of this.hiders()) {
       if (h === this.me && this.ch.immune) continue;
+      if (h.remote && h.netCh && h.netCh.i) continue;
       if (!this.hunters().some((u) => dist(u, h) < range)) continue;
-      if (h.wards > 0) { h.wards--; if (h === this.me) this.alert('green', t('wardSaved'), 'shield'); continue; }
-      h.warnUntil = this.t + 8; h.frozenUntil = this.t + 8 + 25; n++;
+      if (h.wards > 0) { h.wards--; warded.push(h.id); if (h === this.me) this.alert('green', t('wardSaved'), 'shield'); continue; }
+      h.warnUntil = this.t + 8; h.frozenUntil = this.t + 8 + 25; n++; ids.push(h.id);
       if (h === this.me) { h.frozenDrift = 0; h.frozenPenalty = false; this.runToggle = false; this.vibrate([300, 100, 300]); }
     }
     if (n) this.events.push({ k: 'f', t: Math.round(this.t), n });
     if (this.me.role === 'hunter') this.alert('blue', n ? t('freezeSent', { n }) : t('freezeNone'), 'snow');
+    if (this.isHost) this.netSend('freeze', { ids, warded, wu: this.t + 8, fu: this.t + 33, fr: this.freezeReadyAt });
   }
 
-  catchPlayer(hunter, h) {
+  catchPlayer(hunter, h, fromNet) {
     if (h.role !== 'hider') return;
+    if (this.isHost && !fromNet) this.netSend('caught', { a: hunter.id, b: h.id });
     h.caughtAt = this.t; h.caughtBy = hunter.name; hunter.catches = (hunter.catches || 0) + 1;
     this.events.push({ k: 'c', t: Math.round(this.t), a: this.players.indexOf(hunter), b: this.players.indexOf(h), x: Math.round(h.x), y: Math.round(h.y) });
     h.wasCaught = true; h.role = 'hunter'; h.running = false; h.target = null; h.holdMission = false;
@@ -504,7 +541,7 @@ export class Game {
     const cr = this.cfg.mode === 'gps' ? 12 : 9;
     for (const u of this.hunters()) {
       if (!u.bot) continue;
-      for (const h of this.hiders()) if (dist(u, h) < cr && !(h === this.me && this.ch.untouch)) this.catchPlayer(u, h);
+      for (const h of this.hiders()) if (dist(u, h) < cr && !(h === this.me && this.ch.untouch) && !(h.remote && h.netCh && h.netCh.u)) this.catchPlayer(u, h);
     }
   }
 
@@ -512,13 +549,14 @@ export class Game {
     if (!this.hasPowerups) return;
     for (const s of [...this.supplies]) {
       for (const p of this.players) {
-        if (dist(p, s) > (p === this.me && this.ch.magnet ? 90 : 18)) continue;
+        if (dist(p, s) > ((p === this.me && this.ch.magnet) || (p.remote && p.netCh && p.netCh.m) ? 90 : 18)) continue;
         const pool = this.enabledPw.map(pwById).filter((x) => x && (x.side === 'both' || x.side === p.role));
         if (!pool.length) break;
         const pw = pool[Math.floor(Math.random() * pool.length)];
         this.supplies = this.supplies.filter((x) => x !== s);
         setTimeout(() => { if (!this.ended) this.supplies.push(this.newSupply()); }, 45000);
         if (p === this.me) { this.stats.supplies++; this.me.powerups.push(pw.id); this.alert('green', t('pickedUp', { p: pwName(pw) }), 'supply'); this.vibrate([60]); this.renderHud(true); }
+        else if (p.remote) this.netSend('picked', { by: p.id, pw: pw.id });
         else this.botGain(p, pw.id);
         break;
       }
@@ -556,6 +594,7 @@ export class Game {
         const pos = {}; this.players.forEach((q) => { pos[q.id] = { x: q.x, y: q.y, role: q.role, name: q.name }; });
         this.flare = { at: T + 10, pos, shown: false };
         this.alert('blue', t('flareFired'), 'flare');
+        if (this.isHost) this.netSend('flare', { at: T + 10, pos });
         break;
       }
     }
@@ -579,7 +618,9 @@ export class Game {
     }
     this.me.powerups.splice(i, 1);
     this.stats.powers++;
+    if (this.isClient && id === 'flare') { this.netSend('power', { id }); this.renderHud(true); return; }
     this.applyPower(this.me, id);
+    if (this.isClient && ['revealBoost', 'freezeBoost', 'ward', 'jam', 'smoke', 'silence', 'misdirect', 'ghost'].includes(id)) this.netSend('power', { id });
     if (!['lookout', 'decoy', 'flare'].includes(id)) this.alert('green', t('usedPw', { p: pwName(pw) }), pw.icon);
     this.renderHud(true);
   }
@@ -590,6 +631,7 @@ export class Game {
       const pt = this.randZone(0.75, 0.15);
       this.mission = { ...pt, r: 50, deadline: this.t + 150, need: 60, progress: 0, started: false };
       this.events.push({ k: 'm', t: Math.round(this.t), x: Math.round(pt.x), y: Math.round(pt.y), r: 50 });
+      this.netSend('mnew', {});
       if (this.me.role === 'hider') this.alert('yellow', t('missionNew'), 'diamond');
       this.renderHud(true);
     }
@@ -599,22 +641,25 @@ export class Game {
     if (inside.length) {
       if (!m.started) {
         m.started = true;
+        this.netSend('mheld', {});
         if (this.me.role === 'hunter') this.alert('yellow', t('missionSeen'), 'diamond');
         else this.alert('yellow', t('missionHeld'), 'diamond');
       }
       m.progress += dt;
       if (m.progress >= m.need) {
+        const rewards = {};
         for (const h of inside) {
           const pool = this.enabledPw.map(pwById).filter((x) => x && x.side !== 'hunter');
           for (let k = 0; k < 2 && pool.length; k++) {
             const id = pool[Math.floor(Math.random() * pool.length)].id;
-            if (h === this.me) this.me.powerups.push(id); else this.botGain(h, id);
+            if (h === this.me) this.me.powerups.push(id); else if (h.remote) (rewards[h.id] = rewards[h.id] || []).push(id); else this.botGain(h, id);
           }
           if (h === this.me) this.stats.missions++;
         }
         if (this.me.role === 'hider') this.alert('green', t('missionDone'), 'trophy');
         this.hiders().forEach((h) => h.holdMission = false);
         this.events.push({ k: 'md', t: Math.round(this.t) });
+        this.netSend('mdone', { rw: rewards });
         this.mission = null; this.nextMissionAt = this.t + 90; this.renderHud(true);
         return;
       }
@@ -623,6 +668,7 @@ export class Game {
       this.alert('red', this.me.role === 'hider' ? t('missionFail') : t('exposedAll'), 'eye');
       this.hiders().forEach((h) => h.holdMission = false);
       this.events.push({ k: 'mf', t: Math.round(this.t) });
+      this.netSend('mfail', { until: this.t + 60 });
       this.mission = null; this.nextMissionAt = this.t + 90; this.renderHud(true);
     }
   }
@@ -661,6 +707,7 @@ export class Game {
       poly: this.poly ? this.poly.map((q) => [Math.round(q.x), Math.round(q.y)]) : null,
       hideSec: this.cfg.hideSec, huntSec: this.cfg.huntSec, shrinkTo: this.cfg.shrinkTo, winner,
     };
+    if (this.isHost) this.netSend('end', { w: winner, res: this.players.map((p) => ({ id: p.id, caughtAt: p.caughtAt != null ? Math.round(p.caughtAt) : null, caughtBy: p.caughtBy || null, catches: p.catches || 0 })) });
     this.opts.onEnd(result);
   }
 
@@ -746,7 +793,7 @@ export class Game {
     // ракета
     this.layers.flare.forEach((l) => l.remove()); this.layers.flare = [];
     if (this.flare && this.flare.shown) for (const id in this.flare.pos) {
-      if (id === 'me') continue;
+      if (id === this.me.id) continue;
       const q = this.flare.pos[id];
       this.layers.flare.push(L.marker(this.ll(q), { interactive: false, icon: L.divIcon({ className: '', iconSize: [18, 18], iconAnchor: [9, 9], html: `<div class="mk"><div class="mk-ghost" style="border-color:${q.role === 'hunter' ? '#f26d7d' : '#5fd38d'}"></div><div class="mk-name">${esc(q.name)}</div></div>` }) }).addTo(map));
     }
@@ -813,7 +860,7 @@ export class Game {
 
     // ожидание охотника
     if (hunter && ph === 'hide') {
-      if (!cover.firstChild) cover.innerHTML = `<div class="wait-cover"><div><div style="font-size:20px">${t('huntStartsIn')}</div><div class="big" id="wBig"></div><div style="color:#c8d1e0;max-width:280px">${t('waitHint')}</div></div></div>`;
+      if (!cover.querySelector('#wBig')) cover.innerHTML = `<div class="wait-cover"><div><div style="font-size:20px">${t('huntStartsIn')}</div><div class="big" id="wBig"></div><div style="color:#c8d1e0;max-width:280px">${t('waitHint')}</div></div></div>`;
       cover.querySelector('#wBig').textContent = fmt(this.cfg.hideSec - T);
     } else if (cover.firstChild) cover.innerHTML = '';
 
@@ -868,11 +915,11 @@ export class Game {
         break;
       }
       case 'cheats': this.opts.openCheats(); break;
-      case 'leave': this.opts.confirm(t('leaveConfirm'), () => { this.ended = true; this.opts.onLeave(); }); break;
+      case 'leave': this.opts.confirm(t('leaveConfirm'), () => { this.netSend(this.isHost ? 'abort' : 'bye', {}); this.ended = true; this.opts.onLeave(); }); break;
       case 'tray': this.trayOpen = !this.trayOpen; this.renderHud(true); break;
       case 'run': this.runToggle = !this.runToggle; this.renderHud(true); break;
-      case 'reveal': if (this.phase() === 'hunt' && (this.t >= this.revealReadyAt || this.ch.nocd)) { if (this.ch.nocd) this.revealReadyAt = this.t; this.doReveal(me); } break;
-      case 'freeze': if (this.phase() === 'hunt' && (this.t >= this.freezeReadyAt || this.ch.nocd)) { if (this.ch.nocd) this.freezeReadyAt = this.t; this.doFreeze(me); } break;
+      case 'reveal': if (this.phase() === 'hunt' && (this.t >= this.revealReadyAt || this.ch.nocd)) { if (this.isClient) { this.netSend('req', { k: 'reveal' }); break; } if (this.ch.nocd) this.revealReadyAt = this.t; this.doReveal(me); } break;
+      case 'freeze': if (this.phase() === 'hunt' && (this.t >= this.freezeReadyAt || this.ch.nocd)) { if (this.isClient) { this.netSend('req', { k: 'freeze' }); break; } if (this.ch.nocd) this.freezeReadyAt = this.t; this.doFreeze(me); } break;
       case 'catch': this.catchModal(); break;
     }
   }
@@ -889,7 +936,8 @@ export class Game {
       box.querySelector('[data-x]').onclick = close;
       box.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => {
         const h = this.players.find((p) => p.id === b.dataset.id);
-        close(); if (h && h.role === 'hider') this.catchPlayer(this.me, h);
+        close();
+        if (h && h.role === 'hider') { if (this.isClient) this.netSend('req', { k: 'catch', h: h.id, r: !!this.ch.reach }); else this.catchPlayer(this.me, h); }
       });
     });
   }
@@ -903,5 +951,7 @@ export class Game {
     });
   }
 }
+
+Object.assign(Game.prototype, netMixin);
 
 export { fmt };
