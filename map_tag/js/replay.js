@@ -104,6 +104,7 @@ export function renderReplay(el, r, { onBack }) {
       : e.k === 'f' ? `${I.snow}<span>${t('freezeSent', { n: e.n })}</span>`
       : e.k === 'm' ? `${I.diamond}<span>${ru ? 'Новое задание' : 'New mission'}</span>`
       : e.k === 'md' ? `${I.trophy}<span>${ru ? 'Задание выполнено' : 'Mission complete'}</span>`
+      : e.k === 'ch' ? `${I.sparkle}<span>🎲 ${t('chaos_' + e.e)}</span>`
       : e.k === 'fr' ? `${I.shield}<span>${ru ? 'Пленников выручили: ' + e.n : 'Prisoners freed: ' + e.n}</span>`
       : `${I.eye}<span>${ru ? 'Задание провалено' : 'Mission failed'}</span>`;
     const box = el.querySelector('#rEv');

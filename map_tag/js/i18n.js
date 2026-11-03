@@ -119,7 +119,7 @@ const ru = {
   netAreaCap: 'Площадка игры. Её выбирает организатор.', netHostTag: 'организатор', netOnlineTag: 'в сети', netNoPlace: 'Организатор ещё не выбрал площадку',
   transportShort: 'водящим можно транспорт', startIn: 'Старт через', hostLeft: 'Организатор закрыл лобби', playerLeft: '{n} вышел(ла) из игры',
   helpers: 'Помощники поиска', compass: 'Компас', detector: 'Детектор', fog: 'Туман войны', hv_off: 'Выкл', hv_hunters: 'Охотникам', hv_all: 'Всем',
-  helpersHelp: '<b>Компас</b> — стрелка на ближайшего соперника: охотнику на прячущегося, прячущемуся на охотника. Направление обновляется раз в 20 секунд. Если у телефона есть датчик компаса, стрелка учитывает, куда вы смотрите.<br><b>Детектор</b> — «холодно / тепло / горячо / очень горячо» до ближайшего соперника (больше 300 м, 150–300, 50–150, меньше 50 м), со звуком и вибрацией, когда становится ближе.<br><b>Туман войны</b> — карта видна только примерно на 120 м вокруг вас, дальше темно. Круги, следы и метки видны поверх тумана.',
+  helpersHelp: '<b>Компас</b> — стрелка на ближайшего соперника: охотнику на прячущегося, прячущемуся на охотника. Направление обновляется раз в 20 секунд. Если у телефона есть датчик компаса, стрелка учитывает, куда вы смотрите.<br><b>Детектор</b> — «холодно / тепло / горячо / очень горячо» до ближайшего соперника (больше 300 м, 150–300, 50–150, меньше 50 м), со звуком и вибрацией, когда становится ближе.<br><b>Случайные события</b> — раз в 2–3 минуты охоты: охотники ослеплены, сирена (прячущиеся видны всем), дождь тайников или прилив сил.<br><b>Туман войны</b> — карта видна только примерно на 120 м вокруг вас, дальше темно. Круги, следы и метки видны поверх тумана.',
   seekToHider: 'Ближайший прячущийся', seekToHunter: 'Ближайший охотник', seekNone: 'Соперников рядом нет', seekNext: 'новое направление через {s} с', seekNorth: 'стрелка от севера',
   det_veryHot: 'Очень горячо', det_hot: 'Горячо', det_warm: 'Тепло', det_cold: 'Холодно',
   chat: 'Чат', chatAll: 'Все', chatTeam: 'Команда', hidersPl: 'прячущиеся', huntersPl: 'охотники', chatPh: 'Сообщение…', chatEmpty: 'Пока тихо. Напишите первым или зажмите рацию.',
@@ -146,6 +146,9 @@ const ru = {
   ach_missions5: '5 заданий', ach_caches10: '10 тайников', ach_km5: '5 км пешком', ach_treasure: 'Кладоискатель', ach_blitz: 'Победа в блице', ach_online: 'Игра с друзьями', ach_games10: '10 игр',
   quickGame: 'Быстрая игра', quickGameS: 'блиц с ботами за одно касание',
   resWatched: 'Вы смотрели игру 👁', spectator: 'Зритель', spectatorS: 'видите всех, не играете',
+  botLevel: 'Сложность ботов', bl_easy: 'Лёгкие', bl_normal: 'Обычные', bl_hard: 'Хитрые',
+  bigText: 'Крупный текст', bigTextS: 'Удобнее читать на бегу и на солнце', eco: 'Экономия батареи', ecoS: 'Игра обновляет экран раз в секунду, без анимаций',
+  chaos: 'Случайные события', chaosOn: 'Вкл', chaos_blind: 'Охотники ослеплены — 30 секунд без «Раскрытия»!', chaos_siren: 'Сирена! Прячущиеся видны всем 10 секунд!', chaos_rain: 'Дождь тайников: на карте 5 новых бонусов!', chaos_surge: 'Прилив сил: у прячущихся полная выносливость!',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -262,7 +265,7 @@ const en = {
   netAreaCap: 'The play area. The host picks it.', netHostTag: 'host', netOnlineTag: 'online', netNoPlace: 'The host has not picked a place yet',
   transportShort: 'hunters may use transport', startIn: 'Starting in', hostLeft: 'The host closed the lobby', playerLeft: '{n} left the game',
   helpers: 'Search helpers', compass: 'Compass', detector: 'Detector', fog: 'Fog of war', hv_off: 'Off', hv_hunters: 'Hunters', hv_all: 'Everyone',
-  helpersHelp: '<b>Compass</b> — an arrow to the nearest opponent: Hunters see the nearest Hider, Hiders the nearest Hunter. The direction refreshes every 20 seconds and follows your phone’s heading when it has a compass sensor.<br><b>Detector</b> — cold / warm / hot / very hot to the nearest opponent (over 300 m, 150–300, 50–150, under 50 m), with a beep and buzz as it gets closer.<br><b>Fog of war</b> — the map is visible only about 120 m around you, beyond that it is dark. Circles, footprints and markers show on top of the fog.',
+  helpersHelp: '<b>Compass</b> — an arrow to the nearest opponent: Hunters see the nearest Hider, Hiders the nearest Hunter. The direction refreshes every 20 seconds and follows your phone’s heading when it has a compass sensor.<br><b>Detector</b> — cold / warm / hot / very hot to the nearest opponent (over 300 m, 150–300, 50–150, under 50 m), with a beep and buzz as it gets closer.<br><b>Random events</b> — every 2–3 minutes of the hunt: blinded Hunters, a siren (Hiders visible to all), cache rain or a second wind.<br><b>Fog of war</b> — the map is visible only about 120 m around you, beyond that it is dark. Circles, footprints and markers show on top of the fog.',
   seekToHider: 'Nearest Hider', seekToHunter: 'Nearest Hunter', seekNone: 'No opponents', seekNext: 'new bearing in {s} s', seekNorth: 'arrow from north',
   det_veryHot: 'Very hot', det_hot: 'Hot', det_warm: 'Warm', det_cold: 'Cold',
   chat: 'Chat', chatAll: 'Everyone', chatTeam: 'Team', hidersPl: 'hiders', huntersPl: 'hunters', chatPh: 'Message…', chatEmpty: 'Quiet so far. Say something or hold the radio.',
@@ -289,6 +292,9 @@ const en = {
   ach_missions5: '5 missions', ach_caches10: '10 caches', ach_km5: '5 km on foot', ach_treasure: 'Treasure hunter', ach_blitz: 'Blitz win', ach_online: 'Played with friends', ach_games10: '10 games',
   quickGame: 'Quick game', quickGameS: 'blitz with bots in one tap',
   resWatched: 'You watched the game 👁', spectator: 'Spectator', spectatorS: 'you see everyone, not playing',
+  botLevel: 'Bot difficulty', bl_easy: 'Easy', bl_normal: 'Normal', bl_hard: 'Sneaky',
+  bigText: 'Large text', bigTextS: 'Easier to read on the move and in sunlight', eco: 'Battery saver', ecoS: 'The game refreshes once a second, no animations',
+  chaos: 'Random events', chaosOn: 'On', chaos_blind: 'Hunters blinded — no Reveal for 30 seconds!', chaos_siren: 'Siren! Hiders are visible to everyone for 10 seconds!', chaos_rain: 'Cache rain: 5 new power-ups on the map!', chaos_surge: 'Second wind: Hiders get full stamina!',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 

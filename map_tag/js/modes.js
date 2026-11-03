@@ -44,6 +44,16 @@ export const modesMixin = {
   // ---------- шаг (организатор / офлайн) ----------
   modesStep(dt) {
     if (this.phase() !== 'hunt') return;
+    if (this.cfg.chaos) {
+      if (this.nextChaos == null) this.nextChaos = this.cfg.hideSec + 90 + Math.random() * 60;
+      if (this.t >= this.nextChaos) {
+        this.nextChaos = this.t + 120 + Math.random() * 60;
+        const kinds = ['blind', 'siren', 'rain', 'surge'].concat(this.hasPowerups ? [] : []).filter((k) => k !== 'rain' || this.hasPowerups);
+        const k = kinds[Math.floor(Math.random() * kinds.length)];
+        this.chaosApply(k, true);
+        this.netSend('chaos', { k, t: this.t });
+      }
+    }
     if (this.gmode === 'jail') {
       const jailed = this.players.filter((p) => p.jailed);
       if (!jailed.length) { this.rescue = 0; return; }
@@ -81,6 +91,19 @@ export const modesMixin = {
     this.events.push({ k: 'fr', t: Math.round(this.t), n: freed.length });
     this.renderHud(true);
   },
+  /** Случайное событие («хаос»). host — эффекты, которые решает организатор. */
+  chaosApply(k, host) {
+    const T = this.t;
+    if (k === 'blind' && host) this.revealReadyAt = Math.max(this.revealReadyAt, T + 30);
+    if (k === 'siren') for (const h of this.hiders()) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 10);
+    if (k === 'rain' && host) for (let i = 0; i < 5; i++) this.supplies.push(this.newSupply());
+    if (k === 'surge') for (const h of this.players) if (h.sim && h.role === 'hider') h.stamina = 100;
+    const mine = { blind: this.me.role === 'hunter' ? 'red' : 'green', siren: this.me.role === 'hider' ? 'red' : 'green', rain: 'green', surge: this.me.role === 'hider' ? 'green' : 'yellow' }[k];
+    this.alert(mine, '🎲 ' + t('chaos_' + k), 'sparkle');
+    this.vibrate([100, 60, 100]);
+    this.events.push({ k: 'ch', t: Math.round(T), e: k });
+  },
+
   /** Поимка в особых режимах. Возвращает true, если обработано. */
   jailCatch(hunter, h) {
     if (this.gmode === 'sardines') {
@@ -143,6 +166,7 @@ export const modesMixin = {
     const P = (id) => this.players.find((p) => p.id === id);
     if (type === 'tpick') { this.treasures = this.treasures.filter((x) => x.id !== d.id); this.treasureGot++; const h = P(d.by); if (h) this.onTreasure(h); return true; }
     if (type === 'freed') { const h = P(d.by); this.freeAll(h || { name: '?' }); return true; }
+    if (type === 'chaos') { this.chaosApply(d.k, false); return true; }
     if (type === 'rescuing') { if (this.me.role === 'hunter') this.alert('yellow', t('jailRescuing'), 'lock'); else if (this.me.jailed) this.alert('green', t('jailRescuingYou'), 'lock'); return true; }
     return false;
   },

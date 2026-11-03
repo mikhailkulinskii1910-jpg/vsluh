@@ -216,7 +216,7 @@ function presetsBlock() {
     <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
 }
 function bindPresets(el, lb) {
-  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'chaos', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
   const sv = el.querySelector('#psave');
   if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
     b.querySelector('[data-x]').onclick = close;
@@ -453,6 +453,7 @@ const SCREENS = {
       <div class="sect">${t('helpers')}<button class="qbtn" data-q="helpers">${I.help}</button></div>
       <div class="card" style="padding:4px 16px">
         ${['compass', 'detector', 'fog'].map((k) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap">${I[k === 'compass' ? 'north' : k === 'fog' ? 'cloud' : 'scan'].replace('<svg', '<svg width="22" height="22" style="color:var(--accent)"')}<b>${t(k)}</b></span><div class="seg">${['off', 'hunters', 'all'].map((v) => `<button data-hk="${k}:${v}" class="${(lb[k] || 'off') === v ? 'on' : ''}">${t('hv_' + v)}</button>`).join('')}</div></div>`).join('')}
+        <div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="font-size:20px">🎲</span><b>${t('chaos')}</b></span><div class="seg">${['off', 'on'].map((v) => `<button data-chaos="${v}" class="${(lb.chaos ? 'on' : 'off') === v ? 'on' : ''}">${t(v === 'on' ? 'chaosOn' : 'hv_off')}</button>`).join('')}</div></div>
       </div>
       ${S.dev ? presetsBlock() : ''}
       ${summary}
@@ -467,7 +468,7 @@ const SCREENS = {
       : `<div class="crew-row">${badge(p.role)}<span class="nm">${p.bot ? '' : (p.remote ? p.avatar || '' : S.avatar || '') + ' '}${esc(p.bot || p.remote ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : p.remote ? `<span style="color:var(--hider)">●</span> ${t('netOnlineTag')}` : t('hostYou')}</span></span></div>`).join('');
 
     const step2 = `
-      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : []), ...(lb.fog && lb.fog !== 'off' ? [t('fog')] : [])].join(' · ')}</span></button>
+      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : []), ...(lb.fog && lb.fog !== 'off' ? [t('fog')] : []), ...(lb.chaos ? ['🎲 ' + t('chaos')] : [])].join(' · ')}</span></button>
       ${summary}
       <div class="map-card">
         <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button><button class="btn" id="mapEd" style="min-height:48px;padding:0 12px">✏️ ${t('mapEditor')}</button>
@@ -517,6 +518,7 @@ const SCREENS = {
     hostPublish();
     el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => { lb.step = +b.dataset.step; save(); go('lobby'); });
+    el.querySelectorAll('[data-chaos]').forEach((b) => b.onclick = () => { lb.chaos = b.dataset.chaos === 'on'; rerender(); });
     el.querySelectorAll('[data-gm]').forEach((b) => b.onclick = () => { lb.gmode = b.dataset.gm; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-hk]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.hk.split(':'); lb[k] = v; rerender(); });
     el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : b.dataset.q === 'helpers' ? t('helpersHelp') : b.dataset.q === 'gmode' ? t('gmodeHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
@@ -627,7 +629,7 @@ const SCREENS = {
         bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
         roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal',
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos,
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
       };
       base.avatar = S.avatar || null;

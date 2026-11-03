@@ -68,7 +68,7 @@ export const netMixin = {
     const P = (id) => this.netPlayer(id);
     if (this.isClient && from === this.net.hostId) this.netClock(ts);
     const me = this.me;
-    if (this.isClient && ['tpick', 'freed', 'rescuing'].includes(type)) { this.modesNet(type, d); return; }
+    if (this.isClient && ['tpick', 'freed', 'rescuing', 'chaos'].includes(type)) { this.modesNet(type, d); return; }
     switch (type) {
       case 'pos': {   // позиция участника — получают все
         const p = P(from); if (!p || p.sim) break;
