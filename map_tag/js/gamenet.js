@@ -49,6 +49,7 @@ export const netMixin = {
         s: this.supplies.map((q) => [q.id, Math.round(q.x), Math.round(q.y)]),
         m: m ? [Math.round(m.x), Math.round(m.y), m.r, r1(m.deadline), m.need, r1(m.progress), m.started ? 1 : 0] : null,
         rr: r1(this.revealReadyAt), fr: r1(this.freezeReadyAt), nm: this.nextMissionAt === Infinity ? -1 : r1(this.nextMissionAt), pr,
+        md: this.modesState(),
       });
     } else {
       const me = this.me;
@@ -67,6 +68,7 @@ export const netMixin = {
     const P = (id) => this.netPlayer(id);
     if (this.isClient && from === this.net.hostId) this.netClock(ts);
     const me = this.me;
+    if (this.isClient && ['tpick', 'freed', 'rescuing'].includes(type)) { this.modesNet(type, d); return; }
     switch (type) {
       case 'pos': {   // позиция участника — получают все
         const p = P(from); if (!p || p.sim) break;
@@ -87,6 +89,7 @@ export const netMixin = {
           const fresh = !this.mission || Math.abs(this.mission.x - x) > 1 || Math.abs(this.mission.y - y) > 1;
           this.mission = fresh ? { x, y, r, deadline, need, progress, started: !!started } : Object.assign(this.mission, { deadline, need, progress, started: !!started });
         } else this.mission = null;
+        if (d.md) this.modesApply(d.md);
         this.revealReadyAt = d.rr; this.freezeReadyAt = d.fr; this.nextMissionAt = d.nm < 0 ? Infinity : d.nm;
         this.netPrints(d.pr);
         break;

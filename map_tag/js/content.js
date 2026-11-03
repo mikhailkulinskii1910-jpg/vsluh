@@ -129,6 +129,7 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['1.9', ['Режимы игры: Классика, Тюрьма (пойманных можно выручить у ⛓), Кладоискатели (соберите все 🪙), Сардинки (прятки наоборот), Блиц (5 минут).', 'Редактор карт: граница, запретные зоны, свои точки тайников, заданий, тюрьмы и сокровищ; сохранение карт и передача кодом.', 'Приколы: звуковая панель в чате (гудок, кря, ба-дум-тсс…), а в секретных читах — розыгрыши друзей: ложная тревога, переворот экрана, тряска, фейк-поимка, туман.', 'Достижения в профиле, конфетти при победе, «Быстрая игра» на главной.']],
     ['1.8', ['Голосовой чат в реальном времени (Чат → «Войти в голосовой чат»): каналы «Все» и «Команда», индикатор говорящего, кнопка микрофона прямо в игре.', 'Связь напрямую (WebRTC), а если сеть не пускает — автоматически через сервер с задержкой около секунды.']],
     ['1.7', ['Чат в онлайн-игре: каналы «Все» и «Команда», быстрые фразы, «📍 Где я» — точка на карте у вашей команды.', 'Рация: групповые голосовые сообщения — держите кнопку и говорите, у остальных проигрывается сразу.']],
     ['1.6', ['Помощники поиска (лобби → шаг 1): компас на ближайшего соперника и детектор расстояния «холодно — горячо», для охотников или для всех.', 'Чит «Точный радар»: точные метры и живая стрелка.']],
@@ -140,6 +141,7 @@ export const PATCH_NOTES = {
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['1.9', ['Game modes: Classic, Jail (free the caught at ⛓), Treasure hunt (collect every 🪙), Sardines (reverse hide-and-seek), Blitz (5 minutes).', 'Map editor: border, no-go zones, your own cache, mission, jail and treasure points; save maps and share them by code.', 'Fun: a soundboard in chat (horn, quack, ba-dum-tss…), and in the secret cheats — pranks: fake alarm, flipped screen, shake, fake catch, fog.', 'Achievements in the profile, confetti on a win, Quick game on the home screen.']],
     ['1.8', ['Real-time voice chat (Chat → “Join voice chat”): Everyone and Team channels, speaking indicator, mic button right in the game.', 'Direct connection (WebRTC), and automatically via the server with about a second of delay when the network blocks it.']],
     ['1.7', ['Online chat: Everyone and Team channels, quick phrases, “📍 Where I am” shows your spot to your team.', 'Radio: group voice messages — hold the button and talk, the others hear it right away.']],
     ['1.6', ['Search helpers (lobby → step 1): a compass to the nearest opponent and a cold-to-hot distance detector, for Hunters or everyone.', 'Exact radar cheat: exact metres and a live arrow.']],

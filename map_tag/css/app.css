@@ -474,3 +474,39 @@ html[data-theme] .res-hero { background: var(--card); }
 .vlegend { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
 .vlegend .st { margin-left: 6px; }
 .sq.talking { box-shadow: 0 0 0 4px rgba(95,211,141,.55); }
+
+/* ---------- приколы ---------- */
+.fxrow { display: flex; gap: 6px; margin: 0 0 10px; }
+.fxb { flex: 1; min-height: 44px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); font-size: 22px; cursor: pointer; }
+.fxb:active { transform: scale(.92); }
+.prankrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.prankrow .btn { font-size: 14px; padding: 0 8px; }
+html.prank-flip body { transform: rotate(180deg); transition: transform .6s; }
+html.prank-shake body { animation: prshake .12s linear infinite; }
+@keyframes prshake { 0% { transform: translate(0, 0); } 25% { transform: translate(-6px, 3px); } 50% { transform: translate(5px, -4px); } 75% { transform: translate(-4px, -3px); } 100% { transform: translate(0, 0); } }
+html.prank-blind body::before { content: ''; position: fixed; inset: 0; z-index: 2500; pointer-events: none; background: radial-gradient(circle at 50% 55%, transparent 12%, rgba(200,205,215,.92) 45%); animation: fade .6s; }
+/* режимы */
+.gmodes .opt { min-height: 110px; }
+.mk-jail { min-width: 34px; height: 34px; padding: 0 6px; border-radius: 10px; background: #2b3346; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 4px; font-weight: 700; border: 2px solid #8fa0c0; white-space: nowrap; }
+.mk-jail b { background: var(--hider); color: #0f2c1b; border-radius: 6px; padding: 0 5px; }
+.mk-tr { font-size: 22px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); animation: trbob 1.6s ease-in-out infinite; }
+@keyframes trbob { 50% { transform: translateY(-4px); } }
+.ed-pt { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-size: 13px; color: #3a2a00; border: 2px solid #111; }
+/* редактор */
+.ed-tools { display: flex; gap: 6px; overflow-x: auto; padding: 2px; }
+.ed-tool { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 70px; padding: 8px 6px; border-radius: 16px; background: var(--hud-bg); border: 2px solid var(--hud-line); color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; }
+.ed-tool span { font-size: 20px; }
+.ed-tool.on { border-color: var(--accent); background: var(--accent-soft); }
+/* достижения и конфетти */
+.ach { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ach .a { border-radius: 18px; border: 1px solid var(--line); background: var(--card); padding: 12px 6px; text-align: center; font-size: 12px; color: var(--muted); }
+.ach .a .i { font-size: 30px; display: block; filter: grayscale(1); opacity: .35; }
+.ach .a.on { color: var(--text); border-color: var(--gold); }
+.ach .a.on .i { filter: none; opacity: 1; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 2600; overflow: hidden; }
+.confetti i { position: absolute; top: -20px; width: 10px; height: 14px; border-radius: 2px; animation: conf 2.8s linear forwards; }
+@keyframes conf { to { transform: translateY(110vh) rotate(720deg); } }
+.menu-btn.m-quick { background: linear-gradient(135deg, #3b2f1a, #2a2433); color: var(--gold); border-color: #6a5a30; }
+.menu-btn.m-quick .mi { background: rgba(0,0,0,.2); font-size: 28px; }
+.menu-btn small { font-size: 13px; font-weight: 500; color: var(--muted); }
+html[data-theme] .menu-btn.m-quick { background: var(--card); color: var(--text); border-color: var(--line); }

@@ -5,6 +5,7 @@ import { POWERUPS, pwById, pwName, pwDesc } from './content.js';
 import { beep } from './sound.js';
 import { netMixin } from './gamenet.js';
 import { seekMixin } from './seek.js';
+import { modesMixin } from './modes.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -64,7 +65,8 @@ export class Game {
     this.shrinkWarned = false;
     this.makePlayers();
     if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
-    if (this.hasPowerups && !this.isClient) for (let i = 0; i < 6 + Math.round(this.R / 150); i++) this.supplies.push(this.newSupply());
+    this.nogo = []; this.modesInit();
+    if (this.hasPowerups && !this.isClient) for (let i = 0, n = this.ptSupply.length || 6 + Math.round(this.R / 150); i < n; i++) this.supplies.push(this.newSupply());
     if (this.isClient) this.nextMissionAt = Infinity;
     if (this.net) this.netInit();
   }
@@ -84,11 +86,11 @@ export class Game {
   }
   randZone(fMax, fMin = 0) {
     const k = this.zoneScale();
-    if (!this.poly) return this.randIn(this.R * k * fMax, this.R * k * fMin);
+    if (!this.poly) { for (let i = 0; i < 40; i++) { const pt = this.randIn(this.R * k * fMax, this.R * k * fMin); if (!(this.nogo && this.inNogo(pt))) return pt; } return this.randIn(this.R * k * fMax, this.R * k * fMin); }
     const b = this.pbox;
     for (let i = 0; i < 300; i++) {
       const pt = { x: rnd(b.x0, b.x1) * k * fMax, y: rnd(b.y0, b.y1) * k * fMax };
-      if (this.inZone(pt, fMax) && (!fMin || !this.inZone(pt, fMin))) return pt;
+      if (this.inZone(pt, fMax) && (!fMin || !this.inZone(pt, fMin)) && !(this.nogo && this.inNogo(pt))) return pt;
     }
     return { x: 0, y: 0 };
   }
@@ -145,6 +147,11 @@ export class Game {
       roles.forEach((r, i) => this.players.push(mk('b' + i, names[i % names.length], r, true, COLORS[i % COLORS.length])));
     }
     this.me.startRole = myRole;
+    if (this.cfg.gmode === 'sardines' && !this.isClient && !(this.cfg.roles && this.cfg.roles[0] && this.cfg.roles[0].id)) {
+      const hiders = this.players.filter((p) => p.role === 'hider');
+      const keep = hiders.find((p) => p === this.me) || hiders[0] || this.players[0];
+      this.players.forEach((p) => { p.role = p === keep ? 'hider' : 'hunter'; });
+    }
     this.players.forEach((p) => { p.startRole = p.role; p.sim = p === this.me || (p.bot && !this.isClient); });
     // все стартуют у центра одинаково (позиции остальных придут по сети)
     if (this.net) this.players.forEach((p, i) => { p.x = Math.cos(i * 2.4) * 10; p.y = Math.sin(i * 2.4) * 10; p.nx = p.x; p.ny = p.y; });
@@ -250,8 +257,8 @@ export class Game {
   }
 
   // ---------- сущности ----------
-  newSupply() { const zr = this.zoneR(); return { id: 's' + Math.random().toString(36).slice(2, 8), ...this.randZone(0.92, 0.1) }; }
-  hiders() { return this.players.filter((p) => p.role === 'hider' && p.alive); }
+  newSupply() { const p = this.pickPoint(this.ptSupply, this.supplies) || this.randZone(0.92, 0.1); return { id: 's' + Math.random().toString(36).slice(2, 8), x: p.x, y: p.y }; }
+  hiders() { return this.players.filter((p) => p.role === 'hider' && p.alive && !p.jailed); }
   hunters() { return this.players.filter((p) => p.role === 'hunter'); }
   isFrozen(p) { return this.t < p.frozenUntil && this.t >= p.warnUntil; }
 
@@ -326,7 +333,7 @@ export class Game {
     // перемещение игрока
     const me = this.me;
     if (this.cfg.mode === 'demo' || this.ch.spoof) {
-      if (!this.ch.spoof && (this.isFrozen(me) || (me.role === 'hunter' && ph === 'hide'))) { me.running = false; me.speed = 0; }
+      if (!this.ch.spoof && (this.isFrozen(me) || me.jailed || (me.role === 'hunter' && ph === 'hide'))) { me.running = false; me.speed = 0; }
       else if (me.target) { if (this.step(me, me.target, this.runToggle, dt)) me.target = null; }
       else { me.running = false; me.speed = 0; }
     } else {
@@ -342,9 +349,10 @@ export class Game {
     for (const p of this.players) if (p.bot && p.sim) this.botThink(p, dt, ph);
     for (const p of this.players) if (p.bot && p.sim) this.updateStamina(p, dt);
     if (this.net) this.netStep(dt);
+    this.modesLocal(dt);
 
     if (ph === 'hunt') {
-      if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); }
+      if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); this.modesStep(dt); if (this.ended) return; }
       this.checkZone(dt);
       if (!this.shrinkWarned && this.t > this.cfg.hideSec + 5) { this.shrinkWarned = true; this.alert('green', t('zoneShrink'), 'target'); }
       if (!this.isClient && this.hiders().length === 0) { this.finish('hunters'); return; }
@@ -432,7 +440,9 @@ export class Game {
           p.holdMission = true; p.target = { x: m.x + rnd(-15, 15), y: m.y + rnd(-15, 15) };
         } else {
           p.holdMission = false;
-          const sup = ph === 'hunt' && this.supplies.find((s) => dist(s, p) < 90);
+          const mt = this.modeBotTarget(p);
+          const sup = !mt && ph === 'hunt' && this.supplies.find((s) => dist(s, p) < 90);
+          if (mt) p.target = mt; else
           if (sup) p.target = { x: sup.x, y: sup.y };
           else if (!p.target && (ph === 'hide' || Math.random() < 0.18 || !this.inZone(p, 0.92))) p.target = this.randZone(0.85, 0.25);
         }
@@ -456,7 +466,7 @@ export class Game {
       if (m && m.started) p.target = { x: m.x + rnd(-20, 20), y: m.y + rnd(-20, 20) };
       else if (fresh) p.target = { x: fresh.x, y: fresh.y };
       else if (circ) { const o = this.randIn(circ.r * 0.9); p.target = { x: circ.x + o.x, y: circ.y + o.y }; }
-      else p.target = this.randZone(0.85);
+      else p.target = this.modeBotTarget(p) || this.randZone(0.85);
     }
     if (this.step(p, p.target, p.chase, dt)) p.target = null;
   }
@@ -530,12 +540,22 @@ export class Game {
   catchPlayer(hunter, h, fromNet) {
     if (h.role !== 'hider') return;
     if (this.isHost && !fromNet) this.netSend('caught', { a: hunter.id, b: h.id });
+    if (this.gmode === 'sardines') {
+      if (hunter.role !== 'hunter') return;
+      hunter.catches = (hunter.catches || 0) + 1;
+      this.events.push({ k: 'c', t: Math.round(this.t), a: this.players.indexOf(hunter), b: this.players.indexOf(h), x: Math.round(h.x), y: Math.round(h.y) });
+      if (hunter === this.me) this.stats.caught++;
+      this.jailCatch(hunter, h);
+      return;
+    }
     h.caughtAt = this.t; h.caughtBy = hunter.name; hunter.catches = (hunter.catches || 0) + 1;
     this.events.push({ k: 'c', t: Math.round(this.t), a: this.players.indexOf(hunter), b: this.players.indexOf(h), x: Math.round(h.x), y: Math.round(h.y) });
-    h.wasCaught = true; h.role = 'hunter'; h.running = false; h.target = null; h.holdMission = false;
-    h.frozenUntil = 0; h.warnUntil = 0;
+    if (!this.jailCatch(hunter, h)) {
+      h.wasCaught = true; h.role = 'hunter'; h.running = false; h.target = null; h.holdMission = false;
+      h.frozenUntil = 0; h.warnUntil = 0;
+    }
     if (hunter === this.me) { this.stats.caught++; this.alert('green', t('youCaughtX', { b: h.name }), 'target'); }
-    else if (h === this.me) { this.stats.timesCaught++; this.alert('red', t('youCaught'), 'target'); this.vibrate([400]); this.trayOpen = false; }
+    else if (h === this.me) { this.stats.timesCaught++; if (this.gmode !== 'jail') this.alert('red', t('youCaught'), 'target'); this.vibrate([400]); this.trayOpen = false; }
     else this.alert('red', t('caughtBy', { a: hunter.name, b: h.name }), 'target');
     this.renderHud(true);
   }
@@ -631,7 +651,7 @@ export class Game {
   // ---------- задания ----------
   updateMission(dt) {
     if (!this.mission && this.t >= this.nextMissionAt) {
-      const pt = this.randZone(0.75, 0.15);
+      const pt = this.pickPoint(this.ptMission) || this.randZone(0.75, 0.15);
       this.mission = { ...pt, r: 50, deadline: this.t + 150, need: 60, progress: 0, started: false };
       this.events.push({ k: 'm', t: Math.round(this.t), x: Math.round(pt.x), y: Math.round(pt.y), r: 50 });
       this.netSend('mnew', {});
@@ -697,7 +717,7 @@ export class Game {
     const me = this.me;
     const won = (winner === 'hiders' && me.role === 'hider') || (winner === 'hunters' && me.role === 'hunter');
     const result = {
-      winner, won, role: me.role, startRole: me.startRole, survivors: this.hiders().length,
+      winner, won, role: me.role, startRole: me.startRole, survivors: this.hiders().length, gmode: this.gmode, lastSeeker: this.gmode === 'sardines' && this.hunters()[0] ? this.hunters()[0].name : null,
       duration: Math.round(this.t), stats: { ...this.stats }, mode: this.cfg.mode,
       replay: { center: this.c0, R: this.R, track: this.track, date: Date.now(), name: me.name },
       players: this.players.map((p) => ({ name: p.name, me: p === me, bot: p.bot, startRole: p.startRole || (p.wasCaught ? 'hider' : p.role), role: p.role, caughtAt: p.caughtAt != null ? Math.round(p.caughtAt) : null, caughtBy: p.caughtBy || null, catches: p.catches || 0, color: p === me ? '#ffffff' : p.color })),
@@ -802,6 +822,7 @@ export class Game {
     }
 
     this.drawPings();
+    this.modesRender();
     this.renderHud(false);
   }
 
@@ -835,10 +856,11 @@ export class Game {
     if (m && !m.started) { msK = t('enterBy'); msV = fmt(m.deadline - T); idle = false; }
     else if (m && m.started) { msK = t('holding'); msV = fmt(m.need - m.progress); idle = false; }
     else if (this.nextMissionAt < Infinity && ph === 'hunt') { msV = fmt(this.nextMissionAt - T); idle = false; }
+    const mc = this.modesCell(); if (mc && !m) { msK = mc.k; msV = mc.v; idle = false; }
 
     const alive = this.hiders().length, hcount = this.hunters().length;
     const frozenNow = this.isFrozen(me), warnNow = T < me.warnUntil && T < me.frozenUntil;
-    const sig = [full, this.alertsDirty, this.moreOpen, frozenNow, warnNow, me.role, this.cfg.mode, alive].join('|');
+    const sig = [full, this.alertsDirty, this.moreOpen, frozenNow, warnNow, me.role, this.cfg.mode, alive, !!me.jailed].join('|');
     if (full || sig !== this.topSig) {
       this.topSig = sig; this.alertsDirty = false;
       top.innerHTML = `
@@ -861,6 +883,7 @@ export class Game {
           ${this.opts.cheatsUnlocked && this.opts.cheatsUnlocked() ? `<button class="btn block" data-a="cheats" style="color:var(--hunter)">${I.lock}${t('cheats')}</button>` : ''}
           <button class="btn danger block" data-a="leave">${I.leave}${t('leaveGame')}</button>
         </div>` : ''}
+        ${this.modesBanner()}
         ${warnNow ? `<div class="frozen warn"><div><div class="t1">${t('freezeWarn')}</div><div class="t2">${t('freezeWarnS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
         ${frozenNow ? `<div class="frozen"><div><div class="t1">${t('frozenT')}</div><div class="t2">${t('frozenS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
         ${this.alerts.map((a) => `<div class="banner ${a.kind}"><div class="bi">${I[a.icon] || I.signal}</div><div>${esc(a.text)}</div></div>`).join('')}
@@ -978,6 +1001,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin, seekMixin);
+Object.assign(Game.prototype, netMixin, seekMixin, modesMixin);
 
 export { fmt };

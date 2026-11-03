@@ -4,14 +4,15 @@ import { I } from './icons.js';
 import { POWERUPS, pwName, pwDesc, tutorialSteps, PATCH_NOTES } from './content.js';
 import { Game, fmt, BOT_NAMES } from './game.js';
 import { applyTheme, themePicker } from './themes.js';
-import { checkPass, renderCheats, openWheel, openGameCheats } from './cheats.js';
+import { checkPass, renderCheats, openWheel, openGameCheats, applyPrank } from './cheats.js';
 import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
+import { renderMapEditor, drawMapExtras, mapPoints } from './mapeditor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '1.8';
+const VERSION = '1.9';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -38,13 +39,13 @@ const defaultLobby = () => ({
 });
 function genCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 function calc(lb) {
-  const sz = SIZES[lb.size], a = lb.adv || {};
-  const radius = a.radius || Math.round(sz.r * Math.sqrt(VIS[lb.vis] * LIGHT[lb.light]) / 10) * 10;
-  const huntSec = a.total || sz.min * 60;
+  const sz = SIZES[lb.size], a = lb.adv || {}, blitz = lb.gmode === 'blitz';
+  const radius = a.radius || Math.round(sz.r * Math.sqrt(VIS[lb.vis] * LIGHT[lb.light]) * (blitz ? 0.75 : 1) / 10) * 10;
+  const huntSec = a.total || (blitz ? 300 : sz.min * 60);
   return {
-    radius, huntSec, huntMin: Math.round(huntSec / 60), hideSec: a.head != null ? a.head : Math.round(sz.min * 12),
-    shrinkTo: a.shrink === false ? 1 : (a.final || 70) / 100,
-    revealCd: lb.revealCd || (lb.extra === 'tutorial' ? 120 : 90), freezeCd: lb.freezeCd || 150,
+    radius, huntSec, huntMin: Math.round(huntSec / 60), hideSec: a.head != null ? a.head : blitz ? 45 : Math.round(sz.min * 12),
+    shrinkTo: a.shrink === false ? 1 : (a.final || (blitz ? 55 : 70)) / 100,
+    revealCd: lb.revealCd || (blitz ? 40 : lb.extra === 'tutorial' ? 120 : 90), freezeCd: lb.freezeCd || (blitz ? 60 : 150),
   };
 }
 /** Список игроков лобби: вы + боты с ролями. */
@@ -82,6 +83,7 @@ function netRoute(type, d, from, ts) {
   if (!NET) return;
   if (NET.role === 'client' && from === NET.hostId) netSample(ts);
   if (type === 'chat') { chatHandle(d, from); return; }
+  if (type === 'prank') { applyPrank(d.k, game, toast); return; }
   if (/^v(join|here|sig|relay|leave|chunk|talk)$/.test(type)) { voiceHandle(type, d, from); return; }
   if (game && game.net) { if (type !== 'lobby' && type !== 'hello' && type !== 'ping') game.netHandle(type, d, from, ts); if (type === 'lobby') return; }
   if (NET.role === 'host') hostOnMsg(type, d, from, ts); else clientOnMsg(type, d, from, ts);
@@ -107,7 +109,7 @@ function hostPublish(status) {
     const c = calc(lb);
     NET.room.setLobby({
       status: NET.lobbyStatus || 'lobby', hostId: NET.myId, host: S.name, code: lb.code,
-      set: { size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false, compass: lb.compass || 'off', detector: lb.detector || 'off' },
+      set: { gmode: lb.gmode || 'classic', size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false, compass: lb.compass || 'off', detector: lb.detector || 'off' },
       players: lb.players.map((p) => ({ id: p.id, name: p.bot ? p.name : p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, host: !p.bot && !p.remote })),
     });
   }, 250);
@@ -211,7 +213,7 @@ function presetsBlock() {
     <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
 }
 function bindPresets(el, lb) {
-  const keys = ['size', 'vis', 'light', 'extra', 'compass', 'detector', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
   const sv = el.querySelector('#psave');
   if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
     b.querySelector('[data-x]').onclick = close;
@@ -292,7 +294,7 @@ function go(screen, arg) {
   const fn = SCREENS[screen] || SCREENS.home;
   $app.innerHTML = '';
   const el = document.createElement('div');
-  el.className = screen === 'game' || screen === 'replay' ? '' : 'screen screen-enter';
+  el.className = screen === 'game' || screen === 'replay' || screen === 'mapEditor' ? '' : 'screen screen-enter';
   $app.appendChild(el);
   fn(el, arg);
   window.scrollTo(0, 0);
@@ -307,9 +309,28 @@ const SCREENS = {
         <button class="menu-btn m-join" data-go="join"><span class="mi">${I.users}</span><span class="lbl">${t('join')}</span><span class="arr">${I.arrowR}</span></button>
         <button class="menu-btn m-host" data-go="host"><span class="mi">${I.map}</span><span class="lbl">${t('host')}</span><span class="arr">${I.arrowR}</span></button>
         <button class="menu-btn m-stats" data-go="stats"><span class="mi">${I.user}</span><span class="lbl">${t('stats')}</span><span class="arr">${I.arrowR}</span></button>
+        <button class="menu-btn m-quick" id="quick"><span class="mi">⚡</span><span class="lbl">${t('quickGame')}<br><small>${t('quickGameS')}</small></span><span class="arr">${I.arrowR}</span></button>
         <button class="menu-btn m-learn" data-go="learn"><span class="mi">${I.book}</span><span class="lbl">${t('learn')}</span><span class="arr">${I.arrowR}</span></button>
       </div>${supportBlock()}`;
     bindCommon(el);
+    el.querySelector('#quick').onclick = () => SCREENS.quick();
+  },
+
+  quick() {
+    // быстрая игра: блиц с ботами в демо-режиме, у вас или в центре Москвы
+    const start = (center) => {
+      const lb = { ...defaultLobby(), gmode: 'blitz', mode: 'demo', center, step: 2 };
+      ensurePlayers(lb);
+      const cc = calc(lb);
+      go('game', { center, radius: cc.radius, polygon: null, huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo, features: 'spice', powerups: lb.powerups,
+        revealCd: cc.revealCd, freezeCd: cc.freezeCd, bots: 5, hunters: 2, roles: lb.players.map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })),
+        myRole: 'hider', mode: 'demo', name: S.name || 'Я', transport: true, compass: 'off', detector: 'all', gmode: 'classic', nogo: [], points: {}, blitz: true, cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {} });
+    };
+    const fallback = { lat: 55.7520, lng: 37.6175 };
+    if (!navigator.geolocation) return start(fallback);
+    let done = false; const go2 = (c) => { if (!done) { done = true; start(c); } };
+    navigator.geolocation.getCurrentPosition((p) => go2({ lat: p.coords.latitude, lng: p.coords.longitude }), () => go2(fallback), { timeout: 4000 });
+    setTimeout(() => go2(fallback), 4500);
   },
 
   host(el) {
@@ -377,7 +398,7 @@ const SCREENS = {
       <div class="make-yours"><div><div class="k">${t('netHostIs')}</div><h2>${esc(L0.host || '—')}</h2></div></div>
       ${chatBtnHtml()}
       <div class="card wait-card">${I.clock}<div><b>${t('netWaiting')}</b><div style="color:var(--muted);font-size:15px;margin-top:4px">${meP ? t('netYourRole', { r: t(meP.role) }) : t('netNotListed')}</div></div></div>
-      <div class="set-sum" style="cursor:default">${I.gear}<b>${t('settings')}</b><span>${[t(st.size || 'medium'), t(st.vis === 'city' ? 'openCity' : st.vis || 'mixed'), t(st.light || 'day'), t(st.extra || 'spice'), ...(st.compass && st.compass !== 'off' ? [t('compass') + ': ' + t('hv_' + st.compass)] : []), ...(st.detector && st.detector !== 'off' ? [t('detector') + ': ' + t('hv_' + st.detector)] : [])].join(' · ')}</span></div>
+      <div class="set-sum" style="cursor:default">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (st.gmode || 'classic')), t(st.size || 'medium'), t(st.vis === 'city' ? 'openCity' : st.vis || 'mixed'), t(st.light || 'day'), t(st.extra || 'spice'), ...(st.compass && st.compass !== 'off' ? [t('compass') + ': ' + t('hv_' + st.compass)] : []), ...(st.detector && st.detector !== 'off' ? [t('detector') + ': ' + t('hv_' + st.detector)] : [])].join(' · ')}</span></div>
       <div class="summary"><div class="l">${t('radius')}</div><div class="l">${t('huntDur')}</div>
         <div class="v">${Math.round(st.radius || 0)} ${t('m')}</div><div class="v">${fmt(st.huntSec || 0)}</div>
         <div class="sub">${t('toHide', { t: fmt(st.hideSec || 0) })} · ${st.shrinkTo < 1 ? t('shrinks', { p: Math.round(st.shrinkTo * 100) }) : t('noShrink')}${st.transport !== false ? ' · ' + t('transportShort') : ''}</div></div>
@@ -416,6 +437,8 @@ const SCREENS = {
         <div class="saved">${t('saved')}</div></div>`;
 
     const step1 = `
+      <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button></div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -441,10 +464,10 @@ const SCREENS = {
       : `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.bot || p.remote ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : p.remote ? `<span style="color:var(--hider)">●</span> ${t('netOnlineTag')}` : t('hostYou')}</span></span></div>`).join('');
 
     const step2 = `
-      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : [])].join(' · ')}</span></button>
+      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : [])].join(' · ')}</span></button>
       ${summary}
       <div class="map-card">
-        <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button>
+        <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button><button class="btn" id="mapEd" style="min-height:48px;padding:0 12px">✏️ ${t('mapEditor')}</button>
           <div class="seg" style="margin-left:auto">${['circle', 'custom'].map((z) => `<button data-zs="${z}" class="${(lb.shape || 'circle') === z ? 'on' : ''}">${t(z === 'circle' ? 'shapeCircle' : 'shapeCustom')}</button>`).join('')}</div></div>
         <div class="pick-map" id="pmap"></div>
         ${lb.shape === 'custom'
@@ -491,8 +514,9 @@ const SCREENS = {
     hostPublish();
     el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => { lb.step = +b.dataset.step; save(); go('lobby'); });
+    el.querySelectorAll('[data-gm]').forEach((b) => b.onclick = () => { lb.gmode = b.dataset.gm; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-hk]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.hk.split(':'); lb[k] = v; rerender(); });
-    el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : b.dataset.q === 'helpers' ? t('helpersHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
+    el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : b.dataset.q === 'helpers' ? t('helpersHelp') : b.dataset.q === 'gmode' ? t('gmodeHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
     el.querySelector('#leave').onclick = () => { if (NET && NET.role === 'host') { NET.room.send('abort', {}); NET.room.clearLobby(); setTimeout(netClose, 500); } S.lobby = null; save(); go('home'); };
     el.querySelector('#share').onclick = () => shareLobby(lb.code);
     el.querySelector('#qr').onclick = () => { lb.showQr = !lb.showQr; rerender(); };
@@ -576,6 +600,8 @@ const SCREENS = {
     }
     setTimeout(() => { pm.invalidateSize(); fit(); }, 60);
     el.querySelector('#pFit').onclick = fit;
+    el.querySelector('#mapEd').onclick = () => go('mapEditor');
+    drawMapExtras(pm, lb);
     const locate = (quiet) => navigator.geolocation && navigator.geolocation.getCurrentPosition((p) => {
       if (custom) pm.setView([p.coords.latitude, p.coords.longitude], 16); else setC(p.coords.latitude, p.coords.longitude, true);
     }, () => { if (!quiet) toast(t('noGps').split('—')[0]); }, { enableHighAccuracy: true, timeout: 15000 });
@@ -599,6 +625,7 @@ const SCREENS = {
         roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot })),
         myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
         compass: lb.compass || 'off', detector: lb.detector || 'off',
+        gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
       };
       if (!online) return go('game', { ...base, roles: lb.players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
       const startAt = Date.now() + 5000;
@@ -669,7 +696,7 @@ const SCREENS = {
       <div class="res-hero ${hidersWin ? 'hid' : 'hun'}">
         <div class="ic">${I.trophy}</div>
         <div class="k">${t('endT')} · ${fmt(res.duration)}</div>
-        <h1>${hidersWin ? t('endHiders') : t('endHunters')}</h1>
+        <h1>${res.gmode === 'sardines' ? (res.lastSeeker ? t('sardEnd', { n: esc(res.lastSeeker) }) : t('sardEndAll')) : res.gmode === 'treasure' && hidersWin ? t('trWin') : hidersWin ? t('endHiders') : t('endHunters')}</h1>
         <div class="you ${res.won ? 'w' : 'l'}">${res.won ? t('resYouWon') : t('resYouLost')} · ${t(res.role)}</div>
       </div>
       <div class="duo">
@@ -742,6 +769,8 @@ const SCREENS = {
             <div><div class="l">${t('timeRunning')}</div><div class="v" style="color:#5fd38d">${fmtLong(st.timeHide)}</div></div>
             <div><div class="l">${t('timesCaught')}</div><div class="v">${st.timesCaught}</div></div></div></div></div>
       <div class="story">${st.games ? t('storyGo') : t('storyStart')}</div>
+      <h3 class="h-sect">${t('achTitle')} · ${Object.keys(S.ach || {}).length}/${ACH.length}</h3>
+      <div class="ach">${ACH.map(([id, ic]) => `<div class="a ${(S.ach || {})[id] ? 'on' : ''}"><span class="i">${ic}</span>${t('ach_' + id)}</div>`).join('')}</div>
       <h3 class="row" style="font-size:24px;margin-bottom:14px">${I.user.replace('<svg', '<svg width="30" height="30"')} ${esc(S.name || '—')}</h3>
       <details class="acc"><summary>${I.gear}${t('privacy')}<span class="chev">${I.chevD}</span></summary><div class="in"><p>${t('privacyText')}</p>
         <div class="row"><button class="btn" id="exp">${t('exportData')}</button><button class="btn danger" id="rst">${t('resetStats')}</button></div></div></details>
@@ -762,6 +791,11 @@ const SCREENS = {
     };
     el.querySelectorAll('[data-h]').forEach((b) => b.onclick = () => { S.heard = +b.dataset.h; save(); el.querySelectorAll('[data-h]').forEach((x) => x.classList.toggle('on', x === b)); toast(t('thanks')); });
     el.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => openReplay(S.replays[+b.dataset.rep]));
+  },
+
+  mapEditor(el) {
+    S._calcRadius = () => (S.lobby ? calc(S.lobby).radius : 500);
+    renderMapEditor(el, { S, save, go, toast, modal });
   },
 
   cheats(el) {
@@ -809,11 +843,33 @@ function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1).
 function fmtLong(s) { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; }
 
 // ---------- конец игры ----------
+const ACH = [
+  ['first', '🎉', (st) => st.games >= 1], ['win', '🏆', (st) => st.wins >= 1], ['catch1', '🎯', (st) => st.caught >= 1],
+  ['catch10', '🦅', (st) => st.caught >= 10], ['survivor', '🥷', (st, r) => r && r.won && r.startRole === 'hider' && !r.stats.timesCaught],
+  ['missions5', '⭐', (st) => st.missions >= 5], ['caches10', '💎', (st) => st.supplies >= 10], ['km5', '👟', (st) => st.dist >= 5000],
+  ['treasure', '🪙', (st, r) => r && (r.stats.treasures || 0) >= 1], ['blitz', '⚡', (st, r) => r && r.won && r.blitz], ['online', '🌐', (st, r) => r && r.online],
+  ['games10', '🔥', (st) => st.games >= 10],
+];
+function checkAch(r) {
+  S.ach = S.ach || {};
+  const fresh = [];
+  for (const [id, , fn] of ACH) if (!S.ach[id] && fn(S.stats, r)) { S.ach[id] = Date.now(); fresh.push(id); }
+  return fresh;
+}
+function confetti() {
+  const c = document.createElement('div'); c.className = 'confetti';
+  const cols = ['#ff8a5b', '#5fd38d', '#f6c453', '#a99bff', '#4fd1c5', '#f26d7d'];
+  c.innerHTML = Array.from({ length: 70 }, () => `<i style="left:${Math.random() * 100}%;background:${cols[Math.floor(Math.random() * cols.length)]};animation-delay:${Math.random() * 0.8}s;animation-duration:${2 + Math.random() * 1.6}s"></i>`).join('');
+  document.body.appendChild(c); setTimeout(() => c.remove(), 4500);
+}
+
 function endGame(res, cfg) {
   const st = S.stats, g = res.stats;
   st.dist += g.dist; st.games++; st.time += res.duration; st.caught += g.caught; st.missions += g.missions; st.supplies += g.supplies;
   st.powers += g.powers; st.timeHunt += g.timeHunt; st.timeHide += g.timeHide; st.timesCaught += g.timesCaught; if (res.won) st.wins++;
   const rep = { ...res.replay, won: res.won, role: res.role, duration: res.duration, dist: g.dist, winner: res.winner, players: res.players, stats: g };
+  const freshAch = checkAch({ ...res, blitz: cfg.blitz || (S.lobby && S.lobby.gmode === 'blitz'), online: !!cfg.net });
+  setTimeout(() => { if (res.won) confetti(); freshAch.forEach((id, i) => setTimeout(() => toast(`${ACH.find((a) => a[0] === id)[1]} ${t('achNew')}: ${t('ach_' + id)}`), 600 + i * 1600)); }, 300);
   if (S.saveReplays !== false) {
     S.replays.unshift(rep);
     S.replays = S.replays.slice(0, 10);
