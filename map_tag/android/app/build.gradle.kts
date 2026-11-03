@@ -7,8 +7,8 @@ android {
         applicationId = "ru.maptag.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
     signingConfigs {
         create("release") {
@@ -30,7 +30,12 @@ android {
     }
 }
 
-dependencies { implementation("androidx.webkit:webkit:1.12.1") }
+dependencies {
+    implementation("androidx.webkit:webkit:1.12.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+}
+android.testOptions.unitTests.isIncludeAndroidResources = true
 
 // Веб-версия (папка map_tag/) копируется в assets/www при каждой сборке
 val syncWeb = tasks.register<Sync>("syncWeb") {

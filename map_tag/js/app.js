@@ -6,8 +6,9 @@ import { Game, fmt, BOT_NAMES } from './game.js';
 import { applyTheme, themePicker } from './themes.js';
 import { checkPass, renderCheats, openWheel } from './cheats.js';
 import { beep, soundOn, setSound } from './sound.js';
+import { renderReplay } from './replay.js';
 
-const VERSION = '1.2';
+const VERSION = '1.3';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -162,13 +163,15 @@ function askPassword() {
 // ---------- навигация ----------
 let current = 'home';
 let game = null;
+let stopReplay = null;
 function go(screen, arg) {
   if (game) { game.destroy(); game = null; }
+  if (stopReplay) { stopReplay(); stopReplay = null; }
   current = screen;
   const fn = SCREENS[screen] || SCREENS.home;
   $app.innerHTML = '';
   const el = document.createElement('div');
-  el.className = screen === 'game' ? '' : 'screen screen-enter';
+  el.className = screen === 'game' || screen === 'replay' ? '' : 'screen screen-enter';
   $app.appendChild(el);
   fn(el, arg);
   window.scrollTo(0, 0);
@@ -441,6 +444,60 @@ const SCREENS = {
     draw();
   },
 
+  results(el, { res, cfg, rep }) {
+    const ru = getLang() === 'ru', g = res.stats;
+    const players = res.players || [];
+    const hidersWin = res.winner === 'hiders';
+    const survivors = players.filter((p) => p.startRole === 'hider' && p.caughtAt == null);
+    const caughtList = players.filter((p) => p.caughtAt != null).sort((a, b) => b.caughtAt - a.caughtAt);
+    const longest = survivors.length ? null : caughtList[0];
+    const topHunter = players.filter((p) => p.catches > 0).sort((a, b) => b.catches - a.catches)[0];
+    const row = (p) => {
+      const surv = p.startRole === 'hider' && p.caughtAt == null;
+      const status = p.startRole === 'hunter' ? (p.catches ? t('resCatches', { n: p.catches }) : t('hunter'))
+        : surv ? t('resSurvived') : t('resCaughtAt', { t: fmt(Math.max(0, p.caughtAt - cfg.hideSec)), b: esc(p.caughtBy || '') });
+      return `<div class="crew-row"><span class="rbadge ${p.startRole}">${t(p.startRole)}</span><span class="nm">${esc(p.name)}${p.me ? ` <span class="tag">· ${t('you')}</span>` : ''}<br><span class="tag">${status}</span></span>${surv ? `<span style="color:var(--hider)">${I.trophy.replace('<svg', '<svg width="24" height="24"')}</span>` : ''}</div>`;
+    };
+    el.innerHTML = `
+      <div class="res-hero ${hidersWin ? 'hid' : 'hun'}">
+        <div class="ic">${I.trophy}</div>
+        <div class="k">${t('endT')} · ${fmt(res.duration)}</div>
+        <h1>${hidersWin ? t('endHiders') : t('endHunters')}</h1>
+        <div class="you ${res.won ? 'w' : 'l'}">${res.won ? t('resYouWon') : t('resYouLost')} · ${t(res.role)}</div>
+      </div>
+      <div class="duo">
+        <div class="tile"><span style="color:var(--hider)">${I.run}</span><div class="v">${survivors.length}</div><div class="l">${t('resSurvivors')}</div></div>
+        <div class="tile"><span style="color:var(--hunter)">${I.target}</span><div class="v">${caughtList.length}</div><div class="l">${t('resCaught')}</div></div>
+      </div>
+      ${topHunter || longest ? `<div class="card" style="margin-top:14px">
+        ${topHunter ? `<div class="line-row"><span>${I.crosshair.replace('<svg', '<svg width="20" height="20" style="vertical-align:-4px;color:var(--hunter)"')} ${t('resTopHunter')}</span><b>${esc(topHunter.name)} · ${topHunter.catches}</b></div>` : ''}
+        ${longest ? `<div class="line-row"><span>${I.clock.replace('<svg', '<svg width="20" height="20" style="vertical-align:-4px;color:var(--hider)"')} ${t('resLongest')}</span><b>${esc(longest.name)} · ${fmt(longest.caughtAt - cfg.hideSec)}</b></div>` : ''}
+      </div>` : ''}
+      <h3 class="h-sect">${t('players')}</h3>
+      <div class="crew-list">${players.map(row).join('')}</div>
+      <h3 class="h-sect">${t('yourGame')}</h3>
+      <div class="card" style="padding:6px 18px">
+        <div class="line-row"><span>${t('distance')}</span><b>${fmtDist(g.dist)}</b></div>
+        <div class="line-row"><span>${t('caught')}</span><b>${g.caught}</b></div>
+        <div class="line-row"><span>${t('missionsDone')}</span><b>${g.missions}</b></div>
+        <div class="line-row"><span>${t('supplies')}</span><b>${g.supplies}</b></div>
+        <div class="line-row"><span>${t('powersSpent')}</span><b>${g.powers}</b></div></div>
+      <div class="bottom-bar"><div class="in">
+        <button class="btn primary big block" id="rWatch">${I.play}${t('watchReplay')}</button>
+        <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn" id="rLobby" style="flex:1">${t('toLobby')}</button><button class="btn" id="rAgain" style="flex:1">${t('again')}</button><button class="btn" id="rMenu" style="flex:1">${t('toMenu')}</button></div>
+      </div></div>`;
+    el.classList.add('has-bar', 'res');
+    el.querySelector('#rWatch').onclick = () => go('replay', { ...rep, _back: ['results', { res, cfg, rep }] });
+    el.querySelector('#rLobby').onclick = () => go(S.lobby ? 'lobby' : 'home');
+    el.querySelector('#rAgain').onclick = () => go('game', cfg);
+    el.querySelector('#rMenu').onclick = () => go('home');
+  },
+
+  replay(el, r) {
+    const back = r._back;
+    stopReplay = renderReplay(el, r, { onBack: () => { stopReplay = null; back ? go(back[0], back[1]) : go('stats'); } });
+  },
+
   game(el, cfg) {
     game = new Game(cfg, {
       lang: getLang(), modal, toast, confirm: confirmBox,
@@ -477,7 +534,7 @@ const SCREENS = {
         <div class="row"><button class="btn" id="exp">${t('exportData')}</button><button class="btn danger" id="rst">${t('resetStats')}</button></div></div></details>
       <hr style="border:0;border-top:1px solid var(--line);margin:26px 0">
       <div class="row" style="gap:16px;align-items:flex-start"><span style="color:var(--gold)">${I.book.replace('<svg', '<svg width="46" height="46"')}</span><div><div class="kicker" style="margin:0">${t('advKeep')}</div><h2 style="font-size:32px">${t('replays')}</h2></div></div>
-      <div id="reps" style="margin-top:16px">${S.replays.length ? S.replays.map((r, i) => `<div class="replay" data-rep="${i}"><div class="r-ico" style="background:${r.won ? '#1f3a2c' : '#3a222a'};color:${r.won ? 'var(--hider)' : 'var(--hunter)'}">${r.won ? I.trophy : I.target}</div><div style="flex:1"><b>${r.won ? t('won') : t('lost')}</b> · ${r.role === 'hunter' ? t('asHunter') : t('asHider')}<div style="color:var(--muted);font-size:14px">${new Date(r.date).toLocaleString(getLang(), { dateStyle: 'medium', timeStyle: 'short' })} · ${fmt(r.duration)} · ${fmtDist(r.dist)}</div></div>${I.arrowR.replace('<svg', '<svg width="22" height="22"')}</div>`).join('')
+      <div id="reps" style="margin-top:16px">${S.replays.length ? S.replays.map((r, i) => `<div class="replay" data-rep="${i}"><div class="r-ico" style="background:${r.won ? '#1f3a2c' : '#3a222a'};color:${r.won ? 'var(--hider)' : 'var(--hunter)'}">${r.won ? I.trophy : I.target}</div><div style="flex:1"><b>${r.won ? t('won') : t('lost')}</b> · ${r.role === 'hunter' ? t('asHunter') : t('asHider')}<div style="color:var(--muted);font-size:14px">${new Date(r.date).toLocaleString(getLang(), { dateStyle: 'medium', timeStyle: 'short' })} · ${fmt(r.duration)} · ${fmtDist(r.dist)}${r.rec ? ` · ${t('playersN', { n: r.rec.players.length })}` : ''}</div></div>${I.arrowR.replace('<svg', '<svg width="22" height="22"')}</div>`).join('')
         : `<div class="empty">${I.map}<h3>${t('replayEmptyT')}</h3><p>${t('replayEmptyS')}</p></div>`}</div>
       <button class="btn block big" id="refresh">${t('refresh')}</button>
       <div class="card" style="margin-top:22px"><h3 style="font-size:24px">${t('heard')}</h3><p style="color:var(--muted);margin:8px 0 0">${t('optional')}</p>
@@ -543,41 +600,17 @@ function endGame(res, cfg) {
   const st = S.stats, g = res.stats;
   st.dist += g.dist; st.games++; st.time += res.duration; st.caught += g.caught; st.missions += g.missions; st.supplies += g.supplies;
   st.powers += g.powers; st.timeHunt += g.timeHunt; st.timeHide += g.timeHide; st.timesCaught += g.timesCaught; if (res.won) st.wins++;
-  if (S.saveReplays !== false) S.replays.unshift({ ...res.replay, won: res.won, role: res.role, duration: res.duration, dist: g.dist, winner: res.winner });
-  S.replays = S.replays.slice(0, 10);
-  save();
-  modal(`<div style="text-align:center"><div style="color:${res.won ? 'var(--hider)' : 'var(--hunter)'}">${I.trophy.replace('<svg', '<svg width="64" height="64"')}</div>
-    <div style="color:var(--muted);margin-top:6px">${t('endT')}</div>
-    <h2 style="margin:6px 0">${res.winner === 'hiders' ? t('endHiders') : t('endHunters')}</h2>
-    <p style="color:var(--muted)">${t('survivors', { n: res.survivors })}</p></div>
-    <div class="card" style="margin:14px 0"><b>${t('yourGame')}: ${res.won ? t('won') : t('lost')}</b>
-      <div class="line-row"><span>${t('distance')}</span><b>${fmtDist(g.dist)}</b></div>
-      <div class="line-row"><span>${t('caught')}</span><b>${g.caught}</b></div>
-      <div class="line-row"><span>${t('missionsDone')}</span><b>${g.missions}</b></div>
-      <div class="line-row"><span>${t('supplies')}</span><b>${g.supplies}</b></div>
-      <div class="line-row"><span>${t('powersSpent')}</span><b>${g.powers}</b></div></div>
-    <div class="row"><button class="btn" data-m style="flex:1">${t('toMenu')}</button><button class="btn primary" data-a style="flex:1">${t('again')}</button></div>`, (b, close) => {
-    b.querySelector('[data-m]').onclick = () => { close(); go('home'); };
-    b.querySelector('[data-a]').onclick = () => { close(); go('game', cfg); };
-  }, { sticky: true });
+  const rep = { ...res.replay, won: res.won, role: res.role, duration: res.duration, dist: g.dist, winner: res.winner, players: res.players, stats: g };
+  if (S.saveReplays !== false) {
+    S.replays.unshift(rep);
+    S.replays = S.replays.slice(0, 10);
+    // localStorage ограничен: если не влезло — отбрасываем старые повторы
+    for (;;) { try { localStorage.setItem('mt_state', JSON.stringify(S)); break; } catch { if (S.replays.length <= 1) { S.replays.forEach((r) => { if (r.rec) r.rec.frames = r.rec.frames.filter((_, i) => i % 2 === 0); }); try { localStorage.setItem('mt_state', JSON.stringify(S)); } catch {} break; } S.replays.pop(); } }
+  } else save();
+  go('results', { res, cfg, rep });
 }
 
-function openReplay(r) {
-  if (!r) return;
-  modal(`<h2>${r.won ? t('won') : t('lost')}</h2><p style="color:var(--muted);margin-top:0">${new Date(r.date).toLocaleString(getLang())} · ${fmt(r.duration)}</p><div id="rmap" style="height:360px;border-radius:18px;overflow:hidden"></div><button class="btn block" data-x style="margin-top:14px">${t('done')}</button>`, (b, close) => {
-    b.querySelector('[data-x]').onclick = close;
-    const kx = 111320 * Math.cos(r.center.lat * Math.PI / 180), ky = 110540;
-    const ll = (p) => [r.center.lat + p[1] / ky, r.center.lng + p[0] / kx];
-    const m = L.map(b.querySelector('#rmap'), { zoomControl: false }).setView([r.center.lat, r.center.lng], 15);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
-    const z = L.circle([r.center.lat, r.center.lng], { radius: r.R, color: '#2c7a4b', weight: 3, dashArray: '10 8', fill: false }).addTo(m);
-    let seg = [], role = null;
-    const flush = () => { if (seg.length > 1) L.polyline(seg, { color: role ? '#f26d7d' : '#2fae66', weight: 5 }).addTo(m); };
-    for (const p of r.track || []) { if (role !== null && p[2] !== role) { flush(); seg = [seg[seg.length - 1]]; } role = p[2]; seg.push(ll(p)); }
-    flush();
-    setTimeout(() => { m.invalidateSize(); m.fitBounds(z.getBounds()); }, 50);
-  });
-}
+function openReplay(r) { if (r) go('replay', r); }
 
 // ---------- модальные окна ----------
 function openRules(startAt = 0) {

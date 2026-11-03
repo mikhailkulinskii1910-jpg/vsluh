@@ -106,6 +106,8 @@ const ru = {
   fix: 'Исправить', webOnly: 'В веб-версии недоступно — поставьте APK', onbSafety: 'Честно и безопасно', agreeSafety: 'Я буду соблюдать эти правила',
   onbData: 'Данные', onbDataS: 'Всё хранится только на этом телефоне: статистика, повторы и настройки. Ничего не отправляется на сервер.',
   saveReplays: 'Сохранять повторы раундов', onbName: 'Как вас зовут?', onbNameS: 'Имя увидят другие игроки.', letsGo: 'Поехали!',
+  resCatches: 'поймал(а): {n}', resSurvived: 'не пойман(а) до конца', resCaughtAt: 'пойман(а) на {t} охоты · {b}', resYouWon: 'Вы победили', resYouLost: 'Вы проиграли',
+  resSurvivors: 'Уцелели', resCaught: 'Пойманы', resTopHunter: 'Лучший охотник', resLongest: 'Дольше всех продержался', watchReplay: 'Смотреть повтор', toLobby: 'В лобби',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -209,6 +211,8 @@ const en = {
   fix: 'Fix', webOnly: 'Not available on the web — install the APK', onbSafety: 'Play fair, stay safe', agreeSafety: 'I will follow these rules',
   onbData: 'Data', onbDataS: 'Everything stays on this phone: stats, replays and settings. Nothing is sent to a server.',
   saveReplays: 'Save round replays', onbName: 'What’s your name?', onbNameS: 'Other players will see it.', letsGo: 'Let’s go!',
+  resCatches: 'caught {n}', resSurvived: 'never caught', resCaughtAt: 'caught at {t} of the hunt · {b}', resYouWon: 'You won', resYouLost: 'You lost',
+  resSurvivors: 'Survived', resCaught: 'Caught', resTopHunter: 'Top hunter', resLongest: 'Lasted longest', watchReplay: 'Watch replay', toLobby: 'Lobby',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 

@@ -27,7 +27,13 @@ import androidx.webkit.WebViewAssetLoader;
 
 /** Оболочка Map Tag: веб-версия из assets/www в WebView + GPS, камера и «Поделиться». */
 public class MainActivity extends Activity {
-    private static final String START = "https://appassets.androidplatform.net/www/index.html";
+    // Загрузчик отрезает префикс пути: /assets/www/index.html → файл assets/www/index.html
+    static final String BASE = "https://appassets.androidplatform.net/assets/www/";
+    private static final String START = BASE + "index.html";
+
+    static WebViewAssetLoader loader(android.content.Context c) {
+        return new WebViewAssetLoader.Builder().addPathHandler("/assets/", new WebViewAssetLoader.AssetsPathHandler(c)).build();
+    }
     private static final int REQ_LOC = 1, REQ_CAM = 2, REQ_PERM = 3;
     private boolean gameRunning = false;
 
@@ -42,9 +48,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        final WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
-                .addPathHandler("/www/", new WebViewAssetLoader.AssetsPathHandler(this))
-                .build();
+        final WebViewAssetLoader loader = loader(this);
 
         web = new WebView(this);
         web.setBackgroundColor(0xFF10141F);
