@@ -3,7 +3,7 @@ import { t } from './i18n.js';
 import { I } from './icons.js';
 import { POWERUPS, pwById, pwName, pwDesc } from './content.js';
 
-const BOT_NAMES = {
+export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
   en: ['Fox', 'Hedgehog', 'Owl', 'Badger', 'Lynx', 'Squirrel', 'Raccoon', 'Hawk', 'Marten', 'Hare'],
 };
@@ -23,7 +23,10 @@ export class Game {
     this.kx = 111320 * Math.cos(this.c0.lat * Math.PI / 180);
     this.ky = 110540;
     this.R = cfg.radius;
-    this.t = 0;
+    this.poly = cfg.polygon && cfg.polygon.length >= 3 ? cfg.polygon.map((q) => this.xy(q.lat, q.lng)) : null;
+    if (this.poly) this.pbox = { x0: Math.min(...this.poly.map((q) => q.x)), x1: Math.max(...this.poly.map((q) => q.x)), y0: Math.min(...this.poly.map((q) => q.y)), y1: Math.max(...this.poly.map((q) => q.y)) };
+    this.ch = cfg.cheats || {};
+    this.t = cfg.cheats && cfg.cheats.skiphide ? cfg.hideSec : 0;
     this.last = performance.now();
     this.alerts = [];
     this.prints = [];
@@ -51,12 +54,34 @@ export class Game {
     this.lastPlayerFreeze = 0;
     this.shrinkWarned = false;
     this.makePlayers();
+    if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
     if (this.hasPowerups) for (let i = 0; i < 6 + Math.round(this.R / 150); i++) this.supplies.push(this.newSupply());
   }
 
   // ---------- координаты ----------
   ll(p) { return [this.c0.lat + p.y / this.ky, this.c0.lng + p.x / this.kx]; }
   xy(lat, lng) { return { x: (lng - this.c0.lng) * this.kx, y: (lat - this.c0.lat) * this.ky }; }
+  zoneScale() { return this.zoneR() / this.R; }
+  inZone(p, f = 1) {
+    const k = this.zoneScale() * f;
+    if (!this.poly) return Math.hypot(p.x, p.y) <= this.R * k;
+    const x = p.x / k, y = p.y / k, P = this.poly; let ins = false;
+    for (let i = 0, j = P.length - 1; i < P.length; j = i++) {
+      if ((P[i].y > y) !== (P[j].y > y) && x < (P[j].x - P[i].x) * (y - P[i].y) / (P[j].y - P[i].y) + P[i].x) ins = !ins;
+    }
+    return ins;
+  }
+  randZone(fMax, fMin = 0) {
+    const k = this.zoneScale();
+    if (!this.poly) return this.randIn(this.R * k * fMax, this.R * k * fMin);
+    const b = this.pbox;
+    for (let i = 0; i < 300; i++) {
+      const pt = { x: rnd(b.x0, b.x1) * k * fMax, y: rnd(b.y0, b.y1) * k * fMax };
+      if (this.inZone(pt, fMax) && (!fMin || !this.inZone(pt, fMin))) return pt;
+    }
+    return { x: 0, y: 0 };
+  }
+  zoneLatLngs() { const k = this.zoneScale(); return this.poly.map((q) => this.ll({ x: q.x * k, y: q.y * k })); }
   randIn(rMax, rMin = 0) { const a = rnd(0, Math.PI * 2), r = Math.sqrt(rnd((rMin / rMax) ** 2, 1)) * rMax; return { x: Math.cos(a) * r, y: Math.sin(a) * r }; }
   zoneR() {
     const { hideSec, huntSec, shrinkTo } = this.cfg;
@@ -96,7 +121,9 @@ export class Game {
     const map = this.map = L.map(root.querySelector('#map'), { zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView(this.ll({ x: 0, y: 0 }), this.R > 450 ? 15 : 16);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
     map.attributionControl.setPrefix(false);
-    this.zoneLayer = L.circle(this.ll({ x: 0, y: 0 }), { radius: this.R, color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false }).addTo(map);
+    const zst = { color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false };
+    this.zoneLayer = (this.poly ? L.polygon(this.zoneLatLngs(), zst) : L.circle(this.ll({ x: 0, y: 0 }), { radius: this.R, ...zst })).addTo(map);
+    const tint = document.createElement('div'); tint.className = 'map-tint'; root.querySelector('#map').appendChild(tint);
     this.layers = { players: new Map(), circles: new Map(), prints: new Map(), supplies: new Map(), flare: [] };
     this.meMarker = L.marker(this.ll(this.me), { icon: this.meIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
     map.fitBounds(this.zoneLayer.getBounds(), { padding: [20, 20] });
@@ -127,7 +154,7 @@ export class Game {
       const now = this.t;
       if (first) {
         first = false;
-        if (Math.hypot(p.x, p.y) > this.R * 2) {
+        if (!this.poly && Math.hypot(p.x, p.y) > this.R * 2) {
           // центр игры далеко — переносим зону к игроку
           this.c0 = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           this.zoneLayer.setLatLng(this.ll({ x: 0, y: 0 }));
@@ -168,7 +195,7 @@ export class Game {
   }
 
   // ---------- сущности ----------
-  newSupply() { const zr = this.zoneR(); return { id: 's' + Math.random().toString(36).slice(2, 8), ...this.randIn(zr * 0.92, zr * 0.1) }; }
+  newSupply() { const zr = this.zoneR(); return { id: 's' + Math.random().toString(36).slice(2, 8), ...this.randZone(0.92, 0.1) }; }
   hiders() { return this.players.filter((p) => p.role === 'hider' && p.alive); }
   hunters() { return this.players.filter((p) => p.role === 'hunter'); }
   isFrozen(p) { return this.t < p.frozenUntil && this.t >= p.warnUntil; }
@@ -208,7 +235,7 @@ export class Game {
     if (d < 1.5) { p.running = false; return true; }
     const canRun = run && p.stamina > 3;
     p.running = canRun;
-    const v = (canRun ? 3.6 : 1.5) * this.pace;
+    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1);
     const s = Math.min(d, v * dt);
     this.moveTo(p, p.x + dx / d * s, p.y + dy / d * s);
     p.speed = s / dt;
@@ -236,6 +263,8 @@ export class Game {
       if (this.gpsPrev && this.t - this.gpsPrev.t > 4) me.speed *= 0.7;
     }
     this.updateStamina(me, dt);
+    if (this.ch.stamina) me.stamina = 100;
+    if (this.ch.allpw && ph === 'hunt' && !this.allGiven) { this.allGiven = true; for (const id of this.enabledPw) { const pw = pwById(id); if (pw && (pw.side === 'both' || pw.side === me.role)) me.powerups.push(id, id); } this.renderHud(true); }
 
     // боты
     for (const p of this.players) if (p.bot) this.botThink(p, dt, ph);
@@ -281,7 +310,7 @@ export class Game {
 
   checkZone(dt) {
     const me = this.me, zr = this.zoneR();
-    const out = Math.hypot(me.x, me.y) > zr;
+    const out = !this.inZone(me);
     if (out) {
       if (me.outSince == null) { me.outSince = this.t; if (me.role === 'hider') this.alert('red', t('outZone'), 'target'); }
       if (me.role === 'hider' && this.t - me.outSince > 20) {
@@ -303,8 +332,7 @@ export class Game {
       if (near) {
         const [h, d] = near;
         const away = { x: p.x + (p.x - h.x) / d * 60, y: p.y + (p.y - h.y) / d * 60 };
-        const r = Math.hypot(away.x, away.y);
-        if (r > zr * 0.95) { away.x *= zr * 0.9 / r; away.y *= zr * 0.9 / r; }
+        for (let k = 0; k < 12 && !this.inZone(away, 0.95); k++) { away.x *= 0.8; away.y *= 0.8; }
         p.target = away; p.flee = true;
         if (p.powerups.includes('ghost') && p.stamina > 30) this.botUse(p, 'ghost');
       } else if (p.think <= 0) {
@@ -316,7 +344,7 @@ export class Game {
           p.holdMission = false;
           const sup = ph === 'hunt' && this.supplies.find((s) => dist(s, p) < 90);
           if (sup) p.target = { x: sup.x, y: sup.y };
-          else if (!p.target && (ph === 'hide' || Math.random() < 0.18 || Math.hypot(p.x, p.y) > zr * 0.92)) p.target = this.randIn(zr * 0.85, zr * 0.25);
+          else if (!p.target && (ph === 'hide' || Math.random() < 0.18 || !this.inZone(p, 0.92))) p.target = this.randZone(0.85, 0.25);
         }
       }
       if (p.target) {
@@ -338,7 +366,7 @@ export class Game {
       if (m && m.started) p.target = { x: m.x + rnd(-20, 20), y: m.y + rnd(-20, 20) };
       else if (fresh) p.target = { x: fresh.x, y: fresh.y };
       else if (circ) { const o = this.randIn(circ.r * 0.9); p.target = { x: circ.x + o.x, y: circ.y + o.y }; }
-      else p.target = this.randIn(zr * 0.85);
+      else p.target = this.randZone(0.85);
     }
     if (this.step(p, p.target, p.chase, dt)) p.target = null;
   }
@@ -359,7 +387,7 @@ export class Game {
   }
 
   freezeRange() { return Math.max(110, this.R * 0.28); }
-  catchRange() { return this.cfg.mode === 'gps' ? 30 : 18; }
+  catchRange() { return this.ch.reach ? 250 : this.cfg.mode === 'gps' ? 30 : 18; }
   flareShows(p) { return this.flare && this.flare.shown && this.flare.pos[p.id]; }
 
   // ---------- способности ----------
@@ -369,6 +397,7 @@ export class Game {
     const r = Math.min(110, Math.max(50, this.R * 0.16));
     let n = 0;
     for (const h of this.hiders()) {
+      if (h === this.me && this.ch.immune) continue;
       let miss = false;
       if (this.t < h.smokeUntil) miss = true;
       else if (h.jams > 0) { h.jams--; miss = true; }
@@ -390,6 +419,7 @@ export class Game {
     const range = this.freezeRange();
     let n = 0;
     for (const h of this.hiders()) {
+      if (h === this.me && this.ch.immune) continue;
       if (!this.hunters().some((u) => dist(u, h) < range)) continue;
       if (h.wards > 0) { h.wards--; if (h === this.me) this.alert('green', t('wardSaved'), 'shield'); continue; }
       h.warnUntil = this.t + 8; h.frozenUntil = this.t + 8 + 25; n++;
@@ -412,7 +442,7 @@ export class Game {
     const cr = this.cfg.mode === 'gps' ? 12 : 9;
     for (const u of this.hunters()) {
       if (!u.bot) continue;
-      for (const h of this.hiders()) if (dist(u, h) < cr) this.catchPlayer(u, h);
+      for (const h of this.hiders()) if (dist(u, h) < cr && !(h === this.me && this.ch.untouch)) this.catchPlayer(u, h);
     }
   }
 
@@ -420,7 +450,7 @@ export class Game {
     if (!this.hasPowerups) return;
     for (const s of [...this.supplies]) {
       for (const p of this.players) {
-        if (dist(p, s) > 18) continue;
+        if (dist(p, s) > (p === this.me && this.ch.magnet ? 90 : 18)) continue;
         const pool = this.enabledPw.map(pwById).filter((x) => x && (x.side === 'both' || x.side === p.role));
         if (!pool.length) break;
         const pw = pool[Math.floor(Math.random() * pool.length)];
@@ -451,7 +481,7 @@ export class Game {
       case 'ward': p.wards++; break;
       case 'lookout': if (p === this.me) { this.showHuntersUntil = T + 20; this.alert('blue', t('lookoutOn', { s: 20 }), 'eye'); } break;
       case 'decoy': {
-        const zr = this.zoneR(); let s = this.randIn(zr * 0.8); const a = rnd(0, 6.28);
+        let s = this.randZone(0.8); const a = rnd(0, 6.28);
         for (let i = 0; i < 10; i++) { s = { x: s.x + Math.cos(a) * 12, y: s.y + Math.sin(a) * 12 }; this.addPrint({ x: s.x, y: s.y, a: 90 - a * 180 / Math.PI, owner: 'decoy' }); }
         if (p === this.me) this.alert('green', t('decoyOn'), 'copy');
         break;
@@ -495,8 +525,7 @@ export class Game {
   // ---------- задания ----------
   updateMission(dt) {
     if (!this.mission && this.t >= this.nextMissionAt) {
-      const zr = this.zoneR();
-      const pt = this.randIn(zr * 0.75, zr * 0.15);
+      const pt = this.randZone(0.75, 0.15);
       this.mission = { ...pt, r: 50, deadline: this.t + 150, need: 60, progress: 0, started: false };
       if (this.me.role === 'hider') this.alert('yellow', t('missionNew'), 'diamond');
       this.renderHud(true);
@@ -565,7 +594,7 @@ export class Game {
 
   render() {
     const me = this.me, T = this.t, map = this.map;
-    this.zoneLayer.setRadius(this.zoneR());
+    if (this.poly) this.zoneLayer.setLatLngs(this.zoneLatLngs()); else this.zoneLayer.setRadius(this.zoneR());
     this.meMarker.setLatLng(this.ll(me));
     if (this.meRole !== me.role) { this.meRole = me.role; this.meMarker.setIcon(this.meIcon()); }
     if (this.follow && this.cfg.mode === 'gps') map.panTo(this.ll(me), { animate: false });
@@ -578,7 +607,7 @@ export class Game {
       let show = false;
       if (me.role === 'hunter') show = p.role === 'hunter' || d < 25 || T < p.exposedUntil;
       else show = p.role === 'hider' || d < 40 || T < this.showHuntersUntil;
-      if (show) vis.add(p.id);
+      if (show || this.ch.wall) vis.add(p.id);
     }
     for (const p of this.players) {
       if (p === me) continue;
@@ -593,7 +622,7 @@ export class Game {
     }
 
     // круги «Раскрытия» и следы — только охотникам
-    const huntView = me.role === 'hunter';
+    const huntView = me.role === 'hunter' || this.ch.wall;
     const cIds = new Set(huntView ? this.circles.map((c) => c.id) : []);
     for (const [id, l] of this.layers.circles) if (!cIds.has(id)) { l.remove(); this.layers.circles.delete(id); }
     if (huntView) for (const c of this.circles) {
@@ -736,9 +765,9 @@ export class Game {
       bot.querySelectorAll('[data-pw]').forEach((b) => b.onclick = () => this.pwModal(b.dataset.pw));
     }
     const rS = bot.querySelector('#rS');
-    if (rS) { const ok = ph === 'hunt' && rLeft <= 0; rS.textContent = ok ? t('ready') : fmt(ph === 'hide' ? this.cfg.hideSec - T : rLeft); rS.parentElement.classList.toggle('wait', !ok); }
+    if (rS) { const ok = ph === 'hunt' && (rLeft <= 0 || this.ch.nocd); rS.textContent = ok ? t('ready') : fmt(ph === 'hide' ? this.cfg.hideSec - T : rLeft); rS.parentElement.classList.toggle('wait', !ok); }
     const fS = bot.querySelector('#fS');
-    if (fS) { const ok = ph === 'hunt' && fLeft <= 0; fS.textContent = ok ? t('ready') : fmt(ph === 'hide' ? this.freezeReadyAt - T : fLeft); fS.parentElement.classList.toggle('wait', !ok); }
+    if (fS) { const ok = ph === 'hunt' && (fLeft <= 0 || this.ch.nocd); fS.textContent = ok ? t('ready') : fmt(ph === 'hide' ? this.freezeReadyAt - T : fLeft); fS.parentElement.classList.toggle('wait', !ok); }
     const st = bot.querySelector('#stBar');
     if (st) { st.style.width = me.stamina + '%'; bot.querySelector('#stBox').classList.toggle('low', me.stamina < 25); }
     const rt = bot.querySelector('#runT'); if (rt) rt.textContent = me.running ? t('run') : t('walk');
@@ -756,8 +785,8 @@ export class Game {
       case 'leave': this.opts.confirm(t('leaveConfirm'), () => { this.ended = true; this.opts.onLeave(); }); break;
       case 'tray': this.trayOpen = !this.trayOpen; this.renderHud(true); break;
       case 'run': this.runToggle = !this.runToggle; this.renderHud(true); break;
-      case 'reveal': if (this.phase() === 'hunt' && this.t >= this.revealReadyAt) this.doReveal(me); break;
-      case 'freeze': if (this.phase() === 'hunt' && this.t >= this.freezeReadyAt) this.doFreeze(me); break;
+      case 'reveal': if (this.phase() === 'hunt' && (this.t >= this.revealReadyAt || this.ch.nocd)) { if (this.ch.nocd) this.revealReadyAt = this.t; this.doReveal(me); } break;
+      case 'freeze': if (this.phase() === 'hunt' && (this.t >= this.freezeReadyAt || this.ch.nocd)) { if (this.ch.nocd) this.freezeReadyAt = this.t; this.doFreeze(me); } break;
       case 'catch': this.catchModal(); break;
     }
   }

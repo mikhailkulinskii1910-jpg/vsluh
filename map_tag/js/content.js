@@ -129,9 +129,11 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['1.1', ['Темы из krisa: Терминал (цвет, RGB-перелив, «Матрица»), Призма, Тепловизор (10 палитр), Чертёж — интерфейс и карта перекрашиваются.', 'Своя территория: нарисуйте зону многоугольником прямо на карте.', 'Колесо рандома «Кто водит?» в лобби.']],
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['1.1', ['Themes from krisa: Terminal (colour, RGB flow, Matrix), Prism, Thermal (10 palettes), Blueprint — UI and map are recoloured.', 'Custom area: draw the zone as a polygon on the map.', '“Who is it?” random wheel in the lobby.']],
     ['1.0', ['First release: hosting, lobby code and QR, game shaping.', 'Map with a shrinking zone, Reveal, Freeze and Catch.', 'Stamina and footprints, missions, caches and 12 power-ups.', 'Bots fill in for other players; tap-to-walk demo mode.', 'Profile with stats and replays, Russian and English.']],
   ],
 };

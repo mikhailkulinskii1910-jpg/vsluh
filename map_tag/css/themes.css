@@ -1,0 +1,193 @@
+/* ================= Темы (перенесены из krisa) =================
+   html[data-theme=terminal|prism|thermal|blueprint]; «Стандарт» — без атрибута.
+   Цвета, зависящие от настроек (цвет терминала, сдвиг радуги, палитра, оттенок чертежа), задаёт js/themes.js. */
+@font-face { font-family: VT323; src: url(../lib/fonts/vt323.ttf) format('truetype'); font-display: swap; }
+@font-face { font-family: Unbounded; src: url(../lib/fonts/unbounded.ttf) format('truetype'); font-display: swap; }
+@font-face { font-family: Manrope; src: url(../lib/fonts/manrope.ttf) format('truetype'); font-display: swap; }
+
+.theme-bg, .rgb-ov, #matrix { display: none; }
+.map-tint { display: none; position: absolute; inset: 0; z-index: 250; pointer-events: none; }
+
+/* общие правила для всех нестандартных тем: убираем «зашитые» цвета карточек */
+html[data-theme] .menu-btn.m-stats, html[data-theme] .menu-btn.m-learn,
+html[data-theme] .card.host, html[data-theme] .card.join, html[data-theme] .make-yours, html[data-theme] .summary,
+html[data-theme] .tile.purple, html[data-theme] .tile.amber, html[data-theme] .acc, html[data-theme] .hero-stat {
+  background: var(--card); border-color: var(--line); color: var(--text);
+}
+html[data-theme] .menu-btn.m-stats .mi, html[data-theme] .menu-btn.m-learn .mi { background: var(--card2); color: var(--accent); }
+html[data-theme] .tile.purple svg, html[data-theme] .tile.purple .v { color: var(--violet); }
+html[data-theme] .tile.amber svg, html[data-theme] .tile.amber .v { color: var(--gold); }
+html[data-theme] .hero-stat .big, html[data-theme] .summary .v { color: var(--accent); }
+html[data-theme] .hero-stat svg { color: var(--accent); }
+html[data-theme] .opt.on { background: var(--accent-soft); border-color: var(--accent); }
+html[data-theme] .opt.on .t { color: var(--text); }
+html[data-theme] .opt svg { color: var(--violet); }
+html[data-theme] .opt.on svg { color: var(--accent); }
+html[data-theme] .home-sub, html[data-theme] .story, html[data-theme] .kicker { color: var(--accent); }
+html[data-theme] .make-yours .k { color: var(--muted); }
+html[data-theme] input.input { background: var(--bg2); border-color: var(--line); color: var(--text); }
+html[data-theme] .modal { background: var(--card); border-color: var(--line); }
+html[data-theme] .set-row, html[data-theme] .chip, html[data-theme] .player, html[data-theme] .seg, html[data-theme] .pw-item, html[data-theme] .replay { background: var(--card2); border-color: var(--line); }
+html[data-theme] .demo-hint, html[data-theme] .mk-name { background: var(--hud-bg); color: var(--text); }
+
+/* ---------- Терминал ---------- */
+html[data-theme=terminal] {
+  --bg: #000; --bg2: #000; --card: #000; --radius: 0px;
+  --font: ui-monospace, 'Cascadia Mono', 'Roboto Mono', Menlo, Consolas, monospace;
+  --font-head: var(--font); --font-num: VT323, ui-monospace, monospace;
+  --hud-bg: rgba(0,0,0,.92); --accent-ink: #000; --violet-ink: #000;
+  --hunter: #ff5a4a; --hider: var(--term);
+}
+html[data-theme=terminal] body { background: #000; }
+html[data-theme=terminal] body::after { content: ''; position: fixed; inset: 0; z-index: 1900; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, transparent 1px 3px); }
+html[data-theme=terminal] .home-title, html[data-theme=terminal] .card h2, html[data-theme=terminal] .make-yours h2, html[data-theme=terminal] .modal h2 { font-family: VT323, var(--font); font-weight: 400; font-size: 44px; letter-spacing: 0; text-shadow: 0 0 10px var(--text); }
+html[data-theme=terminal] .home-title::after { content: '_'; animation: tblink 1s steps(1) infinite; }
+@keyframes tblink { 50% { opacity: 0; } }
+html[data-theme=terminal] .btn, html[data-theme=terminal] .menu-btn, html[data-theme=terminal] .opt, html[data-theme=terminal] .icon-btn,
+html[data-theme=terminal] .card, html[data-theme=terminal] .modal, html[data-theme=terminal] .set-row, html[data-theme=terminal] .chip,
+html[data-theme=terminal] .tile, html[data-theme=terminal] .hud-bar, html[data-theme=terminal] .sq, html[data-theme=terminal] .ab,
+html[data-theme=terminal] .banner, html[data-theme=terminal] .stamina, html[data-theme=terminal] .hud-more, html[data-theme=terminal] .summary,
+html[data-theme=terminal] .make-yours, html[data-theme=terminal] input.input, html[data-theme=terminal] .player, html[data-theme=terminal] .pw-item,
+html[data-theme=terminal] .replay, html[data-theme=terminal] .acc, html[data-theme=terminal] .hero-stat, html[data-theme=terminal] .seg,
+html[data-theme=terminal] .seg button, html[data-theme=terminal] .frozen, html[data-theme=terminal] .tray .pw, html[data-theme=terminal] .qbtn,
+html[data-theme=terminal] .pw-ico, html[data-theme=terminal] .card-ico, html[data-theme=terminal] .menu-btn .mi, html[data-theme=terminal] .step .n {
+  border-radius: 0 !important; box-shadow: none !important; background: #000; border: 1px solid var(--line); color: var(--text);
+}
+html[data-theme=terminal] .btn.primary, html[data-theme=terminal] .btn.violet, html[data-theme=terminal] .menu-btn.m-join, html[data-theme=terminal] .menu-btn.m-host,
+html[data-theme=terminal] .seg button.on, html[data-theme=terminal] .step.on .n { background: var(--text); color: #000; border-color: var(--text); }
+html[data-theme=terminal] .menu-btn.m-join .mi, html[data-theme=terminal] .menu-btn.m-host .mi { background: #000; color: var(--text); }
+html[data-theme=terminal] .opt.on { background: var(--card2); }
+html[data-theme=terminal] .btn:active, html[data-theme=terminal] .opt:active, html[data-theme=terminal] .icon-btn:active { background: var(--text); color: #000; transform: none; }
+html[data-theme=terminal] .lobby-code, html[data-theme=terminal] .summary .v, html[data-theme=terminal] .hero-stat .big, html[data-theme=terminal] .tile .v,
+html[data-theme=terminal] .frozen .num, html[data-theme=terminal] .wait-cover .big { font-family: VT323, monospace; font-weight: 400; text-shadow: 0 0 8px currentColor; }
+html[data-theme=terminal] .lobby-code { font-size: 64px; color: var(--text); }
+html[data-theme=terminal] .banner .bi { background: var(--text) !important; color: #000 !important; border-radius: 0; }
+html[data-theme=terminal] .stamina .bar i { background: var(--text); }
+html[data-theme=terminal] #matrix { position: fixed; inset: 0; z-index: 0; pointer-events: none; width: 100%; height: 100%; }
+html[data-theme=terminal].matrix #matrix { display: block; }
+html[data-theme=terminal].matrix #app { position: relative; z-index: 1; }
+html[data-theme=terminal] .rgb-ov { position: fixed; inset: 0; z-index: 1950; pointer-events: none; mix-blend-mode: multiply;
+  background: var(--rgbg); background-size: 300% 300%; animation: rgbflow 9s linear infinite; }
+html[data-theme=terminal].rgb .rgb-ov { display: block; }
+@keyframes rgbflow { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+html[data-theme=terminal] .leaflet-tile-pane { filter: var(--tile-filter); }
+html[data-theme=terminal] #map { background: #000; }
+
+/* ---------- Призма ---------- */
+html[data-theme=prism] {
+  --bg: #07060B; --bg2: #0f0d18; --card: rgba(255,255,255,.05); --card2: rgba(255,255,255,.07); --line: #4B4270;
+  --text: #F4F1FF; --muted: #A79FC6; --dim: #7d769a; --accent-ink: #120E1F; --accent-soft: rgba(255,255,255,.1);
+  --gold: var(--i4); --teal: var(--i3);
+  --font: Manrope, 'Segoe UI', system-ui, sans-serif; --font-head: Unbounded, var(--font); --font-num: Unbounded, var(--font);
+  --hud-bg: rgba(16,13,26,.88); --hud-line: #4B4270;
+  --iris: var(--i1), var(--i2), var(--i3), var(--i4), var(--i5), var(--i6), var(--i1);
+  --accent-sh: rgba(0,0,0,.5); --violet-sh: rgba(0,0,0,.5);
+}
+html[data-theme=prism] body { background: var(--bg); }
+html[data-theme=prism] .theme-bg { display: block; position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+html[data-theme=prism] #app { position: relative; z-index: 1; }
+html[data-theme=prism] .theme-bg i { position: absolute; width: 85vmax; height: 85vmax; border-radius: 50%; mix-blend-mode: screen; opacity: .5; animation: drift 40s ease-in-out infinite alternate; }
+html[data-theme=prism] .theme-bg i:nth-child(1) { background: radial-gradient(closest-side, color-mix(in srgb, var(--i1) 40%, transparent), transparent); left: -30vmax; top: -25vmax; }
+html[data-theme=prism] .theme-bg i:nth-child(2) { background: radial-gradient(closest-side, color-mix(in srgb, var(--i2) 33%, transparent), transparent); right: -35vmax; top: 5vmax; animation-duration: 46s; }
+html[data-theme=prism] .theme-bg i:nth-child(3) { background: radial-gradient(closest-side, color-mix(in srgb, var(--i6) 33%, transparent), transparent); left: -20vmax; bottom: -40vmax; animation-duration: 52s; }
+html[data-theme=prism] .theme-bg i:nth-child(4) { background: radial-gradient(closest-side, color-mix(in srgb, var(--i3) 25%, transparent), transparent); right: -30vmax; bottom: -30vmax; animation-duration: 44s; }
+@keyframes drift { to { transform: translate(8vmax, 6vmax) scale(1.1); } }
+@keyframes holo { 0% { background-position: 0% 50%; } 100% { background-position: 100% 50%; } }
+html[data-theme=prism] .btn.primary, html[data-theme=prism] .btn.violet, html[data-theme=prism] .menu-btn.m-join, html[data-theme=prism] .menu-btn.m-host,
+html[data-theme=prism] .seg button.on, html[data-theme=prism] .step.on .n {
+  background: linear-gradient(135deg, var(--iris)) 0 0 / 200% 200%; animation: holo 8s ease-in-out infinite alternate; color: var(--accent-ink); border: 0;
+}
+html[data-theme=prism] .step.on { border-image: linear-gradient(90deg, var(--iris)) 1; }
+html[data-theme=prism] .home-title, html[data-theme=prism] .lobby-code, html[data-theme=prism] .hero-stat .big, html[data-theme=prism] .summary .v {
+  background: linear-gradient(90deg, var(--iris)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+html[data-theme=prism] .home-title { font-size: 30px; }
+html[data-theme=prism] .lobby-code { font-size: 40px; }
+html[data-theme=prism] .card, html[data-theme=prism] .modal, html[data-theme=prism] .opt, html[data-theme=prism] .tile, html[data-theme=prism] .menu-btn,
+html[data-theme=prism] .icon-btn, html[data-theme=prism] .btn:not(.primary):not(.violet) { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+html[data-theme=prism] .menu-btn.m-stats, html[data-theme=prism] .menu-btn.m-learn { background: var(--card2); }
+html[data-theme=prism] .opt.on { border-image: linear-gradient(135deg, var(--iris)) 1; border-radius: 18px; }
+html[data-theme=prism] .modal { background: linear-gradient(160deg, #1d1930, #0d0b16); }
+html[data-theme=prism] .leaflet-tile-pane { filter: var(--tile-filter); }
+html[data-theme=prism] #map { background: #07060B; }
+
+/* ---------- Тепловизор ---------- */
+html[data-theme=thermal] {
+  --bg: #050308; --bg2: #0d080c; --card: rgba(0,0,0,.6); --card2: rgba(30,14,16,.7); --line: var(--yel);
+  --text: #FFF1DC; --muted: #E0974A; --dim: #a8703a; --accent: var(--yel); --accent-ink: #140700; --accent-soft: rgba(255,120,30,.14);
+  --violet: var(--glow); --gold: var(--yel); --teal: var(--yel);
+  --font-num: VT323, ui-monospace, monospace;
+  --hud-bg: rgba(5,3,8,.85); --hud-line: var(--yel); --accent-sh: rgba(0,0,0,.6); --violet-sh: rgba(0,0,0,.6);
+}
+html[data-theme=thermal] body { background: var(--bg); }
+html[data-theme=thermal] #app { position: relative; z-index: 1; }
+html[data-theme=thermal] .theme-bg { display: block; position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+html[data-theme=thermal] .theme-bg i:nth-child(1) { position: absolute; left: 50%; top: 45%; width: 120vmin; height: 120vmin; translate: -50% -50%; border-radius: 50%;
+  background: radial-gradient(circle at 40% 55%, var(--heatr)); opacity: .22; filter: blur(30px); animation: breathe 8s ease-in-out infinite alternate; }
+html[data-theme=thermal] .theme-bg i:nth-child(2) { position: absolute; inset: -50%; opacity: .14; animation: grain .45s steps(3) infinite;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+html[data-theme=thermal] .theme-bg i:nth-child(n+3) { display: none; }
+@keyframes breathe { to { scale: 1.08; } }
+@keyframes grain { 33% { transform: translate(-7%, 4%); } 66% { transform: translate(5%, -6%); } }
+html[data-theme=thermal] .btn.primary, html[data-theme=thermal] .btn.violet, html[data-theme=thermal] .menu-btn.m-join, html[data-theme=thermal] .menu-btn.m-host,
+html[data-theme=thermal] .seg button.on, html[data-theme=thermal] .step.on .n { background: linear-gradient(90deg, var(--hot3)); color: var(--accent-ink); border: 0; }
+html[data-theme=thermal] .home-title, html[data-theme=thermal] .lobby-code, html[data-theme=thermal] .hero-stat .big {
+  background: linear-gradient(90deg, var(--warm), var(--warmr)); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: flow 5s linear infinite; filter: drop-shadow(0 0 10px color-mix(in srgb, var(--glow) 60%, transparent));
+}
+@keyframes flow { to { background-position: 200% 0; } }
+html[data-theme=thermal] .lobby-code { font-family: VT323, monospace; font-size: 64px; font-weight: 400; }
+html[data-theme=thermal] .card, html[data-theme=thermal] .opt, html[data-theme=thermal] .icon-btn, html[data-theme=thermal] .btn:not(.primary):not(.violet), html[data-theme=thermal] .tile { border-color: color-mix(in srgb, var(--yel) 55%, transparent); }
+html[data-theme=thermal] .leaflet-tile-pane { filter: url(#heatmap); }
+html[data-theme=thermal] #map { background: #050308; }
+
+/* ---------- Чертёж ---------- */
+html[data-theme=blueprint] {
+  --text: #fff; --muted: #BFD3F2; --dim: #9FB8E2; --line: #9FB8E2; --card: var(--bga); --card2: var(--bga);
+  --accent: #fff; --accent-ink: var(--bg); --accent-soft: rgba(255,255,255,.14); --violet: #fff; --gold: #fff; --teal: #fff;
+  --hider: #b9ffcf; --hunter: #ffb3bd;
+  --font: Manrope, 'Segoe UI', system-ui, sans-serif; --font-head: Unbounded, var(--font); --font-num: Unbounded, var(--font);
+  --hud-bg: var(--bga); --hud-line: #fff; --radius: 0px; --accent-sh: transparent; --violet-sh: transparent;
+}
+html[data-theme=blueprint] body { background-color: var(--bg);
+  background-image: linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 60px 60px, 60px 60px, 12px 12px, 12px 12px; background-attachment: fixed; }
+html[data-theme=blueprint] .btn, html[data-theme=blueprint] .menu-btn, html[data-theme=blueprint] .opt, html[data-theme=blueprint] .icon-btn,
+html[data-theme=blueprint] .card, html[data-theme=blueprint] .modal, html[data-theme=blueprint] .set-row, html[data-theme=blueprint] .chip,
+html[data-theme=blueprint] .tile, html[data-theme=blueprint] .hud-bar, html[data-theme=blueprint] .sq, html[data-theme=blueprint] .ab,
+html[data-theme=blueprint] .banner, html[data-theme=blueprint] .stamina, html[data-theme=blueprint] .hud-more, html[data-theme=blueprint] .summary,
+html[data-theme=blueprint] .make-yours, html[data-theme=blueprint] input.input, html[data-theme=blueprint] .player, html[data-theme=blueprint] .pw-item,
+html[data-theme=blueprint] .replay, html[data-theme=blueprint] .acc, html[data-theme=blueprint] .hero-stat, html[data-theme=blueprint] .frozen,
+html[data-theme=blueprint] .tray .pw, html[data-theme=blueprint] .seg, html[data-theme=blueprint] .seg button, html[data-theme=blueprint] .qbtn {
+  border-radius: 0 !important; box-shadow: none !important; background: var(--bga); border: 1.5px solid #fff; outline: 1px solid rgba(255,255,255,.4); outline-offset: -6px; color: #fff;
+}
+html[data-theme=blueprint] .seg button { outline: 0; border: 0; }
+html[data-theme=blueprint] .btn.primary, html[data-theme=blueprint] .btn.violet, html[data-theme=blueprint] .menu-btn.m-join, html[data-theme=blueprint] .menu-btn.m-host,
+html[data-theme=blueprint] .seg button.on, html[data-theme=blueprint] .step.on .n, html[data-theme=blueprint] .opt.on { background: #fff; color: var(--bg); }
+html[data-theme=blueprint] .opt.on .t, html[data-theme=blueprint] .opt.on .s, html[data-theme=blueprint] .opt.on svg { color: var(--bg); }
+html[data-theme=blueprint] .menu-btn .mi { background: transparent; border: 1px solid currentColor; border-radius: 0; }
+html[data-theme=blueprint] h1, html[data-theme=blueprint] h2 { text-transform: uppercase; letter-spacing: .02em; }
+html[data-theme=blueprint] .home-title { font-size: 26px; }
+html[data-theme=blueprint] .lobby-code { color: #fff; font-size: 38px; }
+html[data-theme=blueprint] .menu-btn, html[data-theme=blueprint] .btn, html[data-theme=blueprint] .opt .t { text-transform: uppercase; letter-spacing: .06em; font-size: 15px; }
+html[data-theme=blueprint] .banner .bi { background: #fff !important; color: var(--bg) !important; border-radius: 0; }
+html[data-theme=blueprint] .leaflet-tile-pane { filter: var(--tile-filter); }
+html[data-theme=blueprint] #map { background: var(--bg); }
+
+/* ---------- плитки выбора темы в настройках ---------- */
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; margin-top: 8px; }
+.themes button { border-radius: 16px; border: 2px solid var(--line); padding: 0; overflow: hidden; cursor: pointer; background: none; color: var(--text); font-weight: 600; font-size: 13px; }
+.themes button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.themes .pv { height: 56px; display: grid; place-items: center; font-size: 22px; }
+.themes .nm { padding: 6px 4px; background: var(--card2); }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.swatches button { width: 40px; height: 40px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; }
+.swatches button.on { border-color: var(--text); }
+.heats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.heats button { border: 2px solid var(--line); border-radius: 12px; padding: 6px; background: none; color: var(--text); cursor: pointer; font-size: 12px; font-weight: 600; text-align: left; }
+.heats button.on { border-color: var(--accent); }
+.heats b { display: block; height: 18px; border-radius: 4px; margin-bottom: 4px; }
+.theme-opts { margin-top: 10px; padding: 12px 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--card2); }
+.theme-opts .row-l { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }

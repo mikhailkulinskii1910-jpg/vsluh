@@ -2,9 +2,11 @@
 import { t, setLang, getLang } from './i18n.js';
 import { I } from './icons.js';
 import { POWERUPS, pwName, pwDesc, tutorialSteps, PATCH_NOTES } from './content.js';
-import { Game, fmt } from './game.js';
+import { Game, fmt, BOT_NAMES } from './game.js';
+import { applyTheme, themePicker } from './themes.js';
+import { checkPass, renderCheats, openWheel } from './cheats.js';
 
-const VERSION = '1.0';
+const VERSION = '1.1';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -78,6 +80,24 @@ function bindCommon(root) {
   root.querySelectorAll('[data-top]').forEach((b) => b.onclick = () => {
     const a = b.dataset.top;
     if (a === 'notes') openNotes(); else if (a === 'rules') openRules(); else openSettings();
+  });
+  // секретный вход: 5 касаний по логотипу
+  const brand = root.querySelector('.brand');
+  if (brand) brand.onclick = () => {
+    const now = Date.now();
+    secretTaps = now - secretLast < 1500 ? secretTaps + 1 : 1; secretLast = now;
+    if (secretTaps >= 5) { secretTaps = 0; if (S.cheatsUnlocked) go('cheats'); else askPassword(); }
+  };
+}
+let secretTaps = 0, secretLast = 0;
+function askPassword() {
+  modal(`<h2>${I.lock.replace('<svg', '<svg width="26" height="26" style="vertical-align:-3px"')} ${t('password')}</h2>
+    <input class="input code-input" id="pw" type="password" inputmode="numeric" autocomplete="off" style="letter-spacing:.2em">
+    <div class="row" style="margin-top:16px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">${t('enter')}</button></div>`, (b, close) => {
+    const inp = b.querySelector('#pw'); setTimeout(() => inp.focus(), 50);
+    const ok = () => { if (checkPass(inp.value)) { S.cheatsUnlocked = true; save(); close(); go('cheats'); } else { inp.value = ''; toast(t('wrongPass')); } };
+    b.querySelector('[data-x]').onclick = close; b.querySelector('[data-ok]').onclick = ok;
+    inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
   });
 }
 
@@ -179,8 +199,11 @@ const SCREENS = {
     const total = 1 + lb.bots;
     const step2 = `
       <div class="sect">${t('place')}</div>
+      <div class="seg" style="margin-bottom:8px">${['circle', 'custom'].map((z) => `<button data-zs="${z}" class="${(lb.shape || 'circle') === z ? 'on' : ''}">${t(z === 'circle' ? 'shapeCircle' : 'shapeCustom')}</button>`).join('')}</div>
       <div class="pick-map" id="pmap"></div>
-      <div class="row" style="margin-top:10px;justify-content:space-between"><span style="color:var(--muted);font-size:14px;flex:1">${t('placeHint')}</span><button class="btn" id="myloc">${I.locate}${t('myLocation')}</button></div>
+      ${lb.shape === 'custom' ? `<div class="row" style="margin-top:10px"><span style="color:var(--muted);font-size:14px;flex:1" id="polyInfo"></span><button class="btn" id="pUndo">${t('undoPt')}</button><button class="btn danger" id="pClear">${t('clearPts')}</button></div>
+        <div class="row" style="margin-top:8px;justify-content:space-between"><span style="color:var(--muted);font-size:14px;flex:1">${t('customHint')}</span><button class="btn" id="myloc">${I.locate}${t('myLocation')}</button></div>`
+      : `<div class="row" style="margin-top:10px;justify-content:space-between"><span style="color:var(--muted);font-size:14px;flex:1">${t('placeHint')}</span><button class="btn" id="myloc">${I.locate}${t('myLocation')}</button></div>`}
       <div class="sect">${t('players')}</div>
       <div class="card" style="padding:8px 16px">
         <div class="line-row"><span>${t('bots')}</span><div class="stepper"><button class="btn" data-st="bots:-1">−</button><span class="val">${lb.bots}</span><button class="btn" data-st="bots:1">+</button></div></div>
@@ -188,6 +211,7 @@ const SCREENS = {
         <div class="line-row"><span>${t('yourRole')}</span><div class="seg">${['random', 'hider', 'hunter'].map((r) => `<button data-role="${r}" class="${lb.myRole === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
         <div class="line-row"><span>${t('moveMode')}</span><div class="seg">${['gps', 'demo'].map((r) => `<button data-mode="${r}" class="${lb.mode === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
       </div>
+      <button class="btn block" id="wheel" style="margin-top:10px">${I.target}${t('whoIsIt')}</button>
       ${lb.mode === 'demo' ? `<p style="color:var(--muted);font-size:14px">${t('demoHelp')}</p>` : ''}
       <div class="player-list">
         <div class="player"><div class="av" style="background:var(--accent)">${esc((S.name || '?')[0])}</div><div class="nm">${esc(S.name)}</div><div class="tag">${t('you')}</div></div>
@@ -229,21 +253,53 @@ const SCREENS = {
       });
       el.querySelectorAll('[data-role]').forEach((b) => b.onclick = () => { lb.myRole = b.dataset.role; rerender(); });
       el.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => { lb.mode = b.dataset.mode; rerender(); });
+      el.querySelectorAll('[data-zs]').forEach((b) => b.onclick = () => { lb.shape = b.dataset.zs; rerender(); });
+      el.querySelector('#wheel').onclick = () => {
+        const names = S.wheel && S.wheel.names.filter(Boolean).length >= 2 ? S.wheel.names : defaultNames();
+        openWheel(modal, { names, rig: S.wheel ? S.wheel.rig : '', onRole: (win, box) => {
+          const mine = win === S.name;
+          box.innerHTML = `<button class="btn ${mine ? 'primary' : ''} block">${mine ? t('iAmHunter') : t('iAmHider')}</button>`;
+          box.firstChild.onclick = () => { lb.myRole = mine ? 'hunter' : 'hider'; save(); toast(t(mine ? 'hunter' : 'hider')); };
+        } });
+      };
       const center = lb.center || { lat: 55.7520, lng: 37.6175 };
       const pm = L.map(el.querySelector('#pmap'), { zoomControl: false, attributionControl: true }).setView([center.lat, center.lng], 15);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(pm);
       pm.attributionControl.setPrefix(false);
-      const circ = L.circle([center.lat, center.lng], { radius: c.radius, color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 }).addTo(pm);
+      const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
+      const custom = lb.shape === 'custom';
+      lb.poly = lb.poly || [];
+      const circ = L.circle([center.lat, center.lng], { radius: c.radius, ...zst });
+      const poly = L.polygon([], zst), dots = L.layerGroup();
+      const drawPoly = () => {
+        poly.setLatLngs(lb.poly.map((q) => [q.lat, q.lng])); dots.clearLayers();
+        lb.poly.forEach((q, i) => L.circleMarker([q.lat, q.lng], { radius: 7, color: '#fff', weight: 3, fillColor: i === 0 ? '#ff8a5b' : '#2c7a4b', fillOpacity: 1 }).addTo(dots));
+        const info = el.querySelector('#polyInfo');
+        if (info) { const g = polyGeo(lb.poly); info.textContent = lb.poly.length < 3 ? t('ptsNeed', { n: lb.poly.length }) : t('ptsInfo', { n: lb.poly.length, a: (g.area / 10000).toFixed(1), r: Math.round(g.radius) }); }
+      };
       const setC = (lat, lng, fit) => { lb.center = { lat, lng }; save(); circ.setLatLng([lat, lng]); if (fit) pm.fitBounds(circ.getBounds()); };
-      pm.fitBounds(circ.getBounds());
-      pm.on('click', (e) => setC(e.latlng.lat, e.latlng.lng));
+      if (custom) {
+        poly.addTo(pm); dots.addTo(pm); drawPoly();
+        if (lb.poly.length >= 3) pm.fitBounds(poly.getBounds(), { padding: [20, 20] }); else pm.fitBounds(L.latLng(center.lat, center.lng).toBounds(c.radius * 2));
+        pm.on('click', (e) => { lb.poly.push({ lat: e.latlng.lat, lng: e.latlng.lng }); save(); drawPoly(); });
+        el.querySelector('#pUndo').onclick = () => { lb.poly.pop(); save(); drawPoly(); };
+        el.querySelector('#pClear').onclick = () => { lb.poly = []; save(); drawPoly(); };
+      } else {
+        circ.addTo(pm); pm.fitBounds(circ.getBounds());
+        pm.on('click', (e) => setC(e.latlng.lat, e.latlng.lng));
+      }
       const locate = (quiet) => navigator.geolocation && navigator.geolocation.getCurrentPosition((p) => setC(p.coords.latitude, p.coords.longitude, true), () => { if (!quiet) toast(t('noGps').split('—')[0]); }, { enableHighAccuracy: true, timeout: 15000 });
       el.querySelector('#myloc').onclick = () => locate(false);
       if (!lb.center) locate(true);
       el.querySelector('#start').onclick = () => {
         const cc = calc(lb);
+        let zc = lb.center || center, zr = cc.radius, polygon = null;
+        if (custom) {
+          if (lb.poly.length < 3) return toast(t('ptsNeed', { n: lb.poly.length }));
+          const g = polyGeo(lb.poly); zc = g.center; zr = g.radius; polygon = lb.poly.slice();
+        }
         go('game', {
-          center: lb.center || center, radius: cc.radius, huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
+          center: zc, radius: zr, polygon, cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
           features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
           bots: lb.bots, hunters: Math.min(lb.hunters, Math.max(1, lb.bots)), myRole: lb.myRole, mode: lb.mode, name: S.name,
         });
@@ -304,6 +360,11 @@ const SCREENS = {
     el.querySelectorAll('[data-rep]').forEach((b) => b.onclick = () => openReplay(S.replays[+b.dataset.rep]));
   },
 
+  cheats(el) {
+    if (!S.cheatsUnlocked) return go('home');
+    renderCheats(el, S, save, { modal, toast, topbar: () => topbar(), bindCommon, defaultNames, go });
+  },
+
   learn(el) {
     el.innerHTML = `${topbar()}
       <button class="menu-btn m-learn" id="rules" style="margin-bottom:12px"><span class="mi">${I.book}</span><span class="lbl">${t('basicRules')}</span><span class="arr">${I.arrowR}</span></button>
@@ -325,6 +386,21 @@ function devTuning(lb, c) {
     ${rng('freezeCd', 30, 300, 10, c.freezeCd, t('freezeCd'), t('sec'))}</div>
     ${lb.extra === 'spice' ? `<div class="sect">${t('powerupsIn')}</div><div class="card" style="padding:8px 16px">${POWERUPS.map((p) => `<label class="line-row"><span class="row">${I[p.icon].replace('<svg', '<svg width="20" height="20"')} ${esc(pwName(p))}</span><input type="checkbox" data-pwt="${p.id}" ${lb.powerups.includes(p.id) ? 'checked' : ''} style="width:24px;height:24px;accent-color:var(--accent)"></label>`).join('')}</div>` : ''}`;
 }
+
+function polyGeo(pts) {
+  if (pts.length < 3) return { area: 0, radius: 0, center: pts[0] || null };
+  const lat0 = pts.reduce((a, q) => a + q.lat, 0) / pts.length, lng0 = pts.reduce((a, q) => a + q.lng, 0) / pts.length;
+  const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+  const P = pts.map((q) => [(q.lng - lng0) * kx, (q.lat - lat0) * ky]);
+  let A = 0, cx = 0, cy = 0;
+  for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const f = P[j][0] * P[i][1] - P[i][0] * P[j][1]; A += f; cx += (P[j][0] + P[i][0]) * f; cy += (P[j][1] + P[i][1]) * f; }
+  A /= 2;
+  const area = Math.abs(A);
+  if (area < 1) return { area: 0, radius: 0, center: { lat: lat0, lng: lng0 } };
+  cx /= 6 * A; cy /= 6 * A;
+  return { area, radius: Math.sqrt(area / Math.PI), center: { lat: lat0 + cy / ky, lng: lng0 + cx / kx } };
+}
+function defaultNames() { const n = (S.lobby && S.lobby.bots) || 3; return [S.name || (getLang() === 'ru' ? 'Я' : 'Me'), ...(BOT_NAMES[getLang()] || BOT_NAMES.ru).slice(0, n)]; }
 
 function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1).replace('.', getLang() === 'ru' ? ',' : '.') + (getLang() === 'ru' ? ' км' : ' km') : Math.round(m) + (getLang() === 'ru' ? ' м' : ' m'); }
 function fmtLong(s) { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; }
@@ -414,6 +490,8 @@ function openSettings() {
       box.innerHTML = `<h2>${t('settings')}</h2>
         <div style="color:var(--muted);margin-left:4px">${t('language')}</div>
         <div class="lang"><button class="opt ${getLang() === 'ru' ? 'on' : ''}" data-l="ru">${FLAG_RU}<span class="t">Русский</span></button><button class="opt ${getLang() === 'en' ? 'on' : ''}" data-l="en">${FLAG_EN}<span class="t">English</span></button></div>
+        <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
+        ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
         <label class="set-row"><div><div class="tt">${t('devSettings')}</div><div class="ss">${t('devSettingsS')}</div></div><input type="checkbox" id="dev" ${S.dev ? 'checked' : ''}></label>
         <button class="set-row" data-s="privacy"><div><div class="tt">${t('privacy')}</div><div class="ss">${t('privacyText')}</div></div></button>
         <button class="set-row" data-s="perms"><div><div class="tt">${t('checkPerms')}</div><div class="ss">${t('checkPermsS')}</div></div></button>
@@ -421,6 +499,7 @@ function openSettings() {
         <p style="margin:16px 4px"><a href="#" data-s="pn">${t('privacyNotice')}</a> · <a href="#" data-s="terms">${t('terms')}</a></p>
         <button class="btn block big" data-x>${t('done')}</button>`;
       box.querySelectorAll('[data-l]').forEach((b) => b.onclick = () => { setLang(b.dataset.l); draw(); });
+      themePicker(box.querySelector('#thp'));
       box.querySelector('#dev').onchange = (e) => { S.dev = e.target.checked; save(); };
       box.querySelector('[data-x]').onclick = () => { close(); if (current !== 'game') go(current); };
       box.querySelectorAll('[data-s]').forEach((b) => b.onclick = (e) => {
@@ -428,6 +507,7 @@ function openSettings() {
         const s = b.dataset.s;
         if (s === 'privacy' || s === 'pn') { close(); go('stats'); setTimeout(() => { const d = document.querySelector('details.acc'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } }, 50); }
         else if (s === 'perms') openPerms();
+        else if (s === 'cheats') { close(); go('cheats'); }
         else if (s === 'onb') { S.onboarded = false; save(); close(); openRules(); }
         else if (s === 'terms') modal(`<h2>${t('terms')}</h2><p>${t('termsText')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, c2) => m.querySelector('[data-x]').onclick = c2);
       });
@@ -503,6 +583,7 @@ function scanQr(onCode) {
 
 // ---------- старт ----------
 setLang(getLang());
+applyTheme();
 const hash = /#join=([A-Z0-9]{6})/i.exec(location.hash);
 if (hash) { history.replaceState(null, '', location.pathname); go('join', hash[1].toUpperCase()); }
 else go('home');

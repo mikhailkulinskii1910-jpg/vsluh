@@ -78,6 +78,10 @@ const ru = {
   noGps: 'GPS недоступен — включаю демо-режим.', gpsFar: 'Вы далеко от зоны: центр перенесён к вам.',
   catchWho: 'Кого вы поймали?', far: '{d} м', cancel: 'Отмена',
   // обучение
+  shapeCircle: 'Круг', shapeCustom: 'Своя территория', undoPt: 'Отменить', clearPts: 'Очистить',
+  customHint: 'Касайтесь карты, чтобы поставить углы территории по порядку.', ptsNeed: 'Точек: {n} — нужно минимум 3', ptsInfo: 'Точек: {n} · {a} га · как круг {r} м',
+  whoIsIt: 'Кто водит? Колесо рандома', iAmHunter: 'Я вожу — играю охотником', iAmHider: 'Я прячусь', theme: 'Тема',
+  cheats: 'Читы', cheatsS: 'Секретная вкладка', password: 'Пароль', wrongPass: 'Неверный пароль', enter: 'Войти',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -153,6 +157,10 @@ const en = {
   survivors: 'Survivors: {n}', yourGame: 'Your round', toMenu: 'Menu', again: 'Play again',
   noGps: 'GPS unavailable — switching to demo mode.', gpsFar: 'You are far from the zone: centre moved to you.',
   catchWho: 'Who did you catch?', far: '{d} m', cancel: 'Cancel',
+  shapeCircle: 'Circle', shapeCustom: 'Custom area', undoPt: 'Undo', clearPts: 'Clear',
+  customHint: 'Tap the map to place the corners of the area in order.', ptsNeed: 'Points: {n} — at least 3 needed', ptsInfo: 'Points: {n} · {a} ha · like a {r} m circle',
+  whoIsIt: 'Who is it? Random wheel', iAmHunter: 'I’m it — play as Hunter', iAmHider: 'I’m hiding', theme: 'Theme',
+  cheats: 'Cheats', cheatsS: 'Secret tab', password: 'Password', wrongPass: 'Wrong password', enter: 'Enter',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 
