@@ -42,6 +42,7 @@ export const CHEATS = [
   ['magnet', 'Магнит тайников', 'Cache magnet', 'Тайники подбираются с 90 м.', 'Caches are picked up from 90 m.', 'supply'],
   ['allpw', 'Все бонусы', 'All power-ups', 'С началом охоты — по 2 каждого бонуса.', 'Two of every power-up when the hunt starts.', 'sparkle'],
   ['reach', 'Длинные руки', 'Long arms', '«Поймал» достаёт до 250 м.', 'Catch reaches 250 m.', 'crosshair'],
+  ['radar', 'Точный радар', 'Exact radar', 'Компас и детектор включены всегда, показывают точные метры и обновляются без задержки.', 'Compass and detector always on, with exact metres and no delay.', 'scan'],
   ['spoof', 'Подмена гео', 'Fake location', 'В режиме GPS настоящее гео игнорируется — вы ходите касаниями карты.', 'In GPS mode your real location is ignored — you walk by tapping the map.', 'locate'],
   ['teleport', 'Телепорт', 'Teleport', 'Вместе с подменой гео касание карты мгновенно переносит вас.', 'With fake location, a map tap moves you instantly.', 'swap'],
   ['skiphide', 'Без пряток', 'Skip hiding', 'Охота начинается сразу.', 'The hunt starts right away.', 'play'],

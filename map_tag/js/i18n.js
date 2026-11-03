@@ -118,6 +118,10 @@ const ru = {
   netHostIs: 'Организатор', netWaiting: 'Ждём, когда организатор начнёт игру', netYourRole: 'Ваша роль: {r}', netNotListed: 'Подключаемся к лобби…',
   netAreaCap: 'Площадка игры. Её выбирает организатор.', netHostTag: 'организатор', netOnlineTag: 'в сети', netNoPlace: 'Организатор ещё не выбрал площадку',
   transportShort: 'водящим можно транспорт', startIn: 'Старт через', hostLeft: 'Организатор закрыл лобби', playerLeft: '{n} вышел(ла) из игры',
+  helpers: 'Помощники поиска', compass: 'Компас', detector: 'Детектор', hv_off: 'Выкл', hv_hunters: 'Охотникам', hv_all: 'Всем',
+  helpersHelp: '<b>Компас</b> — стрелка на ближайшего соперника: охотнику на прячущегося, прячущемуся на охотника. Направление обновляется раз в 20 секунд. Если у телефона есть датчик компаса, стрелка учитывает, куда вы смотрите.<br><b>Детектор</b> — «холодно / тепло / горячо / очень горячо» до ближайшего соперника (больше 300 м, 150–300, 50–150, меньше 50 м), со звуком и вибрацией, когда становится ближе.',
+  seekToHider: 'Ближайший прячущийся', seekToHunter: 'Ближайший охотник', seekNone: 'Соперников рядом нет', seekNext: 'новое направление через {s} с', seekNorth: 'стрелка от севера',
+  det_veryHot: 'Очень горячо', det_hot: 'Горячо', det_warm: 'Тепло', det_cold: 'Холодно',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -233,6 +237,10 @@ const en = {
   netHostIs: 'Host', netWaiting: 'Waiting for the host to start', netYourRole: 'Your role: {r}', netNotListed: 'Joining the lobby…',
   netAreaCap: 'The play area. The host picks it.', netHostTag: 'host', netOnlineTag: 'online', netNoPlace: 'The host has not picked a place yet',
   transportShort: 'hunters may use transport', startIn: 'Starting in', hostLeft: 'The host closed the lobby', playerLeft: '{n} left the game',
+  helpers: 'Search helpers', compass: 'Compass', detector: 'Detector', hv_off: 'Off', hv_hunters: 'Hunters', hv_all: 'Everyone',
+  helpersHelp: '<b>Compass</b> — an arrow to the nearest opponent: Hunters see the nearest Hider, Hiders the nearest Hunter. The direction refreshes every 20 seconds and follows your phone’s heading when it has a compass sensor.<br><b>Detector</b> — cold / warm / hot / very hot to the nearest opponent (over 300 m, 150–300, 50–150, under 50 m), with a beep and buzz as it gets closer.',
+  seekToHider: 'Nearest Hider', seekToHunter: 'Nearest Hunter', seekNone: 'No opponents', seekNext: 'new bearing in {s} s', seekNorth: 'arrow from north',
+  det_veryHot: 'Very hot', det_hot: 'Hot', det_warm: 'Warm', det_cold: 'Cold',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 

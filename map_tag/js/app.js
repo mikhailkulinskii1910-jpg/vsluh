@@ -9,7 +9,7 @@ import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
 
-const VERSION = '1.5';
+const VERSION = '1.6';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -96,7 +96,7 @@ function hostPublish(status) {
     const c = calc(lb);
     NET.room.setLobby({
       status: NET.lobbyStatus || 'lobby', hostId: NET.myId, host: S.name, code: lb.code,
-      set: { size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false },
+      set: { size: lb.size, vis: lb.vis, light: lb.light, extra: lb.extra, shape: lb.shape || 'circle', center: lb.center || { lat: 55.7520, lng: 37.6175 }, poly: lb.shape === 'custom' ? lb.poly : null, radius: c.radius, huntSec: c.huntSec, hideSec: c.hideSec, shrinkTo: c.shrinkTo, transport: lb.transport !== false, compass: lb.compass || 'off', detector: lb.detector || 'off' },
       players: lb.players.map((p) => ({ id: p.id, name: p.bot ? p.name : p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, host: !p.bot && !p.remote })),
     });
   }, 250);
@@ -200,7 +200,7 @@ function presetsBlock() {
     <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
 }
 function bindPresets(el, lb) {
-  const keys = ['size', 'vis', 'light', 'extra', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const keys = ['size', 'vis', 'light', 'extra', 'compass', 'detector', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
   const sv = el.querySelector('#psave');
   if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
     b.querySelector('[data-x]').onclick = close;
@@ -364,7 +364,7 @@ const SCREENS = {
       </div>
       <div class="make-yours"><div><div class="k">${t('netHostIs')}</div><h2>${esc(L0.host || '—')}</h2></div></div>
       <div class="card wait-card">${I.clock}<div><b>${t('netWaiting')}</b><div style="color:var(--muted);font-size:15px;margin-top:4px">${meP ? t('netYourRole', { r: t(meP.role) }) : t('netNotListed')}</div></div></div>
-      <div class="set-sum" style="cursor:default">${I.gear}<b>${t('settings')}</b><span>${[t(st.size || 'medium'), t(st.vis === 'city' ? 'openCity' : st.vis || 'mixed'), t(st.light || 'day'), t(st.extra || 'spice')].join(' · ')}</span></div>
+      <div class="set-sum" style="cursor:default">${I.gear}<b>${t('settings')}</b><span>${[t(st.size || 'medium'), t(st.vis === 'city' ? 'openCity' : st.vis || 'mixed'), t(st.light || 'day'), t(st.extra || 'spice'), ...(st.compass && st.compass !== 'off' ? [t('compass') + ': ' + t('hv_' + st.compass)] : []), ...(st.detector && st.detector !== 'off' ? [t('detector') + ': ' + t('hv_' + st.detector)] : [])].join(' · ')}</span></div>
       <div class="summary"><div class="l">${t('radius')}</div><div class="l">${t('huntDur')}</div>
         <div class="v">${Math.round(st.radius || 0)} ${t('m')}</div><div class="v">${fmt(st.huntSec || 0)}</div>
         <div class="sub">${t('toHide', { t: fmt(st.hideSec || 0) })} · ${st.shrinkTo < 1 ? t('shrinks', { p: Math.round(st.shrinkTo * 100) }) : t('noShrink')}${st.transport !== false ? ' · ' + t('transportShort') : ''}</div></div>
@@ -411,6 +411,10 @@ const SCREENS = {
       <div class="opts c2">${opt('light', 'day', 'sun', t('day'), '', lb.light === 'day')}${opt('light', 'dark', 'moon', t('dark'), t('areaPct', { p: pct(LIGHT.dark) }), lb.light === 'dark')}</div>
       <div class="sect">${t('extras')}<button class="qbtn" data-q="extra">${I.help}</button></div>
       <div class="opts c3">${opt('extra', 'tutorial', 'book', t('tutorial'), '', lb.extra === 'tutorial')}${opt('extra', 'simple', 'sparkle', t('simple'), '', lb.extra === 'simple')}${opt('extra', 'spice', 'pepper', t('spice'), '', lb.extra === 'spice')}</div>
+      <div class="sect">${t('helpers')}<button class="qbtn" data-q="helpers">${I.help}</button></div>
+      <div class="card" style="padding:4px 16px">
+        ${['compass', 'detector'].map((k) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap">${I[k === 'compass' ? 'north' : 'scan'].replace('<svg', '<svg width="22" height="22" style="color:var(--accent)"')}<b>${t(k)}</b></span><div class="seg">${['off', 'hunters', 'all'].map((v) => `<button data-hk="${k}:${v}" class="${(lb[k] || 'off') === v ? 'on' : ''}">${t('hv_' + v)}</button>`).join('')}</div></div>`).join('')}
+      </div>
       ${S.dev ? presetsBlock() : ''}
       ${summary}
       <button class="btn primary big block next-btn" data-step="2"><span>${t('next')}</span>${I.arrowR}</button>`;
@@ -424,7 +428,7 @@ const SCREENS = {
       : `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.bot || p.remote ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : p.remote ? `<span style="color:var(--hider)">●</span> ${t('netOnlineTag')}` : t('hostYou')}</span></span></div>`).join('');
 
     const step2 = `
-      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra)].join(' · ')}</span></button>
+      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : [])].join(' · ')}</span></button>
       ${summary}
       <div class="map-card">
         <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button>
@@ -473,7 +477,8 @@ const SCREENS = {
     hostPublish();
     el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => { lb.step = +b.dataset.step; save(); go('lobby'); });
-    el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
+    el.querySelectorAll('[data-hk]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.hk.split(':'); lb[k] = v; rerender(); });
+    el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : b.dataset.q === 'helpers' ? t('helpersHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
     el.querySelector('#leave').onclick = () => { if (NET && NET.role === 'host') { NET.room.send('abort', {}); NET.room.clearLobby(); setTimeout(netClose, 500); } S.lobby = null; save(); go('home'); };
     el.querySelector('#share').onclick = () => shareLobby(lb.code);
     el.querySelector('#qr').onclick = () => { lb.showQr = !lb.showQr; rerender(); };
@@ -579,6 +584,7 @@ const SCREENS = {
         bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
         roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot })),
         myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
+        compass: lb.compass || 'off', detector: lb.detector || 'off',
       };
       if (!online) return go('game', { ...base, roles: lb.players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
       const startAt = Date.now() + 5000;

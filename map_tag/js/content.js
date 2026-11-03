@@ -129,6 +129,7 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['1.6', ['Помощники поиска (лобби → шаг 1): компас на ближайшего соперника и детектор расстояния «холодно — горячо», для охотников или для всех.', 'Чит «Точный радар»: точные метры и живая стрелка.']],
     ['1.5', ['Онлайн-игра с друзьями: создайте лобби — друзья входят по коду или QR и появляются в «Вашей команде». Организатор назначает роли и начинает игру, у всех общий таймер, раскрытия, заморозки, поимки, тайники, задания и итоги.', 'Связь через публичный сервер без регистрации; всё зашифровано ключом из кода лобби.']],
     ['1.4', ['Быстрое добавление игроков: имена через запятую, кнопки +1/+3/+5 и −1; роли распределяются сами.', 'Водящим можно транспорт (самокат, велосипед, автобус), прячущимся — только пешком; переключатель в расширенных настройках.', 'Читы: подмена гео и телепорт; вход в читы прямо из игры (5 касаний по таймеру или кнопка в меню ⌄).']],
     ['1.3', ['Исправлен запуск APK (страница не открывалась: ERR_INVALID_RESPONSE).', 'Экран конца раунда: кто победил, уцелевшие, пойманные (кем и когда), лучший охотник, ваша статистика.', 'Повтор всех игроков: следы, раскрытия, поимки, задания и сужение зоны на шкале времени, скорость до ×32, слежение за игроком.']],
@@ -137,6 +138,7 @@ export const PATCH_NOTES = {
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['1.6', ['Search helpers (lobby → step 1): a compass to the nearest opponent and a cold-to-hot distance detector, for Hunters or everyone.', 'Exact radar cheat: exact metres and a live arrow.']],
     ['1.5', ['Online play with friends: create a lobby — friends join with the code or QR and appear in “Your crew”. The host assigns roles and starts; everyone shares the timer, reveals, freezes, catches, caches, missions and results.', 'Runs through a public server, no sign-up; everything is encrypted with a key from the lobby code.']],
     ['1.4', ['Quick player adding: comma-separated names, +1/+3/+5 and −1; roles balance themselves.', 'Hunters may use transport (scooter, bike, bus), Hiders walk; toggle in advanced settings.', 'Cheats: fake location and teleport; open cheats right in the game (5 taps on the timer or the button in the ⌄ menu).']],
     ['1.3', ['Fixed APK launch (page failed with ERR_INVALID_RESPONSE).', 'End-of-round screen: winner, survivors, who caught whom and when, top hunter, your stats.', 'Replay of every player: trails, reveals, catches, missions and the shrinking zone on a timeline, up to ×32, follow a player.']],

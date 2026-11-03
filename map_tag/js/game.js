@@ -4,6 +4,7 @@ import { I } from './icons.js';
 import { POWERUPS, pwById, pwName, pwDesc } from './content.js';
 import { beep } from './sound.js';
 import { netMixin } from './gamenet.js';
+import { seekMixin } from './seek.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -168,12 +169,14 @@ export class Game {
     if (this.cfg.mode === 'gps') this.startGps();
     try { window.MapTagNative && window.MapTagNative.gameStart('Map Tag — ' + (this.me.role === 'hunter' ? t('hunter') : t('hider'))); } catch {}
     this.requestWakeLock();
+    if (this.cfg.compass && this.cfg.compass !== 'off') this.startHeading();
     this.renderHud(true);
     this.timer = setInterval(() => this.tick(), 250);
     this.alert('blue', this.me.role === 'hunter' ? t('waitHint') : (this.cfg.mode === 'demo' ? t('demoTap') : t('hideTime') + '!'), 'map');
   }
 
   destroy() {
+    this.stopHeading();
     clearInterval(this.timer);
     window.__nativeLoc = null;
     try { window.MapTagNative && window.MapTagNative.gameStop(); } catch {}
@@ -866,21 +869,21 @@ export class Game {
 
     // нижняя панель
     const rLeft = this.revealReadyAt - T, fLeft = this.freezeReadyAt - T;
-    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof].join('|');
+    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof, this.seekActive(), !!this.ch.radar].join('|');
     if (full || bsig !== this.botSig) {
       this.botSig = bsig;
       const counts = {}; me.powerups.forEach((id) => counts[id] = (counts[id] || 0) + 1);
       const tray = this.trayOpen && me.powerups.length ? `<div class="tray">${Object.keys(counts).map((id) => { const p = pwById(id); return `<button class="pw" data-pw="${id}">${counts[id] > 1 ? `<span class="x">×${counts[id]}</span>` : ''}${I[p.icon]}${esc(pwName(p))}</button>`; }).join('')}</div>` : '';
       const side = this.hasPowerups ? `<div class="side-col"><button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
       if (hunter) {
-        bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${tray}<div class="act-row">${side}
+        bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${side}
           <button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}
           <button class="ab catch" data-a="catch">${I.crosshair}<span class="t">${t('catch')}</span><span class="s">${t('choosePlayer')}</span></button>
         </div>`;
       } else {
         bot.innerHTML = `${this.cfg.mode === 'demo' || this.ch.spoof ? `<div class="demo-hint">${this.ch.spoof ? t('spoofHint') : t('demoTap')}</div>` : ''}${tray}
-          <div class="stamina" id="stBox"><span>${t('stamina')}</span><div class="bar"><i id="stBar"></i></div></div>
+          ${this.seekHtml()}<div class="stamina" id="stBox"><span>${t('stamina')}</span><div class="bar"><i id="stBar"></i></div></div>
           <div class="act-row">${side}
             ${this.cfg.mode === 'demo'
               ? `<button class="ab run ${this.runToggle ? 'on' : ''}" data-a="run">${I.run}<span class="t">${this.runToggle ? t('run') : t('walk')}</span><span class="s">${this.runToggle ? t('walk') + ' ↔' : t('run') + ' ↔'}</span></button>`
@@ -896,6 +899,7 @@ export class Game {
     if (fS) { const ok = ph === 'hunt' && (fLeft <= 0 || this.ch.nocd); fS.textContent = ok ? t('ready') : fmt(ph === 'hide' ? this.freezeReadyAt - T : fLeft); fS.parentElement.classList.toggle('wait', !ok); }
     const st = bot.querySelector('#stBar');
     if (st) { st.style.width = me.stamina + '%'; bot.querySelector('#stBox').classList.toggle('low', me.stamina < 25); }
+    this.seekUpdate();
     const rt = bot.querySelector('#runT'); if (rt) rt.textContent = me.running ? t('run') : t('walk');
   }
 
@@ -908,6 +912,7 @@ export class Game {
       case 'more': this.moreOpen = !this.moreOpen; this.renderHud(true); break;
       case 'gps': if (this.cfg.mode !== 'gps') { this.cfg.mode = 'gps'; this.pace = 1; this.gpsPrev = null; this.startGps(); this.renderHud(true); } break;
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
+      case 'heading': this.askHeading(); break;
       case 'secret': {
         const now = Date.now();
         this.secTaps = now - (this.secLast || 0) < 1500 ? (this.secTaps || 0) + 1 : 1; this.secLast = now;
@@ -952,6 +957,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin);
+Object.assign(Game.prototype, netMixin, seekMixin);
 
 export { fmt };
