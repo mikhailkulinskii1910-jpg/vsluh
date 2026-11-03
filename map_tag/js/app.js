@@ -9,8 +9,9 @@ import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat } from './chat.js';
+import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '1.7';
+const VERSION = '1.8';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -67,7 +68,7 @@ function netStatusHtml() {
   return `<span class="net-pill" id="netPill"><i style="background:${c}"></i>${txt}</span>`;
 }
 function netRefreshPill() { const el = document.getElementById('netPill'); if (el) el.outerHTML = netStatusHtml(); }
-function netClose() { if (!NET) return; clearInterval(NET.ping); try { NET.room.disconnect(); } catch {} NET = null; chatReset(); }
+function netClose() { if (!NET) return; voiceLeave(); clearInterval(NET.ping); try { NET.room.disconnect(); } catch {} NET = null; chatReset(); }
 function myRoleNow() {
   if (game) return game.me.role;
   if (NET && NET.role === 'client') { const p = ((NET.lobby || {}).players || []).find((x) => x.id === NET.myId); return p ? p.role : 'hider'; }
@@ -81,6 +82,7 @@ function netRoute(type, d, from, ts) {
   if (!NET) return;
   if (NET.role === 'client' && from === NET.hostId) netSample(ts);
   if (type === 'chat') { chatHandle(d, from); return; }
+  if (/^v(join|here|sig|relay|leave|chunk|talk)$/.test(type)) { voiceHandle(type, d, from); return; }
   if (game && game.net) { if (type !== 'lobby' && type !== 'hello' && type !== 'ping') game.netHandle(type, d, from, ts); if (type === 'lobby') return; }
   if (NET.role === 'host') hostOnMsg(type, d, from, ts); else clientOnMsg(type, d, from, ts);
 }
@@ -709,6 +711,8 @@ const SCREENS = {
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
       openChat: () => openChat(modal),
+      voice: () => ({ on: VOICE.on, mic: VOICE.mic, talk: VOICE.speaking.size > 0 }),
+      voiceMute: () => voiceMute(),
       chatUnread: () => CHAT.unread,
       openCheats: () => { const open = () => { game && openGameCheats(modal, S, save, game); game && game.renderHud(true); }; if (S.cheatsUnlocked) open(); else askPassword(open); },
       onLeave: () => go(NET && NET.role === 'client' ? (NET.lobby ? 'clientLobby' : 'home') : 'lobby'),
@@ -868,6 +872,7 @@ function openSettings() {
         <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
         ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
         <label class="set-row"><div><div class="tt">${t('sound')}</div><div class="ss">${t('soundS')}</div></div><input type="checkbox" id="snd" ${soundOn() ? 'checked' : ''}></label>
+        <button class="set-row" data-s="turn"><div><div class="tt">${t('turn')}</div><div class="ss">${t('turnS')}</div></div></button>
         <label class="set-row"><div><div class="tt">${t('devSettings')}</div><div class="ss">${t('devSettingsS')}</div></div><input type="checkbox" id="dev" ${S.dev ? 'checked' : ''}></label>
         <button class="set-row" data-s="privacy"><div><div class="tt">${t('privacy')}</div><div class="ss">${t('privacyText')}</div></div></button>
         <button class="set-row" data-s="perms"><div><div class="tt">${t('checkPerms')}</div><div class="ss">${t('checkPermsS')}</div></div></button>
@@ -885,6 +890,17 @@ function openSettings() {
         if (s === 'privacy' || s === 'pn') { close(); go('stats'); setTimeout(() => { const d = document.querySelector('details.acc'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } }, 50); }
         else if (s === 'perms') modal(`<h2>${t('checkPerms')}</h2><div id="permList">…</div><button class="btn block" data-x style="margin-top:14px">${t('done')}</button>`, (m, c2) => { m.querySelector('[data-x]').onclick = () => { window.__permChanged = null; c2(); }; window.__permChanged = () => renderPerms(m.querySelector('#permList')); renderPerms(m.querySelector('#permList')); });
         else if (s === 'cheats') { close(); go('cheats'); }
+        else if (s === 'turn') {
+          let cur = {}; try { cur = JSON.parse(localStorage.getItem('mt_turn') || '{}') || {}; } catch {}
+          modal(`<h2>${t('turn')}</h2><p style="color:var(--muted)">${t('turnS')}</p>
+            <input class="input" id="tu" placeholder="turn:example.com:3478" value="${esc(cur.url || '')}" style="margin-bottom:8px">
+            <input class="input" id="tus" placeholder="username" value="${esc(cur.user || '')}" style="margin-bottom:8px">
+            <input class="input" id="tup" placeholder="password" value="${esc(cur.pass || '')}">
+            <div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (m, c2) => {
+            m.querySelector('[data-x]').onclick = c2;
+            m.querySelector('[data-ok]').onclick = () => { const v = { url: m.querySelector('#tu').value.trim(), user: m.querySelector('#tus').value.trim(), pass: m.querySelector('#tup').value }; try { v.url ? localStorage.setItem('mt_turn', JSON.stringify(v)) : localStorage.removeItem('mt_turn'); } catch {} c2(); };
+          });
+        }
         else if (s === 'onb') { S.onboarded = false; save(); close(); go('onboarding'); }
         else if (s === 'terms') modal(`<h2>${t('terms')}</h2><p>${t('termsText')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, c2) => m.querySelector('[data-x]').onclick = c2);
       });
@@ -1002,6 +1018,14 @@ chatInit({
   inGame: () => (game && game.net ? game : null),
   toast, onUnread: chatBadges,
 });
+voiceInit({
+  send: (type, data, to) => NET && NET.room.send(type, data, to),
+  myId: () => myNetId(), myName: () => S.name, myRole: () => myRoleNow(), toast,
+});
+VOICE.onChange = () => {
+  if (CHAT.open) CHAT.open.redraw();
+  if (game) game.renderHud(true);
+};
 const hash = /#join=([A-Z0-9]{6})/i.exec(location.hash);
 if (hash) { history.replaceState(null, '', location.pathname); go('join', hash[1].toUpperCase()); }
 else go(S.onboarded ? 'home' : 'onboarding');

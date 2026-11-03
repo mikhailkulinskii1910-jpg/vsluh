@@ -3,6 +3,7 @@
 import { t, getLang } from './i18n.js';
 import { I } from './icons.js';
 import { beep } from './sound.js';
+import { VOICE, voiceJoin, voiceLeave, voiceMute } from './voice.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const MAX_REC = 15;            // секунд на одно сообщение рации
@@ -107,6 +108,7 @@ export function openChat(modal) {
       const me = ctx.me(), g = ctx.inGame();
       const list = CHAT.msgs.filter((m) => (CHAT.ch === 'all' ? m.ch === 'all' : m.ch === 'team' && (m.team === me.role || m.from === me.id)));
       box.innerHTML = `<div class="mhead"><span class="k">${t('chat')}</span><button class="icon-btn" data-x>${I.close}</button></div>
+        ${voiceBar(me)}
         <div class="seg" style="display:flex;margin-bottom:10px"><button data-ch="all" class="${CHAT.ch === 'all' ? 'on' : ''}" style="flex:1">${t('chatAll')}</button><button data-ch="team" class="${CHAT.ch === 'team' ? 'on' : ''}" style="flex:1">${t('chatTeam')}: ${t(me.role === 'hunter' ? 'huntersPl' : 'hidersPl')}</button></div>
         <div class="chat-list" id="chList">${list.length ? list.map((m) => `<div class="msg ${m.from === me.id ? 'mine' : ''}"><div class="who">${esc(m.name)} · ${fmtT(m.at)}</div>
           ${m.kind === 'voice' ? `<button class="vmsg" data-play="${m.id}">${I.play}<span>${t('chatVoice')} · ${m.dur}${t('sec')}</span></button>` : m.kind === 'loc' ? `<div class="bub">📍 ${t('chatLoc')}</div>` : `<div class="bub">${esc(m.text)}</div>`}</div>`).join('') : `<div class="empty" style="padding:20px">${t('chatEmpty')}</div>`}</div>
@@ -118,6 +120,9 @@ export function openChat(modal) {
         </div>
         <label class="row" style="margin-top:10px;color:var(--muted);font-size:14px;gap:8px;flex-wrap:nowrap"><input type="checkbox" id="chAuto" ${CHAT.autoplay ? 'checked' : ''} style="width:20px;height:20px;accent-color:var(--accent)">${t('chatAutoplay')}</label>`;
       const lst = box.querySelector('#chList'); lst.scrollTop = lst.scrollHeight;
+      const vj = box.querySelector('#vJoin'); if (vj) vj.onclick = async () => { vj.disabled = true; await voiceJoin(CHAT.ch); draw(); };
+      const vm = box.querySelector('#vMic'); if (vm) vm.onclick = () => { voiceMute(); };
+      const vl = box.querySelector('#vLeave'); if (vl) vl.onclick = () => { voiceLeave(); };
       box.querySelector('[data-x]').onclick = () => { CHAT.open = null; recStop(true); close(); };
       box.querySelectorAll('[data-ch]').forEach((b) => b.onclick = () => { CHAT.ch = b.dataset.ch; draw(); });
       box.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => sendText(b.dataset.q));
@@ -141,4 +146,18 @@ export function openChat(modal) {
     CHAT.open = { redraw: () => { const inp = box.querySelector('#chText'); const v = inp ? inp.value : ''; const foc = document.activeElement === inp; if (recording()) return; draw(); const n = box.querySelector('#chText'); if (n) { n.value = v; if (foc) n.focus(); } } };
     draw();
   }, { onClose: () => { CHAT.open = null; recStop(true); } });
+}
+
+/** Полоса голосового чата вверху окна. */
+function voiceBar(me) {
+  const chName = CHAT.ch === 'team' ? `${t('chatTeam')}: ${t(me.role === 'hunter' ? 'huntersPl' : 'hidersPl')}` : t('chatAll');
+  if (!VOICE.on) return `<button class="btn block voice-join" id="vJoin">🎧 ${t('voiceJoin')} · ${esc(chName)}</button>`;
+  const peers = [...VOICE.peers.values()];
+  const chip = (name, id, state) => `<span class="vchip ${VOICE.speaking.has(id) ? 'talk' : ''}"><i class="st ${state}"></i>${esc(name)}</span>`;
+  return `<div class="voice-bar">
+    <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b>🎧 ${t('voiceLive')} · ${esc(VOICE.ch === 'team' ? t('chatTeam') : t('chatAll'))}</b><span style="color:var(--muted);font-size:13px">${peers.length ? '' : t('voiceAlone')}</span></div>
+    <div class="vchips">${chip(t('you'), 'me', VOICE.mic ? 'direct' : 'muted')}${peers.map((p) => chip(p.name || '?', p.id, p.state)).join('')}</div>
+    <div class="row" style="flex-wrap:nowrap;margin-top:8px"><button class="btn ${VOICE.mic ? 'primary' : ''}" id="vMic" style="flex:1">${VOICE.mic ? '🎙 ' + t('voiceMicOn') : '🔇 ' + t('voiceMicOff')}</button><button class="btn danger" id="vLeave">${t('voiceLeave')}</button></div>
+    <div class="vlegend"><i class="st direct"></i>${t('voiceDirect')} <i class="st relay"></i>${t('voiceRelay')} <i class="st connecting"></i>${t('voiceConnecting')}</div>
+  </div>`;
 }

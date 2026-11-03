@@ -883,13 +883,15 @@ export class Game {
 
     // нижняя панель
     const rLeft = this.revealReadyAt - T, fLeft = this.freezeReadyAt - T;
-    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof, this.seekActive(), !!this.ch.radar, this.net && this.opts.chatUnread ? this.opts.chatUnread() : 0].join('|');
+    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof, this.seekActive(), !!this.ch.radar, this.net && this.opts.chatUnread ? this.opts.chatUnread() : 0, this.opts.voice ? JSON.stringify(this.opts.voice()) : ''].join('|');
     if (full || bsig !== this.botSig) {
       this.botSig = bsig;
       const counts = {}; me.powerups.forEach((id) => counts[id] = (counts[id] || 0) + 1);
       const tray = this.trayOpen && me.powerups.length ? `<div class="tray">${Object.keys(counts).map((id) => { const p = pwById(id); return `<button class="pw" data-pw="${id}">${counts[id] > 1 ? `<span class="x">×${counts[id]}</span>` : ''}${I[p.icon]}${esc(pwName(p))}</button>`; }).join('')}</div>` : '';
       const unread = this.opts.chatUnread ? this.opts.chatUnread() : 0;
-      const chatSq = this.net ? `<button class="sq" data-a="chat" aria-label="chat" style="color:var(--teal)">${I.mail}${unread ? `<span class="cnt" style="background:var(--hunter)">${unread}</span>` : ''}</button>` : '';
+      const vo = this.opts.voice ? this.opts.voice() : { on: false };
+      const voiceSq = vo.on ? `<button class="sq ${vo.talk ? 'talking' : ''}" data-a="vmic" aria-label="mic" style="font-size:24px">${vo.mic ? '🎙' : '🔇'}</button>` : '';
+      const chatSq = this.net ? `${voiceSq}<button class="sq" data-a="chat" aria-label="chat" style="color:var(--teal)">${I.mail}${unread ? `<span class="cnt" style="background:var(--hunter)">${unread}</span>` : ''}</button>` : '';
       const chatBtn = this.net && !this.hasPowerups ? `<div class="side-col">${chatSq}</div>` : '';
       const side = this.hasPowerups ? `<div class="side-col">${chatSq}<button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
       if (hunter) {
@@ -931,6 +933,7 @@ export class Game {
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
       case 'heading': this.askHeading(); break;
       case 'chat': this.opts.openChat && this.opts.openChat(); break;
+      case 'vmic': this.opts.voiceMute && this.opts.voiceMute(); break;
       case 'secret': {
         const now = Date.now();
         this.secTaps = now - (this.secLast || 0) < 1500 ? (this.secTaps || 0) + 1 : 1; this.secLast = now;

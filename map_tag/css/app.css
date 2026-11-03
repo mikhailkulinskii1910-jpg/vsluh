@@ -459,3 +459,18 @@ html[data-theme] .res-hero { background: var(--card); }
 .ptt.rec { background: var(--hunter); color: #fff; border-color: transparent; animation: tblink 1s ease-in-out infinite; }
 .mk-ping { width: 26px; height: 26px; border-radius: 50%; background: rgba(79,209,197,.35); border: 3px solid var(--teal); animation: pingp 1.4s ease-out infinite; }
 @keyframes pingp { 0% { box-shadow: 0 0 0 0 rgba(79,209,197,.7); } 100% { box-shadow: 0 0 0 18px rgba(79,209,197,0); } }
+
+/* ---------- голосовой чат ---------- */
+.voice-join { margin-bottom: 10px; }
+.voice-bar { padding: 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--card2); margin-bottom: 10px; }
+.vchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.vchip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: var(--bg2); border: 2px solid transparent; font-size: 14px; transition: border-color .15s; }
+.vchip.talk { border-color: var(--hider); box-shadow: 0 0 0 3px rgba(95,211,141,.25); }
+.st { width: 9px; height: 9px; border-radius: 50%; display: inline-block; background: var(--muted); }
+.st.direct { background: var(--hider); }
+.st.relay { background: var(--gold); }
+.st.connecting { background: var(--muted); animation: tblink 1s infinite; }
+.st.muted { background: var(--hunter); }
+.vlegend { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.vlegend .st { margin-left: 6px; }
+.sq.talking { box-shadow: 0 0 0 4px rgba(95,211,141,.55); }

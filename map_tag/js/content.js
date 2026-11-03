@@ -129,6 +129,7 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['1.8', ['Голосовой чат в реальном времени (Чат → «Войти в голосовой чат»): каналы «Все» и «Команда», индикатор говорящего, кнопка микрофона прямо в игре.', 'Связь напрямую (WebRTC), а если сеть не пускает — автоматически через сервер с задержкой около секунды.']],
     ['1.7', ['Чат в онлайн-игре: каналы «Все» и «Команда», быстрые фразы, «📍 Где я» — точка на карте у вашей команды.', 'Рация: групповые голосовые сообщения — держите кнопку и говорите, у остальных проигрывается сразу.']],
     ['1.6', ['Помощники поиска (лобби → шаг 1): компас на ближайшего соперника и детектор расстояния «холодно — горячо», для охотников или для всех.', 'Чит «Точный радар»: точные метры и живая стрелка.']],
     ['1.5', ['Онлайн-игра с друзьями: создайте лобби — друзья входят по коду или QR и появляются в «Вашей команде». Организатор назначает роли и начинает игру, у всех общий таймер, раскрытия, заморозки, поимки, тайники, задания и итоги.', 'Связь через публичный сервер без регистрации; всё зашифровано ключом из кода лобби.']],
@@ -139,6 +140,7 @@ export const PATCH_NOTES = {
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['1.8', ['Real-time voice chat (Chat → “Join voice chat”): Everyone and Team channels, speaking indicator, mic button right in the game.', 'Direct connection (WebRTC), and automatically via the server with about a second of delay when the network blocks it.']],
     ['1.7', ['Online chat: Everyone and Team channels, quick phrases, “📍 Where I am” shows your spot to your team.', 'Radio: group voice messages — hold the button and talk, the others hear it right away.']],
     ['1.6', ['Search helpers (lobby → step 1): a compass to the nearest opponent and a cold-to-hot distance detector, for Hunters or everyone.', 'Exact radar cheat: exact metres and a live arrow.']],
     ['1.5', ['Online play with friends: create a lobby — friends join with the code or QR and appear in “Your crew”. The host assigns roles and starts; everyone shares the timer, reveals, freezes, catches, caches, missions and results.', 'Runs through a public server, no sign-up; everything is encrypted with a key from the lobby code.']],

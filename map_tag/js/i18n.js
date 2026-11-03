@@ -125,6 +125,8 @@ const ru = {
   chat: 'Чат', chatAll: 'Все', chatTeam: 'Команда', hidersPl: 'прячущиеся', huntersPl: 'охотники', chatPh: 'Сообщение…', chatEmpty: 'Пока тихо. Напишите первым или зажмите рацию.',
   chatHold: 'Держите и говорите', chatRec: 'Запись', chatVoice: 'голосовое', chatLoc: 'отметил(а) место на карте', chatWhere: 'Где я', chatLocSent: 'Ваше место видно вашей команде 30 секунд',
   chatNoMic: 'Нет доступа к микрофону', chatAutoplay: 'Сразу проигрывать голосовые (как рация)',
+  voiceJoin: 'Войти в голосовой чат', voiceLive: 'Голосовой чат', voiceAlone: 'пока никого', voiceMicOn: 'Микрофон вкл', voiceMicOff: 'Микрофон выкл', voiceLeave: 'Выйти',
+  voiceDirect: 'напрямую', voiceRelay: 'через сервер', voiceConnecting: 'соединяемся', turn: 'TURN-сервер для голоса', turnS: 'Необязательно. Ускоряет прямое соединение на мобильном интернете.',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -247,6 +249,8 @@ const en = {
   chat: 'Chat', chatAll: 'Everyone', chatTeam: 'Team', hidersPl: 'hiders', huntersPl: 'hunters', chatPh: 'Message…', chatEmpty: 'Quiet so far. Say something or hold the radio.',
   chatHold: 'Hold to talk', chatRec: 'Recording', chatVoice: 'voice', chatLoc: 'marked a spot on the map', chatWhere: 'Where I am', chatLocSent: 'Your spot is visible to your team for 30 seconds',
   chatNoMic: 'No microphone access', chatAutoplay: 'Play voice messages right away (radio style)',
+  voiceJoin: 'Join voice chat', voiceLive: 'Voice chat', voiceAlone: 'nobody yet', voiceMicOn: 'Mic on', voiceMicOff: 'Mic off', voiceLeave: 'Leave',
+  voiceDirect: 'direct', voiceRelay: 'via server', voiceConnecting: 'connecting', turn: 'TURN server for voice', turnS: 'Optional. Helps direct connections on mobile data.',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 
