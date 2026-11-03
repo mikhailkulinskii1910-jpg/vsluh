@@ -169,6 +169,7 @@ export class Game {
     const onPos = (pos) => {
       if (this.cfg.mode !== 'gps' || this.ended) return;
       this.gotFix = true;
+      if (this.ch.spoof) return;   // чит: настоящее гео игнорируется
       const p = this.xy(pos.coords.latitude, pos.coords.longitude);
       const now = this.t;
       if (first) {
@@ -210,10 +211,18 @@ export class Game {
   }
 
   onMapTap(e) {
-    if (this.cfg.mode !== 'demo') return;
-    if (this.me.role === 'hunter' && this.phase() === 'hide') return;
+    const spoof = this.cfg.mode === 'gps' && this.ch.spoof;
+    if (this.cfg.mode !== 'demo' && !spoof) return;
+    if (this.me.role === 'hunter' && this.phase() === 'hide' && !spoof) return;
     const p = this.xy(e.latlng.lat, e.latlng.lng);
+    if (spoof && this.ch.teleport) { this.me.x = p.x; this.me.y = p.y; this.me.target = null; this.render(); return; }
     this.me.target = p;
+  }
+  /** Читы поменялись прямо в игре. */
+  cheatsChanged() {
+    if (this.ch.skiphide && this.phase() === 'hide') this.t = this.cfg.hideSec;
+    if (this.ch.allpw && this.phase() === 'hunt') this.allGiven = false;
+    this.renderHud(true); this.render();
   }
 
   // ---------- сущности ----------
@@ -282,13 +291,14 @@ export class Game {
 
     // перемещение игрока
     const me = this.me;
-    if (this.cfg.mode === 'demo') {
-      if (this.isFrozen(me) || (me.role === 'hunter' && ph === 'hide')) { me.running = false; me.speed = 0; }
+    if (this.cfg.mode === 'demo' || this.ch.spoof) {
+      if (!this.ch.spoof && (this.isFrozen(me) || (me.role === 'hunter' && ph === 'hide'))) { me.running = false; me.speed = 0; }
       else if (me.target) { if (this.step(me, me.target, this.runToggle, dt)) me.target = null; }
       else { me.running = false; me.speed = 0; }
     } else {
       me.running = me.speed > 2.8;
       if (this.gpsPrev && this.t - this.gpsPrev.t > 4) me.speed *= 0.7;
+      this.checkVehicle(dt);
     }
     this.updateStamina(me, dt);
     if (this.ch.stamina) me.stamina = 100;
@@ -327,6 +337,19 @@ export class Game {
     this.alerts = this.alerts.filter((a) => this.t < a.until);
 
     if (draw) this.render();
+  }
+
+  /** Скорость как у транспорта (> 7 м/с дольше 8 с): прячущимся нельзя, охотникам — если выключено в настройках. */
+  checkVehicle(dt) {
+    const me = this.me, banned = me.role === 'hider' || this.cfg.transport === false;
+    if (!banned || this.phase() === 'end' || this.ch.spoof) { this.vehT = 0; return; }
+    this.vehT = me.speed > 7 ? (this.vehT || 0) + dt : Math.max(0, (this.vehT || 0) - dt);
+    if (this.vehT > 8) {
+      this.vehT = 0;
+      if (me.role === 'hider') { me.exposedUntil = Math.max(me.exposedUntil, this.t + 30); this.alert('red', t('noVehicleHider'), 'run'); }
+      else this.alert('yellow', t('noVehicleHunter'), 'run');
+      this.vibrate([200, 100, 200]);
+    }
   }
 
   updateStamina(p, dt) {
@@ -760,7 +783,7 @@ export class Game {
           <button class="hb" data-a="me" aria-label="me">${I.locate}</button>
           <button class="hb" data-a="help" aria-label="help">${I.help}</button>
           <div class="sep"></div>
-          <div class="tm"><div class="k" id="gK"></div><div class="v" id="gV"></div></div>
+          <div class="tm" data-a="secret"><div class="k" id="gK"></div><div class="v" id="gV"></div></div>
           <div class="sep"></div>
           <div class="tm ms" id="msBox"><div class="k">${I.diamond.replace('<svg', '<svg width="12" height="12"')}<span id="mK"></span></div><div class="v" id="mV"></div></div>
           <div class="sep"></div>
@@ -771,6 +794,7 @@ export class Game {
           <div class="line-row"><span>${t('alive')}</span><b>${t('hider')}: ${alive} · ${t('hunters')}: ${hcount}</b></div>
           <div class="line-row"><span>${t('zoneR')}</span><b id="zR"></b></div>
           <div class="line-row"><span>${t('moveMode')}</span><div class="seg"><button data-a="gps" class="${this.cfg.mode === 'gps' ? 'on' : ''}">${t('gps')}</button><button data-a="demo" class="${this.cfg.mode === 'demo' ? 'on' : ''}">${t('demo')}</button></div></div>
+          ${this.opts.cheatsUnlocked && this.opts.cheatsUnlocked() ? `<button class="btn block" data-a="cheats" style="color:var(--hunter)">${I.lock}${t('cheats')}</button>` : ''}
           <button class="btn danger block" data-a="leave">${I.leave}${t('leaveGame')}</button>
         </div>` : ''}
         ${warnNow ? `<div class="frozen warn"><div><div class="t1">${t('freezeWarn')}</div><div class="t2">${t('freezeWarnS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
@@ -795,20 +819,20 @@ export class Game {
 
     // нижняя панель
     const rLeft = this.revealReadyAt - T, fLeft = this.freezeReadyAt - T;
-    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze].join('|');
+    const bsig = [full, me.role, this.trayOpen, me.powerups.join(), this.cfg.mode, this.runToggle, ph, this.hasFreeze, !!this.ch.spoof].join('|');
     if (full || bsig !== this.botSig) {
       this.botSig = bsig;
       const counts = {}; me.powerups.forEach((id) => counts[id] = (counts[id] || 0) + 1);
       const tray = this.trayOpen && me.powerups.length ? `<div class="tray">${Object.keys(counts).map((id) => { const p = pwById(id); return `<button class="pw" data-pw="${id}">${counts[id] > 1 ? `<span class="x">×${counts[id]}</span>` : ''}${I[p.icon]}${esc(pwName(p))}</button>`; }).join('')}</div>` : '';
       const side = this.hasPowerups ? `<div class="side-col"><button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
       if (hunter) {
-        bot.innerHTML = `${tray}<div class="act-row">${side}
+        bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${tray}<div class="act-row">${side}
           <button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}
           <button class="ab catch" data-a="catch">${I.crosshair}<span class="t">${t('catch')}</span><span class="s">${t('choosePlayer')}</span></button>
         </div>`;
       } else {
-        bot.innerHTML = `${this.cfg.mode === 'demo' ? `<div class="demo-hint">${t('demoTap')}</div>` : ''}${tray}
+        bot.innerHTML = `${this.cfg.mode === 'demo' || this.ch.spoof ? `<div class="demo-hint">${this.ch.spoof ? t('spoofHint') : t('demoTap')}</div>` : ''}${tray}
           <div class="stamina" id="stBox"><span>${t('stamina')}</span><div class="bar"><i id="stBar"></i></div></div>
           <div class="act-row">${side}
             ${this.cfg.mode === 'demo'
@@ -837,6 +861,13 @@ export class Game {
       case 'more': this.moreOpen = !this.moreOpen; this.renderHud(true); break;
       case 'gps': if (this.cfg.mode !== 'gps') { this.cfg.mode = 'gps'; this.pace = 1; this.gpsPrev = null; this.startGps(); this.renderHud(true); } break;
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
+      case 'secret': {
+        const now = Date.now();
+        this.secTaps = now - (this.secLast || 0) < 1500 ? (this.secTaps || 0) + 1 : 1; this.secLast = now;
+        if (this.secTaps >= 5) { this.secTaps = 0; this.opts.openCheats(); }
+        break;
+      }
+      case 'cheats': this.opts.openCheats(); break;
       case 'leave': this.opts.confirm(t('leaveConfirm'), () => { this.ended = true; this.opts.onLeave(); }); break;
       case 'tray': this.trayOpen = !this.trayOpen; this.renderHud(true); break;
       case 'run': this.runToggle = !this.runToggle; this.renderHud(true); break;

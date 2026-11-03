@@ -411,3 +411,6 @@ html[data-theme] .res-hero { background: var(--card); }
 .screen.res.has-bar { padding-bottom: calc(190px + var(--safe-bottom)); }
 .dotc { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #888; flex: none; }
 .rp-catch { width: 26px; height: 26px; border-radius: 50%; background: #111; color: #f26d7d; display: grid; place-items: center; font-weight: 900; border: 2px solid #f26d7d; }
+.quick-add { display: flex; gap: 8px; margin-bottom: 10px; }
+.quick-add .input { min-height: 48px; font-size: 16px; flex: 1; }
+.quick-add .btn { flex: none; }

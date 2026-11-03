@@ -4,11 +4,11 @@ import { I } from './icons.js';
 import { POWERUPS, pwName, pwDesc, tutorialSteps, PATCH_NOTES } from './content.js';
 import { Game, fmt, BOT_NAMES } from './game.js';
 import { applyTheme, themePicker } from './themes.js';
-import { checkPass, renderCheats, openWheel } from './cheats.js';
+import { checkPass, renderCheats, openWheel, openGameCheats } from './cheats.js';
 import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 
-const VERSION = '1.3';
+const VERSION = '1.4';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -60,6 +60,7 @@ function advancedBlock(lb, c) {
     <div class="row" style="flex-wrap:nowrap;margin-top:8px"><input type="range" class="range" data-av="${k}" min="${min}" max="${max}" step="${step}" value="${val}" style="flex:1"><input class="input adv-in" data-ai="${k}" value="${unit === 'time' ? txt : val}" inputmode="${unit === 'time' ? 'text' : 'numeric'}">${unit && unit !== 'time' ? `<span style="color:var(--muted)">${unit}</span>` : ''}</div>
     ${hint ? `<div class="adv-hint">${hint}</div>` : ''}</div>`;
   return `<label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('shrinkArea')}</b><br><span class="adv-hint">${t('shrinkAreaS')}</span></span><input type="checkbox" id="advShrink" ${shrink ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
+    <label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('transportOk')}</b><br><span class="adv-hint">${t('transportOkS')}</span></span><input type="checkbox" id="advTransport" ${lb.transport !== false ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
     ${row('radius', t('areaRadius'), c.radius, 100, 2000, 10, c.radius + ' ' + t('m'), t('m'))}
     ${shrink ? row('final', t('finalRadius'), Math.round(c.shrinkTo * 100), 30, 100, 1, Math.round(c.shrinkTo * 100) + '%', '%', t('finalRadiusS')) : ''}
     ${row('total', t('totalLen'), c.huntSec, 180, 5400, 30, fmt(c.huntSec), 'time', t('timeFmt'))}
@@ -78,6 +79,7 @@ function bindAdvanced(el, lb, rerender) {
     const lim = { radius: [50, 5000], final: [10, 100], total: [60, 4 * 3600], head: [0, 3600] }[k];
     set(k, Math.max(lim[0], Math.min(lim[1], v))); rerender();
   });
+  const tr = el.querySelector('#advTransport'); if (tr) tr.onchange = () => { lb.transport = tr.checked; save(); };
   const sh = el.querySelector('#advShrink'); if (sh) sh.onchange = () => { set('shrink', sh.checked); rerender(); };
   const rs = el.querySelector('#advReset'); if (rs) rs.onclick = () => { lb.adv = {}; rerender(); };
   el.querySelectorAll('[data-tune]').forEach((r) => { r.oninput = () => { lb[r.dataset.tune] = +r.value; el.querySelector(`#v_${r.dataset.tune}`).textContent = r.value; }; r.onchange = rerender; });
@@ -149,12 +151,12 @@ function bindCommon(root) {
   };
 }
 let secretTaps = 0, secretLast = 0;
-function askPassword() {
+function askPassword(onOk) {
   modal(`<h2>${I.lock.replace('<svg', '<svg width="26" height="26" style="vertical-align:-3px"')} ${t('password')}</h2>
     <input class="input code-input" id="pw" type="password" inputmode="numeric" autocomplete="off" style="letter-spacing:.2em">
     <div class="row" style="margin-top:16px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">${t('enter')}</button></div>`, (b, close) => {
     const inp = b.querySelector('#pw'); setTimeout(() => inp.focus(), 50);
-    const ok = () => { if (checkPass(inp.value)) { S.cheatsUnlocked = true; save(); close(); go('cheats'); } else { inp.value = ''; toast(t('wrongPass')); } };
+    const ok = () => { if (checkPass(inp.value)) { S.cheatsUnlocked = true; save(); close(); onOk ? onOk() : go('cheats'); } else { inp.value = ''; toast(t('wrongPass')); } };
     b.querySelector('[data-x]').onclick = close; b.querySelector('[data-ok]').onclick = ok;
     inp.onkeydown = (e) => { if (e.key === 'Enter') ok(); };
   });
@@ -283,6 +285,8 @@ const SCREENS = {
         <div class="kicker2">${t('yourCrew')}</div>
         <h2 class="row" style="font-size:28px">${I.users.replace('<svg', '<svg width="26" height="26"')} ${t('playersN', { n: lb.players.length })}</h2>
         <div class="row" style="justify-content:space-between;margin:10px 0 14px"><span style="color:var(--muted)">${t('crewCount', { h: hunters, d: hiders })}</span><button class="btn" id="manage">${lb.manage ? t('done') : t('managePlayers')}</button></div>
+        <div class="quick-add"><input class="input" id="qaName" maxlength="120" placeholder="${t('quickAddPh')}" enterkeyhint="done"><button class="btn primary" id="qaAdd">+ ${t('add')}</button></div>
+        <div class="row" style="gap:8px;margin:0 0 12px"><button class="chip" data-qb="1" style="flex:1;text-align:center">+1 ${t('bot')}</button><button class="chip" data-qb="3" style="flex:1;text-align:center">+3</button><button class="chip" data-qb="5" style="flex:1;text-align:center">+5</button><button class="chip" data-qb="-1" style="flex:1;text-align:center">−1</button></div>
         <div class="crew-list">${crewRows}</div>
         ${lb.manage ? `<div class="row" style="margin-top:12px"><button class="btn" id="addBot" style="flex:1">+ ${t('addBot')}</button><button class="btn" id="shuffle" style="flex:1">${I.swap}${t('shuffle')}</button></div>` : ''}
         <button class="btn block" id="wheel" style="margin-top:12px">${I.target}${t('whoIsIt')}</button>
@@ -326,6 +330,27 @@ const SCREENS = {
     el.querySelectorAll('[data-pr]').forEach((b) => b.onclick = () => { const [i, r] = b.dataset.pr.split(':'); lb.players[+i].role = r; rerender(); });
     el.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { lb.players.splice(+b.dataset.rm, 1); rerender(); });
     el.querySelectorAll('[data-pn]').forEach((inp) => inp.onchange = () => { lb.players[+inp.dataset.pn].name = inp.value.trim() || lb.players[+inp.dataset.pn].name; save(); });
+    // быстрое добавление: имена через запятую / с новой строки, роли балансируются автоматически (≈ треть охотников)
+    const addPlayers = (names) => {
+      for (const nm of names) {
+        if (lb.players.length >= 16) { toast(t('maxPlayers')); break; }
+        const n = lb.players.length + 1, hunt = lb.players.filter((p) => p.role === 'hunter').length;
+        lb.players.push({ name: nm, role: hunt < Math.max(1, Math.round(n / 3)) ? 'hunter' : 'hider', bot: true });
+      }
+      rerender();
+    };
+    const freeName = () => { const used = new Set(lb.players.map((p) => p.name)); return (BOT_NAMES[getLang()] || BOT_NAMES.ru).find((n) => !used.has(n)) || (t('bot') + ' ' + (lb.players.length + 1)); };
+    const qa = el.querySelector('#qaName');
+    const qaGo = () => { const names = qa.value.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean).map((x) => x.slice(0, 16)); addPlayers(names.length ? names : [freeName()]); };
+    el.querySelector('#qaAdd').onclick = qaGo;
+    qa.onkeydown = (e) => { if (e.key === 'Enter') qaGo(); };
+    el.querySelectorAll('[data-qb]').forEach((b) => b.onclick = () => {
+      const k = +b.dataset.qb;
+      if (k < 0) { const i = lb.players.map((p) => p.bot).lastIndexOf(true); if (i >= 0) { lb.players.splice(i, 1); rerender(); } return; }
+      const used = new Set(lb.players.map((p) => p.name)), pool = BOT_NAMES[getLang()] || BOT_NAMES.ru, names = [];
+      for (let j = 0; j < k; j++) { const nm = pool.find((n) => !used.has(n)) || (t('bot') + ' ' + (lb.players.length + names.length + 1)); used.add(nm); names.push(nm); }
+      addPlayers(names);
+    });
     const addBot = el.querySelector('#addBot');
     if (addBot) addBot.onclick = () => { if (lb.players.length >= 12) return; const used = new Set(lb.players.map((p) => p.name)); const nm = (BOT_NAMES[getLang()] || BOT_NAMES.ru).find((n) => !used.has(n)) || (t('bot') + ' ' + lb.players.length); lb.players.push({ name: nm, role: 'hider', bot: true }); rerender(); };
     const shuffle = el.querySelector('#shuffle');
@@ -396,7 +421,7 @@ const SCREENS = {
         features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
         bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
         roles: lb.players.map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })),
-        myRole: (lb.players.find((p) => !p.bot) || {}).role || 'hider', mode: lb.mode, name: S.name,
+        myRole: (lb.players.find((p) => !p.bot) || {}).role || 'hider', mode: lb.mode, name: S.name, transport: lb.transport !== false,
       });
     };
   },
@@ -502,6 +527,8 @@ const SCREENS = {
     game = new Game(cfg, {
       lang: getLang(), modal, toast, confirm: confirmBox,
       openRules: () => openRules(),
+      cheatsUnlocked: () => !!S.cheatsUnlocked,
+      openCheats: () => { const open = () => { game && openGameCheats(modal, S, save, game); game && game.renderHud(true); }; if (S.cheatsUnlocked) open(); else askPassword(open); },
       onLeave: () => go('lobby'),
       onEnd: (res) => endGame(res, cfg),
     });

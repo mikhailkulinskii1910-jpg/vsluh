@@ -42,6 +42,8 @@ export const CHEATS = [
   ['magnet', 'Магнит тайников', 'Cache magnet', 'Тайники подбираются с 90 м.', 'Caches are picked up from 90 m.', 'supply'],
   ['allpw', 'Все бонусы', 'All power-ups', 'С началом охоты — по 2 каждого бонуса.', 'Two of every power-up when the hunt starts.', 'sparkle'],
   ['reach', 'Длинные руки', 'Long arms', '«Поймал» достаёт до 250 м.', 'Catch reaches 250 m.', 'crosshair'],
+  ['spoof', 'Подмена гео', 'Fake location', 'В режиме GPS настоящее гео игнорируется — вы ходите касаниями карты.', 'In GPS mode your real location is ignored — you walk by tapping the map.', 'locate'],
+  ['teleport', 'Телепорт', 'Teleport', 'Вместе с подменой гео касание карты мгновенно переносит вас.', 'With fake location, a map tap moves you instantly.', 'swap'],
   ['skiphide', 'Без пряток', 'Skip hiding', 'Охота начинается сразу.', 'The hunt starts right away.', 'play'],
 ];
 
@@ -127,4 +129,31 @@ export function renderCheats(el, S, save, ctx) {
     el.querySelector('#chLock').onclick = () => { S.cheatsUnlocked = false; save(); ctx.go('home'); };
   };
   draw();
+}
+
+/** Читы прямо в игре: те же переключатели (действуют сразу) и быстрые действия. */
+export function openGameCheats(modal, S, save, game) {
+  S.cheats = S.cheats || {};
+  modal('', (box, close) => {
+    const draw = () => {
+      box.innerHTML = `<div class="mhead"><span class="k" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${ru() ? 'Читы' : 'Cheats'}</span><button class="icon-btn" data-x>${I.close}</button></div>
+        <div class="row" style="gap:6px;margin:6px 0 12px;flex-wrap:nowrap">
+          <button class="btn" data-act="center" style="flex:1;padding:0 8px;font-size:14px;gap:6px">${I.locate}${ru() ? 'В центр' : 'To centre'}</button>
+          <button class="btn" data-act="cd" style="flex:1;padding:0 8px;font-size:14px;gap:6px">${I.clock}${ru() ? 'Перезарядить' : 'Recharge'}</button>
+          <button class="btn" data-act="pw" style="flex:1;padding:0 8px;font-size:14px;gap:6px">${I.sparkle}${ru() ? 'Бонусы' : 'Power-ups'}</button>
+        </div>
+        <div class="card" style="padding:2px 14px">${CHEATS.map(([k, r, e, dr, de, ic]) => `<label class="line-row" style="cursor:pointer"><span class="row" style="flex:1;flex-wrap:nowrap;gap:10px"><span style="color:var(--accent)">${I[ic].replace('<svg', '<svg width="22" height="22"')}</span><span><b>${ru() ? r : e}</b><br><span style="color:var(--muted);font-size:13px">${ru() ? dr : de}</span></span></span><input type="checkbox" data-ch="${k}" ${game.ch[k] ? 'checked' : ''} style="width:26px;height:26px;accent-color:var(--accent);flex:none"></label>`).join('')}</div>
+        ${game.cfg.mode !== 'gps' ? `<p style="color:var(--muted);font-size:14px">${ru() ? 'Подмена гео нужна в режиме GPS: в демо вы и так ходите касаниями.' : 'Fake location matters in GPS mode; in demo you already walk by tapping.'}</p>` : ''}`;
+      box.querySelector('[data-x]').onclick = close;
+      box.querySelectorAll('[data-ch]').forEach((cb) => cb.onchange = () => { game.ch[cb.dataset.ch] = cb.checked; S.cheats[cb.dataset.ch] = cb.checked; save(); game.cheatsChanged(); });
+      box.querySelectorAll('[data-act]').forEach((b) => b.onclick = () => {
+        const a = b.dataset.act;
+        if (a === 'center') { game.me.x = 0; game.me.y = 0; game.me.target = null; game.render(); }
+        if (a === 'cd') { game.revealReadyAt = game.t; game.freezeReadyAt = game.t; }
+        if (a === 'pw') { for (const id of game.enabledPw) game.me.powerups.push(id); }
+        game.renderHud(true); close();
+      });
+    };
+    draw();
+  });
 }
