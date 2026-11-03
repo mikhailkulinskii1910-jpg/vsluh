@@ -20,6 +20,10 @@ export const modesMixin = {
     // без точки из редактора тюрьма — у северного края зоны (у всех одинаково), а не в центре, где все стартуют
     this.jail = this.gmode === 'jail' ? (pts.jail ? this.xy(pts.jail.lat, pts.jail.lng) : { x: 0, y: this.R * (this.poly ? 0.45 : 0.65) }) : null;
     this.rescue = 0;
+    // VIP — первый прячущийся по порядку списка (одинаково у всех телефонов)
+    this.vipId = this.gmode === 'vip' ? ((this.players.find((p) => p.role === 'hider') || {}).id || null) : null;
+    this.fuse = Math.round(Math.max(90, Math.min(180, (cfg.huntSec || 1200) * 0.15)));
+    this.fuseEnd = this.gmode === 'bomb' ? (cfg.hideSec || 0) + this.fuse : Infinity;
     this.hill = this.gmode === 'hill' ? (pts.hill ? this.xy(pts.hill.lat, pts.hill.lng) : { x: 0, y: 0 }) : null;
     this.hillProg = 0; this.hillNeed = Math.round(Math.min(180, Math.max(60, (cfg.huntSec || 1200) * 0.2)));
     this.treasures = [];
@@ -66,6 +70,11 @@ export const modesMixin = {
         if (this.rescue >= RESCUE_NEED) { this.freeAll(savers[0]); this.netSend('freed', { by: savers[0].id }); }
       } else this.rescue = Math.max(0, this.rescue - dt * 2);
     }
+    if (this.gmode === 'vip' && this.vipId) {
+      const v = this.players.find((p) => p.id === this.vipId);
+      if (v && v.role !== 'hider') { this.netSend('vipdown', {}); this.modesNet('vipdown', {}); this.finish('hunters'); return; }
+    }
+    if (this.gmode === 'bomb' && this.t >= this.fuseEnd) { this.netSend('boom', {}); this.modesNet('boom', {}); this.finish('hiders'); return; }
     if (this.gmode === 'hill') {
       const inside = this.hiders().filter((h) => dist(h, this.hill) <= HILL_R).length;
       const guards = this.hunters().filter((h) => dist(h, this.hill) <= HILL_R).length;
@@ -103,8 +112,26 @@ export const modesMixin = {
     this.events.push({ k: 'fr', t: Math.round(this.t), n: freed.length });
     this.renderHud(true);
   },
+  /** Салки: водящий передаёт роль пойманному; обратно — не раньше чем через 15 с. */
+  tagCatch(hunter, h) {
+    hunter.role = 'hider'; h.role = 'hunter'; h.target = null; hunter.target = null;
+    h.noTagBack = { id: hunter.id, until: this.t + 15 };
+    h.timesIt = (h.timesIt || 0) + 1; hunter.catches = (hunter.catches || 0) + 1;
+    this.events.push({ k: 'c', t: Math.round(this.t), a: this.players.indexOf(hunter), b: this.players.indexOf(h), x: Math.round(h.x), y: Math.round(h.y) });
+    if (h === this.me) { this.stats.timesCaught++; this.alert('red', t('tagYou'), 'target'); this.vibrate([300, 100, 300]); }
+    else if (hunter === this.me) { this.stats.caught++; this.alert('green', t('tagPassed', { n: h.name }), 'target'); }
+    else this.alert('yellow', t('tagOther', { a: hunter.name, b: h.name }), 'target');
+    this.renderHud(true);
+  },
+  /** Бомба: поимка сбрасывает фитиль. */
+  bombReset(hunter) {
+    this.fuseEnd = this.t + this.fuse;
+    this.alert(this.me.role === 'hunter' ? 'green' : 'yellow', t('bombReset', { s: this.fuse }), 'bolt');
+  },
   /** Кто побеждает, когда вышло время. */
   timeoutWinner() {
+    if (this.gmode === 'tag') return 'hiders';
+    if (this.gmode === 'vip') return this.players.some((p) => p.id === this.vipId && p.role === 'hider') ? 'hiders' : 'hunters';
     if (this.gmode === 'treasure' || this.gmode === 'hill') return 'hunters';   // не успели собрать / удержать
     if (this.gmode === 'sardines') return 'hiders';
     return this.hiders().length > 0 ? 'hiders' : 'hunters';
@@ -178,10 +205,11 @@ export const modesMixin = {
 
   // ---------- сеть ----------
   modesState() {
-    return { hp: Math.round(this.hillProg), jl: this.players.map((p) => (p.jailed ? 1 : 0)).join(''), rs: Math.round(this.rescue * 10) / 10, tr: this.treasures.map((q) => [q.id, Math.round(q.x), Math.round(q.y)]), tg: this.treasureGot };
+    return { fe: this.fuseEnd === Infinity ? -1 : Math.round(this.fuseEnd * 10) / 10, hp: Math.round(this.hillProg), jl: this.players.map((p) => (p.jailed ? 1 : 0)).join(''), rs: Math.round(this.rescue * 10) / 10, tr: this.treasures.map((q) => [q.id, Math.round(q.x), Math.round(q.y)]), tg: this.treasureGot };
   },
   modesApply(d) {
     if (d.hp != null && this.hill) this.hillProg = d.hp;
+    if (d.fe != null && d.fe >= 0) this.fuseEnd = d.fe;
     if (d.jl != null) [...d.jl].forEach((c, i) => { const p = this.players[i]; if (p) p.jailed = c === '1'; });
     if (d.rs != null) this.rescue = d.rs;
     if (d.tr) this.treasures = d.tr.map(([id, x, y]) => ({ id, x, y }));
@@ -192,6 +220,8 @@ export const modesMixin = {
     if (type === 'tpick') { this.treasures = this.treasures.filter((x) => x.id !== d.id); this.treasureGot++; const h = P(d.by); if (h) this.onTreasure(h); return true; }
     if (type === 'freed') { const h = P(d.by); this.freeAll(h || { name: '?' }); return true; }
     if (type === 'chaos') { this.chaosApply(d.k, false); return true; }
+    if (type === 'vipdown') { this.alert(this.me.role === 'hunter' ? 'green' : 'red', t('vipDown'), 'target'); return true; }
+    if (type === 'boom') { this.alert(this.me.role === 'hunter' ? 'red' : 'green', t('bombBoom'), 'bolt'); this.vibrate([500]); return true; }
     if (type === 'hillp') { this.hillProg = d.p; this.alert(this.me.role === 'hider' ? 'green' : 'red', t('hillProg', { a: Math.floor(d.p), b: this.hillNeed }), 'mountain'); return true; }
     if (type === 'rescuing') { if (this.me.role === 'hunter') this.alert('yellow', t('jailRescuing'), 'lock'); else if (this.me.jailed) this.alert('green', t('jailRescuingYou'), 'lock'); return true; }
     return false;
@@ -234,9 +264,13 @@ export const modesMixin = {
     if (this.gmode === 'jail') { const n = this.players.filter((p) => p.jailed).length; return n ? { k: t('jailCell'), v: String(n) } : null; }
     if (this.gmode === 'sardines') return { k: t('sardCell'), v: String(this.hunters().length) };
     if (this.gmode === 'hill') return { k: t('hillCell'), v: `${Math.floor(this.hillProg)}/${this.hillNeed}` };
+    if (this.gmode === 'bomb' && this.phase() === 'hunt') { const s = Math.max(0, Math.ceil(this.fuseEnd - this.t)); return { k: '💣 ' + t('bombCell'), v: String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') }; }
+    if (this.gmode === 'tag') { const it = this.hunters()[0]; return { k: '🏷 ' + t('tagCell'), v: it ? (it === this.me ? t('you') : it.name).slice(0, 8) : '—' }; }
+    if (this.gmode === 'vip') return { k: '👑 VIP', v: this.players.some((p) => p.id === this.vipId && p.role === 'hider') ? t('vipAlive') : '✕' };
     return null;
   },
   modesBanner() {
+    if (this.gmode === 'vip' && this.me.id === this.vipId && this.me.role === 'hider') return `<div class="banner yellow"><div class="bi">👑</div><div>${t('vipYou')}</div></div>`;
     if (this.gmode === 'jail' && this.me.jailed) return `<div class="frozen"><div><div class="t1">${t('jailT')}</div><div class="t2">${t('jailS')}</div></div><div class="num">⛓</div></div>`;
     return '';
   },

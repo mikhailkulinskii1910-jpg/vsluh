@@ -12,7 +12,7 @@ import { renderMapEditor, drawMapExtras, mapPoints } from './mapeditor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.0';
+const VERSION = '2.1';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -441,7 +441,7 @@ const SCREENS = {
 
     const step1 = `
       <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button></div>
-      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -703,7 +703,7 @@ const SCREENS = {
       <div class="res-hero ${hidersWin ? 'hid' : 'hun'}">
         <div class="ic">${I.trophy}</div>
         <div class="k">${t('endT')} · ${fmt(res.duration)}</div>
-        <h1>${res.gmode === 'sardines' ? (res.lastSeeker ? t('sardEnd', { n: esc(res.lastSeeker) }) : t('sardEndAll')) : res.gmode === 'treasure' && hidersWin ? t('trWin') : hidersWin ? t('endHiders') : t('endHunters')}</h1>
+        <h1>${res.gmode === 'tag' ? t('tagEnd', { n: esc(res.lastSeeker || '—') }) : res.gmode === 'vip' ? (hidersWin ? t('vipWin') : t('vipLost')) : res.gmode === 'bomb' && hidersWin ? t('bombWin') : res.gmode === 'sardines' ? (res.lastSeeker ? t('sardEnd', { n: esc(res.lastSeeker) }) : t('sardEndAll')) : res.gmode === 'treasure' && hidersWin ? t('trWin') : hidersWin ? t('endHiders') : t('endHunters')}</h1>
         <div class="you ${res.won ? 'w' : 'l'}">${res.role === 'spectator' ? t('resWatched') : `${res.won ? t('resYouWon') : t('resYouLost')} · ${t(res.role)}`}</div>
       </div>
       <div class="duo">
@@ -724,10 +724,17 @@ const SCREENS = {
         <div class="line-row"><span>${t('supplies')}</span><b>${g.supplies}</b></div>
         <div class="line-row"><span>${t('powersSpent')}</span><b>${g.powers}</b></div></div>
       <div class="bottom-bar"><div class="in">
+        <button class="btn block" id="rShare" style="margin-bottom:8px">📤 ${t('shareResult')}</button>
         <button class="btn primary big block" id="rWatch">${I.play}${t('watchReplay')}</button>
         <div class="row" style="margin-top:10px;flex-wrap:nowrap"><button class="btn" id="rLobby" style="flex:1">${t('toLobby')}</button>${cfg.net ? (cfg.net.role === 'host' ? `<button class="btn" id="rRematch" style="flex:1">🔁 ${t('rematch')}</button>` : '') : `<button class="btn" id="rAgain" style="flex:1">${t('again')}</button>`}<button class="btn" id="rMenu" style="flex:1">${t('toMenu')}</button></div>
       </div></div>`;
     el.classList.add('has-bar', 'res');
+    el.querySelector('#rShare').onclick = async () => {
+      const txt = t('shareResultText', { w: el.querySelector('.res-hero h1').textContent, d: fmt(res.duration), r: t(res.startRole || res.role), km: fmtDist(g.dist), c: g.caught });
+      if (window.MapTagNative) return window.MapTagNative.share(txt);
+      try { if (navigator.share) return await navigator.share({ title: 'Map Tag', text: txt }); } catch (e) { if (e && e.name === 'AbortError') return; }
+      try { await navigator.clipboard.writeText(txt); toast(t('copied')); } catch { toast(txt); }
+    };
     el.querySelector('#rWatch').onclick = () => go('replay', { ...rep, _back: ['results', { res, cfg, rep }] });
     el.querySelector('#rLobby').onclick = () => go(NET && NET.role === 'client' ? 'clientLobby' : S.lobby ? 'lobby' : 'home');
     const ag = el.querySelector('#rAgain'); if (ag) ag.onclick = () => go('game', cfg);
@@ -779,6 +786,11 @@ const SCREENS = {
             <div><div class="l">${t('timesCaught')}</div><div class="v">${st.timesCaught}</div></div></div></div></div>
       <div class="story">${st.games ? t('storyGo') : t('storyStart')}</div>
       ${Object.keys(S.board || {}).length ? `<h3 class="h-sect">🏅 ${t('boardTitle')}</h3><div class="card" style="padding:4px 16px">${Object.entries(S.board).sort((a, b) => b[1].wins - a[1].wins || b[1].catches - a[1].catches).slice(0, 10).map(([n, b], i) => `<div class="line-row"><span>${['🥇', '🥈', '🥉'][i] || (i + 1) + '.'} <b>${esc(n)}</b></span><span style="color:var(--muted);font-size:14px">${t('boardRow', { w: b.wins, g: b.games, c: b.catches })}</span></div>`).join('')}</div>` : ''}
+      ${S.rec && Object.keys(S.rec).length ? `<h3 class="h-sect">🏆 ${t('recTitle')}</h3><div class="duo" style="margin-top:0">
+        <div class="tile"><span style="color:var(--hider)">${I.clock}</span><div class="v" style="font-size:26px">${fmt(S.rec.survive || 0)}</div><div class="l">${t('recSurvive')}</div></div>
+        <div class="tile"><span style="color:var(--hunter)">${I.target}</span><div class="v" style="font-size:26px">${S.rec.catches || 0}</div><div class="l">${t('recCatches')}</div></div>
+        <div class="tile"><span style="color:var(--teal)">${I.run}</span><div class="v" style="font-size:26px">${fmtDist(S.rec.dist || 0)}</div><div class="l">${t('recDist')}</div></div>
+        <div class="tile"><span style="color:var(--gold)">${I.bolt}</span><div class="v" style="font-size:26px">${S.rec.fastWin ? fmt(S.rec.fastWin) : '—'}</div><div class="l">${t('recFast')}</div></div></div>` : ''}
       <h3 class="h-sect">${t('achTitle')} · ${Object.keys(S.ach || {}).length}/${ACH.length}</h3>
       <div class="ach">${ACH.map(([id, ic]) => `<div class="a ${(S.ach || {})[id] ? 'on' : ''}"><span class="i">${ic}</span>${t('ach_' + id)}</div>`).join('')}</div>
       <h3 class="row" style="font-size:24px;margin-bottom:10px">${S.avatar ? `<span style="font-size:30px">${S.avatar}</span>` : I.user.replace('<svg', '<svg width="30" height="30"')} ${esc(S.name || '—')}</h3>
@@ -890,6 +902,12 @@ function endGame(res, cfg) {
       b.games++; if (won) b.wins++; b.catches += p.catches || 0;
     }
   }
+  S.rec = S.rec || {};
+  const R = S.rec, survived = res.startRole === 'hider' && !g.timesCaught ? res.duration - (cfg.hideSec || 0) : 0;
+  if (survived > (R.survive || 0)) R.survive = Math.round(survived);
+  if (g.caught > (R.catches || 0)) R.catches = g.caught;
+  if (g.dist > (R.dist || 0)) R.dist = Math.round(g.dist);
+  if (res.won && res.role === 'hunter' && (!R.fastWin || res.duration < R.fastWin)) R.fastWin = res.duration;
   const freshAch = checkAch({ ...res, blitz: cfg.blitz || (S.lobby && S.lobby.gmode === 'blitz'), online: !!cfg.net });
   setTimeout(() => { if (res.won) confetti(); freshAch.forEach((id, i) => setTimeout(() => toast(`${ACH.find((a) => a[0] === id)[1]} ${t('achNew')}: ${t('ach_' + id)}`), 600 + i * 1600)); }, 300);
   if (S.saveReplays !== false) {

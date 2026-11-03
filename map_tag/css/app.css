@@ -527,3 +527,5 @@ html.eco *, html.eco *::before, html.eco *::after { animation: none !important; 
 html.eco .theme-bg, html.eco #matrix { display: none !important; }
 html.dark-map:not([data-theme]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.7); }
 html.dark-map:not([data-theme]) #map { background: #1b1f27; }
+.out-banner #outArrow { font-size: 20px; transition: transform .4s; }
+.gmodes { grid-template-columns: repeat(2, 1fr); }

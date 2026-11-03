@@ -166,6 +166,8 @@ export const netMixin = {
         this.finish(d.w);
         break;
       }
+      case 'pause': if (this.isClient) { this.paused = true; } break;
+      case 'resume': if (this.isClient) { this.net.startAt = d.startAt; this.paused = false; this.last = performance.now(); const c = this.root.querySelector('#cover'); if (c) c.innerHTML = ''; } break;
       case 'abort': if (this.isClient && from === this.net.hostId) { this.ended = true; this.opts.toast(t('hostLeft')); this.opts.onLeave(); } break;
       case 'bye': { const p = P(from); if (p) { p.left = true; this.alert('yellow', t('playerLeft', { n: p.name }), 'users'); } break; }
     }

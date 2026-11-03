@@ -153,7 +153,7 @@ export class Game {
       const keep = hiders.find((p) => p === this.me) || hiders[0] || this.players[0];
       this.players.forEach((p) => { p.role = p === keep ? 'hider' : 'hunter'; });
     }
-    if (this.cfg.gmode === 'zombie' && !this.isClient && !(this.cfg.roles && this.cfg.roles[0] && this.cfg.roles[0].id)) {
+    if ((this.cfg.gmode === 'zombie' || this.cfg.gmode === 'tag') && !this.isClient && !(this.cfg.roles && this.cfg.roles[0] && this.cfg.roles[0].id)) {
       const hunters = this.players.filter((p) => p.role === 'hunter');
       const zero = hunters.find((p) => p === this.me) || hunters[Math.floor(Math.random() * hunters.length)] || this.players[1] || this.players[0];
       this.players.forEach((p) => { p.role = p === zero ? 'hunter' : 'hider'; });
@@ -318,6 +318,7 @@ export class Game {
     const now = performance.now();
     let total = Math.min(600, (now - this.last) / 1000);
     this.last = now;
+    if (this.paused) { this.renderPause(); return; }
     if (this.net) {
       const target = this.netClockT();
       if (target < 0) { this.renderCountdown(-target); return; }
@@ -358,10 +359,10 @@ export class Game {
     for (const p of this.players) if (p.bot && p.sim) this.updateStamina(p, dt);
     if (this.net) this.netStep(dt);
     this.modesLocal(dt);
+    if (ph !== 'end') this.checkZone(dt);   // стрелка к зоне — и во время пряток
 
     if (ph === 'hunt') {
       if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); this.modesStep(dt); if (this.ended) return; }
-      this.checkZone(dt);
       if (!this.shrinkWarned && this.t > this.cfg.hideSec + 5) { this.shrinkWarned = true; this.alert('green', t('zoneShrink'), 'target'); }
       if (!this.isClient && this.hiders().length === 0) { this.finish('hunters'); return; }
     }
@@ -419,11 +420,37 @@ export class Game {
     const out = !this.inZone(me);
     if (out) {
       if (me.outSince == null) { me.outSince = this.t; if (me.role === 'hider') this.alert('red', t('outZone'), 'target'); }
-      if (me.role === 'hider' && this.t - me.outSince > 20) {
+      if (me.role === 'hider' && this.phase() === 'hunt' && this.t - me.outSince > 20) {
         if (me.exposedUntil < this.t + 1) this.alert('red', t('outExposed'), 'eye');
         me.exposedUntil = this.t + 15;
       }
-    } else me.outSince = null;
+      me.outDist = this.distToZone(me);
+    } else { me.outSince = null; me.outDist = 0; }
+  }
+  /** Пауза: только организатор / офлайн. Онлайн у всех сдвигается время старта. */
+  togglePause() {
+    if (this.isClient || this.ended) return;
+    if (!this.paused) { this.paused = true; this.pauseAt = Date.now(); this.netSend('pause', {}); }
+    else {
+      const dur = Date.now() - (this.pauseAt || Date.now());
+      if (this.net) { this.net.startAt += dur; this.netSend('resume', { startAt: this.net.startAt }); }
+      this.paused = false; this.last = performance.now();
+    }
+    this.renderHud(true);
+  }
+  renderPause() {
+    const cover = this.root && this.root.querySelector('#cover');
+    if (cover && !cover.querySelector('#pauseBig')) cover.innerHTML = `<div class="wait-cover"><div><div class="big" id="pauseBig" style="color:var(--accent)">⏸</div><div style="font-size:22px">${t('paused')}</div>${this.isClient ? '' : `<button class="btn primary big" data-a="pause" style="margin-top:18px">▶ ${t('resume')}</button>`}</div></div>`;
+    const b = cover && cover.querySelector('[data-a=pause]'); if (b) b.onclick = () => { cover.innerHTML = ''; this.togglePause(); };
+  }
+
+  /** Примерное расстояние до границы зоны и направление к центру. */
+  distToZone(p) {
+    if (!this.poly) return Math.max(0, Math.hypot(p.x, p.y) - this.zoneR());
+    let lo = 1, hi = 50;
+    const r = Math.hypot(p.x, p.y) || 1;
+    for (let i = 0; i < 20; i++) { const m = (lo + hi) / 2; if (this.inZone({ x: p.x / m, y: p.y / m })) hi = m; else lo = m; }
+    return Math.max(0, r - r / hi);
   }
 
   // ---------- ИИ ботов ----------
@@ -550,7 +577,10 @@ export class Game {
 
   catchPlayer(hunter, h, fromNet) {
     if (h.role !== 'hider') return;
+    if (this.gmode === 'tag' && hunter.noTagBack && hunter.noTagBack.id === h.id && this.t < hunter.noTagBack.until) return;   // обратно сразу нельзя
     if (this.isHost && !fromNet) this.netSend('caught', { a: hunter.id, b: h.id });
+    if (this.gmode === 'tag') { if (hunter.role === 'hunter') this.tagCatch(hunter, h); return; }
+    if (this.gmode === 'bomb') this.bombReset(hunter);
     if (this.gmode === 'sardines') {
       if (hunter.role !== 'hunter') return;
       hunter.catches = (hunter.catches || 0) + 1;
@@ -728,7 +758,7 @@ export class Game {
     const me = this.me;
     const won = (winner === 'hiders' && me.role === 'hider') || (winner === 'hunters' && me.role === 'hunter');
     const result = {
-      winner, won, role: me.role, startRole: me.startRole, survivors: this.hiders().length, gmode: this.gmode, lastSeeker: this.gmode === 'sardines' && this.hunters()[0] ? this.hunters()[0].name : null,
+      winner, won, role: me.role, startRole: me.startRole, survivors: this.hiders().length, gmode: this.gmode, lastSeeker: (this.gmode === 'sardines' || this.gmode === 'tag') && this.hunters()[0] ? this.hunters()[0].name : null,
       duration: Math.round(this.t), stats: { ...this.stats }, mode: this.cfg.mode,
       replay: { center: this.c0, R: this.R, track: this.track, date: Date.now(), name: me.name },
       players: this.players.map((p) => ({ name: p.name, me: p === me, bot: p.bot, startRole: p.startRole || (p.wasCaught ? 'hider' : p.role), role: p.role, caughtAt: p.caughtAt != null ? Math.round(p.caughtAt) : null, caughtBy: p.caughtBy || null, catches: p.catches || 0, color: p === me ? '#ffffff' : p.color })),
@@ -779,9 +809,9 @@ export class Game {
       let m = this.layers.players.get(p.id);
       if (vis.has(p.id)) {
         const col = p.role === 'hunter' ? '#f26d7d' : p.color;
-        const key = p.role + (T < p.frozenUntil ? 'f' : '');
+        const key = p.role + (T < p.frozenUntil ? 'f' : '') + (p.id === this.vipId ? me.role : '');
         if (!m) { m = L.marker(this.ll(p), { interactive: false }).addTo(map); this.layers.players.set(p.id, m); }
-        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${esc(p.name)}</div></div>` })); }
+        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'vip' && p.id === this.vipId && me.role === 'hider' && p.role === 'hider' ? '<span class="mk-av">👑</span>' : this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${esc(p.name)}</div></div>` })); }
         m.setLatLng(this.ll(p));
       } else if (m) { m.remove(); this.layers.players.delete(p.id); }
     }
@@ -878,7 +908,7 @@ export class Game {
 
     const alive = this.hiders().length, hcount = this.hunters().length;
     const frozenNow = this.isFrozen(me), warnNow = T < me.warnUntil && T < me.frozenUntil;
-    const sig = [full, this.alertsDirty, this.moreOpen, frozenNow, warnNow, me.role, this.cfg.mode, alive, !!me.jailed].join('|');
+    const sig = [full, this.alertsDirty, this.moreOpen, frozenNow, warnNow, me.role, this.cfg.mode, alive, !!me.jailed, me.outSince != null, !!this.paused].join('|');
     if (full || sig !== this.topSig) {
       this.topSig = sig; this.alertsDirty = false;
       top.innerHTML = `
@@ -899,9 +929,11 @@ export class Game {
           <div class="line-row"><span>${t('zoneR')}</span><b id="zR"></b></div>
           <div class="line-row"><span>${t('moveMode')}</span><div class="seg"><button data-a="gps" class="${this.cfg.mode === 'gps' ? 'on' : ''}">${t('gps')}</button><button data-a="demo" class="${this.cfg.mode === 'demo' ? 'on' : ''}">${t('demo')}</button></div></div>
           ${this.opts.cheatsUnlocked && this.opts.cheatsUnlocked() ? `<button class="btn block" data-a="cheats" style="color:var(--hunter)">${I.lock}${t('cheats')}</button>` : ''}
+          ${this.isClient ? '' : `<button class="btn block" data-a="pause">${this.paused ? '▶ ' + t('resume') : '⏸ ' + t('pause')}</button>`}
           <button class="btn danger block" data-a="leave">${I.leave}${t('leaveGame')}</button>
         </div>` : ''}
         ${this.modesBanner()}
+        ${me.outSince != null && me.role !== 'spectator' ? `<div class="banner red out-banner"><div class="bi"><span id="outArrow" style="display:inline-block">⬆</span></div><div>${t('outZoneShort')} · <b id="outDist"></b></div></div>` : ''}
         ${warnNow ? `<div class="frozen warn"><div><div class="t1">${t('freezeWarn')}</div><div class="t2">${t('freezeWarnS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
         ${frozenNow ? `<div class="frozen"><div><div class="t1">${t('frozenT')}</div><div class="t2">${t('frozenS')}</div></div><div class="num" id="fzN"></div></div>` : ''}
         ${this.alerts.map((a) => `<div class="banner ${a.kind}"><div class="bi">${I[a.icon] || I.signal}</div><div>${esc(a.text)}</div></div>`).join('')}
@@ -913,6 +945,8 @@ export class Game {
     top.querySelector('#mK').textContent = msK;
     top.querySelector('#mV').textContent = msV;
     top.querySelector('#msBox').classList.toggle('idle', idle);
+    const od = top.querySelector('#outDist');
+    if (od) { od.textContent = Math.round(me.outDist || 0) + ' ' + t('m'); const ang = Math.atan2(-me.x, -me.y) * 180 / Math.PI; top.querySelector('#outArrow').style.transform = `rotate(${ang.toFixed(0)}deg)`; }
     const zr = top.querySelector('#zR'); if (zr) zr.textContent = Math.round(this.zoneR()) + ' ' + t('m');
     const fz = top.querySelector('#fzN'); if (fz) fz.textContent = Math.ceil(warnNow ? me.warnUntil - T : me.frozenUntil - T);
 
@@ -975,6 +1009,7 @@ export class Game {
       case 'gps': if (this.cfg.mode !== 'gps') { this.cfg.mode = 'gps'; this.pace = 1; this.gpsPrev = null; this.startGps(); this.renderHud(true); } break;
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
       case 'heading': this.askHeading(); break;
+      case 'pause': this.togglePause(); break;
       case 'chat': this.opts.openChat && this.opts.openChat(); break;
       case 'vmic': this.opts.voiceMute && this.opts.voiceMute(); break;
       case 'secret': {
