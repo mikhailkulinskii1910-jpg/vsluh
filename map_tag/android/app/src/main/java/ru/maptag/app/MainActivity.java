@@ -5,6 +5,10 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationManager;
+import android.media.AudioManager;
+import android.provider.Settings;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -24,7 +28,8 @@ import androidx.webkit.WebViewAssetLoader;
 /** Оболочка Map Tag: веб-версия из assets/www в WebView + GPS, камера и «Поделиться». */
 public class MainActivity extends Activity {
     private static final String START = "https://appassets.androidplatform.net/www/index.html";
-    private static final int REQ_LOC = 1, REQ_CAM = 2;
+    private static final int REQ_LOC = 1, REQ_CAM = 2, REQ_PERM = 3;
+    private boolean gameRunning = false;
 
     private WebView web;
     private GeolocationPermissions.Callback geoCallback;
@@ -84,6 +89,8 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(web);
+        GameService.listener = (Location l) -> runOnUiThread(() -> web.evaluateJavascript(
+                "window.__nativeLoc&&__nativeLoc(" + l.getLatitude() + "," + l.getLongitude() + "," + l.getAccuracy() + "," + (l.hasSpeed() ? l.getSpeed() : -1) + ")", null));
 
         String url = START;
         Uri data = getIntent() != null ? getIntent().getData() : null;
@@ -99,6 +106,7 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int code, String[] perms, int[] res) {
         boolean ok = res.length > 0 && res[0] == PackageManager.PERMISSION_GRANTED;
         if (code == REQ_LOC && geoCallback != null) { geoCallback.invoke(geoOrigin, ok, false); geoCallback = null; }
+        web.evaluateJavascript("window.__permChanged&&__permChanged()", null);
         if (code == REQ_CAM && camRequest != null) {
             if (ok) camRequest.grant(camRequest.getResources()); else camRequest.deny();
             camRequest = null;
@@ -114,10 +122,13 @@ public class MainActivity extends Activity {
     }
 
     @Override
-    protected void onPause() { super.onPause(); web.onPause(); }
+    protected void onPause() { super.onPause(); if (!gameRunning) web.onPause(); }
 
     @Override
-    protected void onResume() { super.onResume(); web.onResume(); }
+    protected void onResume() { super.onResume(); web.onResume(); web.evaluateJavascript("window.__permChanged&&__permChanged()", null); }
+
+    @Override
+    protected void onDestroy() { GameService.stop(this); GameService.listener = null; super.onDestroy(); }
 
     /** Методы, доступные из JavaScript как window.MapTagNative. */
     class Bridge {
@@ -133,6 +144,53 @@ public class MainActivity extends Activity {
                 startActivity(Intent.createChooser(i, "Map Tag"));
             });
         }
+
+        /** Состояние разрешений для онбординга: JSON. */
+        @JavascriptInterface
+        public String permState() {
+            LocationManager lm = (LocationManager) getSystemService(LOCATION_SERVICE);
+            boolean on = lm != null && (lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER));
+            boolean fine = hasPerm(Manifest.permission.ACCESS_FINE_LOCATION);
+            boolean coarse = hasPerm(Manifest.permission.ACCESS_COARSE_LOCATION);
+            boolean bg = Build.VERSION.SDK_INT < 29 ? fine : hasPerm(Manifest.permission.ACCESS_BACKGROUND_LOCATION);
+            boolean notif = Build.VERSION.SDK_INT < 33 || hasPerm("android.permission.POST_NOTIFICATIONS");
+            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+            float vol = am == null ? 1f : am.getStreamVolume(AudioManager.STREAM_MUSIC) / (float) Math.max(1, am.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
+            return "{\"on\":" + on + ",\"fine\":" + fine + ",\"coarse\":" + coarse + ",\"bg\":" + bg + ",\"notif\":" + notif + ",\"vol\":" + vol + "}";
+        }
+
+        /** kind: fine | bg | notif | gps | app | volume */
+        @JavascriptInterface
+        public void requestPerm(String kind) {
+            runOnUiThread(() -> {
+                try {
+                    switch (kind) {
+                        case "fine": requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_PERM); break;
+                        case "bg":
+                            if (!hasPerm(Manifest.permission.ACCESS_FINE_LOCATION)) requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_PERM);
+                            else if (Build.VERSION.SDK_INT >= 29) requestPermissions(new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, REQ_PERM);
+                            break;
+                        case "notif": if (Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, REQ_PERM); break;
+                        case "gps": startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); break;
+                        case "app": startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); break;
+                        case "volume": {
+                            AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
+                            int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                            am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(am.getStreamVolume(AudioManager.STREAM_MUSIC), (int) Math.ceil(max * 0.7)), AudioManager.FLAG_SHOW_UI);
+                            web.evaluateJavascript("window.__permChanged&&__permChanged()", null);
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) { }
+            });
+        }
+
+        /** Начало/конец раунда: служба с GPS в фоне. */
+        @JavascriptInterface
+        public void gameStart(String title) { runOnUiThread(() -> { gameRunning = true; if (hasPerm(Manifest.permission.ACCESS_FINE_LOCATION) || hasPerm(Manifest.permission.ACCESS_COARSE_LOCATION)) GameService.start(MainActivity.this, title); }); }
+
+        @JavascriptInterface
+        public void gameStop() { runOnUiThread(() -> { gameRunning = false; GameService.stop(MainActivity.this); }); }
 
         @JavascriptInterface
         public void vibrate(long ms) {

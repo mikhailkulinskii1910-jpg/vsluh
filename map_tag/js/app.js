@@ -5,8 +5,9 @@ import { POWERUPS, pwName, pwDesc, tutorialSteps, PATCH_NOTES } from './content.
 import { Game, fmt, BOT_NAMES } from './game.js';
 import { applyTheme, themePicker } from './themes.js';
 import { checkPass, renderCheats, openWheel } from './cheats.js';
+import { beep, soundOn, setSound } from './sound.js';
 
-const VERSION = '1.1';
+const VERSION = '1.2';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -28,18 +29,75 @@ const VIS = { forest: 0.85, mixed: 1, city: 1.15 };
 const LIGHT = { day: 1, dark: 0.85 };
 const defaultLobby = () => ({
   code: genCode(), size: 'medium', vis: 'mixed', light: 'day', extra: 'spice', step: 1,
-  center: null, bots: 5, hunters: 2, myRole: 'random', mode: 'demo',
-  revealCd: null, freezeCd: null, huntMin: null, powerups: POWERUPS.map((p) => p.id),
+  center: null, bots: 5, hunters: 2, myRole: 'random', mode: 'demo', adv: {},
+  revealCd: null, freezeCd: null, powerups: POWERUPS.map((p) => p.id),
 });
 function genCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
 function calc(lb) {
-  const sz = SIZES[lb.size];
-  const radius = Math.round(sz.r * Math.sqrt(VIS[lb.vis] * LIGHT[lb.light]) / 10) * 10;
-  const huntMin = lb.huntMin || sz.min;
+  const sz = SIZES[lb.size], a = lb.adv || {};
+  const radius = a.radius || Math.round(sz.r * Math.sqrt(VIS[lb.vis] * LIGHT[lb.light]) / 10) * 10;
+  const huntSec = a.total || sz.min * 60;
   return {
-    radius, huntSec: huntMin * 60, huntMin, hideSec: Math.round(huntMin * 12), shrinkTo: 0.7,
+    radius, huntSec, huntMin: Math.round(huntSec / 60), hideSec: a.head != null ? a.head : Math.round(sz.min * 12),
+    shrinkTo: a.shrink === false ? 1 : (a.final || 70) / 100,
     revealCd: lb.revealCd || (lb.extra === 'tutorial' ? 120 : 90), freezeCd: lb.freezeCd || 150,
   };
+}
+/** Список игроков лобби: вы + боты с ролями. */
+function ensurePlayers(lb) {
+  if (Array.isArray(lb.players) && lb.players.some((p) => !p.bot)) return;
+  const names = BOT_NAMES[getLang()] || BOT_NAMES.ru;
+  const n = lb.bots ?? 5, h = Math.max(1, Math.min(lb.hunters ?? 2, n));
+  lb.players = [{ role: 'hider', bot: false }, ...Array.from({ length: n }, (_, i) => ({ name: names[i % names.length], role: i < h ? 'hunter' : 'hider', bot: true }))];
+}
+const parseTime = (s) => { s = String(s).trim(); if (!s) return null; const p = s.split(':').map(Number); if (p.some(isNaN)) return null; return p.length === 1 ? p[0] * 60 : p.length === 2 ? p[0] * 60 + p[1] : p[0] * 3600 + p[1] * 60 + p[2]; };
+
+function advancedBlock(lb, c) {
+  const a = lb.adv || {};
+  const shrink = a.shrink !== false;
+  const row = (k, label, val, min, max, step, txt, unit, hint) => `<div class="adv-row"><div class="row" style="justify-content:space-between"><b>${label}</b><b id="av_${k}">${txt}</b></div>
+    <div class="row" style="flex-wrap:nowrap;margin-top:8px"><input type="range" class="range" data-av="${k}" min="${min}" max="${max}" step="${step}" value="${val}" style="flex:1"><input class="input adv-in" data-ai="${k}" value="${unit === 'time' ? txt : val}" inputmode="${unit === 'time' ? 'text' : 'numeric'}">${unit && unit !== 'time' ? `<span style="color:var(--muted)">${unit}</span>` : ''}</div>
+    ${hint ? `<div class="adv-hint">${hint}</div>` : ''}</div>`;
+  return `<label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('shrinkArea')}</b><br><span class="adv-hint">${t('shrinkAreaS')}</span></span><input type="checkbox" id="advShrink" ${shrink ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
+    ${row('radius', t('areaRadius'), c.radius, 100, 2000, 10, c.radius + ' ' + t('m'), t('m'))}
+    ${shrink ? row('final', t('finalRadius'), Math.round(c.shrinkTo * 100), 30, 100, 1, Math.round(c.shrinkTo * 100) + '%', '%', t('finalRadiusS')) : ''}
+    ${row('total', t('totalLen'), c.huntSec, 180, 5400, 30, fmt(c.huntSec), 'time', t('timeFmt'))}
+    ${row('head', t('headStart'), c.hideSec, 0, 900, 15, fmt(c.hideSec), 'time', t('timeFmt'))}
+    ${S.dev ? devTuning(lb, c) : ''}
+    <button class="btn block" id="advReset" style="margin-top:12px">${t('resetAdv')}</button>`;
+}
+function bindAdvanced(el, lb, rerender) {
+  lb.adv = lb.adv || {};
+  const set = (k, v) => { lb.adv[k] = v; };
+  const show = (k, v) => { const o = el.querySelector('#av_' + k), i = el.querySelector(`[data-ai="${k}"]`); const txt = k === 'radius' ? v + ' ' + t('m') : k === 'final' ? v + '%' : fmt(v); if (o) o.textContent = txt; if (i && document.activeElement !== i) i.value = k === 'total' || k === 'head' ? txt : v; };
+  el.querySelectorAll('[data-av]').forEach((r) => { r.oninput = () => { set(r.dataset.av, +r.value); show(r.dataset.av, +r.value); }; r.onchange = rerender; });
+  el.querySelectorAll('[data-ai]').forEach((inp) => inp.onchange = () => {
+    const k = inp.dataset.ai; let v = k === 'total' || k === 'head' ? parseTime(inp.value) : parseInt(inp.value, 10);
+    if (v == null || isNaN(v)) return rerender();
+    const lim = { radius: [50, 5000], final: [10, 100], total: [60, 4 * 3600], head: [0, 3600] }[k];
+    set(k, Math.max(lim[0], Math.min(lim[1], v))); rerender();
+  });
+  const sh = el.querySelector('#advShrink'); if (sh) sh.onchange = () => { set('shrink', sh.checked); rerender(); };
+  const rs = el.querySelector('#advReset'); if (rs) rs.onclick = () => { lb.adv = {}; rerender(); };
+  el.querySelectorAll('[data-tune]').forEach((r) => { r.oninput = () => { lb[r.dataset.tune] = +r.value; el.querySelector(`#v_${r.dataset.tune}`).textContent = r.value; }; r.onchange = rerender; });
+  el.querySelectorAll('[data-pwt]').forEach((cb) => cb.onchange = () => { const id = cb.dataset.pwt; lb.powerups = cb.checked ? [...new Set([...lb.powerups, id])] : lb.powerups.filter((x) => x !== id); save(); });
+}
+// ---------- сохранённые пресеты (расширенные настройки) ----------
+function presetsBlock() {
+  const ps = S.presets || [];
+  return `<div class="sect">${t('presets')}</div><div class="card" style="padding:10px 14px">
+    ${ps.length ? ps.map((p, i) => `<div class="line-row"><button class="btn ghost" data-pload="${i}" style="flex:1;justify-content:flex-start;padding:0">${esc(p.name)}</button><button class="btn" data-pdel="${i}" style="min-height:36px;padding:0 10px">${I.close.replace('<svg', '<svg width="16" height="16"')}</button></div>`).join('') : `<div style="color:var(--muted)">${t('noPresets')}</div>`}
+    <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
+}
+function bindPresets(el, lb) {
+  const keys = ['size', 'vis', 'light', 'extra', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const sv = el.querySelector('#psave');
+  if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
+    b.querySelector('[data-x]').onclick = close;
+    b.querySelector('[data-ok]').onclick = () => { const name = b.querySelector('#pname').value.trim() || t('presets') + ' ' + ((S.presets || []).length + 1); const data = {}; keys.forEach((k) => data[k] = JSON.parse(JSON.stringify(lb[k] ?? null))); S.presets = [...(S.presets || []), { name, data }]; save(); close(); go('lobby'); };
+  });
+  el.querySelectorAll('[data-pload]').forEach((b) => b.onclick = () => { const p = S.presets[+b.dataset.pload]; Object.assign(lb, JSON.parse(JSON.stringify(p.data))); save(); toast(p.name); go('lobby'); });
+  el.querySelectorAll('[data-pdel]').forEach((b) => b.onclick = () => { S.presets.splice(+b.dataset.pdel, 1); save(); go('lobby'); });
 }
 
 // ---------- общие элементы ----------
@@ -175,10 +233,16 @@ const SCREENS = {
   lobby(el) {
     const lb = S.lobby;
     if (!lb) return go('host');
+    ensurePlayers(lb);
     const c = calc(lb);
+    const ru = getLang() === 'ru';
     const pct = (f) => (f > 1 ? '+' : '−') + Math.round(Math.abs(1 - f) * 100) + '%';
     const opt = (group, key, icon, title, sub, on) => `<button class="opt ${on ? 'on' : ''}" data-g="${group}" data-k="${key}">${I[icon]}<span class="t">${title}</span>${sub ? `<span class="s">${sub}</span>` : ''}</button>`;
-    const sizeSub = (k) => `${lb.huntMin || SIZES[k].min} ${t('min')} · ${Math.round(SIZES[k].r * Math.sqrt(VIS[lb.vis] * LIGHT[lb.light]) / 10) * 10} ${t('m')}`;
+    const sizeSub = (k) => `${SIZES[k].min} ${t('min')} · ${Math.round(SIZES[k].r * Math.sqrt(VIS[lb.vis] * LIGHT[lb.light]) / 10) * 10} ${t('m')}`;
+    const summary = `<div class="summary"><div class="l">${t('radius')}</div><div class="l">${t('huntDur')}</div>
+        <div class="v">${c.radius} ${t('m')}</div><div class="v">${fmt(c.huntSec)}</div>
+        <div class="sub">${t('toHide', { t: fmt(c.hideSec) })} · ${c.shrinkTo < 1 ? t('shrinks', { p: Math.round(c.shrinkTo * 100) }) : t('noShrink')}</div>
+        <div class="saved">${t('saved')}</div></div>`;
 
     const step1 = `
       <div class="sect">${t('sizeLen')}</div>
@@ -189,122 +253,192 @@ const SCREENS = {
       <div class="opts c2">${opt('light', 'day', 'sun', t('day'), '', lb.light === 'day')}${opt('light', 'dark', 'moon', t('dark'), t('areaPct', { p: pct(LIGHT.dark) }), lb.light === 'dark')}</div>
       <div class="sect">${t('extras')}<button class="qbtn" data-q="extra">${I.help}</button></div>
       <div class="opts c3">${opt('extra', 'tutorial', 'book', t('tutorial'), '', lb.extra === 'tutorial')}${opt('extra', 'simple', 'sparkle', t('simple'), '', lb.extra === 'simple')}${opt('extra', 'spice', 'pepper', t('spice'), '', lb.extra === 'spice')}</div>
-      ${S.dev ? devTuning(lb, c) : ''}
-      <div class="summary"><div class="l">${t('radius')}</div><div class="l">${t('huntDur')}</div>
-        <div class="v">${c.radius} ${t('m')}</div><div class="v">${c.huntMin} ${t('min')}</div>
-        <div class="sub">${t('toHide', { t: fmt(c.hideSec) })} · ${t('shrinks', { p: 70 })}</div>
-        <div class="saved">${t('saved')}</div></div>
+      ${S.dev ? presetsBlock() : ''}
+      ${summary}
       <button class="btn primary big block next-btn" data-step="2"><span>${t('next')}</span>${I.arrowR}</button>`;
 
-    const total = 1 + lb.bots;
-    const step2 = `
-      <div class="sect">${t('place')}</div>
-      <div class="seg" style="margin-bottom:8px">${['circle', 'custom'].map((z) => `<button data-zs="${z}" class="${(lb.shape || 'circle') === z ? 'on' : ''}">${t(z === 'circle' ? 'shapeCircle' : 'shapeCustom')}</button>`).join('')}</div>
-      <div class="pick-map" id="pmap"></div>
-      ${lb.shape === 'custom' ? `<div class="row" style="margin-top:10px"><span style="color:var(--muted);font-size:14px;flex:1" id="polyInfo"></span><button class="btn" id="pUndo">${t('undoPt')}</button><button class="btn danger" id="pClear">${t('clearPts')}</button></div>
-        <div class="row" style="margin-top:8px;justify-content:space-between"><span style="color:var(--muted);font-size:14px;flex:1">${t('customHint')}</span><button class="btn" id="myloc">${I.locate}${t('myLocation')}</button></div>`
-      : `<div class="row" style="margin-top:10px;justify-content:space-between"><span style="color:var(--muted);font-size:14px;flex:1">${t('placeHint')}</span><button class="btn" id="myloc">${I.locate}${t('myLocation')}</button></div>`}
-      <div class="sect">${t('players')}</div>
-      <div class="card" style="padding:8px 16px">
-        <div class="line-row"><span>${t('bots')}</span><div class="stepper"><button class="btn" data-st="bots:-1">−</button><span class="val">${lb.bots}</span><button class="btn" data-st="bots:1">+</button></div></div>
-        <div class="line-row"><span>${t('hunters')}</span><div class="stepper"><button class="btn" data-st="hunters:-1">−</button><span class="val">${Math.min(lb.hunters, Math.max(1, total - 1))}</span><button class="btn" data-st="hunters:1">+</button></div></div>
-        <div class="line-row"><span>${t('yourRole')}</span><div class="seg">${['random', 'hider', 'hunter'].map((r) => `<button data-role="${r}" class="${lb.myRole === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
-        <div class="line-row"><span>${t('moveMode')}</span><div class="seg">${['gps', 'demo'].map((r) => `<button data-mode="${r}" class="${lb.mode === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
-      </div>
-      <button class="btn block" id="wheel" style="margin-top:10px">${I.target}${t('whoIsIt')}</button>
-      ${lb.mode === 'demo' ? `<p style="color:var(--muted);font-size:14px">${t('demoHelp')}</p>` : ''}
-      <div class="player-list">
-        <div class="player"><div class="av" style="background:var(--accent)">${esc((S.name || '?')[0])}</div><div class="nm">${esc(S.name)}</div><div class="tag">${t('you')}</div></div>
-        ${Array.from({ length: lb.bots }, (_, i) => `<div class="player"><div class="av" style="background:#4a5672;color:#fff">${I.users.replace('<svg', '<svg width="18" height="18"')}</div><div class="nm">${t('bot')} ${i + 1}</div><div class="tag">${t('bot')}</div></div>`).join('')}
-      </div>
-      <div class="row" style="margin-top:16px"><button class="btn big" data-step="1" style="flex:1">${I.arrowL}${t('back2')}</button><button class="btn primary big" id="start" style="flex:2">${I.play}${t('startGame')}</button></div>`;
+    const hunters = lb.players.filter((p) => p.role === 'hunter').length, hiders = lb.players.length - hunters;
+    const badge = (r) => `<span class="rbadge ${r}">${t(r)}</span>`;
+    const crewRows = lb.players.map((p, i) => lb.manage
+      ? `<div class="crew-row manage"><div class="row" style="justify-content:space-between;width:100%">${badge(p.role)}${p.bot ? `<button class="btn" data-rm="${i}" style="min-height:36px;padding:0 10px">${I.close.replace('<svg', '<svg width="16" height="16"')}</button>` : ''}</div>
+          <div class="nm">${p.bot ? `<input class="input" data-pn="${i}" value="${esc(p.name)}" maxlength="16" style="min-height:40px;font-size:16px">` : `${esc(S.name)} <span class="tag">· ${t('hostYou')}</span>`}</div>
+          <div class="row" style="justify-content:flex-end;width:100%"><button class="btn ${p.role === 'hunter' ? 'primary' : ''}" data-pr="${i}:hunter" style="min-height:40px">${t('hunter')}</button><button class="btn ${p.role === 'hider' ? 'primary' : ''}" data-pr="${i}:hider" style="min-height:40px">${t('hider')}</button></div></div>`
+      : `<div class="crew-row">${badge(p.role)}<span class="nm">${esc(p.bot ? p.name : S.name)} <span class="tag">· ${p.bot ? t('bot') : t('hostYou')}</span></span></div>`).join('');
 
-    el.innerHTML = `${topbar(false)}
-      <div class="lobby-code-lbl">${t('lobbyCodeLbl')}</div>
+    const step2 = `
+      <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra)].join(' · ')}</span></button>
+      ${summary}
+      <div class="map-card">
+        <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button>
+          <div class="seg" style="margin-left:auto">${['circle', 'custom'].map((z) => `<button data-zs="${z}" class="${(lb.shape || 'circle') === z ? 'on' : ''}">${t(z === 'circle' ? 'shapeCircle' : 'shapeCustom')}</button>`).join('')}</div></div>
+        <div class="pick-map" id="pmap"></div>
+        ${lb.shape === 'custom'
+          ? `<div class="map-cap"><div>${t('customHint')}</div><div class="row" style="margin-top:8px"><span id="polyInfo" style="flex:1"></span><button class="btn" id="pUndo">${t('undoPt')}</button><button class="btn danger" id="pClear">${t('clearPts')}</button></div></div>`
+          : `<div class="map-cap">${t('playground')}</div>`}
+      </div>
+      <div class="card crew">
+        <div class="kicker2">${t('yourCrew')}</div>
+        <h2 class="row" style="font-size:28px">${I.users.replace('<svg', '<svg width="26" height="26"')} ${t('playersN', { n: lb.players.length })}</h2>
+        <div class="row" style="justify-content:space-between;margin:10px 0 14px"><span style="color:var(--muted)">${t('crewCount', { h: hunters, d: hiders })}</span><button class="btn" id="manage">${lb.manage ? t('done') : t('managePlayers')}</button></div>
+        <div class="crew-list">${crewRows}</div>
+        ${lb.manage ? `<div class="row" style="margin-top:12px"><button class="btn" id="addBot" style="flex:1">+ ${t('addBot')}</button><button class="btn" id="shuffle" style="flex:1">${I.swap}${t('shuffle')}</button></div>` : ''}
+        <button class="btn block" id="wheel" style="margin-top:12px">${I.target}${t('whoIsIt')}</button>
+        <div class="line-row" style="margin-top:6px"><span>${t('moveMode')}</span><div class="seg">${['gps', 'demo'].map((r) => `<button data-mode="${r}" class="${lb.mode === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
+        ${lb.mode === 'demo' ? `<p style="color:var(--muted);font-size:14px;margin:6px 0 0">${t('demoHelp')}</p>` : ''}
+      </div>
+      <details class="adv" ${lb.advOpen ? 'open' : ''}><summary>${t('advanced')}</summary>${advancedBlock(lb, c)}</details>
+      <p style="color:var(--muted)">${t('replayNote')}</p>
+      <div class="bottom-bar"><div class="in"><button class="btn primary big block" id="start">${t('startGame')}</button><div class="hint2">${t('inviteHint')}</div></div></div>`;
+
+    el.classList.toggle('has-bar', lb.step === 2);
+    el.innerHTML = `
+      <div class="lobby-code-lbl" style="margin-top:8px">${t('lobbyCodeLbl')}</div>
       <div class="lobby-code">${lb.code}</div>
-      <div class="row">
+      <div class="row lobby-btns">
         <button class="btn danger" id="leave">${I.leave}${t('leave')}</button>
         <button class="btn" id="share">${t('share')}</button>
-        <button class="btn" id="qr">QR</button>
+        <button class="btn ${lb.showQr ? 'primary' : ''}" id="qr">QR</button>
+        <button class="icon-btn" data-top="rules" aria-label="rules">${I.help}</button>
+        <button class="icon-btn" data-top="settings" aria-label="settings">${I.gear}</button>
       </div>
-      <div class="make-yours"><div><div class="k">${t('makeYours')}</div><h2>${t('hostGame')}</h2></div><button class="btn" id="howrun">${t('helpRun')}</button></div>
-      <div class="steps"><button class="step ${lb.step === 1 ? 'on' : ''}" data-step="1"><span class="n">1</span>${t('step1')}</button><button class="step ${lb.step === 2 ? 'on' : ''}" data-step="2"><span class="n">2</span>${t('step2')}</button></div>
+      ${lb.showQr ? `<div class="qr-inline"><div class="qr-box">${qrSvg(lb.code)}</div><p>${t('qrInline')}</p><code>${esc(joinUrl(lb.code))}</code></div>` : ''}
+      <div class="make-yours"><div><div class="k">${t('makeYours')}</div><h2>${lb.step === 1 ? t('hostGame') : t('choosePlace')}</h2></div><button class="btn" id="howrun">${t('helpRun')}</button></div>
+      <div class="steps"><button class="step ${lb.step === 1 ? 'on' : 'done'}" data-step="1"><span class="n">${lb.step === 2 ? '✓' : '1'}</span>${t('step1')}</button><button class="step ${lb.step === 2 ? 'on' : ''}" data-step="2"><span class="n">2</span>${t('step2')}</button></div>
       ${lb.step === 1 ? step1 : step2}`;
     bindCommon(el);
 
     const rerender = () => { save(); const y = window.scrollY; go('lobby'); window.scrollTo(0, y); };
-    el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; rerender(); });
+    el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => { lb.step = +b.dataset.step; save(); go('lobby'); });
     el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
     el.querySelector('#leave').onclick = () => { S.lobby = null; save(); go('home'); };
     el.querySelector('#share').onclick = () => shareLobby(lb.code);
-    el.querySelector('#qr').onclick = () => showQr(lb.code);
-    el.querySelector('#howrun').onclick = () => modal(`<h2>${t('howRun')}</h2><ol>${t('howRunList').map((x) => `<li>${esc(x)}</li>`).join('')}</ol><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close);
-    el.querySelectorAll('[data-tune]').forEach((r) => r.oninput = () => { lb[r.dataset.tune] = +r.value; el.querySelector(`#v_${r.dataset.tune}`).textContent = r.value; });
-    el.querySelectorAll('[data-tune]').forEach((r) => r.onchange = rerender);
-    el.querySelectorAll('[data-pwt]').forEach((cb) => cb.onchange = () => { const id = cb.dataset.pwt; lb.powerups = cb.checked ? [...new Set([...lb.powerups, id])] : lb.powerups.filter((x) => x !== id); save(); });
+    el.querySelector('#qr').onclick = () => { lb.showQr = !lb.showQr; rerender(); };
+    el.querySelector('#howrun').onclick = () => modal(`<h2>${t('runGame')}</h2><ol>${t('runGameList').map((x) => `<li>${esc(x)}</li>`).join('')}</ol><p style="color:var(--muted)">${t('firstGame')}</p><button class="btn primary big block" data-x>${t('letsSet')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = () => { close(); lb.step = 1; save(); go('lobby'); });
+    bindPresets(el, lb);
 
-    if (lb.step === 2) {
-      el.querySelectorAll('[data-st]').forEach((b) => b.onclick = () => {
-        const [k, d] = b.dataset.st.split(':');
-        lb[k] = Math.max(k === 'bots' ? 0 : 1, Math.min(k === 'bots' ? 9 : 9, lb[k] + +d));
-        lb.hunters = Math.min(lb.hunters, Math.max(1, lb.bots));
-        rerender();
-      });
-      el.querySelectorAll('[data-role]').forEach((b) => b.onclick = () => { lb.myRole = b.dataset.role; rerender(); });
-      el.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => { lb.mode = b.dataset.mode; rerender(); });
-      el.querySelectorAll('[data-zs]').forEach((b) => b.onclick = () => { lb.shape = b.dataset.zs; rerender(); });
-      el.querySelector('#wheel').onclick = () => {
-        const names = S.wheel && S.wheel.names.filter(Boolean).length >= 2 ? S.wheel.names : defaultNames();
-        openWheel(modal, { names, rig: S.wheel ? S.wheel.rig : '', onRole: (win, box) => {
-          const mine = win === S.name;
-          box.innerHTML = `<button class="btn ${mine ? 'primary' : ''} block">${mine ? t('iAmHunter') : t('iAmHider')}</button>`;
-          box.firstChild.onclick = () => { lb.myRole = mine ? 'hunter' : 'hider'; save(); toast(t(mine ? 'hunter' : 'hider')); };
-        } });
-      };
-      const center = lb.center || { lat: 55.7520, lng: 37.6175 };
-      const pm = L.map(el.querySelector('#pmap'), { zoomControl: false, attributionControl: true }).setView([center.lat, center.lng], 15);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(pm);
-      pm.attributionControl.setPrefix(false);
-      const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
-      const custom = lb.shape === 'custom';
-      lb.poly = lb.poly || [];
-      const circ = L.circle([center.lat, center.lng], { radius: c.radius, ...zst });
-      const poly = L.polygon([], zst), dots = L.layerGroup();
-      const drawPoly = () => {
-        poly.setLatLngs(lb.poly.map((q) => [q.lat, q.lng])); dots.clearLayers();
-        lb.poly.forEach((q, i) => L.circleMarker([q.lat, q.lng], { radius: 7, color: '#fff', weight: 3, fillColor: i === 0 ? '#ff8a5b' : '#2c7a4b', fillOpacity: 1 }).addTo(dots));
-        const info = el.querySelector('#polyInfo');
-        if (info) { const g = polyGeo(lb.poly); info.textContent = lb.poly.length < 3 ? t('ptsNeed', { n: lb.poly.length }) : t('ptsInfo', { n: lb.poly.length, a: (g.area / 10000).toFixed(1), r: Math.round(g.radius) }); }
-      };
-      const setC = (lat, lng, fit) => { lb.center = { lat, lng }; save(); circ.setLatLng([lat, lng]); if (fit) pm.fitBounds(circ.getBounds()); };
-      if (custom) {
-        poly.addTo(pm); dots.addTo(pm); drawPoly();
-        if (lb.poly.length >= 3) pm.fitBounds(poly.getBounds(), { padding: [20, 20] }); else pm.fitBounds(L.latLng(center.lat, center.lng).toBounds(c.radius * 2));
-        pm.on('click', (e) => { lb.poly.push({ lat: e.latlng.lat, lng: e.latlng.lng }); save(); drawPoly(); });
-        el.querySelector('#pUndo').onclick = () => { lb.poly.pop(); save(); drawPoly(); };
-        el.querySelector('#pClear').onclick = () => { lb.poly = []; save(); drawPoly(); };
-      } else {
-        circ.addTo(pm); pm.fitBounds(circ.getBounds());
-        pm.on('click', (e) => setC(e.latlng.lat, e.latlng.lng));
-      }
-      const locate = (quiet) => navigator.geolocation && navigator.geolocation.getCurrentPosition((p) => setC(p.coords.latitude, p.coords.longitude, true), () => { if (!quiet) toast(t('noGps').split('—')[0]); }, { enableHighAccuracy: true, timeout: 15000 });
-      el.querySelector('#myloc').onclick = () => locate(false);
-      if (!lb.center) locate(true);
-      el.querySelector('#start').onclick = () => {
-        const cc = calc(lb);
-        let zc = lb.center || center, zr = cc.radius, polygon = null;
-        if (custom) {
-          if (lb.poly.length < 3) return toast(t('ptsNeed', { n: lb.poly.length }));
-          const g = polyGeo(lb.poly); zc = g.center; zr = g.radius; polygon = lb.poly.slice();
-        }
-        go('game', {
-          center: zc, radius: zr, polygon, cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
-          features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
-          bots: lb.bots, hunters: Math.min(lb.hunters, Math.max(1, lb.bots)), myRole: lb.myRole, mode: lb.mode, name: S.name,
-        });
-      };
+    if (lb.step !== 2) return;
+    // --- игроки ---
+    el.querySelector('#manage').onclick = () => { lb.manage = !lb.manage; rerender(); };
+    el.querySelectorAll('[data-pr]').forEach((b) => b.onclick = () => { const [i, r] = b.dataset.pr.split(':'); lb.players[+i].role = r; rerender(); });
+    el.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { lb.players.splice(+b.dataset.rm, 1); rerender(); });
+    el.querySelectorAll('[data-pn]').forEach((inp) => inp.onchange = () => { lb.players[+inp.dataset.pn].name = inp.value.trim() || lb.players[+inp.dataset.pn].name; save(); });
+    const addBot = el.querySelector('#addBot');
+    if (addBot) addBot.onclick = () => { if (lb.players.length >= 12) return; const used = new Set(lb.players.map((p) => p.name)); const nm = (BOT_NAMES[getLang()] || BOT_NAMES.ru).find((n) => !used.has(n)) || (t('bot') + ' ' + lb.players.length); lb.players.push({ name: nm, role: 'hider', bot: true }); rerender(); };
+    const shuffle = el.querySelector('#shuffle');
+    if (shuffle) shuffle.onclick = () => { const h = Math.max(1, Math.round(lb.players.length / 3)); const idx = lb.players.map((_, i) => i).sort(() => Math.random() - 0.5); lb.players.forEach((p) => p.role = 'hider'); idx.slice(0, h).forEach((i) => lb.players[i].role = 'hunter'); rerender(); };
+    el.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => { lb.mode = b.dataset.mode; rerender(); });
+    el.querySelectorAll('[data-zs]').forEach((b) => b.onclick = () => { lb.shape = b.dataset.zs; rerender(); });
+    el.querySelector('#wheel').onclick = () => {
+      const names = S.wheel && S.wheel.names.filter(Boolean).length >= 2 ? S.wheel.names : lb.players.map((p) => p.bot ? p.name : S.name);
+      openWheel(modal, { names, rig: S.wheel ? S.wheel.rig : '', onRole: (win, box) => {
+        const pl = lb.players.find((p) => (p.bot ? p.name : S.name) === win);
+        if (!pl) return;
+        box.innerHTML = `<button class="btn primary block">${t('makeHunter', { n: esc(win) })}</button>`;
+        box.firstChild.onclick = () => { pl.role = 'hunter'; save(); toast(t('makeHunterDone', { n: win })); };
+      } });
+    };
+    // --- расширенные настройки ---
+    const adv = el.querySelector('details.adv');
+    adv.ontoggle = () => { lb.advOpen = adv.open; save(); };
+    bindAdvanced(el, lb, rerender);
+
+    // --- карта ---
+    const center = lb.center || { lat: 55.7520, lng: 37.6175 };
+    const pm = L.map(el.querySelector('#pmap'), { zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView([center.lat, center.lng], 15);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(pm);
+    pm.attributionControl.setPrefix(false);
+    const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
+    const custom = lb.shape === 'custom';
+    lb.poly = lb.poly || [];
+    const circ = L.circle([center.lat, center.lng], { radius: c.radius, ...zst });
+    const poly = L.polygon([], zst), dots = L.layerGroup();
+    const circBounds = () => L.latLng((lb.center || center).lat, (lb.center || center).lng).toBounds(c.radius * 2);
+    const drawPoly = () => {
+      poly.setLatLngs(lb.poly.map((q) => [q.lat, q.lng])); dots.clearLayers();
+      lb.poly.forEach((q, i) => L.circleMarker([q.lat, q.lng], { radius: 7, color: '#fff', weight: 3, fillColor: i === 0 ? '#ff8a5b' : '#2c7a4b', fillOpacity: 1 }).addTo(dots));
+      const info = el.querySelector('#polyInfo');
+      if (info) { const g = polyGeo(lb.poly); info.textContent = lb.poly.length < 3 ? t('ptsNeed', { n: lb.poly.length }) : t('ptsInfo', { n: lb.poly.length, a: (g.area / 10000).toFixed(1), r: Math.round(g.radius) }); }
+    };
+    const fit = () => { if (custom && lb.poly.length >= 3) pm.fitBounds(poly.getBounds(), { padding: [20, 20] }); else pm.fitBounds(circBounds()); };
+    const setC = (lat, lng, doFit) => { lb.center = { lat, lng }; save(); circ.setLatLng([lat, lng]); if (doFit) fit(); };
+    if (custom) {
+      poly.addTo(pm); dots.addTo(pm); drawPoly();
+      pm.on('click', (e) => { lb.poly.push({ lat: e.latlng.lat, lng: e.latlng.lng }); save(); drawPoly(); });
+      el.querySelector('#pUndo').onclick = () => { lb.poly.pop(); save(); drawPoly(); };
+      el.querySelector('#pClear').onclick = () => { lb.poly = []; save(); drawPoly(); };
+    } else {
+      circ.addTo(pm);
+      pm.on('click', (e) => setC(e.latlng.lat, e.latlng.lng));
     }
+    setTimeout(() => { pm.invalidateSize(); fit(); }, 60);
+    el.querySelector('#pFit').onclick = fit;
+    const locate = (quiet) => navigator.geolocation && navigator.geolocation.getCurrentPosition((p) => {
+      if (custom) pm.setView([p.coords.latitude, p.coords.longitude], 16); else setC(p.coords.latitude, p.coords.longitude, true);
+    }, () => { if (!quiet) toast(t('noGps').split('—')[0]); }, { enableHighAccuracy: true, timeout: 15000 });
+    el.querySelector('#myloc').onclick = () => locate(false);
+    if (!lb.center) locate(true);
+
+    el.querySelector('#start').onclick = () => {
+      const cc = calc(lb);
+      if (!lb.players.some((p) => p.role === 'hider')) return toast(t('needHider'));
+      let zc = lb.center || center, zr = cc.radius, polygon = null;
+      if (custom) {
+        if (lb.poly.length < 3) return toast(t('ptsNeed', { n: lb.poly.length }));
+        const g = polyGeo(lb.poly); zc = g.center; zr = g.radius; polygon = lb.poly.slice();
+      }
+      go('game', {
+        center: zc, radius: zr, polygon, cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {},
+        huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
+        features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
+        bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
+        roles: lb.players.map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })),
+        myRole: (lb.players.find((p) => !p.bot) || {}).role || 'hider', mode: lb.mode, name: S.name,
+      });
+    };
+  },
+
+  onboarding(el, startStep) {
+    let i = startStep || 0;
+    const N = 6;
+    const draw = async () => {
+      const ru = getLang() === 'ru';
+      let body = '', canNext = true;
+      if (i === 0) body = `<h2>${t('onbWelcome')}</h2><p>${t('onbWelcomeS')}</p>`;
+      else if (i === 1) body = `<h2>${t('onbRules')}</h2><p>${t('onbRulesS')}</p>
+        <div class="pw-item"><div class="pw-ico" style="color:var(--hider);background:none;border:0">${I.run}</div><div><h3>${t('hider')}</h3><p>${ru ? 'Не попадайтесь до конца времени.' : 'Stay free until time runs out.'}</p></div></div>
+        <div class="pw-item"><div class="pw-ico" style="color:var(--hunter);background:none;border:0">${I.target}</div><div><h3>${t('hunter')}</h3><p>${ru ? 'Найдите и поймайте всех прячущихся.' : 'Find and catch every Hider.'}</p></div></div>
+        <button class="btn block" id="fullRules">${I.book}${t('fullRules')}</button>`;
+      else if (i === 2) body = `<h2>${t('perms')}</h2><p>${t('permsS')}</p><div style="color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:8px">${t('needs')}</div><div id="permList">…</div>`;
+      else if (i === 3) { body = `<h2>${t('onbSafety')}</h2>${tutorialSteps()[8].html}<label class="agree"><input type="checkbox" id="agree" ${S.agreed ? 'checked' : ''}><b>${t('agreeSafety')}</b></label>`; canNext = !!S.agreed; }
+      else if (i === 4) body = `<h2>${t('onbData')}</h2><p>${t('onbDataS')}</p><label class="agree"><input type="checkbox" id="saveRep" ${S.saveReplays !== false ? 'checked' : ''}><b>${t('saveReplays')}</b></label>`;
+      else body = `<h2>${t('onbName')}</h2><p>${t('onbNameS')}</p><input class="input" id="onbName" maxlength="20" placeholder="${t('namePh')}" value="${esc(S.name)}">`;
+      el.innerHTML = `<div class="onb">
+        <div class="lang">${['ru', 'en'].map((l) => `<button class="opt ${getLang() === l ? 'on' : ''}" data-l="${l}">${l === 'ru' ? FLAG_RU : FLAG_EN}<span class="t">${l === 'ru' ? 'Русский' : 'English'}</span></button>`).join('')}</div>
+        <div class="brand-big">${I.logo}<span>Map Tag</span></div>
+        <div class="modal" style="max-height:none">${body}
+          <div class="progress">${Array.from({ length: N }, (_, k) => `<i class="${k <= i ? 'on' : ''}"></i>`).join('')}</div>
+          <div style="color:var(--muted)">${t('stepOf', { a: i + 1, b: N })}</div>
+          <div class="tut-foot"><button class="btn big" data-b ${i === 0 ? 'disabled' : ''}>${t('back2')}</button><button class="btn primary big" data-n ${canNext ? '' : 'disabled'}>${i === N - 1 ? t('letsGo') : t('next')}</button></div>
+        </div></div>`;
+      el.querySelectorAll('[data-l]').forEach((b) => b.onclick = () => { setLang(b.dataset.l); draw(); });
+      el.querySelector('[data-b]').onclick = () => { if (i > 0) { i--; draw(); } };
+      el.querySelector('[data-n]').onclick = () => {
+        if (i === N - 1) {
+          const n = el.querySelector('#onbName').value.trim();
+          if (!n) return toast(t('enterName'));
+          S.name = n; S.onboarded = true; save(); window.__permChanged = null; go('home'); return;
+        }
+        i++; draw();
+      };
+      const fr = el.querySelector('#fullRules'); if (fr) fr.onclick = () => openRules();
+      const ag = el.querySelector('#agree'); if (ag) ag.onchange = () => { S.agreed = ag.checked; save(); el.querySelector('[data-n]').disabled = !ag.checked; };
+      const sr = el.querySelector('#saveRep'); if (sr) sr.onchange = () => { S.saveReplays = sr.checked; save(); };
+      if (i === 2) { window.__permChanged = () => renderPerms(el.querySelector('#permList')); renderPerms(el.querySelector('#permList')); }
+      else window.__permChanged = null;
+      window.scrollTo(0, 0);
+    };
+    draw();
   },
 
   game(el, cfg) {
@@ -381,7 +515,6 @@ const SCREENS = {
 function devTuning(lb, c) {
   const rng = (k, min, max, step, val, label, unit) => `<div class="line-row" style="display:block"><div class="row" style="justify-content:space-between"><span>${label}</span><b><span id="v_${k}">${val}</span> ${unit}</b></div><input type="range" class="range" data-tune="${k}" min="${min}" max="${max}" step="${step}" value="${val}"></div>`;
   return `<div class="sect">${t('tuning')}</div><div class="card" style="padding:8px 16px">
-    ${rng('huntMin', 3, 40, 1, c.huntMin, t('huntDur'), t('min'))}
     ${rng('revealCd', 30, 240, 10, c.revealCd, t('revealCd'), t('sec'))}
     ${rng('freezeCd', 30, 300, 10, c.freezeCd, t('freezeCd'), t('sec'))}</div>
     ${lb.extra === 'spice' ? `<div class="sect">${t('powerupsIn')}</div><div class="card" style="padding:8px 16px">${POWERUPS.map((p) => `<label class="line-row"><span class="row">${I[p.icon].replace('<svg', '<svg width="20" height="20"')} ${esc(pwName(p))}</span><input type="checkbox" data-pwt="${p.id}" ${lb.powerups.includes(p.id) ? 'checked' : ''} style="width:24px;height:24px;accent-color:var(--accent)"></label>`).join('')}</div>` : ''}`;
@@ -410,7 +543,7 @@ function endGame(res, cfg) {
   const st = S.stats, g = res.stats;
   st.dist += g.dist; st.games++; st.time += res.duration; st.caught += g.caught; st.missions += g.missions; st.supplies += g.supplies;
   st.powers += g.powers; st.timeHunt += g.timeHunt; st.timeHide += g.timeHide; st.timesCaught += g.timesCaught; if (res.won) st.wins++;
-  S.replays.unshift({ ...res.replay, won: res.won, role: res.role, duration: res.duration, dist: g.dist, winner: res.winner });
+  if (S.saveReplays !== false) S.replays.unshift({ ...res.replay, won: res.won, role: res.role, duration: res.duration, dist: g.dist, winner: res.winner });
   S.replays = S.replays.slice(0, 10);
   save();
   modal(`<div style="text-align:center"><div style="color:${res.won ? 'var(--hider)' : 'var(--hunter)'}">${I.trophy.replace('<svg', '<svg width="64" height="64"')}</div>
@@ -492,6 +625,7 @@ function openSettings() {
         <div class="lang"><button class="opt ${getLang() === 'ru' ? 'on' : ''}" data-l="ru">${FLAG_RU}<span class="t">Русский</span></button><button class="opt ${getLang() === 'en' ? 'on' : ''}" data-l="en">${FLAG_EN}<span class="t">English</span></button></div>
         <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
         ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
+        <label class="set-row"><div><div class="tt">${t('sound')}</div><div class="ss">${t('soundS')}</div></div><input type="checkbox" id="snd" ${soundOn() ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('devSettings')}</div><div class="ss">${t('devSettingsS')}</div></div><input type="checkbox" id="dev" ${S.dev ? 'checked' : ''}></label>
         <button class="set-row" data-s="privacy"><div><div class="tt">${t('privacy')}</div><div class="ss">${t('privacyText')}</div></div></button>
         <button class="set-row" data-s="perms"><div><div class="tt">${t('checkPerms')}</div><div class="ss">${t('checkPermsS')}</div></div></button>
@@ -501,14 +635,15 @@ function openSettings() {
       box.querySelectorAll('[data-l]').forEach((b) => b.onclick = () => { setLang(b.dataset.l); draw(); });
       themePicker(box.querySelector('#thp'));
       box.querySelector('#dev').onchange = (e) => { S.dev = e.target.checked; save(); };
+      box.querySelector('#snd').onchange = (e) => { setSound(e.target.checked); if (e.target.checked) beep('green'); };
       box.querySelector('[data-x]').onclick = () => { close(); if (current !== 'game') go(current); };
       box.querySelectorAll('[data-s]').forEach((b) => b.onclick = (e) => {
         e.preventDefault();
         const s = b.dataset.s;
         if (s === 'privacy' || s === 'pn') { close(); go('stats'); setTimeout(() => { const d = document.querySelector('details.acc'); if (d) { d.open = true; d.scrollIntoView({ behavior: 'smooth' }); } }, 50); }
-        else if (s === 'perms') openPerms();
+        else if (s === 'perms') modal(`<h2>${t('checkPerms')}</h2><div id="permList">…</div><button class="btn block" data-x style="margin-top:14px">${t('done')}</button>`, (m, c2) => { m.querySelector('[data-x]').onclick = () => { window.__permChanged = null; c2(); }; window.__permChanged = () => renderPerms(m.querySelector('#permList')); renderPerms(m.querySelector('#permList')); });
         else if (s === 'cheats') { close(); go('cheats'); }
-        else if (s === 'onb') { S.onboarded = false; save(); close(); openRules(); }
+        else if (s === 'onb') { S.onboarded = false; save(); close(); go('onboarding'); }
         else if (s === 'terms') modal(`<h2>${t('terms')}</h2><p>${t('termsText')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, c2) => m.querySelector('[data-x]').onclick = c2);
       });
     };
@@ -534,6 +669,40 @@ async function openPerms() {
   });
 }
 
+// ---------- проверка разрешений (онбординг и настройки) ----------
+async function permStatus() {
+  const N = window.MapTagNative;
+  if (N && N.permState) {
+    try { const p = JSON.parse(N.permState()); return { native: true, on: p.on, always: p.bg, precise: p.fine, vol: p.vol >= 0.5, notif: p.notif, coarse: p.coarse }; } catch {}
+  }
+  let geo = 'unknown';
+  try { geo = (await navigator.permissions.query({ name: 'geolocation' })).state; } catch {}
+  let acc = null;
+  if (geo === 'granted') acc = await new Promise((res) => navigator.geolocation.getCurrentPosition((p) => res(p.coords.accuracy), () => res(null), { enableHighAccuracy: true, timeout: 8000 }));
+  return { native: false, on: geo === 'granted' ? acc != null : null, always: null, precise: geo === 'granted' ? (acc != null && acc < 100) : null, vol: null, notif: null, geo };
+}
+async function renderPerms(box) {
+  if (!box) return;
+  const st = await permStatus();
+  const item = (ok, title, sub, fix) => {
+    const cls = ok === true ? '' : ok === false ? 'bad' : 'warn';
+    return `<div class="perm ${cls}"><div style="flex:1"><div class="pt">${title}</div><div class="ps">${sub}</div></div><div class="st">${ok === true ? `<span style="color:var(--hider);font-size:24px">✓</span>` : fix ? `<button class="fix" data-fix="${fix}">${t('fix')}</button>${ok === false ? `<span style="color:var(--hunter);font-size:24px">✕</span>` : ''}` : ''}</div></div>`;
+  };
+  const web = !st.native;
+  box.innerHTML = [
+    item(st.on, t('pLocOn'), t('pLocOnS'), st.native ? (st.precise || st.coarse ? 'gps' : 'fine') : 'fine'),
+    item(st.always, t('pAlways'), web ? t('webOnly') : t('pAlwaysS'), web ? null : 'bg'),
+    item(st.precise, t('pPrecise'), t('pPreciseS'), st.native ? 'fine' : 'fine'),
+    item(st.vol, t('pVolume'), t('pVolumeS'), web ? null : 'volume'),
+    ...(st.native ? [item(st.notif, t('pNotif'), t('pNotifS'), 'notif')] : []),
+  ].join('');
+  box.querySelectorAll('[data-fix]').forEach((b) => b.onclick = () => {
+    const k = b.dataset.fix;
+    if (window.MapTagNative && window.MapTagNative.requestPerm) window.MapTagNative.requestPerm(k === 'fine' && st.precise === false && (st.coarse) ? 'app' : k);
+    else navigator.geolocation.getCurrentPosition(() => renderPerms(box), () => renderPerms(box), { enableHighAccuracy: true, timeout: 15000 });
+  });
+}
+
 // ---------- поделиться и QR ----------
 function joinUrl(code) { return location.href.split('#')[0].replace(/^file:.*|^https:\/\/appassets\.androidplatform\.net.*/, 'https://mikhailkulinskii1910-jpg.github.io/vsluh/map_tag/') + '#join=' + code; }
 async function shareLobby(code) {
@@ -542,6 +711,7 @@ async function shareLobby(code) {
   try { if (navigator.share) { await navigator.share({ title: 'Map Tag', text, url }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(text + ' ' + url); toast(t('copied')); } catch { toast(text); }
 }
+function qrSvg(code) { const qr = qrcode(0, 'M'); qr.addData(joinUrl(code)); qr.make(); return qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }); }
 function showQr(code) {
   const qr = qrcode(0, 'M'); qr.addData(joinUrl(code)); qr.make();
   modal(`<h2>${t('qrTitle')}</h2><p style="color:var(--muted)">${t('qrLead')}</p><div class="qr-box">${qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true })}</div><div class="lobby-code" style="text-align:center;font-size:36px">${code}</div><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close);
@@ -586,8 +756,7 @@ setLang(getLang());
 applyTheme();
 const hash = /#join=([A-Z0-9]{6})/i.exec(location.hash);
 if (hash) { history.replaceState(null, '', location.pathname); go('join', hash[1].toUpperCase()); }
-else go('home');
-if (!S.onboarded) setTimeout(() => openRules(), 300);
+else go(S.onboarded ? 'home' : 'onboarding');
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !location.host.includes('appassets')) navigator.serviceWorker.register('sw.js').catch(() => {});
 document.addEventListener('backbutton-press', () => { if (document.querySelector('.modal-wrap')) document.querySelector('.modal-wrap').remove(); else if (current !== 'home') go('home'); else window.MapTagNative && window.MapTagNative.exit(); });
 // для отладки из консоли

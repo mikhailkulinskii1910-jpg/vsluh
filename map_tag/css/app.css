@@ -338,3 +338,61 @@ video.scan { width: 100%; border-radius: 18px; background: #000; aspect-ratio: 1
   .lobby-code { font-size: 40px; }
   .summary .v { font-size: 30px; }
 }
+
+/* ---------- лобби: шаг «Место и игроки» ---------- */
+.step.done { color: var(--text); border-color: var(--accent); }
+.step.done .n { background: var(--accent); color: var(--accent-ink); }
+.set-sum { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: 0; padding: 6px 2px 16px; cursor: pointer; text-align: left; color: var(--text); flex-wrap: wrap; }
+.set-sum svg { width: 26px; height: 26px; flex: none; }
+.set-sum b { font-size: 22px; font-weight: 500; }
+.set-sum span { color: var(--muted); font-size: 15px; }
+.map-card { margin-top: 14px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); overflow: hidden; }
+.map-tools { display: flex; align-items: center; gap: 10px; padding: 12px; }
+.map-card .pick-map { border-radius: 0; border: 0; margin: 0; height: 320px; }
+.map-cap { padding: 14px 18px; color: var(--muted); font-size: 15px; }
+.crew { margin-top: 14px; }
+.kicker2 { font-size: 13px; letter-spacing: .14em; color: #b9b2ff; font-weight: 600; text-transform: uppercase; margin-bottom: 6px; }
+html[data-theme] .kicker2 { color: var(--muted); }
+.crew-list { display: grid; gap: 10px; }
+.crew-row { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--bg2); }
+.crew-row.manage { flex-direction: column; align-items: flex-start; gap: 10px; }
+.crew-row .nm { font-size: 18px; flex: 1; width: 100%; }
+.crew-row .tag { color: var(--muted); font-size: 15px; }
+.rbadge { display: inline-block; padding: 6px 12px; border-radius: 12px; font-weight: 700; font-size: 15px; flex: none; }
+.rbadge.hider { background: var(--hider); color: #0f2c1b; }
+.rbadge.hunter { background: var(--hunter); color: #3a0f16; }
+details.adv { margin-top: 20px; }
+details.adv > summary { cursor: pointer; list-style: none; font-size: 19px; padding: 8px 0; color: var(--text); }
+details.adv > summary::before { content: '▸ '; }
+details.adv[open] > summary::before { content: '▾ '; }
+.adv-row { padding: 14px 0; }
+.adv-hint { color: var(--muted); font-size: 15px; margin-top: 6px; font-weight: 400; }
+.adv-in { width: 110px !important; min-height: 50px !important; flex: none; font-size: 18px !important; text-align: left; }
+.screen.has-bar { padding-bottom: calc(150px + var(--safe-bottom)); }
+.bottom-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 900; background: color-mix(in srgb, var(--bg) 94%, transparent); border-top: 1px solid var(--line); padding: 12px 18px calc(12px + var(--safe-bottom)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.bottom-bar .in { max-width: 524px; margin: 0 auto; }
+.bottom-bar .hint2 { color: var(--muted); font-size: 14px; margin-top: 8px; }
+.qr-inline { text-align: center; margin: 16px 0 6px; }
+.qr-inline .qr-box svg { width: 220px; height: 220px; }
+.qr-inline p { color: var(--muted); margin: 6px 10px; }
+.qr-inline code { font-size: 13px; color: var(--muted); word-break: break-all; }
+
+/* ---------- онбординг ---------- */
+.onb { min-height: 100%; display: flex; flex-direction: column; gap: 16px; padding-top: 10px; }
+.onb .brand-big { display: flex; align-items: center; justify-content: center; gap: 14px; font-size: 30px; font-weight: 600; }
+.onb .brand-big svg { width: 64px; height: 64px; }
+.perm { display: flex; gap: 12px; padding: 14px 4px; border-bottom: 1px solid var(--line); align-items: flex-start; }
+.perm.bad { background: var(--card2); border-radius: 16px; padding: 14px 12px; border-bottom: 0; }
+.perm .pt { font-size: 18px; color: var(--hider); }
+.perm.bad .pt { color: var(--hunter); }
+.perm.warn .pt { color: var(--gold); }
+.perm .ps { color: var(--muted); font-size: 15px; margin-top: 4px; }
+.perm .st { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: none; }
+.perm .st svg { width: 26px; height: 26px; }
+.perm .fix { border: 1px solid var(--hunter); color: var(--hunter); background: none; border-radius: 10px; padding: 4px 10px; font-weight: 600; cursor: pointer; }
+.agree { display: flex; gap: 12px; align-items: center; padding: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--card2); cursor: pointer; margin-top: 10px; }
+.agree input { width: 26px; height: 26px; accent-color: var(--accent); flex: none; }
+.lobby-btns { flex-wrap: nowrap; gap: 6px; }
+.lobby-btns .btn { padding: 0 10px; font-size: 15px; min-height: 46px; }
+.lobby-btns .btn svg { width: 20px; height: 20px; }
+.lobby-btns .icon-btn { width: 46px; height: 46px; flex: none; }

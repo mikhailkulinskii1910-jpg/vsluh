@@ -2,6 +2,7 @@
 import { t } from './i18n.js';
 import { I } from './icons.js';
 import { POWERUPS, pwById, pwName, pwDesc } from './content.js';
+import { beep } from './sound.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -108,9 +109,19 @@ export class Game {
       warnUntil: 0, frozenUntil: 0, powerups: [], target: null, think: 0, lastPrint: null, speed: 0, outSince: null,
       wasCaught: false, holdMission: false,
     });
-    this.me = mk('me', this.cfg.name, myRole, false, '#ffffff');
-    this.players = [this.me];
-    roles.forEach((r, i) => this.players.push(mk('b' + i, names[i % names.length], r, true, COLORS[i % COLORS.length])));
+    if (Array.isArray(this.cfg.roles) && this.cfg.roles.length) {
+      // роли назначены вручную в «Ваша команда»: [{ name, role, bot }]
+      const meR = this.cfg.roles.find((r) => !r.bot);
+      myRole = meR ? meR.role : myRole;
+      this.me = mk('me', this.cfg.name, myRole, false, '#ffffff');
+      this.players = [this.me];
+      this.cfg.roles.filter((r) => r.bot).forEach((r, i) => this.players.push(mk('b' + i, r.name, r.role, true, COLORS[i % COLORS.length])));
+      if (!this.players.some((p) => p.role === 'hider')) this.me.role = myRole = 'hider';
+    } else {
+      this.me = mk('me', this.cfg.name, myRole, false, '#ffffff');
+      this.players = [this.me];
+      roles.forEach((r, i) => this.players.push(mk('b' + i, names[i % names.length], r, true, COLORS[i % COLORS.length])));
+    }
     this.me.startRole = myRole;
   }
 
@@ -131,6 +142,7 @@ export class Game {
     map.on('dragstart', () => { this.follow = false; });
 
     if (this.cfg.mode === 'gps') this.startGps();
+    try { window.MapTagNative && window.MapTagNative.gameStart('Map Tag — ' + (this.me.role === 'hunter' ? t('hunter') : t('hider'))); } catch {}
     this.requestWakeLock();
     this.renderHud(true);
     this.timer = setInterval(() => this.tick(), 250);
@@ -139,6 +151,8 @@ export class Game {
 
   destroy() {
     clearInterval(this.timer);
+    window.__nativeLoc = null;
+    try { window.MapTagNative && window.MapTagNative.gameStop(); } catch {}
     if (this.watchId != null) navigator.geolocation.clearWatch(this.watchId);
     try { this.wakeLock && this.wakeLock.release(); } catch {}
     if (this.map) this.map.remove();
@@ -149,7 +163,9 @@ export class Game {
   startGps() {
     if (!navigator.geolocation) { this.switchDemo(t('noGps')); return; }
     let first = true;
-    this.watchId = navigator.geolocation.watchPosition((pos) => {
+    const onPos = (pos) => {
+      if (this.cfg.mode !== 'gps' || this.ended) return;
+      this.gotFix = true;
       const p = this.xy(pos.coords.latitude, pos.coords.longitude);
       const now = this.t;
       if (first) {
@@ -176,7 +192,10 @@ export class Game {
         }
       } else { this.me.x = p.x; this.me.y = p.y; }
       this.gpsPrev = { x: this.me.x, y: this.me.y, t: now };
-    }, () => { this.switchDemo(t('noGps')); }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+    };
+    // в APK позиции идут ещё и из фоновой службы (телефон в кармане, экран выключен)
+    window.__nativeLoc = (lat, lng, acc, sp) => onPos({ coords: { latitude: lat, longitude: lng, accuracy: acc, speed: sp >= 0 ? sp : null } });
+    this.watchId = navigator.geolocation.watchPosition(onPos, () => { if (!this.gotFix) this.switchDemo(t('noGps')); }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
   }
 
   switchDemo(msg) {
@@ -245,8 +264,14 @@ export class Game {
   // ---------- главный цикл ----------
   tick() {
     const now = performance.now();
-    const dt = Math.min(1, (now - this.last) / 1000);
+    let total = Math.min(600, (now - this.last) / 1000);
     this.last = now;
+    // в фоне браузер может вызывать таймер реже — прогоняем пропущенное время шагами по секунде
+    while (total > 1 && !this.ended) { this.stepSim(1, false); total -= 1; }
+    if (!this.ended) this.stepSim(total, true);
+  }
+
+  stepSim(dt, draw) {
     if (this.ended) return;
     this.t += dt;
     const ph = this.phase();
@@ -291,7 +316,7 @@ export class Game {
     this.circles = this.circles.filter((c) => this.t - c.t < 90);
     this.alerts = this.alerts.filter((a) => this.t < a.until);
 
-    this.render();
+    if (draw) this.render();
   }
 
   updateStamina(p, dt) {
@@ -568,8 +593,12 @@ export class Game {
     this.alerts.push({ kind, text, icon, until: this.t + 6 });
     if (this.alerts.length > 2) this.alerts.shift();
     this.alertsDirty = true;
+    beep(kind);
   }
-  vibrate(p) { try { navigator.vibrate && navigator.vibrate(p); } catch {} }
+  vibrate(p) {
+    try { if (navigator.vibrate && navigator.vibrate(p)) return; } catch {}
+    try { window.MapTagNative && window.MapTagNative.vibrate(Array.isArray(p) ? p.reduce((a, b) => a + b, 0) : p); } catch {}
+  }
 
   // ---------- конец ----------
   finish(winner) {

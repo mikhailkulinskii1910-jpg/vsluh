@@ -129,10 +129,12 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['1.2', ['Лобби как в настоящей игре: сводка настроек, карта-площадка, «Ваша команда» с ручным выбором ролей, расширенные настройки (радиус, итоговый радиус, длительность, фора), QR прямо в лобби, кнопка «Начать» всегда внизу.', 'Онбординг из 6 шагов с проверкой разрешений (геолокация «всегда», точность, громкость, уведомления).', 'APK: GPS работает в фоне — можно играть с телефоном в кармане.', 'Звуковые сигналы, сохранённые пресеты в расширенном режиме.']],
     ['1.1', ['Темы из krisa: Терминал (цвет, RGB-перелив, «Матрица»), Призма, Тепловизор (10 палитр), Чертёж — интерфейс и карта перекрашиваются.', 'Своя территория: нарисуйте зону многоугольником прямо на карте.', 'Колесо рандома «Кто водит?» в лобби.']],
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['1.2', ['Lobby like the real thing: settings summary, playground map, “Your crew” with manual roles, advanced settings (radius, final radius, length, head start), inline QR, sticky Start button.', '6-step onboarding with a permission checklist (always-on location, precision, volume, notifications).', 'APK: GPS keeps working in the background — play with the phone in your pocket.', 'Sound alerts; saved presets in advanced mode.']],
     ['1.1', ['Themes from krisa: Terminal (colour, RGB flow, Matrix), Prism, Thermal (10 palettes), Blueprint — UI and map are recoloured.', 'Custom area: draw the zone as a polygon on the map.', '“Who is it?” random wheel in the lobby.']],
     ['1.0', ['First release: hosting, lobby code and QR, game shaping.', 'Map with a shrinking zone, Reveal, Freeze and Catch.', 'Stamina and footprints, missions, caches and 12 power-ups.', 'Bots fill in for other players; tap-to-walk demo mode.', 'Profile with stats and replays, Russian and English.']],
   ],
