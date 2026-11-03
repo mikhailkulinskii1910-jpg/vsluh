@@ -219,15 +219,23 @@ class MainActivity : Activity() {
 
     /** Итог режима с несколькими указателями: до N разных вариантов или все на одном. */
     private fun onMulti(active: List<Item>, picks: IntArray) {
-        val who = if (wheel.mode == SpinMode.TRIPLE) listOf("колесо", "стрелка", "комета")
-            else List(picks.size) { "стрела ${it + 1}" }
+        val who = when (wheel.mode) {
+            SpinMode.TRIPLE -> listOf("колесо", "стрелка", "комета")
+            SpinMode.DOUBLE -> listOf("внешнее колесо", "внутреннее колесо")
+            SpinMode.ORBITS -> List(picks.size) { "комета ${it + 1}" }
+            else -> List(picks.size) { "стрела ${it + 1}" }
+        }
         val names = picks.map { active[it].name.ifBlank { "—" } }
         val distinct = picks.distinct()
         if (distinct.size == 1) {
             result.setTextColor(readable(wheel.colorOf(picks[0])))
             result.text = names[0]
-            resultNote.text = if (wheel.mode == SpinMode.TRIPLE) "Колесо, стрелка и комета совпали!"
-                else "Все ${picks.size} ${if (picks.size < 5) "стрелы" else "стрел"} совпали!"
+            resultNote.text = when (wheel.mode) {
+                SpinMode.TRIPLE -> "Колесо, стрелка и комета совпали!"
+                SpinMode.DOUBLE -> "Оба колеса совпали!"
+                SpinMode.ORBITS -> "Все 3 кометы совпали!"
+                else -> "Все ${picks.size} ${if (picks.size < 5) "стрелы" else "стрел"} совпали!"
+            }
         } else {
             val sb = android.text.SpannableStringBuilder()
             distinct.forEachIndexed { k, i ->

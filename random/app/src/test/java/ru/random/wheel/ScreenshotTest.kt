@@ -105,7 +105,7 @@ class ScreenshotTest {
         // все режимы вращения: результат — сектор под стрелкой / шариком / огоньком / линией барабана
         click(R.id.tabSettings); click(R.id.optEliminate) // выбывание выкл, иначе вариантов не хватит
         click(R.id.tabWheel); root.findViewById<View>(R.id.restore).performClick(); idle(150)
-        for ((k, m) in listOf("Стрелка", "Шарик", "Огоньки", "Встречное", "Барабан", "Маятник", "Часы", "Лента", "Вспышки", "Радар", "Бутылочка", "Змейка", "Пружина", "Комета", "Интрига", "Дартс", "Плинко", "Обратное", "Бумеранг").withIndex()) {
+        for ((k, m) in listOf("Стрелка", "Шарик", "Огоньки", "Встречное", "Барабан", "Маятник", "Часы", "Лента", "Вспышки", "Радар", "Бутылочка", "Змейка", "Пружина", "Комета", "Интрига", "Дартс", "Плинко", "Обратное", "Бумеранг", "Спидометр", "Турбо").withIndex()) {
             click(R.id.tabSettings); clickText(m)
             click(R.id.tabWheel); shot("2${k}a-mode-$k")
             root.findViewById<View>(R.id.spin).performClick()
@@ -131,17 +131,17 @@ class ScreenshotTest {
         }
         idle(150)
         assertEquals(listOf("Test", "No test"), wheel.labels)
-        for (m in listOf("Стрелка", "Пружина", "Комета", "Пружина", "Дартс", "Интрига", "Плинко", "Обратное", "Колесо")) {
+        for (m in listOf("Стрелка", "Пружина", "Комета", "Пружина", "Дартс", "Интрига", "Плинко", "Обратное", "Спидометр", "Турбо", "Колесо")) {
             click(R.id.tabSettings); clickText(m); click(R.id.tabWheel)
             repeat(4) {
                 root.findViewById<View>(R.id.spin).performClick(); idle(9000)
                 val res = root.findViewById<TextView>(R.id.result).text.toString()
                 assertEquals(m, wheel.labels[wheel.indexUnderPointer()], res)
-                if (m in setOf("Пружина", "Колесо", "Интрига", "Обратное")) assertEquals("$m: под верхним указателем", wheel.labels[wheel.indexAtTop()], res)
+                if (m in setOf("Пружина", "Колесо", "Интрига", "Обратное", "Турбо")) assertEquals("$m: под верхним указателем", wheel.labels[wheel.indexAtTop()], res)
             }
         }
         // «Тройной»: у колеса, стрелки и кометы свои результаты — текст совпадает с тем, куда они указывают
-        for (m in listOf("Тройной", "Две стрелы", "Пять стрел")) {
+        for (m in listOf("Тройной", "Две стрелы", "Пять стрел", "Орбиты", "Два колеса")) {
             click(R.id.tabSettings); clickText(m); click(R.id.tabWheel)
             var seenDifferent = false
             repeat(8) { k ->
@@ -198,7 +198,7 @@ class ScreenshotTest {
         shadowOf(testBar).onSeekBarChangeListener.onStopTrackingTouch(testBar)
         assertTrue(rig.isChecked)
         click(R.id.oddsClose)
-        for (m in listOf("Тройной", "Две стрелы", "Пять стрел")) {
+        for (m in listOf("Тройной", "Две стрелы", "Пять стрел", "Орбиты", "Два колеса")) {
             click(R.id.tabSettings); clickText(m); click(R.id.tabWheel)
             repeat(5) {
                 root.findViewById<View>(R.id.spin).performClick(); idle(11000)
