@@ -25,6 +25,7 @@ export const voiceRoomFor = (ch) => (ch === 'team' ? 'team:' + ctx.myRole() : 'a
 
 // ---------- вход / выход ----------
 export async function voiceJoin(ch) {
+  if (ctx.canTalk && !ctx.canTalk()) { ctx.toast(t('deadMute')); return false; }
   if (VOICE.on) await voiceLeave();
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }); }
   catch { ctx.toast(t('chatNoMic')); return false; }

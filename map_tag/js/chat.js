@@ -43,6 +43,7 @@ export function chatHandle(d, from) {
 }
 
 function post(data) {
+  if (ctx.canTalk && !ctx.canTalk()) { ctx.toast(t('deadMute')); return; }
   const me = ctx.me();
   const m = { id: Math.random().toString(36).slice(2, 10), name: me.name, ch: CHAT.ch, team: me.role, ...data };
   ctx.send(m);

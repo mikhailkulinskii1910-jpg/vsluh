@@ -538,3 +538,19 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .code-card .tmr { color: var(--gold); margin-top: 8px; font-weight: 700; }
 .msg .bub.sos { background: #c0392b; color: #fff; }
 .msg .bub.sos a { color: #fff; text-decoration: underline; }
+
+/* 2.3: дрон, ловушки, эвакуация, режим «В помещении» */
+.mk-drone { font-size: 28px; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
+.mk-trap { font-size: 20px; line-height: 1; opacity: .85; filter: drop-shadow(0 1px 3px rgba(0,0,0,.6)); }
+.mk-evac { font-size: 30px; line-height: 1; animation: pulse 1.2s infinite; filter: drop-shadow(0 0 8px #5fd38d); }
+@keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+.indoor-cover { position: absolute; inset: 0; z-index: 900; background: radial-gradient(circle at 50% 35%, #1d2a3d, #0b0f18 70%); display: grid; place-items: center; padding: 120px 20px 160px; pointer-events: none; }
+.indoor-cover .indoor { text-align: center; max-width: 340px; color: #e7ecf5; }
+.indoor-cover .indoor .ic { font-size: 64px; }
+.indoor-cover .indoor .t { font-size: 15px; opacity: .8; margin-top: 8px; }
+.role-big { font-size: 34px; font-weight: 800; margin-top: 14px; }
+.role-big.hunter { color: #f26d7d; } .role-big.hider { color: #5fd38d; } .role-big.dead { color: #9aa3b2; }
+.tel { margin: 6px 0 10px; }
+.tel .tl { font-weight: 600; opacity: .85; } .tel .tv { font-weight: 700; font-size: 13px; } .tel .tn { opacity: .6; font-size: 13px; }
+.tel svg { width: 100%; height: 56px; display: block; margin-top: 4px; background: rgba(255,255,255,.04); border-radius: 8px; }
+.vote-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }

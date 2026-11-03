@@ -12,7 +12,7 @@ import { renderMapEditor, drawMapExtras, mapPoints } from './mapeditor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.2';
+const VERSION = '2.3';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -218,7 +218,7 @@ function presetsBlock() {
     <button class="btn block" id="psave" style="margin-top:10px">${t('savePreset')}</button></div>`;
 }
 function bindPresets(el, lb) {
-  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'chaos', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
+  const keys = ['gmode', 'map', 'size', 'vis', 'light', 'extra', 'compass', 'detector', 'fog', 'chaos', 'drone', 'drift', 'adv', 'revealCd', 'freezeCd', 'powerups', 'shape', 'poly', 'center'];
   const sv = el.querySelector('#psave');
   if (sv) sv.onclick = () => modal(`<h2>${t('savePreset')}</h2><input class="input" id="pname" maxlength="24" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
     b.querySelector('[data-x]').onclick = close;
@@ -443,7 +443,7 @@ const SCREENS = {
 
     const step1 = `
       <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button></div>
-      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['indoor', '🏠'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -455,6 +455,7 @@ const SCREENS = {
       <div class="sect">${t('helpers')}<button class="qbtn" data-q="helpers">${I.help}</button></div>
       <div class="card" style="padding:4px 16px">
         ${['compass', 'detector', 'fog'].map((k) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap">${I[k === 'compass' ? 'north' : k === 'fog' ? 'cloud' : 'scan'].replace('<svg', '<svg width="22" height="22" style="color:var(--accent)"')}<b>${t(k)}</b></span><div class="seg">${['off', 'hunters', 'all'].map((v) => `<button data-hk="${k}:${v}" class="${(lb[k] || 'off') === v ? 'on' : ''}">${t('hv_' + v)}</button>`).join('')}</div></div>`).join('')}
+        ${[['drone', '🛸'], ['drift', '🌀']].map(([k, ic]) => `<div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="font-size:20px">${ic}</span><b>${t('opt_' + k)}</b></span><div class="seg">${['off', 'on'].map((v) => `<button data-opt="${k}:${v}" class="${(lb[k] ? 'on' : 'off') === v ? 'on' : ''}">${t(v === 'on' ? 'chaosOn' : 'hv_off')}</button>`).join('')}</div></div>`).join('')}
         <div class="line-row helper-row"><span class="row" style="gap:10px;flex-wrap:nowrap"><span style="font-size:20px">🎲</span><b>${t('chaos')}</b></span><div class="seg">${['off', 'on'].map((v) => `<button data-chaos="${v}" class="${(lb.chaos ? 'on' : 'off') === v ? 'on' : ''}">${t(v === 'on' ? 'chaosOn' : 'hv_off')}</button>`).join('')}</div></div>
       </div>
       ${S.dev ? presetsBlock() : ''}
@@ -520,6 +521,7 @@ const SCREENS = {
     hostPublish();
     el.querySelectorAll('[data-g]').forEach((b) => b.onclick = () => { lb[b.dataset.g] = b.dataset.k; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => { lb.step = +b.dataset.step; save(); go('lobby'); });
+    el.querySelectorAll('[data-opt]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.opt.split(':'); lb[k] = v === 'on'; rerender(); });
     el.querySelectorAll('[data-chaos]').forEach((b) => b.onclick = () => { lb.chaos = b.dataset.chaos === 'on'; rerender(); });
     el.querySelectorAll('[data-gm]').forEach((b) => b.onclick = () => { lb.gmode = b.dataset.gm; lb.adv = {}; rerender(); });
     el.querySelectorAll('[data-hk]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.hk.split(':'); lb[k] = v; rerender(); });
@@ -625,18 +627,25 @@ const SCREENS = {
         const g = polyGeo(lb.poly); zc = g.center; zr = g.radius; polygon = lb.poly.slice();
       }
       const online = NET && NET.role === 'host' && NET.room.status === 'online' && lb.players.some((p) => p.remote);
+      // тайный охотник: один случайный охотник, остальные прячутся (роли из лобби не меняем)
+      let players = lb.players;
+      if (['impostor', 'mimic', 'phantom'].includes(lb.gmode)) {
+        const pool = lb.players.filter((p) => p.role !== 'spectator' && (online || !p.remote));
+        const imp = pool[Math.floor(Math.random() * pool.length)];
+        players = lb.players.map((p) => (p.role === 'spectator' ? p : { ...p, role: p === imp ? 'hunter' : 'hider' }));
+      }
       const base = {
         center: zc, radius: zr, polygon,
         huntSec: cc.huntSec, hideSec: cc.hideSec, shrinkTo: cc.shrinkTo,
         features: lb.extra, powerups: lb.powerups, revealCd: cc.revealCd, freezeCd: cc.freezeCd,
-        bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
-        roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
-        myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos, catchCode: lb.catchCode !== false,
+        bots: players.filter((p) => p.bot).length, hunters: players.filter((p) => p.role === 'hunter').length,
+        roles: players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
+        myRole: (players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || [])].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
       };
       base.avatar = S.avatar || null;
-      if (!online) return go('game', { ...base, roles: lb.players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
+      if (!online) return go('game', { ...base, roles: players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
       const startAt = Date.now() + 5000;
       NET.room.send('start', { cfg: base, startAt });
       hostPublish('playing');
@@ -718,6 +727,7 @@ const SCREENS = {
       </div>` : ''}
       <h3 class="h-sect">${t('players')}</h3>
       <div class="crew-list">${players.map(row).join('')}</div>
+      ${telHtml(res.tel)}
       <h3 class="h-sect">${t('yourGame')}</h3>
       <div class="card" style="padding:6px 18px">
         <div class="line-row"><span>${t('distance')}</span><b>${fmtDist(g.dist)}</b></div>
@@ -755,6 +765,7 @@ const SCREENS = {
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
       openChat: () => openChat(modal),
+      onDead: () => { voiceLeave(); toast(t('deadMute')); },
       ping: (x, y) => sendPing(x, y),
       sos: () => confirmBox(t('sosConfirm'), async () => {
         const g = game; if (!g) return;
@@ -873,6 +884,19 @@ function polyGeo(pts) {
   return { area, radius: Math.sqrt(area / Math.PI), center: { lat: lat0 + cy / ky, lng: lng0 + cx / kx } };
 }
 function defaultNames() { const n = (S.lobby && S.lobby.bots) || 3; return [S.name || (getLang() === 'ru' ? 'Я' : 'Me'), ...(BOT_NAMES[getLang()] || BOT_NAMES.ru).slice(0, n)]; }
+
+/** Графики высоты, скорости и заряда батареи за раунд. */
+function telHtml(tel) {
+  if (!tel || tel.length < 2) return '';
+  const spark = (idx, col, unit, label) => {
+    const pts = tel.filter((r) => r[idx] != null);
+    if (pts.length < 2) return `<div class="tel"><div class="tl">${label}</div><div class="tn">${t('telNone')}</div></div>`;
+    const t0 = tel[0][0], t1 = tel[tel.length - 1][0] || 1, vs = pts.map((r) => r[idx]), mn = Math.min(...vs), mx = Math.max(...vs), rg = mx - mn || 1;
+    const d = pts.map((r) => `${((r[0] - t0) / Math.max(1, t1 - t0) * 300).toFixed(1)},${(56 - (r[idx] - mn) / rg * 50).toFixed(1)}`).join(' ');
+    return `<div class="tel"><div class="row" style="justify-content:space-between"><span class="tl">${label}</span><span class="tv" style="color:${col}">${Math.round(mn)}–${Math.round(mx)} ${unit}</span></div><svg viewBox="0 0 300 60" preserveAspectRatio="none"><polyline points="${d}" fill="none" stroke="${col}" stroke-width="2.5" vector-effect="non-scaling-stroke"/></svg></div>`;
+  };
+  return `<h3 class="h-sect">📈 ${t('telTitle')}</h3><div class="card" style="padding:12px 16px">${spark(1, '#8fd0ff', t('m'), t('telAlt'))}${spark(2, '#5fd38d', t('kmh'), t('telSpeed'))}${spark(3, '#f6c453', '%', t('telBat'))}</div>`;
+}
 
 function fmtDist(m) { return m >= 1000 ? (m / 1000).toFixed(m >= 10000 ? 0 : 1).replace('.', getLang() === 'ru' ? ',' : '.') + (getLang() === 'ru' ? ' км' : ' km') : Math.round(m) + (getLang() === 'ru' ? ' м' : ' m'); }
 function fmtLong(s) { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return h ? `${h}:${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(x).padStart(2, '0')}`; }
@@ -1133,9 +1157,11 @@ chatInit({
   send: (m) => NET && NET.room.send('chat', m),
   me: () => ({ id: myNetId(), name: S.name, role: myRoleNow() }),
   inGame: () => (game && game.net ? game : null),
+  canTalk: () => !game || !game.canTalk || game.canTalk(),
   toast, onUnread: chatBadges,
 });
 voiceInit({
+  canTalk: () => !game || !game.canTalk || game.canTalk(),
   send: (type, data, to) => NET && NET.room.send(type, data, to),
   myId: () => myNetId(), myName: () => S.name, myRole: () => myRoleNow(), toast,
 });

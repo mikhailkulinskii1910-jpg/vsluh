@@ -148,6 +148,7 @@ export const modesMixin = {
 
   /** Кто побеждает, когда вышло время. */
   timeoutWinner() {
+    if (this.social && this.social()) return this.hiders().length || this.escaped ? 'hiders' : 'hunters';
     if (this.gmode === 'tag') return 'hiders';
     if (this.gmode === 'vip') return this.players.some((p) => p.id === this.vipId && p.role === 'hider') ? 'hiders' : 'hunters';
     if (this.gmode === 'treasure' || this.gmode === 'hill') return 'hunters';   // не успели собрать / удержать

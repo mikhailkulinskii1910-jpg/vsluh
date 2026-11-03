@@ -203,6 +203,13 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void gameStop() { runOnUiThread(() -> { gameRunning = false; GameService.stop(MainActivity.this); }); }
 
+        /** Заряд батареи, %. */
+        @JavascriptInterface
+        public int battery() {
+            android.os.BatteryManager bm = (android.os.BatteryManager) getSystemService(BATTERY_SERVICE);
+            return bm == null ? -1 : bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY);
+        }
+
         @JavascriptInterface
         public void vibrate(long ms) {
             android.os.Vibrator v = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);

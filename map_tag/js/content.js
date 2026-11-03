@@ -34,6 +34,15 @@ export const POWERUPS = [
   { id: 'misdirect', icon: 'swap', cls: 'd', side: 'hider',
     n: { ru: 'Обманка', en: 'Mislead' },
     d: { ru: 'Следующее «Раскрытие» рисует круг в 150 м от вас.', en: 'The next reveal draws its circle 150 m away from you.' } },
+  { id: 'shield', icon: 'shield', cls: 'b', side: 'hider',
+    n: { ru: 'Щит', en: 'Shield' },
+    d: { ru: 'Спасает от одной поимки: охотник отлетает и 3 секунды не может ловить.', en: 'Blocks one catch: the Hunter bounces off and cannot catch for 3 seconds.' } },
+  { id: 'stun', icon: 'bolt', cls: 'h', side: 'hider',
+    n: { ru: 'Оглушение', en: 'Stun' },
+    d: { ru: 'Охотники в 40 м оглушены на 8 секунд: не двигаются и не ловят.', en: 'Hunters within 40 m are stunned for 8 seconds: no moving, no catching.' } },
+  { id: 'trap', icon: 'lock', cls: 'd', side: 'hider',
+    n: { ru: 'Ловушка', en: 'Trap' },
+    d: { ru: 'Ставит невидимую для охотников ловушку: первый, кто наступит, оглушён на 6 секунд.', en: 'Places a trap Hunters cannot see: the first to step on it is stunned for 6 seconds.' } },
   { id: 'flare', icon: 'flare', cls: 'b', side: 'both',
     n: { ru: 'Сигнальная ракета', en: 'Flare' },
     d: { ru: 'Запоминает позиции всех игроков и через 10 секунд показывает их всем.', en: 'Captures every player’s position and shows it to everyone 10 seconds later.' } },
@@ -135,6 +144,7 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['2.3', ['Режимы: Вслепую 🙈, В помещении 🏠 (без GPS, «Звук» на телефонах прячущихся), Тайный охотник 🔪, Мимик 🎭, Фантом 🫥 — туман, неизвестный охотник, собрания и голосование, точка эвакуации 🚁; выбывшие не пишут и не говорят.', 'Барьеры: здания и стены, сквозь которые не пройти ни игрокам, ни ботам. В редакторе — инструмент 🧱 и загрузка всех зданий из карты.', 'Дрон охотника 🛸: медленный, управляется касаниями, сканирует под собой каждые 2 с. Блуждающая зона 🌀.', 'Бонусы прячущихся: Щит, Оглушение, Ловушка.', 'Трек раунда: графики высоты, скорости и заряда батареи в итогах.']],
     ['2.2', ['Поимка по коду: у пойманного на экране код, охотник вводит его для подтверждения (онлайн, отключается в настройках).', 'Режимы: Хищник 🦖 и Королевская битва 🎯 — всего 13.', 'Читы в раунде: кнопка в меню ⌄ всегда (спросит пароль), долгое нажатие на таймер. Новые читы: стелс, рентген, бесконечные бонусы, автопоимка, замедление; действия: заморозить ботов, к ближайшему, +60 с, победить сейчас.', 'Кнопка 🆘 SOS и голосовые объявления.']],
     ['2.1', ['Режимы: VIP 👑, Бомба 💣, Салки 🏷 — всего 11 режимов.', 'Пауза игры у организатора (онлайн у всех).', 'Стрелка и расстояние до зоны, если вышли за границу.', '«Поделиться результатом» и личные рекорды в профиле.']],
     ['2.0', ['Режимы: Царь горы ⛰, Невидимки 👻, Зомби 🧟.', 'Метка «Сюда!» долгим нажатием на карту — для своей команды.', '«Реванш» в один клик после онлайн-игры, рейтинг друзей в профиле, тёмная карта.', 'Исправлено: в «Кладоискателях» по истечении времени теперь побеждают охотники.']],
@@ -150,6 +160,7 @@ export const PATCH_NOTES = {
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['2.3', ['Modes: Blind 🙈, Indoors 🏠 (no GPS, a Sound button for Hiders’ phones), Secret hunter 🔪, Mimic 🎭, Phantom 🫥 — fog, an unknown Hunter, meetings and voting, an evacuation point 🚁; players who are out can’t chat or talk.', 'Barriers: buildings and walls that neither players nor bots can pass. In the editor — the 🧱 tool and loading all buildings from the map.', 'Hunter drone 🛸: slow, steered by taps, scans below every 2 s. Drifting zone 🌀.', 'Hider power-ups: Shield, Stun, Trap.', 'Round track: altitude, speed and battery charts in the results.']],
     ['2.2', ['Catch by code: the caught player sees a code, the Hunter types it to confirm (online, can be turned off).', 'Modes: Predator 🦖 and Battle royale 🎯 — 13 in total.', 'Cheats mid-round: the ⌄ menu button is always there (asks for the password), long-press the timer. New cheats: stealth, x-ray, endless power-ups, auto-catch, slow motion; actions: freeze bots, to nearest, +60 s, win now.', '🆘 SOS button and voice announcements.']],
     ['2.1', ['Modes: VIP 👑, Bomb 💣, Tag 🏷 — 11 modes in total.', 'Pause for the host (for everyone online).', 'Arrow and distance back to the zone when you step outside.', 'Share result and personal records in the profile.']],
     ['2.0', ['Modes: King of the hill ⛰, Ghosts 👻, Zombies 🧟.', '“Here!” marker by long-pressing the map — for your team.', 'One-tap Rematch after online games, friends leaderboard in the profile, dark map.', 'Fixed: in Treasure hunt the Hunters now win when time runs out.']],
