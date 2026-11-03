@@ -6,6 +6,7 @@ import { beep } from './sound.js';
 import { netMixin } from './gamenet.js';
 import { seekMixin } from './seek.js';
 import { modesMixin } from './modes.js';
+import { catchCodeMixin } from './catchcode.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -99,6 +100,7 @@ export class Game {
   zoneR() {
     const { hideSec, huntSec, shrinkTo } = this.cfg;
     if (this.t <= hideSec) return this.R;
+    if (this.cfg.gmode === 'royale') return this.R * this.royaleK();
     const p = Math.min(1, (this.t - hideSec) / huntSec);
     return this.R * (1 - (1 - shrinkTo) * p);
   }
@@ -153,7 +155,7 @@ export class Game {
       const keep = hiders.find((p) => p === this.me) || hiders[0] || this.players[0];
       this.players.forEach((p) => { p.role = p === keep ? 'hider' : 'hunter'; });
     }
-    if ((this.cfg.gmode === 'zombie' || this.cfg.gmode === 'tag') && !this.isClient && !(this.cfg.roles && this.cfg.roles[0] && this.cfg.roles[0].id)) {
+    if ((this.cfg.gmode === 'zombie' || this.cfg.gmode === 'tag' || this.cfg.gmode === 'predator') && !this.isClient && !(this.cfg.roles && this.cfg.roles[0] && this.cfg.roles[0].id)) {
       const hunters = this.players.filter((p) => p.role === 'hunter');
       const zero = hunters.find((p) => p === this.me) || hunters[Math.floor(Math.random() * hunters.length)] || this.players[1] || this.players[0];
       this.players.forEach((p) => { p.role = p === zero ? 'hunter' : 'hider'; });
@@ -283,7 +285,7 @@ export class Game {
       }
     }
     // следы при беге
-    if (p.role === 'hider' && p.running && this.t >= p.ghostUntil && this.phase() !== 'end') {
+    if (p.role === 'hider' && p.running && this.t >= p.ghostUntil && !(p === this.me && this.ch.stealth) && this.phase() !== 'end') {
       if (!p.lastPrint || Math.hypot(x - p.lastPrint.x, y - p.lastPrint.y) >= 12) {
         const a = Math.atan2(x - p.x, y - p.y) * 180 / Math.PI;
         this.addPrint({ x, y, a, owner: p.id });
@@ -326,6 +328,7 @@ export class Game {
       if (total < 0) return;
     }
     // в фоне браузер может вызывать таймер реже — прогоняем пропущенное время шагами по секунде
+    if (this.ch.slowmo && !this.net) total *= 0.5;   // чит: замедление времени (только офлайн)
     while (total > 1 && !this.ended) { this.stepSim(1, false); total -= 1; }
     if (!this.ended) this.stepSim(total, true);
   }
@@ -359,10 +362,12 @@ export class Game {
     for (const p of this.players) if (p.bot && p.sim) this.updateStamina(p, dt);
     if (this.net) this.netStep(dt);
     this.modesLocal(dt);
+    this.announceTick();
     if (ph !== 'end') this.checkZone(dt);   // стрелка к зоне — и во время пряток
 
     if (ph === 'hunt') {
       if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); this.modesStep(dt); if (this.ended) return; }
+      if (this.ch.autocatch && me.role === 'hunter' && !this.isClient) for (const h of this.hiders()) if (!h.remote && h !== me && dist(h, me) < 30) this.catchPlayer(me, h);
       if (!this.shrinkWarned && this.t > this.cfg.hideSec + 5) { this.shrinkWarned = true; this.alert('green', t('zoneShrink'), 'target'); }
       if (!this.isClient && this.hiders().length === 0) { this.finish('hunters'); return; }
     }
@@ -427,6 +432,18 @@ export class Game {
       me.outDist = this.distToZone(me);
     } else { me.outSince = null; me.outDist = 0; }
   }
+  /** Голосовые объявления (настройка): начало охоты, 5 и 1 минута до конца. */
+  announceTick() {
+    if (!this.cfg.announce || !window.speechSynthesis) return;
+    const ph = this.phase(), left = this.cfg.hideSec + this.cfg.huntSec - this.t;
+    const say = (key, txt) => { if ((this.said = this.said || {})[key]) return; this.said[key] = 1; try { const u = new SpeechSynthesisUtterance(txt); u.lang = this.opts.lang === 'en' ? 'en-US' : 'ru-RU'; speechSynthesis.speak(u); } catch {} };
+    if (ph === 'hide' && this.cfg.hideSec - this.t <= 10 && this.cfg.hideSec - this.t > 0) say('h10', t('sayHunt10'));
+    if (ph === 'hunt') say('hunt', t('sayHunt'));
+    if (ph === 'hunt' && left <= 300 && left > 290) say('m5', t('say5'));
+    if (ph === 'hunt' && left <= 60 && left > 50) say('m1', t('say1'));
+  }
+  speak(txt) { if (!this.cfg.announce || !window.speechSynthesis) return; try { const u = new SpeechSynthesisUtterance(txt); u.lang = this.opts.lang === 'en' ? 'en-US' : 'ru-RU'; speechSynthesis.speak(u); } catch {} }
+
   /** Пауза: только организатор / офлайн. Онлайн у всех сдвигается время старта. */
   togglePause() {
     if (this.isClient || this.ended) return;
@@ -491,9 +508,9 @@ export class Game {
       return;
     }
     // охотник-бот
-    if (ph === 'hide') { p.speed = 0; return; }
+    if (ph === 'hide' || this.t < (p.frozenUntil || 0)) { p.speed = 0; return; }
     p.think -= dt;
-    const seen = this.hiders().map((h) => [h, dist(h, p)]).filter(([h, d]) => d < this.botK().sight || this.t < h.exposedUntil || this.flareShows(h)).sort((a, b) => a[1] - b[1])[0];
+    const seen = this.hiders().filter((h) => !(h === this.me && this.ch.stealth)).map((h) => [h, dist(h, p)]).filter(([h, d]) => d < this.botK().sight || this.t < h.exposedUntil || this.flareShows(h)).sort((a, b) => a[1] - b[1])[0];
     if (seen) { p.target = { x: seen[0].x, y: seen[0].y }; p.chase = true; }
     else if (p.think <= 0 || !p.target) {
       p.think = rnd(3, 6); p.chase = false;
@@ -523,7 +540,7 @@ export class Game {
     }
   }
 
-  freezeRange() { return Math.max(110, this.R * 0.28); }
+  freezeRange() { return Math.max(110, this.R * 0.28) * (this.gmode === 'predator' ? 1.5 : 1); }
   catchRange() { return this.ch.reach ? 250 : this.cfg.mode === 'gps' ? 30 : 18; }
   flareShows(p) { return this.flare && this.flare.shown && this.flare.pos[p.id]; }
 
@@ -545,12 +562,13 @@ export class Game {
       if (miss) { if (h === this.me) this.alert('green', t('revealMissed'), 'shield'); continue; }
       let cx = h.x, cy = h.y;
       if (h.misdirect) { h.misdirect = false; const a = rnd(0, 6.28); cx += Math.cos(a) * 150; cy += Math.sin(a) * 150; }
-      const o = this.randIn(r * 0.75);
-      const c = { id: 'c' + Math.random().toString(36).slice(2, 8), x: cx + o.x, y: cy + o.y, r, t: this.t, owner: h.id };
+      const xr = by === this.me && this.ch.xray;
+      const o = xr ? { x: 0, y: 0 } : this.randIn(r * 0.75);
+      const c = { id: 'c' + Math.random().toString(36).slice(2, 8), x: cx + o.x, y: cy + o.y, r: xr ? 12 : r, t: this.t, owner: h.id };
       this.circles.push(c); made.push(c);
       this.events.push({ k: 'r', t: Math.round(this.t), x: Math.round(cx + o.x), y: Math.round(cy + o.y), r: Math.round(r), p: this.players.indexOf(h) });
       n++;
-      if (h === this.me) { this.alert('red', t('revealedYou'), 'signal'); this.vibrate([200, 80, 200]); }
+      if (h === this.me) { this.alert('red', t('revealedYou'), 'signal'); this.vibrate([200, 80, 200]); this.speak(t('sayRevealed')); }
     }
     if (this.me.role === 'hunter') this.alert('blue', n ? t('revealSent') : t('revealNone'), 'signal');
     if (this.isHost) this.netSend('reveal', { c: made.map((c) => [c.id, Math.round(c.x), Math.round(c.y), Math.round(c.r), c.owner]), rr: this.revealReadyAt });
@@ -577,6 +595,7 @@ export class Game {
 
   catchPlayer(hunter, h, fromNet) {
     if (h.role !== 'hider') return;
+    if (h === this.me) this.hideCode();
     if (this.gmode === 'tag' && hunter.noTagBack && hunter.noTagBack.id === h.id && this.t < hunter.noTagBack.until) return;   // обратно сразу нельзя
     if (this.isHost && !fromNet) this.netSend('caught', { a: hunter.id, b: h.id });
     if (this.gmode === 'tag') { if (hunter.role === 'hunter') this.tagCatch(hunter, h); return; }
@@ -680,7 +699,7 @@ export class Game {
       });
       return;
     }
-    this.me.powerups.splice(i, 1);
+    if (!this.ch.infpw) this.me.powerups.splice(i, 1);
     this.stats.powers++;
     if (this.isClient && id === 'flare') { this.netSend('power', { id }); this.renderHud(true); return; }
     this.applyPower(this.me, id);
@@ -917,7 +936,7 @@ export class Game {
           <button class="hb" data-a="me" aria-label="me">${I.locate}</button>
           <button class="hb" data-a="help" aria-label="help">${I.help}</button>
           <div class="sep"></div>
-          <div class="tm" data-a="secret"><div class="k" id="gK"></div><div class="v" id="gV"></div></div>
+          <div class="tm" data-a="secret" data-lp="cheats"><div class="k" id="gK"></div><div class="v" id="gV"></div></div>
           <div class="sep"></div>
           <div class="tm ms" id="msBox"><div class="k">${I.diamond.replace('<svg', '<svg width="12" height="12"')}<span id="mK"></span></div><div class="v" id="mV"></div></div>
           <div class="sep"></div>
@@ -928,7 +947,7 @@ export class Game {
           <div class="line-row"><span>${t('alive')}</span><b>${t('hider')}: ${alive} · ${t('hunters')}: ${hcount}</b></div>
           <div class="line-row"><span>${t('zoneR')}</span><b id="zR"></b></div>
           <div class="line-row"><span>${t('moveMode')}</span><div class="seg"><button data-a="gps" class="${this.cfg.mode === 'gps' ? 'on' : ''}">${t('gps')}</button><button data-a="demo" class="${this.cfg.mode === 'demo' ? 'on' : ''}">${t('demo')}</button></div></div>
-          ${this.opts.cheatsUnlocked && this.opts.cheatsUnlocked() ? `<button class="btn block" data-a="cheats" style="color:var(--hunter)">${I.lock}${t('cheats')}</button>` : ''}
+          <div class="row" style="gap:8px;flex-wrap:nowrap"><button class="btn" data-a="cheats" style="flex:1;color:var(--hunter)">${I.lock}${t('cheats')}</button><button class="btn" data-a="sos" style="flex:1;color:#fff;background:#c0392b;border-color:#c0392b">🆘 SOS</button></div>
           ${this.isClient ? '' : `<button class="btn block" data-a="pause">${this.paused ? '▶ ' + t('resume') : '⏸ ' + t('pause')}</button>`}
           <button class="btn danger block" data-a="leave">${I.leave}${t('leaveGame')}</button>
         </div>` : ''}
@@ -939,6 +958,7 @@ export class Game {
         ${this.alerts.map((a) => `<div class="banner ${a.kind}"><div class="bi">${I[a.icon] || I.signal}</div><div>${esc(a.text)}</div></div>`).join('')}
       `;
       top.querySelectorAll('[data-a]').forEach((b) => b.onclick = () => this.hudAction(b.dataset.a));
+      top.querySelectorAll('[data-lp]').forEach((b) => { let tm; b.onpointerdown = () => { tm = setTimeout(() => { this.secTaps = 0; this.opts.openCheats(); }, 1200); }; b.onpointerup = b.onpointerleave = () => clearTimeout(tm); });
     }
     top.querySelector('#gK').textContent = gameK;
     top.querySelector('#gV').textContent = gameV;
@@ -1010,6 +1030,7 @@ export class Game {
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
       case 'heading': this.askHeading(); break;
       case 'pause': this.togglePause(); break;
+      case 'sos': this.opts.sos && this.opts.sos(); break;
       case 'chat': this.opts.openChat && this.opts.openChat(); break;
       case 'vmic': this.opts.voiceMute && this.opts.voiceMute(); break;
       case 'secret': {
@@ -1041,7 +1062,7 @@ export class Game {
       box.querySelectorAll('[data-id]').forEach((b) => b.onclick = () => {
         const h = this.players.find((p) => p.id === b.dataset.id);
         close();
-        if (h && h.role === 'hider') { if (this.isClient) this.netSend('req', { k: 'catch', h: h.id, r: !!this.ch.reach }); else this.catchPlayer(this.me, h); }
+        if (h && h.role === 'hider') this.requestCatch(h);
       });
     });
   }
@@ -1056,6 +1077,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin, seekMixin, modesMixin);
+Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin);
 
 export { fmt };

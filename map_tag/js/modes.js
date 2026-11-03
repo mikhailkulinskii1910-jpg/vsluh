@@ -24,6 +24,8 @@ export const modesMixin = {
     this.vipId = this.gmode === 'vip' ? ((this.players.find((p) => p.role === 'hider') || {}).id || null) : null;
     this.fuse = Math.round(Math.max(90, Math.min(180, (cfg.huntSec || 1200) * 0.15)));
     this.fuseEnd = this.gmode === 'bomb' ? (cfg.hideSec || 0) + this.fuse : Infinity;
+    if (this.gmode === 'predator') { this.revealCd = Math.round(this.revealCd * 0.5); this.freezeCd = Math.round(this.freezeCd * 0.6); }
+    this.royaleStage = 0;
     this.hill = this.gmode === 'hill' ? (pts.hill ? this.xy(pts.hill.lat, pts.hill.lng) : { x: 0, y: 0 }) : null;
     this.hillProg = 0; this.hillNeed = Math.round(Math.min(180, Math.max(60, (cfg.huntSec || 1200) * 0.2)));
     this.treasures = [];
@@ -128,6 +130,22 @@ export const modesMixin = {
     this.fuseEnd = this.t + this.fuse;
     this.alert(this.me.role === 'hunter' ? 'green' : 'yellow', t('bombReset', { s: this.fuse }), 'bolt');
   },
+  /** Королевская битва: зона сжимается рывками 100% → 75% → 50% → 30% (переход 20 с). */
+  royaleK() {
+    const hunt = this.cfg.huntSec, el = Math.max(0, this.t - this.cfg.hideSec), K = [1, 0.75, 0.5, 0.3];
+    const stageLen = hunt / 4, i = Math.min(3, Math.floor(el / stageLen)), into = el - i * stageLen;
+    if (i === 0) return 1;
+    const f = Math.min(1, into / 20);
+    return K[i - 1] + (K[i] - K[i - 1]) * f;
+  },
+  royaleLocal() {
+    if (this.gmode !== 'royale' || this.phase() !== 'hunt') return;
+    const stageLen = this.cfg.huntSec / 4, el = this.t - this.cfg.hideSec, i = Math.min(3, Math.floor(el / stageLen));
+    if (i > this.royaleStage) { this.royaleStage = i; this.alert('red', t('royaleNow', { p: [100, 75, 50, 30][i] }), 'target'); this.vibrate([200, 100, 200]); }
+    const next = (i + 1) * stageLen - el;
+    if (i < 3 && next <= 30 && next > 29 && this.royaleWarned !== i) { this.royaleWarned = i; this.alert('yellow', t('royaleSoon', { p: [75, 50, 30][i] }), 'target'); }
+  },
+
   /** Кто побеждает, когда вышло время. */
   timeoutWinner() {
     if (this.gmode === 'tag') return 'hiders';
@@ -170,6 +188,7 @@ export const modesMixin = {
   // ---------- для каждого телефона ----------
   modesLocal(dt) {
     const me = this.me;
+    this.royaleLocal();
     if (this.nogo.length && this.phase() !== 'end') {
       const inside = this.inNogo(me);
       if (inside) {
@@ -265,6 +284,7 @@ export const modesMixin = {
     if (this.gmode === 'sardines') return { k: t('sardCell'), v: String(this.hunters().length) };
     if (this.gmode === 'hill') return { k: t('hillCell'), v: `${Math.floor(this.hillProg)}/${this.hillNeed}` };
     if (this.gmode === 'bomb' && this.phase() === 'hunt') { const s = Math.max(0, Math.ceil(this.fuseEnd - this.t)); return { k: '💣 ' + t('bombCell'), v: String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') }; }
+    if (this.gmode === 'royale' && this.phase() === 'hunt') { const sl = this.cfg.huntSec / 4, el = this.t - this.cfg.hideSec, i = Math.min(3, Math.floor(el / sl)); if (i < 3) { const s = Math.max(0, Math.ceil((i + 1) * sl - el)); return { k: t('royaleCell'), v: String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0') }; } return { k: t('royaleCell'), v: '30%' }; }
     if (this.gmode === 'tag') { const it = this.hunters()[0]; return { k: '🏷 ' + t('tagCell'), v: it ? (it === this.me ? t('you') : it.name).slice(0, 8) : '—' }; }
     if (this.gmode === 'vip') return { k: '👑 VIP', v: this.players.some((p) => p.id === this.vipId && p.role === 'hider') ? t('vipAlive') : '✕' };
     return null;

@@ -45,6 +45,11 @@ export const CHEATS = [
   ['radar', 'Точный радар', 'Exact radar', 'Компас и детектор включены всегда, показывают точные метры и обновляются без задержки.', 'Compass and detector always on, with exact metres and no delay.', 'scan'],
   ['spoof', 'Подмена гео', 'Fake location', 'В режиме GPS настоящее гео игнорируется — вы ходите касаниями карты.', 'In GPS mode your real location is ignored — you walk by tapping the map.', 'locate'],
   ['teleport', 'Телепорт', 'Teleport', 'Вместе с подменой гео касание карты мгновенно переносит вас.', 'With fake location, a map tap moves you instantly.', 'swap'],
+  ['stealth', 'Стелс', 'Stealth', 'Боты вас не замечают, а ваш бег не оставляет следов.', 'Bots never notice you and your running leaves no footprints.', 'ghost'],
+  ['xray', 'Рентген', 'X-ray', 'Ваше «Раскрытие» ставит маленький круг прямо на прячущегося.', 'Your Reveal puts a tiny circle right on the Hider.', 'crosshair'],
+  ['infpw', 'Бесконечные бонусы', 'Endless power-ups', 'Бонусы не тратятся при использовании.', 'Power-ups are not used up.', 'sparkle'],
+  ['autocatch', 'Автопоимка', 'Auto-catch', 'Охотником вы сами ловите ботов в 30 м.', 'As a Hunter you auto-catch bots within 30 m.', 'target'],
+  ['slowmo', 'Замедление', 'Slow motion', 'Время идёт вдвое медленнее (только офлайн).', 'Time runs at half speed (offline only).', 'clock'],
   ['skiphide', 'Без пряток', 'Skip hiding', 'Охота начинается сразу.', 'The hunt starts right away.', 'play'],
 ];
 
@@ -143,6 +148,14 @@ export function openGameCheats(modal, S, save, game) {
           <button class="btn" data-act="cd" style="flex:1;padding:0 8px;font-size:14px;gap:6px">${I.clock}${ru() ? 'Перезарядить' : 'Recharge'}</button>
           <button class="btn" data-act="pw" style="flex:1;padding:0 8px;font-size:14px;gap:6px">${I.sparkle}${ru() ? 'Бонусы' : 'Power-ups'}</button>
         </div>
+        <div class="row" style="gap:6px;margin:-6px 0 12px;flex-wrap:nowrap">
+          <button class="btn" data-act="freezebots" style="flex:1;padding:0 6px;font-size:13px">❄ ${ru() ? 'Боты-охотники замрут' : 'Freeze bot hunters'}</button>
+          <button class="btn" data-act="tpnear" style="flex:1;padding:0 6px;font-size:13px">🎯 ${ru() ? 'К ближайшему' : 'To nearest'}</button>
+        </div>
+        ${game.isClient ? '' : `<div class="row" style="gap:6px;margin:-6px 0 12px;flex-wrap:nowrap">
+          <button class="btn" data-act="plus60" style="flex:1;padding:0 6px;font-size:13px">⏱ +60 ${ru() ? 'с к игре' : 's to game'}</button>
+          <button class="btn" data-act="winnow" style="flex:1;padding:0 6px;font-size:13px">🏆 ${ru() ? 'Победить сейчас' : 'Win now'}</button>
+        </div>`}
         <h3 style="margin:4px 0 8px">${ru() ? 'Розыгрыши' : 'Pranks'}</h3>
         ${prankBlock(game.players.filter((p) => p.remote).map((p) => ({ id: p.id, name: p.name })))}
         <h3 style="margin:14px 0 8px">${ru() ? 'Читы' : 'Cheats'}</h3>
@@ -156,6 +169,10 @@ export function openGameCheats(modal, S, save, game) {
         if (a === 'center') { game.me.x = 0; game.me.y = 0; game.me.target = null; game.render(); }
         if (a === 'cd') { game.revealReadyAt = game.t; game.freezeReadyAt = game.t; }
         if (a === 'pw') { for (const id of game.enabledPw) game.me.powerups.push(id); }
+        if (a === 'freezebots') game.players.filter((p) => p.bot && p.role === 'hunter').forEach((p) => { p.frozenUntil = game.t + 30; p.target = null; });
+        if (a === 'tpnear') { const others = game.players.filter((p) => p !== game.me && p.role !== game.me.role && p.role !== 'spectator'); const n = others.sort((x, y) => Math.hypot(x.x - game.me.x, x.y - game.me.y) - Math.hypot(y.x - game.me.x, y.y - game.me.y))[0]; if (n) { game.me.x = n.x + 15; game.me.y = n.y; game.me.target = null; } }
+        if (a === 'plus60') { game.cfg.huntSec += 60; game.netSend('ext', { huntSec: game.cfg.huntSec }); }
+        if (a === 'winnow') { close(); game.finish(game.me.role === 'hunter' ? 'hunters' : 'hiders'); return; }
         game.renderHud(true); close();
       });
     };

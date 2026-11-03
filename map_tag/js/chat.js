@@ -30,11 +30,12 @@ export function chatHandle(d, from) {
   const g = ctx.inGame();
   if (m.kind === 'voice' && CHAT.autoplay) playVoice(m);
   if (m.kind === 'fx') playFx(m.fx);
+  if (m.kind === 'sos') { [0, 900, 1800].forEach((d) => setTimeout(() => playFx('horn'), d)); try { navigator.vibrate && navigator.vibrate([500, 200, 500, 200, 500]); } catch {} if (g && g.showPing && m.x != null) g.showPing(m.x, m.y, '🆘 ' + m.name); }
   if (m.kind === 'loc' && g && g.showPing) g.showPing(m.x, m.y, m.here ? `${m.name}: ${t('pingHere')}` : m.name);
   if (CHAT.open) CHAT.open.redraw();
   else {
     CHAT.unread++;
-    const txt = m.kind === 'voice' ? `🎙 ${t('chatVoice')}` : m.kind === 'loc' ? `📍 ${t('chatLoc')}` : m.kind === 'fx' ? FX_ICON[m.fx] + ' ' + t('fx_' + m.fx) : m.text;
+    const txt = m.kind === 'sos' ? `🆘 SOS — ${t('sosMsg')}` : m.kind === 'voice' ? `🎙 ${t('chatVoice')}` : m.kind === 'loc' ? `📍 ${t('chatLoc')}` : m.kind === 'fx' ? FX_ICON[m.fx] + ' ' + t('fx_' + m.fx) : m.text;
     const label = `${m.ch === 'team' ? '[' + t('chatTeam') + '] ' : ''}${m.name}: ${txt}`;
     if (g) { g.alert('blue', label, 'mail'); g.renderHud(true); } else { ctx.toast(label); beep('blue'); }
     ctx.onUnread && ctx.onUnread();
@@ -50,6 +51,7 @@ function post(data) {
 }
 const FX_ICON = { horn: '📯', quack: '🦆', drum: '🥁', boo: '👻', clap: '👏', fart: '💨' };
 export const sendFx = (fx) => { playFx(fx); post({ kind: 'fx', fx }); };
+export const sendSos = (x, y, link) => post({ kind: 'sos', x, y, link, ch: 'all' });
 export const sendText = (text) => { text = String(text).trim().slice(0, 300); if (text) post({ kind: 'text', text }); };
 
 // ---------- рация ----------
@@ -121,7 +123,7 @@ export function openChat(modal) {
         ${voiceBar(me)}
         <div class="seg" style="display:flex;margin-bottom:10px"><button data-ch="all" class="${CHAT.ch === 'all' ? 'on' : ''}" style="flex:1">${t('chatAll')}</button><button data-ch="team" class="${CHAT.ch === 'team' ? 'on' : ''}" style="flex:1">${t('chatTeam')}: ${t(me.role === 'hunter' ? 'huntersPl' : 'hidersPl')}</button></div>
         <div class="chat-list" id="chList">${list.length ? list.map((m) => `<div class="msg ${m.from === me.id ? 'mine' : ''}"><div class="who">${esc(m.name)} · ${fmtT(m.at)}</div>
-          ${m.kind === 'voice' ? `<button class="vmsg" data-play="${m.id}">${I.play}<span>${t('chatVoice')} · ${m.dur}${t('sec')}</span></button>` : m.kind === 'loc' ? `<div class="bub">📍 ${t('chatLoc')}</div>` : m.kind === 'fx' ? `<div class="bub" style="font-size:22px">${FX_ICON[m.fx] || '🔊'} <span style="font-size:14px">${t('fx_' + m.fx)}</span></div>` : `<div class="bub">${esc(m.text)}</div>`}</div>`).join('') : `<div class="empty" style="padding:20px">${t('chatEmpty')}</div>`}</div>
+          ${m.kind === 'voice' ? `<button class="vmsg" data-play="${m.id}">${I.play}<span>${t('chatVoice')} · ${m.dur}${t('sec')}</span></button>` : m.kind === 'loc' ? `<div class="bub">📍 ${t('chatLoc')}</div>` : m.kind === 'sos' ? `<div class="bub sos">🆘 SOS — ${t('sosMsg')}${m.link ? `<br><a href="${esc(m.link)}" target="_blank" rel="noopener">${t('sosMap')}</a>` : ''}</div>` : m.kind === 'fx' ? `<div class="bub" style="font-size:22px">${FX_ICON[m.fx] || '🔊'} <span style="font-size:14px">${t('fx_' + m.fx)}</span></div>` : `<div class="bub">${esc(m.text)}</div>`}</div>`).join('') : `<div class="empty" style="padding:20px">${t('chatEmpty')}</div>`}</div>
         <div class="chips quick">${(QUICK[getLang()] || QUICK.ru).map((q) => `<button class="chip" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
         <div class="fxrow">${FX.map((f) => `<button class="fxb" data-fx="${f}" title="${t('fx_' + f)}">${FX_ICON[f]}</button>`).join('')}</div>
         <div class="chat-in"><input class="input" id="chText" maxlength="300" placeholder="${t('chatPh')}" enterkeyhint="send"><button class="btn primary" id="chSend">${I.arrowR}</button></div>

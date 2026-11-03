@@ -529,3 +529,12 @@ html.dark-map:not([data-theme]) .leaflet-tile-pane { filter: invert(1) hue-rotat
 html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .out-banner #outArrow { font-size: 20px; transition: transform .4s; }
 .gmodes { grid-template-columns: repeat(2, 1fr); }
+.code-cover { position: absolute; inset: 0; z-index: 1800; background: rgba(10,13,20,.88); display: grid; place-items: center; padding: 20px; animation: fade .2s; }
+.code-card { text-align: center; background: var(--card); border: 2px solid var(--hunter); border-radius: 28px; padding: 24px 20px; max-width: 360px; width: 100%; }
+.code-card .k { font-size: 20px; font-weight: 700; color: var(--hunter); }
+.code-card .digits { display: flex; justify-content: center; gap: 10px; margin: 18px 0 10px; }
+.code-card .digits span { width: 62px; height: 78px; border-radius: 16px; background: var(--bg2); border: 2px solid var(--line); display: grid; place-items: center; font-size: 46px; font-weight: 800; font-family: var(--font-num); color: var(--text); }
+.code-card .s { color: var(--muted); }
+.code-card .tmr { color: var(--gold); margin-top: 8px; font-weight: 700; }
+.msg .bub.sos { background: #c0392b; color: #fff; }
+.msg .bub.sos a { color: #fff; text-decoration: underline; }

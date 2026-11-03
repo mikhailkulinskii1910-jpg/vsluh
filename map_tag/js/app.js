@@ -9,10 +9,10 @@ import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
 import { renderMapEditor, drawMapExtras, mapPoints } from './mapeditor.js';
-import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing } from './chat.js';
+import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.1';
+const VERSION = '2.2';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -181,6 +181,7 @@ function advancedBlock(lb, c) {
     <div class="row" style="flex-wrap:nowrap;margin-top:8px"><input type="range" class="range" data-av="${k}" min="${min}" max="${max}" step="${step}" value="${val}" style="flex:1"><input class="input adv-in" data-ai="${k}" value="${unit === 'time' ? txt : val}" inputmode="${unit === 'time' ? 'text' : 'numeric'}">${unit && unit !== 'time' ? `<span style="color:var(--muted)">${unit}</span>` : ''}</div>
     ${hint ? `<div class="adv-hint">${hint}</div>` : ''}</div>`;
   return `<label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('shrinkArea')}</b><br><span class="adv-hint">${t('shrinkAreaS')}</span></span><input type="checkbox" id="advShrink" ${shrink ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
+    <label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('catchCode')}</b><br><span class="adv-hint">${t('catchCodeS')}</span></span><input type="checkbox" id="advCode" ${lb.catchCode !== false ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
     <label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('transportOk')}</b><br><span class="adv-hint">${t('transportOkS')}</span></span><input type="checkbox" id="advTransport" ${lb.transport !== false ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
     <div class="adv-row"><b>${t('botLevel')}</b><div class="seg" style="display:flex;margin-top:8px">${['easy', 'normal', 'hard'].map((v) => `<button data-bl="${v}" class="${(lb.botLevel || 'normal') === v ? 'on' : ''}" style="flex:1">${t('bl_' + v)}</button>`).join('')}</div></div>
     ${row('radius', t('areaRadius'), c.radius, 100, 2000, 10, c.radius + ' ' + t('m'), t('m'))}
@@ -202,6 +203,7 @@ function bindAdvanced(el, lb, rerender) {
     set(k, Math.max(lim[0], Math.min(lim[1], v))); rerender();
   });
   el.querySelectorAll('[data-bl]').forEach((b) => b.onclick = () => { lb.botLevel = b.dataset.bl; rerender(); });
+  const cc = el.querySelector('#advCode'); if (cc) cc.onchange = () => { lb.catchCode = cc.checked; save(); };
   const tr = el.querySelector('#advTransport'); if (tr) tr.onchange = () => { lb.transport = tr.checked; save(); };
   const sh = el.querySelector('#advShrink'); if (sh) sh.onchange = () => { set('shrink', sh.checked); rerender(); };
   const rs = el.querySelector('#advReset'); if (rs) rs.onclick = () => { lb.adv = {}; rerender(); };
@@ -441,7 +443,7 @@ const SCREENS = {
 
     const step1 = `
       <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button></div>
-      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -630,7 +632,7 @@ const SCREENS = {
         bots: lb.players.filter((p) => p.bot).length, hunters: lb.players.filter((p) => p.role === 'hunter').length,
         roles: lb.players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (lb.players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos,
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos, catchCode: lb.catchCode !== false,
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
       };
       base.avatar = S.avatar || null;
@@ -748,12 +750,21 @@ const SCREENS = {
   },
 
   game(el, cfg) {
-    game = new Game({ ...cfg, eco: !!S.eco }, {
+    game = new Game({ ...cfg, eco: !!S.eco, announce: S.announce !== false }, {
       lang: getLang(), modal, toast, confirm: confirmBox,
       openRules: () => openRules(),
       cheatsUnlocked: () => !!S.cheatsUnlocked,
       openChat: () => openChat(modal),
       ping: (x, y) => sendPing(x, y),
+      sos: () => confirmBox(t('sosConfirm'), async () => {
+        const g = game; if (!g) return;
+        const [lat, lng] = g.ll(g.me), link = `https://maps.google.com/?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+        const txt = `🆘 SOS Map Tag — ${S.name}: ${t('sosMsg')} ${link}`;
+        if (NET && g.net) { sendSos(Math.round(g.me.x), Math.round(g.me.y), link); toast(t('sosSent')); }
+        if (window.MapTagNative) return window.MapTagNative.share(txt);
+        try { if (navigator.share) return await navigator.share({ title: 'SOS', text: txt }); } catch (e) { if (e && e.name === 'AbortError') return; }
+        try { await navigator.clipboard.writeText(txt); toast(t('copied')); } catch { toast(txt); }
+      }),
       voice: () => ({ on: VOICE.on, mic: VOICE.mic, talk: VOICE.speaking.size > 0 }),
       voiceMute: () => voiceMute(),
       chatUnread: () => CHAT.unread,
@@ -967,6 +978,7 @@ function openSettings() {
         <div class="lang"><button class="opt ${getLang() === 'ru' ? 'on' : ''}" data-l="ru">${FLAG_RU}<span class="t">Русский</span></button><button class="opt ${getLang() === 'en' ? 'on' : ''}" data-l="en">${FLAG_EN}<span class="t">English</span></button></div>
         <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
         ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
+        <label class="set-row"><div><div class="tt">${t('announce')}</div><div class="ss">${t('announceS')}</div></div><input type="checkbox" id="ann" ${S.announce !== false ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('darkMap')}</div><div class="ss">${t('darkMapS')}</div></div><input type="checkbox" id="dkm" ${S.darkMap ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('bigText')}</div><div class="ss">${t('bigTextS')}</div></div><input type="checkbox" id="bigT" ${S.bigText ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('eco')}</div><div class="ss">${t('ecoS')}</div></div><input type="checkbox" id="eco" ${S.eco ? 'checked' : ''}></label>
@@ -981,6 +993,7 @@ function openSettings() {
       box.querySelectorAll('[data-l]').forEach((b) => b.onclick = () => { setLang(b.dataset.l); draw(); });
       themePicker(box.querySelector('#thp'));
       box.querySelector('#dev').onchange = (e) => { S.dev = e.target.checked; save(); };
+      box.querySelector('#ann').onchange = (e) => { S.announce = e.target.checked; save(); };
       box.querySelector('#dkm').onchange = (e) => { S.darkMap = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#bigT').onchange = (e) => { S.bigText = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#eco').onchange = (e) => { S.eco = e.target.checked; save(); applyPrefs(); };
