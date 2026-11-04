@@ -1,0 +1,15 @@
+{
+  "name": "velo-karta-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Сервер лобби, гонок и погонь для «Велокарты» (раздаёт папку ../ и WebSocket /ws)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/game.test.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
