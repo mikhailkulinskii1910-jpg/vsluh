@@ -65,6 +65,9 @@ export function drawMapExtras(map, lb) {
     L.marker([c.lat, c.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 12], html: `<div class="mk-zone">${ic}</div>` }) }).addTo(g);
   }
   (m.objs || []).forEach((o) => OBJ[o.k] && L.marker([o.lat, o.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], html: `<div class="mk-obj k-${o.k}">${OBJ[o.k].ic}</div>` }) }).addTo(g));
+  // зоны-линии: одна грань, цвет зоны
+  const LCOL = { nogo: '#d63a4a', barriers: '#8b6b4a', ...Object.fromEntries(Object.entries(ZST).map(([k, v]) => [k, v[0]])) };
+  for (const [k, col] of Object.entries(LCOL)) for (const ln of m[k + 'L'] || []) L.polyline(ln.map((q) => [q.lat, q.lng]), { color: col, weight: 5, opacity: 0.9, interactive: false }).addTo(g);
   for (const z of m.nogo || []) L.polygon(z.map((q) => [q.lat, q.lng]), { color: '#d63a4a', weight: 2, fillColor: '#d63a4a', fillOpacity: 0.22, dashArray: '4 6', interactive: false }).addTo(g);
   const pin = (q, html) => L.marker([q.lat, q.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 12], html }) }).addTo(g);
   (m.supply || []).forEach((q) => pin(q, '<div class="mk-dia" style="transform:rotate(45deg) scale(.8)"></div>'));
@@ -85,7 +88,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   const closeDraft = (quiet, closed) => {
     const k = POLY[draftTool];
     if (k && closed && draft.length >= 3) { (lb.map[k] = lb.map[k] || []).push(draft); if (!quiet) toast(t('edClosed', { n: t('ed_' + draftTool) })); }
-    else if (k && draft.length >= 2) { (lb.map[k] = lb.map[k] || []).push(lineBand(draft, draftTool === 'barrier' ? 2 : 6)); if (!quiet) toast(t('edLined', { n: t('ed_' + draftTool) })); }
+    else if (k && draft.length >= 2) { (lb.map[k + 'L'] = lb.map[k + 'L'] || []).push(draft); if (!quiet) toast(t('edLined', { n: t('ed_' + draftTool) })); }
     draft = []; draftTool = null;
   };
   const center = lb.center || (lb.poly[0]) || { lat: 55.7520, lng: 37.6175 };
@@ -101,7 +104,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     </div>
     <div class="hud-bottom"><div class="hud-more" id="edPanel"></div></div></div>`;
 
-  const map = L.map(el.querySelector('#map'), { zoomControl: false, zoomSnap: 0.25 }).setView([center.lat, center.lng], 16);
+  const map = L.map(el.querySelector('#map'), { preferCanvas: true, zoomControl: false, zoomSnap: 0.25 }).setView([center.lat, center.lng], 16);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   map.attributionControl.setPrefix(false);
   const layer = L.layerGroup().addTo(map);
@@ -153,6 +156,14 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (lb.map.jail && near(lb.map.jail)) return () => { lb.map.jail = null; };
     if (lb.map.hill && near(lb.map.hill)) return () => { lb.map.hill = null; };
     { const i = (lb.map.objs || []).findIndex(near); if (i >= 0) return () => lb.map.objs.splice(i, 1); }
+    for (const key of Object.values(POLY)) {
+      const LL = lb.map[key + 'L'] || [];
+      for (let i = 0; i < LL.length; i++) for (let j = 1; j < LL[i].length; j++) {
+        const a = map.latLngToContainerPoint([LL[i][j - 1].lat, LL[i][j - 1].lng]), b = map.latLngToContainerPoint([LL[i][j].lat, LL[i][j].lng]);
+        const dx = b.x - a.x, dy = b.y - a.y, u = Math.max(0, Math.min(1, ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+        if (Math.hypot(a.x + u * dx - pt.x, a.y + u * dy - pt.y) < 22) return () => LL.splice(i, 1);
+      }
+    }
     for (const key of ['barriers', 'walls', 'safe', 'kill', 'grave', ...ZX_KINDS]) for (let i = 0; i < (lb.map[key] || []).length; i++) { const poly = L.polygon(lb.map[key][i].map((q) => [q.lat, q.lng])); if (poly.getBounds().contains(latlng)) return () => lb.map[key].splice(i, 1); }
     for (let i = 0; i < lb.map.nogo.length; i++) {
       const poly = L.polygon(lb.map.nogo[i].map((q) => [q.lat, q.lng]));

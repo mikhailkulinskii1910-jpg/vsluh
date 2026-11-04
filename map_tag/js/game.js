@@ -181,7 +181,7 @@ export class Game {
   mount(root) {
     this.root = root;
     root.innerHTML = `<div id="game"><div id="map"></div><div class="hud-top" id="hudTop"></div><div class="hud-bottom" id="hudBot"></div><div id="cover"></div></div>`;
-    const map = this.map = L.map(root.querySelector('#map'), { zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView(this.ll({ x: 0, y: 0 }), this.R > 450 ? 15 : 16);
+    const map = this.map = L.map(root.querySelector('#map'), { preferCanvas: true, zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView(this.ll({ x: 0, y: 0 }), this.R > 450 ? 15 : 16);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
     map.attributionControl.setPrefix(false);
     const zst = { color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false };

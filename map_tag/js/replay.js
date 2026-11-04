@@ -43,7 +43,7 @@ export function renderReplay(el, r, { onBack }) {
       </div>
     </div></div>`;
 
-  const map = L.map(el.querySelector('#map'), { zoomControl: false, zoomSnap: 0.25 }).setView([r.center.lat, r.center.lng], 15);
+  const map = L.map(el.querySelector('#map'), { preferCanvas: true, zoomControl: false, zoomSnap: 0.25 }).setView([r.center.lat, r.center.lng], 15);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   map.attributionControl.setPrefix(false);
   const zst = { color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false };

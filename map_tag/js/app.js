@@ -8,12 +8,12 @@ import { checkPass, renderCheats, openWheel, openGameCheats, applyPrank } from '
 import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
-import { renderMapEditor, drawMapExtras, mapPoints, buildingAt } from './mapeditor.js';
+import { renderMapEditor, drawMapExtras, mapPoints, buildingAt, lineBand } from './mapeditor.js';
 import { OBJ, OBJ_KINDS, OUT_LIMIT, ZX, ZX_KINDS } from './world.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.8.2';
+const VERSION = '2.8.3';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -421,7 +421,7 @@ const SCREENS = {
     el.querySelector('#cLeave').onclick = () => { if (NET) NET.room.send('bye', {}); setTimeout(netClose, 300); go('home'); };
     el.querySelectorAll('[data-cm]').forEach((b) => b.onclick = () => { S.clientMode = b.dataset.cm; save(); const y = window.scrollY; go('clientLobby'); window.scrollTo(0, y); });
     if (st.center) {
-      const m = L.map(el.querySelector('#cmap'), { zoomControl: false, dragging: true }).setView([st.center.lat, st.center.lng], 15);
+      const m = L.map(el.querySelector('#cmap'), { preferCanvas: true, zoomControl: false, dragging: true }).setView([st.center.lat, st.center.lng], 15);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
       m.attributionControl.setPrefix(false);
       const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
@@ -586,7 +586,7 @@ const SCREENS = {
 
     // --- карта ---
     const center = lb.center || { lat: 55.7520, lng: 37.6175 };
-    const pm = L.map(el.querySelector('#pmap'), { zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView([center.lat, center.lng], 15);
+    const pm = L.map(el.querySelector('#pmap'), { preferCanvas: true, zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView([center.lat, center.lng], 15);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(pm);
     pm.attributionControl.setPrefix(false);
     const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
@@ -613,6 +613,7 @@ const SCREENS = {
       pm.on('click', (e) => setC(e.latlng.lat, e.latlng.lng));
     }
     setTimeout(() => { pm.invalidateSize(); fit(); }, 60);
+    setTimeout(() => pm.invalidateSize(), 400);   // после анимации экрана — иначе серые квадраты вместо карты
     el.querySelector('#pFit').onclick = fit;
     el.querySelector('#mapEd').onclick = () => go('mapEditor');
     drawMapExtras(pm, lb);
@@ -666,10 +667,10 @@ const SCREENS = {
         roles: players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
         compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', outLimit: lb.outLimit != null ? lb.outLimit : 30, chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '',
-        zonesX: Object.fromEntries(ZX_KINDS.map((k) => [k, zoneArr((lb.map || {})[k])])),
-        safeZones: zoneArr((lb.map || {}).safe), killZones: zoneArr((lb.map || {}).kill), graveZones: zoneArr((lb.map || {}).grave),
-        objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || [])].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
-        gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
+        zonesX: Object.fromEntries(ZX_KINDS.map((k) => [k, zoneArr(zl(lb, k))])),
+        safeZones: zoneArr(zl(lb, 'safe')), killZones: zoneArr(zl(lb, 'kill')), graveZones: zoneArr(zl(lb, 'grave')),
+        objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || []), ...lineZones(lb, 'barriers', 1.5)].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
+        gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: zl(lb, 'nogo'), points: mapPoints(lb),
       };
       base.avatar = S.avatar || null;
       if (!online) return go('game', { ...base, roles: players.filter((p) => !p.remote).map((p) => ({ name: p.bot ? p.name : S.name, role: p.role, bot: !!p.bot })), cheats: S.cheatsUnlocked ? { ...(S.cheats || {}) } : {}, mode: lb.mode, name: S.name });
@@ -1004,6 +1005,11 @@ function endGame(res, cfg) {
 function openReplay(r) { if (r) go('replay', r); }
 
 // ---------- модальные окна ----------
+/** Зоны-линии из редактора → узкие полосы для игры (w — полуширина, м). */
+function lineZones(lb, key, w) { return (((lb.map || {})[key + 'L']) || []).filter((l) => l.length >= 2).map((l) => lineBand(l, w)); }
+/** Многоугольники зоны + её линии. */
+function zl(lb, key) { return [...(((lb.map || {})[key]) || []), ...lineZones(lb, key, 4)]; }
+
 /** Многоугольники зон из редактора → [[lat, lng], …]. */
 function zoneArr(a) { return (a || []).filter((w) => w && w.length >= 3).map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])); }
 
