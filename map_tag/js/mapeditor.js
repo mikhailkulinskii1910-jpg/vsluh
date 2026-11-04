@@ -134,7 +134,10 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   function panel() {
     const p = el.querySelector('#edPanel');
     p.classList.toggle('mini', !!S._edMini);
-    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}${POLY[tool] ? `<div style="color:var(--muted);font-size:13px;margin-top:4px">${t('edCloseTip')}</div>` : ''}</div>${POLY[tool] && draft.length >= 2 ? `<button class="btn" data-ed="lineDraft" style="flex:none;min-height:38px;padding:0 10px">〰 ${t('edLine')}</button>` : ''}${POLY[tool] && draft.length ? `<button class="icon-btn" data-ed="undoDraft" aria-label="undo" style="width:38px;height:38px;flex:none;font-size:20px">↶</button>` : ''}${POLY[tool] && draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:none;min-height:38px;padding:0 10px">✓ ${t('edClose')}</button>` : ''}<button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
+    const dr = POLY[tool] && draft.length;
+    p.innerHTML = `<div class="row ed-head"><div class="ed-hint">${dr ? t('edPtsN', { n: draft.length }) : t('edHint_' + tool)}</div><button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
+      ${dr ? `<div class="row ed-draft keep"><button class="btn" data-ed="undoDraft" style="flex:none;min-height:42px;padding:0 12px">↶</button>${draft.length >= 2 ? `<button class="btn" data-ed="lineDraft" style="flex:1;min-height:42px">〰 ${t('edLine')}</button>` : ''}${draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:1;min-height:42px">✓ ${t('edClose')}</button>` : ''}</div>` : ''}
+      ${POLY[tool] ? `<div class="ed-tip">${t('edCloseTip')}</div>` : ''}
       <div style="color:var(--muted);font-size:13px;margin-top:6px">${counts()}</div>
       ${tool === 'zone' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoZone" style="flex:1">${t('undoPt')}</button><button class="btn" data-ed="circle" style="flex:1">${t('edToCircle')}</button></div>` : ''}
       ${tool === 'barrier' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="buildings" style="flex:2">🏢 ${t('edBuildings')}</button><button class="btn" data-ed="clearWalls" style="flex:1">${t('edClearWalls')}</button></div>` : ''}
@@ -181,6 +184,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
       // касание рядом с первой точкой — замкнуть
       if (draft.length >= 3 && map.latLngToContainerPoint([draft[0].lat, draft[0].lng]).distanceTo(map.latLngToContainerPoint(e.latlng)) < 28) { closeDraft(false, true); save(); draw(); return; }
       draftTool = tool; draft.push(q);
+      if (draft.length === 1) S._edMini = true;   // карта свободна, кнопки черновика остаются видны
     }
     else if (tool === 'obj') { (lb.map.objs = lb.map.objs || []).push({ k: objKind, ...q }); }
     else if (tool === 'jail') lb.map.jail = q;

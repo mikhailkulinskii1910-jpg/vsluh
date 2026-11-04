@@ -14,7 +14,7 @@ import { DEFAULT_ROOMS } from './indoor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '3.1';
+const VERSION = '3.1.1';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

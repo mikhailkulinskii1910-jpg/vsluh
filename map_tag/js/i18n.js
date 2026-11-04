@@ -222,6 +222,7 @@ const ru = {
   emoteTitle: 'Эмоция',
   radarScale: 'круг — {m} м', radarCompass: 'по компасу', radarNoCompass: 'север вверху', floorNow: 'этаж {f} от старта', trapPlaced: 'Капкан поставлен под вами 🕸', trapMax: 'Не больше {n} капканов',
   gm_lastman: 'Последний герой', gm_lastmanS: 'пойманные выбывают', gm_stalker: 'Невидимый охотник', gm_stalkerS: 'охотник виден раз в 30 с', stalkPulse: 'Охотник показался на 4 секунды!', elim_caught: 'пойман(а)',
+  edPtsN: 'Точек: {n}',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -441,6 +442,7 @@ const en = {
   emoteTitle: 'Emote',
   radarScale: 'ring — {m} m', radarCompass: 'compass on', radarNoCompass: 'north up', floorNow: 'floor {f} from start', trapPlaced: 'Snare placed under you 🕸', trapMax: 'No more than {n} snares',
   gm_lastman: 'Last one standing', gm_lastmanS: 'the caught are out', gm_stalker: 'Invisible hunter', gm_stalkerS: 'the Hunter shows every 30 s', stalkPulse: 'The Hunter is visible for 4 seconds!', elim_caught: 'caught',
+  edPtsN: 'Points: {n}',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 
