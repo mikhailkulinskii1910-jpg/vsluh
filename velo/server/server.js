@@ -158,6 +158,7 @@ wss.on('connection', (ws) => {
         room.members.delete(m.id);
         ws.roomCode = null; ws.memberId = null;
         room.lastActivity = now;
+        if (room.members.size === 0) { rooms.delete(room.code); return; } // последний вышел — лобби и его данные удаляются сразу
         if (room.hostId === m.id) room.hostId = room.members.keys().next().value || null;
         if (room.members.size) broadcastRoom(room);
         return;

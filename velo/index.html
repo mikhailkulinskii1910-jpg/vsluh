@@ -96,42 +96,6 @@
     <div id="track-list"></div>
   </div>
 
-  <div class="tab" data-tab="offline" hidden>
-    <h3>Скачать карту для офлайн</h3>
-    <p class="muted small">Скачивается слой, выбранный на карте: схема или спутник.</p>
-    <label class="field">Область
-      <select id="pack-area">
-        <option value="view">Текущий вид на карте</option>
-        <option value="moscow">Москва и область</option>
-        <option value="spb">Санкт-Петербург и область</option>
-        <option value="russia">Вся Россия (обзор)</option>
-      </select>
-    </label>
-    <div class="grid2">
-      <label class="field">Зум от<input id="pack-zmin" type="number" min="0" max="18"></label>
-      <label class="field">до<input id="pack-zmax" type="number" min="0" max="18"></label>
-    </div>
-    <p id="pack-est" class="info"></p>
-    <div class="row">
-      <button id="btn-pack-go" class="primary grow"><span data-icon="download" data-size="18"></span> Скачать</button>
-      <button id="btn-pack-cancel" hidden>Отмена</button>
-    </div>
-    <div id="pack-progress" hidden>
-      <div class="progress"><i id="pack-bar"></i></div>
-      <p id="pack-status" class="muted small"></p>
-    </div>
-    <h3>Сохранённые карты</h3>
-    <div id="pack-list"></div>
-    <p id="storage-info" class="muted small"></p>
-    <details>
-      <summary>Адреса карт и маршрутов</summary>
-      <label class="field">Адрес тайлов схемы<input id="set-tile"></label>
-      <label class="field">Сервер маршрутов (BRouter)<input id="set-router"></label>
-      <div class="row"><button id="btn-save-settings">Сохранить</button></div>
-      <p class="muted small">Схема — OpenStreetMap, спутник — Esri World Imagery, высоты — открытые Terrain Tiles. Правила OSM запрещают массовую загрузку тайлов: скачивайте небольшие области или укажите свой тайловый сервер. Маршруты строятся онлайн; сохранённые маршруты, поездки и загруженные карты работают без сети.</p>
-    </details>
-  </div>
-
   <div class="tab" data-tab="lobby" hidden>
     <div id="lobby-setup">
       <label class="field">Ваше имя<input id="lb-name" maxlength="20" placeholder="Например, Миша"></label>
@@ -146,6 +110,11 @@
         <button id="lb-join">Войти</button>
       </div>
       <p id="lb-status" class="info"></p>
+      <div class="legal-links">
+        <button class="small-btn" data-legal="terms">Соглашение</button>
+        <button class="small-btn" data-legal="privacy">Защита местоположения</button>
+        <button class="small-btn danger" data-wipe>Удалить мои данные</button>
+      </div>
     </div>
 
     <div id="lobby-room" hidden>
@@ -160,6 +129,7 @@
         </div>
       </div>
       <p id="lb-meta" class="info"></p>
+      <p class="muted small">Ваша позиция видна только участникам этого лобби. Выход из лобби прекращает передачу.</p>
       <h3>Игроки</h3>
       <ul id="lb-members" class="players"></ul>
       <h3>Игра</h3>
@@ -173,9 +143,37 @@
   <button data-tab="map" class="on"><span data-icon="map" data-size="22"></span><span class="lbl">Карта</span></button>
   <button data-tab="route"><span data-icon="route" data-size="22"></span><span class="lbl">Маршрут</span></button>
   <button data-tab="tracks"><span data-icon="tracks" data-size="22"></span><span class="lbl">Поездки</span></button>
-  <button data-tab="offline"><span data-icon="download" data-size="22"></span><span class="lbl">Офлайн</span></button>
   <button data-tab="lobby"><span data-icon="users" data-size="22"></span><span class="lbl">Лобби</span></button>
 </nav>
+
+<!-- согласие при первом запуске -->
+<div id="consent" class="modal consent" hidden>
+  <div class="card">
+    <h3>Велокарта</h3>
+    <p>Приложению нужен доступ к вашему местоположению, чтобы показывать карту, маршрут и позицию в лобби.</p>
+    <p class="small muted">Позиция видна только участникам вашего лобби и не хранится на сервере после выхода. Поездки и маршруты остаются на вашем телефоне.</p>
+    <div class="legal-links">
+      <button class="small-btn" data-legal="terms">Соглашение</button>
+      <button class="small-btn" data-legal="privacy">Защита местоположения</button>
+    </div>
+    <label class="check"><input id="consent-check" type="checkbox"> Я принимаю соглашение и даю согласие на обработку местоположения</label>
+    <div class="row">
+      <button id="consent-decline" class="grow">Не принимаю</button>
+      <button id="consent-accept" class="primary grow" disabled>Продолжить</button>
+    </div>
+  </div>
+</div>
+
+<!-- текст соглашения и политики -->
+<div id="legal-modal" class="modal" hidden>
+  <div class="card">
+    <div class="row between">
+      <h3 id="legal-title"></h3>
+      <button id="legal-close" class="icon-btn" aria-label="Закрыть"><span data-icon="close" data-size="20"></span></button>
+    </div>
+    <div id="legal-body" class="legal-body"></div>
+  </div>
+</div>
 
 <!-- выбор курсора -->
 <div id="modal" class="modal" hidden>
@@ -205,7 +203,7 @@
 <script src="js/store.js"></script>
 <script src="js/net.js"></script>
 <script src="js/elevation.js"></script>
-<script src="js/offline.js"></script>
+<script src="js/legal.js"></script>
 <script src="js/app.js"></script>
 <script src="js/lobby.js"></script>
 </body>

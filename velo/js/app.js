@@ -2,7 +2,7 @@
    маршруты с оценкой сложности, запись поездок, офлайн-пакеты.
    Лобби, гонки и повтор финиша — в lobby.js; обмен через window.VeloApp. */
 (function (root) {
-  const G = root.VeloGeo, S = root.VeloStore, OFF = root.VeloOffline;
+  const G = root.VeloGeo, S = root.VeloStore;
   const IC = root.VeloIcons, SK = root.VeloSkins, EL = root.VeloElevation;
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -558,83 +558,6 @@
     }).join('');
   }
 
-  /* ---------- офлайн-карты ---------- */
-  let dl = null;
-
-  function currentArea() { return $('#pack-area').value; }
-
-  function packBounds() {
-    const a = currentArea();
-    if (a === 'view') { const b = map.getBounds(); return { south: b.getSouth(), north: b.getNorth(), west: b.getWest(), east: b.getEast() }; }
-    return OFF.AREAS[a].bounds;
-  }
-
-  function updatePackEstimate() {
-    const zmin = +$('#pack-zmin').value, zmax = +$('#pack-zmax').value;
-    if (!(zmin >= 0 && zmax <= 18 && zmin <= zmax)) { $('#pack-est').textContent = 'Проверьте уровни зума (0–18)'; return; }
-    const e = OFF.estimate(packBounds(), zmin, zmax);
-    const over = e.count > OFF.MAX_TILES;
-    $('#pack-est').textContent = `${e.count} тайлов · ~${OFF.fmtMb(e.sizeMb)} · слой: ${BASES[state.base].title}` +
-      (over ? ` — больше лимита ${OFF.MAX_TILES}, уменьшите зум или область` : '');
-    $('#btn-pack-go').disabled = over || !!dl;
-  }
-
-  function onAreaChange() {
-    const a = currentArea();
-    if (a === 'view') {
-      const z = Math.round(map.getZoom());
-      $('#pack-zmin').value = Math.max(0, z - 1);
-      $('#pack-zmax').value = Math.min(16, z + 2);
-    } else {
-      $('#pack-zmin').value = OFF.AREAS[a].zmin;
-      $('#pack-zmax').value = OFF.AREAS[a].zmax;
-    }
-    updatePackEstimate();
-  }
-
-  async function startPack() {
-    const name = (currentArea() === 'view' ? 'Текущий вид' : OFF.AREAS[currentArea()].title) + ' · ' + BASES[state.base].title;
-    const zmin = +$('#pack-zmin').value, zmax = +$('#pack-zmax').value;
-    const ac = new AbortController();
-    dl = { abort: ac };
-    $('#pack-progress').hidden = false;
-    $('#btn-pack-cancel').hidden = false;
-    $('#btn-pack-go').disabled = true;
-    try {
-      const pack = await OFF.download({
-        name, bounds: packBounds(), zmin, zmax, template: baseTemplate(), signal: ac.signal,
-        onProgress: (done, total) => {
-          $('#pack-bar').style.width = Math.round((done / total) * 100) + '%';
-          $('#pack-status').textContent = `Скачано ${done} из ${total}`;
-        },
-      });
-      toast(`Карта «${pack.name}» сохранена${pack.failed ? `, не загружено тайлов: ${pack.failed}` : ''}`);
-    } catch (e) {
-      toast(e.name === 'AbortError' ? 'Загрузка отменена' : 'Ошибка: ' + e.message, 4000);
-    } finally {
-      dl = null;
-      $('#pack-progress').hidden = true;
-      $('#pack-bar').style.width = '0%';
-      $('#btn-pack-cancel').hidden = true;
-      renderPacks();
-      updatePackEstimate();
-    }
-  }
-
-  async function renderPacks() {
-    const list = $('#pack-list');
-    const packs = (await S.all('packs')).sort((a, b) => b.createdAt - a.createdAt);
-    list.innerHTML = packs.length ? packs.map(p => {
-      const e = OFF.estimate(p.bounds, p.zmin, p.zmax);
-      return `<article class="item">
-        <div class="item-h"><b>${esc(p.name)}</b></div>
-        <div class="stats"><span>зум ${p.zmin}–${p.zmax}</span><span>${p.tiles} тайлов</span><span>~${OFF.fmtMb(e.sizeMb)}</span>${p.failed ? `<span>ошибок: ${p.failed}</span>` : ''}</div>
-        <div class="row"><button data-act="del-pack" data-id="${esc(p.id)}" class="danger">${icon('trash', 16)} Удалить</button></div></article>`;
-    }).join('') : '<p class="muted">Офлайн-карт пока нет. Выберите область и скачайте.</p>';
-    const si = await OFF.storageInfo().catch(() => null);
-    $('#storage-info').textContent = si ? `Занято приложением и кэшем: ${OFF.fmtMb(si.usedMb)} · доступно браузеру ~${(si.quotaMb / 1024).toFixed(1)} ГБ` : '';
-  }
-
   /* ---------- подсказки ---------- */
   let toastTimer = 0;
   function toast(text, ms = 3000) {
@@ -674,7 +597,6 @@
     $$('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
     if (name === 'tracks') renderTracks();
     if (name === 'route') { renderPlan(); renderRoutes(); }
-    if (name === 'offline') { renderPacks(); onAreaChange(); }
     emit('tab', name);
   }
 
@@ -757,34 +679,8 @@
       }
     });
 
-    $('#pack-area').addEventListener('change', onAreaChange);
-    $('#pack-zmin').addEventListener('input', updatePackEstimate);
-    $('#pack-zmax').addEventListener('input', updatePackEstimate);
-    map.on('moveend', () => { if (currentArea() === 'view' && state.tab === 'offline' && !dl) updatePackEstimate(); });
-    $('#btn-pack-go').addEventListener('click', startPack);
-    $('#btn-pack-cancel').addEventListener('click', () => dl && dl.abort.abort());
-    $('#pack-list').addEventListener('click', async e => {
-      const b = e.target.closest('button'); if (!b || b.dataset.act !== 'del-pack') return;
-      if (!confirm('Удалить офлайн-карту? Тайлы, которые входят и в другие пакеты, тоже будут удалены.')) return;
-      const p = await S.get('packs', b.dataset.id);
-      if (p) await OFF.removePack(p);
-      renderPacks();
-    });
-
-    const s = S.settings.get();
-    $('#set-tile').value = s.tileUrl;
-    $('#set-router').value = s.routerUrl;
-    $('#btn-save-settings').addEventListener('click', () => {
-      const tileUrl = $('#set-tile').value.trim() || S.DEFAULTS.tileUrl;
-      const routerUrl = $('#set-router').value.trim() || S.DEFAULTS.routerUrl;
-      if (!tileUrl.includes('{z}') || !tileUrl.includes('{x}') || !tileUrl.includes('{y}')) return toast('В адресе тайлов должны быть {z} {x} {y}', 4000);
-      S.settings.set({ tileUrl, routerUrl });
-      applyBase();
-      toast('Настройки сохранены');
-    });
-
     window.addEventListener('online', updateHud);
-    window.addEventListener('offline', () => setGps('нет сети — работают офлайн-карты и сохранённые маршруты'));
+    window.addEventListener('offline', () => setGps('нет сети: карта и маршруты недоступны'));
   }
 
   /* ---------- запуск ---------- */
@@ -801,11 +697,8 @@
     renderPlan();
     showTab('map');
     recoverTracks().catch(console.error);
-    startGps();
+    root.VeloLegal.mountConsent({ onAccept: startGps });
     setInterval(updateHud, 1000);
-    if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
-    }
   }
 
   root.VeloApp = {

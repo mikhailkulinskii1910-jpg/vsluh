@@ -301,3 +301,13 @@ details summary { color: var(--muted); margin: 14px 0 6px; cursor: pointer; }
   .panel { max-width: 620px; margin: -14px auto 0; border-radius: 18px 18px 0 0; }
   body.panel-collapsed .panel { height: 40px; }
 }
+
+/* согласие и юридические тексты */
+.tabbar { grid-template-columns: repeat(4, 1fr); }
+.legal-links { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.check { display: flex; gap: 8px; align-items: flex-start; margin: 12px 0; font-size: 14px; }
+.check input { width: auto; min-height: 0; margin-top: 3px; }
+.consent .card { max-height: none; }
+.legal-body { overflow-y: auto; max-height: 70vh; font-size: 14px; line-height: 1.5; }
+.legal-body h4 { margin: 14px 0 4px; font-size: 15px; }
+.legal-body ul { padding-left: 20px; }
