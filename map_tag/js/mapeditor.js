@@ -64,13 +64,13 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   if (!lb) return go('home');
   lb.map = { ...emptyMap(), ...(lb.map || {}) };
   lb.poly = lb.poly || [];
-  let tool = 'zone', draft = [], draftTool = null, objKind = S._edObj || 'bush';
+  let tool = 'zone', draft = [], draftTool = null, committed = false, objKind = S._edObj || 'bush';
   const DCOL = { nogo: '#d63a4a', barrier: '#8b6b4a', safe: '#3fb6ff', kill: '#b0001a', grave: '#8a8f99', ...Object.fromEntries(ZX_KINDS.map((k) => [k, ZX[k].col])) };
   /** Замкнуть черновик в зону того инструмента, которым его начали рисовать. */
   const closeDraft = (quiet) => {
-    const k = POLY[draftTool];
-    if (k && draft.length >= 3) { (lb.map[k] = lb.map[k] || []).push(draft); if (!quiet) toast(t('edClosed', { n: t('ed_' + draftTool) })); }
-    draft = []; draftTool = null;
+    // зона уже сохранена сама (с 3-й точки) — просто начинаем новую
+    if (committed && !quiet && draft.length >= 3) toast(t('edClosed', { n: t('ed_' + draftTool) }));
+    draft = []; draftTool = null; committed = false;
   };
   const center = lb.center || (lb.poly[0]) || { lat: 55.7520, lng: 37.6175 };
 
@@ -116,7 +116,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   function panel() {
     const p = el.querySelector('#edPanel');
     p.classList.toggle('mini', !!S._edMini);
-    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}${POLY[tool] ? `<div style="color:var(--muted);font-size:13px;margin-top:4px">${t('edCloseTip')}</div>` : ''}</div>${POLY[tool] && draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:none;min-height:38px;padding:0 12px">✓ ${t('edClose')}</button>` : ''}<button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
+    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}${POLY[tool] ? `<div style="color:var(--muted);font-size:13px;margin-top:4px">${t('edCloseTip')}</div>` : ''}</div>${POLY[tool] && draft.length ? `<button class="icon-btn" data-ed="undoDraft" aria-label="undo" style="width:38px;height:38px;flex:none;font-size:20px">↶</button>` : ''}${POLY[tool] && draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:none;min-height:38px;padding:0 12px">➕ ${t('edNewZone')}</button>` : ''}<button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
       <div style="color:var(--muted);font-size:13px;margin-top:6px">${counts()}</div>
       ${tool === 'zone' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoZone" style="flex:1">${t('undoPt')}</button><button class="btn" data-ed="circle" style="flex:1">${t('edToCircle')}</button></div>` : ''}
       ${tool === 'barrier' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="buildings" style="flex:2">🏢 ${t('edBuildings')}</button><button class="btn" data-ed="clearWalls" style="flex:1">${t('edClearWalls')}</button></div>` : ''}
@@ -148,6 +148,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   }
 
   map.on('click', (e) => {
+    if (committed && !(lb.map[POLY[draftTool]] || []).includes(draft)) { draft = []; draftTool = null; committed = false; }
     const q = { lat: e.latlng.lat, lng: e.latlng.lng };
     if (tool === 'zone') { lb.shape = 'custom'; lb.poly.push(q); }
     else if (POLY[tool]) {
@@ -155,6 +156,8 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
       // касание рядом с первой точкой — замкнуть
       if (draft.length >= 3 && map.latLngToContainerPoint([draft[0].lat, draft[0].lng]).distanceTo(map.latLngToContainerPoint(e.latlng)) < 28) { closeDraft(); save(); draw(); return; }
       draftTool = tool; draft.push(q);
+      // с 3-й точки зона сохраняется автоматически, следующие точки её расширяют
+      if (draft.length >= 3 && !committed) { const k = POLY[tool]; (lb.map[k] = lb.map[k] || []).push(draft); committed = true; }
     }
     else if (tool === 'obj') { (lb.map.objs = lb.map.objs || []).push({ k: objKind, ...q }); }
     else if (tool === 'jail') lb.map.jail = q;
@@ -168,13 +171,17 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (a === 'mini') { S._edMini = !S._edMini; panel(); return; }
     if (a === 'undoZone') lb.poly.pop();
     if (a === 'circle') { lb.shape = 'circle'; if (lb.poly.length >= 3 && !lb.center) lb.center = lb.poly[0]; }
-    if (a === 'undoDraft') { draft.pop(); if (!draft.length) draftTool = null; }
+    if (a === 'undoDraft') {
+      draft.pop();
+      if (committed && draft.length < 3) { const L = lb.map[POLY[draftTool]] || []; const i = L.indexOf(draft); if (i >= 0) L.splice(i, 1); committed = false; }
+      if (!draft.length) draftTool = null;
+    }
     if (a === 'closeNogo' && draft.length >= 3) closeDraft();
     if (a.startsWith('ok:')) { objKind = S._edObj = a.slice(3); panel(); return; }
     if (a === 'clearObjs') { lb.map.objs = []; }
     if (a === 'buildings') { loadBuildings(); return; }
     if (a === 'clearWalls') { lb.map.walls = []; }
-    if (a === 'clear') { lb.map = emptyMap(); lb.poly = []; lb.shape = 'circle'; draft = []; draftTool = null; }
+    if (a === 'clear') { lb.map = emptyMap(); lb.poly = []; lb.shape = 'circle'; draft = []; draftTool = null; committed = false; }
     if (a === 'save') {
       modal(`<h2>${t('edSave')}</h2><input class="input" id="mn" maxlength="30" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
         b.querySelector('[data-x]').onclick = close;
