@@ -6,6 +6,7 @@
   --muted: #6b7280;
   --line: #e2e6ec;
   --blue: #1f6feb;
+  --on-accent: #ffffff;
   --red: #d93025;
   --green: #1e8e3e;
   --amber: #b06a00;
@@ -19,6 +20,18 @@ body.theme-dark {
   --blue: #4a9dff; --red: #ff6b61; --green: #4cc26d; --amber: #f0a040;
   --shadow: 0 2px 12px rgba(0, 0, 0, .6);
   color-scheme: dark;
+}
+/* ночная тема: чёрный фон, белые дороги, серая вода — как на референсах */
+body.theme-night {
+  --bg: #000; --card: #0a0a0a; --card-2: #161616; --text: #ededed; --muted: #8a8a8a; --line: #262626;
+  --blue: #f2f2f2; --on-accent: #000; --red: #ff6b6b; --green: #9be7a8; --amber: #e6c27a;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .95);
+}
+/* графит: тёмно-серый фон, кремовые дороги, розовые акценты — как на третьем референсе */
+body.theme-graphite {
+  --bg: #2b2a27; --card: #34322e; --card-2: #3e3b36; --text: #f4ead6; --muted: #b0a48c; --line: #4a463f;
+  --blue: #f1d9b0; --on-accent: #2b2a27; --red: #f08aa0; --green: #b8d98a; --amber: #e8b86a;
+  --shadow: 0 2px 12px rgba(0, 0, 0, .7);
 }
 
 * { box-sizing: border-box; }
@@ -36,6 +49,8 @@ button .ico { margin-right: 2px; }
 #map { position: absolute; inset: 0; }
 /* тёмная схема: инвертируем тайлы OSM (спутник не трогаем) */
 body.theme-dark.base-osm .leaflet-tile-pane { filter: invert(.92) hue-rotate(180deg) brightness(.82) contrast(.92); }
+body.theme-night.base-osm .leaflet-tile-pane { filter: invert(1) grayscale(1) contrast(1.35) brightness(1.05); }
+body.theme-graphite.base-osm .leaflet-tile-pane { filter: invert(.9) sepia(.6) hue-rotate(-60deg) saturate(1.3) contrast(1.1) brightness(.8); }
 .leaflet-container { font-family: inherit; }
 .leaflet-control-attribution { font-size: 10px; background: rgba(255,255,255,.7) !important; }
 body.theme-dark .leaflet-control-attribution { background: rgba(20,24,32,.7) !important; color: #aab; }
@@ -91,7 +106,7 @@ body.theme-dark .leaflet-control-attribution { background: rgba(20,24,32,.7) !im
 /* карточка поворота */
 .nav-card {
   position: absolute; left: 10px; top: calc(env(safe-area-inset-top) + 86px); z-index: 515;
-  display: flex; gap: 10px; align-items: center; background: var(--blue); color: #fff; border-radius: 16px;
+  display: flex; gap: 10px; align-items: center; background: var(--blue); color: var(--on-accent); border-radius: 16px;
   padding: 10px 14px 10px 10px; box-shadow: var(--shadow); max-width: 62%;
 }
 .nav-card[hidden] { display: none; }
@@ -144,10 +159,10 @@ button, input, select {
 }
 button { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 button:disabled { opacity: .45; cursor: default; }
-button.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+button.primary { background: var(--blue); border-color: var(--blue); color: var(--on-accent); }
 button.danger { color: var(--red); }
 button.primary.danger, button.danger.on { background: var(--red); border-color: var(--red); color: #fff; }
-button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+button.on { background: var(--blue); border-color: var(--blue); color: var(--on-accent); }
 button.small-btn { min-height: 0; padding: 6px 10px; font-size: 13px; }
 button.icon-btn { min-height: 0; padding: 6px; border: 0; background: none; }
 input, select { width: 100%; }
@@ -225,10 +240,10 @@ details summary { color: var(--muted); margin: 14px 0 6px; cursor: pointer; }
   border-radius: 8px; padding: 2px 6px; font: 600 12px/1.3 system-ui, sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,.3);
 }
 .vm .tag .c { color: inherit; }
-.vm.me .tag { background: var(--blue); color: #fff; }
+.vm.me .tag { background: var(--blue); color: var(--on-accent); }
 .vm.off { opacity: .45; }
 .wp {
-  width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: #fff; border: 2px solid #fff;
+  width: 22px; height: 22px; border-radius: 50%; background: var(--blue); color: var(--on-accent); border: 2px solid var(--card);
   font: 700 12px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.4);
 }
 .finish { width: 30px; height: 30px; border-radius: 50%; background: #fff; color: #111; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.5); }

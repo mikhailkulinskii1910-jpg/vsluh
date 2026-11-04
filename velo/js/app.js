@@ -29,7 +29,7 @@
     lobbyAwake: false,
     tab: 'map',
     base: cfg.base === 'sat' ? 'sat' : 'osm',
-    theme: cfg.theme === 'dark' ? 'dark' : 'light',
+    theme: ['night', 'graphite'].includes(cfg.theme) ? cfg.theme : (cfg.theme === 'dark' ? 'night' : 'light'),
     elev: !!cfg.elev,
   };
   const plan = {
@@ -60,11 +60,25 @@
     S.settings.set({ base: state.base });
   }
 
+  const THEME_NAMES = { light: 'светлая', night: 'ночная', graphite: 'графит' };
+  const NEXT_THEME = { light: 'night', night: 'graphite', graphite: 'light' };
+
   function applyTheme() {
-    document.body.classList.toggle('theme-dark', state.theme === 'dark');
-    $('#btn-theme').classList.toggle('on', state.theme === 'dark');
+    const b = document.body.classList;
+    b.toggle('theme-dark', state.theme !== 'light');
+    b.toggle('theme-night', state.theme === 'night');
+    b.toggle('theme-graphite', state.theme === 'graphite');
+    const btn = $('#btn-theme');
+    btn.classList.toggle('on', state.theme !== 'light');
+    btn.title = 'Тема: ' + THEME_NAMES[state.theme];
     S.settings.set({ theme: state.theme });
+    // акцентный цвет берём из темы: линия маршрута и свой маркер
+    if (typeof drawPlan === 'function') drawPlan();
+    if (state.fix) updateMe();
   }
+
+  /** Акцентный цвет текущей темы (линии маршрута, свой курсор). */
+  function accent() { return getComputedStyle(document.body).getPropertyValue('--blue').trim() || '#1f6feb'; }
 
   function applyElev() {
     if (state.elev) {
@@ -110,7 +124,7 @@
     const f = state.fix;
     if (!f) return;
     meMarker.setLatLng([f.lat, f.lon]).setOpacity(1);
-    meMarker.setIcon(skinIcon({ color: '#1f6feb', skin: S.settings.get().skin || SK.DEFAULT, heading: f.hdg, name: 'Я', me: true, speedMs: f.spd }));
+    meMarker.setIcon(skinIcon({ color: accent(), skin: S.settings.get().skin || SK.DEFAULT, heading: f.hdg, name: 'Я', me: true, speedMs: f.spd }));
   }
 
   function onPos(p) {
@@ -385,7 +399,7 @@
 
   function drawPlan() {
     if (planLine) planLine.remove();
-    planLine = plan.coords ? L.polyline(plan.coords, { color: '#1f6feb', weight: 5, opacity: 0.85 }).addTo(map) : null;
+    planLine = plan.coords ? L.polyline(plan.coords, { color: accent(), weight: 5, opacity: 0.85 }).addTo(map) : null;
   }
 
   function fitTo(coords) {
@@ -657,7 +671,7 @@
       $('#layer-pop').hidden = true;
     }));
     $('#btn-elev').addEventListener('click', () => { state.elev = !state.elev; applyElev(); if (state.elev) toast('Перепады высот: светлее — выше'); });
-    $('#btn-theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(); });
+    $('#btn-theme').addEventListener('click', () => { state.theme = NEXT_THEME[state.theme]; applyTheme(); });
 
     const si = $('#search-input');
     si.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(si.value.trim()), 700); });
