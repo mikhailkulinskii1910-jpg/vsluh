@@ -22,7 +22,10 @@
   function setStatus(text, isErr) {
     const el = $('#lb-status');
     el.textContent = text || '';
+    el.hidden = !text;
     el.classList.toggle('err', !!isErr);
+    // ошибка подключения или нет адреса — показываем поле сервера
+    if (isErr && /сервер|подключ/i.test(text || '')) $('#lb-server-box').open = true;
   }
 
   function defaultServerUrl() {
@@ -492,6 +495,7 @@
     const s = S.settings.get();
     $('#lb-name').value = s.name || '';
     $('#lb-server').value = s.serverUrl || defaultServerUrl();
+    if (!$('#lb-server').value) $('#lb-server-box').open = true; // адрес не задан (например, в APK) — поле сразу видно
     $('#lb-skin-name').textContent = SK.get(mySkin()).name;
     $('#lb-code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
     $('#lb-create').addEventListener('click', create);

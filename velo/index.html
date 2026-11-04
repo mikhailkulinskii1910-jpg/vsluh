@@ -51,88 +51,87 @@
 </main>
 
 <section class="panel">
-  <button id="panel-toggle" class="panel-handle" aria-label="Свернуть или развернуть панель" title="Свернуть / развернуть"><span></span></button>
+  <div class="panel-top">
+    <button id="panel-toggle" class="panel-handle" aria-label="Свернуть или развернуть панель" title="Свернуть / развернуть"><span></span></button>
+    <button id="attr-btn" class="attr-btn" aria-label="Источники карты" title="Источники карты">©</button>
+  </div>
+  <p id="attr-text" class="attr-text" hidden></p>
+
   <div class="tab" data-tab="map">
     <div id="nav-bar" class="nav-bar" hidden>
       <div><small class="muted">Осталось</small><b id="nav-left">—</b></div>
       <div><small class="muted">Прибытие</small><b id="nav-eta">—</b></div>
       <button id="btn-nav-stop" class="danger">Стоп</button>
     </div>
-    <div class="row">
-      <button id="btn-rec" class="primary grow">Записать поездку</button>
-    </div>
-    <p id="rec-info" class="muted"></p>
+    <button id="btn-rec" class="primary wide">Записать поездку</button>
+    <p id="rec-info" class="muted small" hidden></p>
   </div>
 
   <div class="tab" data-tab="route" hidden>
     <p id="plan-info" class="info"></p>
     <div id="plan-difficulty" class="difficulty" hidden></div>
     <div id="plan-profile-chart" class="chart" hidden></div>
-    <label class="field inline">Тип дороги
-      <select id="plan-profile">
-        <option value="trekking">Прогулочный (trekking)</option>
-        <option value="fastbike">Шоссейный (fastbike)</option>
+    <div class="row">
+      <select id="plan-profile" class="grow" aria-label="Тип дороги">
+        <option value="trekking">Прогулочный</option>
+        <option value="fastbike">Шоссейный</option>
         <option value="shortest">Кратчайший</option>
       </select>
-    </label>
-    <div class="row wrap">
-      <button id="btn-go" class="primary grow">Поехать</button>
+      <button id="btn-go" class="primary">Поехать</button>
     </div>
-    <div class="row wrap">
-      <button id="btn-my-start">Старт от меня</button>
-      <button id="btn-undo">Точка</button>
-      <button id="btn-clear">Очистить</button>
-      <button id="btn-save-route" class="primary">Сохранить</button>
-      <button id="btn-gpx-plan">GPX</button>
+    <div class="chips-row">
+      <button id="btn-my-start" class="ghost">От меня</button>
+      <button id="btn-undo" class="ghost">Отменить точку</button>
+      <button id="btn-clear" class="ghost">Очистить</button>
+      <button id="btn-save-route" class="ghost">Сохранить</button>
+      <button id="btn-gpx-plan" class="ghost">GPX</button>
     </div>
-    <h3>Сохранённые маршруты</h3>
+    <div class="label">Сохранённые</div>
     <div id="route-list"></div>
   </div>
 
   <div class="tab" data-tab="tracks" hidden>
-    <h3>Пройденные маршруты</h3>
     <div id="track-list"></div>
   </div>
 
   <div class="tab" data-tab="lobby" hidden>
     <div id="lobby-setup">
-      <label class="field">Ваше имя<input id="lb-name" maxlength="20" placeholder="Например, Миша"></label>
-      <label class="field">Сервер лобби<input id="lb-server" placeholder="wss://адрес-сервера/ws"></label>
+      <input id="lb-name" maxlength="20" placeholder="Ваше имя" aria-label="Ваше имя">
       <div class="row">
-        <button id="lb-skin" class="grow">Мой курсор: <b id="lb-skin-name">Машинка</b></button>
+        <button id="lb-skin" class="ghost grow">Курсор: <b id="lb-skin-name">Машинка</b></button>
+        <button id="lb-create" class="primary grow">Создать лобби</button>
       </div>
-      <div class="row"><button id="lb-create" class="primary grow">Создать лобби</button></div>
-      <div class="divider">или войти по коду</div>
       <div class="row">
-        <input id="lb-code" maxlength="6" placeholder="КОД" autocapitalize="characters" autocomplete="off" class="grow">
+        <input id="lb-code" maxlength="6" placeholder="Код лобби" autocapitalize="characters" autocomplete="off" class="grow">
         <button id="lb-join">Войти</button>
       </div>
-      <p id="lb-status" class="info"></p>
-      <div class="legal-links">
-        <button class="small-btn" data-legal="terms">Соглашение</button>
-        <button class="small-btn" data-legal="privacy">Защита местоположения</button>
-        <button class="small-btn danger" data-wipe>Удалить мои данные</button>
+      <p id="lb-status" class="info" hidden></p>
+      <details class="more" id="lb-server-box">
+        <summary>Сервер</summary>
+        <input id="lb-server" placeholder="wss://адрес-сервера/ws" aria-label="Сервер лобби">
+      </details>
+      <div class="links">
+        <button class="link-btn" data-legal="terms">Соглашение</button>
+        <button class="link-btn" data-legal="privacy">Защита местоположения</button>
+        <button class="link-btn danger" data-wipe>Удалить мои данные</button>
       </div>
     </div>
 
     <div id="lobby-room" hidden>
       <div class="row between">
         <div>
-          <small class="muted">Код лобби</small>
           <div id="lb-code-big" class="code"></div>
+          <small id="lb-meta" class="muted"></small>
         </div>
         <div class="col">
-          <button id="lb-share">Поделиться</button>
-          <button id="lb-leave" class="danger"><span data-icon="close" data-size="18"></span> Выйти</button>
+          <button id="lb-share" class="ghost">Поделиться</button>
+          <button id="lb-leave" class="ghost danger">Выйти</button>
         </div>
       </div>
-      <p id="lb-meta" class="info"></p>
-      <p class="muted small">Ваша позиция видна только участникам этого лобби. Выход из лобби прекращает передачу.</p>
-      <h3>Игроки</h3>
       <ul id="lb-members" class="players"></ul>
-      <h3>Игра</h3>
       <div id="lb-host"></div>
       <div id="lb-game"></div>
+      <p class="muted small">Позиция видна только участникам этого лобби.</p>
     </div>
   </div>
 </section>
@@ -148,15 +147,15 @@
 <div id="consent" class="modal consent" hidden>
   <div class="card">
     <h3>Велокарта</h3>
-    <p>Приложению нужен доступ к вашему местоположению, чтобы показывать карту, маршрут и позицию в лобби.</p>
-    <p class="small muted">Позиция видна только участникам вашего лобби и не хранится на сервере после выхода. Поездки и маршруты остаются на вашем телефоне.</p>
-    <div class="legal-links">
-      <button class="small-btn" data-legal="terms">Соглашение</button>
-      <button class="small-btn" data-legal="privacy">Защита местоположения</button>
+    <p>Приложению нужен доступ к местоположению, чтобы показывать карту, маршрут и позицию в лобби.</p>
+    <p class="small muted">Позиция видна только участникам вашего лобби и не хранится на сервере после выхода. Поездки и маршруты остаются на телефоне.</p>
+    <div class="links">
+      <button class="link-btn" data-legal="terms">Соглашение</button>
+      <button class="link-btn" data-legal="privacy">Защита местоположения</button>
     </div>
-    <label class="check"><input id="consent-check" type="checkbox"> Я принимаю соглашение и даю согласие на обработку местоположения</label>
+    <label class="check"><input id="consent-check" type="checkbox"> Принимаю соглашение и даю согласие на обработку местоположения</label>
     <div class="row">
-      <button id="consent-decline" class="grow">Не принимаю</button>
+      <button id="consent-decline" class="ghost grow">Не принимаю</button>
       <button id="consent-accept" class="primary grow" disabled>Продолжить</button>
     </div>
   </div>
@@ -177,7 +176,7 @@
 <div id="modal" class="modal" hidden>
   <div class="card">
     <div class="row between">
-      <h3 id="modal-title">Мой курсор</h3>
+      <h3 id="modal-title">Курсор</h3>
       <button id="modal-close" class="icon-btn" aria-label="Закрыть"><span data-icon="close" data-size="20"></span></button>
     </div>
     <input id="skin-search" placeholder="Найти курсор…" autocomplete="off">

@@ -40,9 +40,10 @@
   const overlays = new Map();
 
   /* ---------- карта ---------- */
-  const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([55.75, 37.62], 11);
-  // подпись OSM обязательна по лицензии: показываем свёрнутой кнопкой «©», по нажатию — полный текст
-  map.attributionControl.getContainer().addEventListener('click', e => { e.preventDefault(); e.currentTarget.classList.toggle('open'); }); // нажатие раскрывает подпись, а не открывает ссылку
+  // подпись источников карты обязательна по лицензиям: она вынесена в панель (кнопка «©»), а не лежит поверх карты
+  const map = L.map('map', { zoomControl: false, worldCopyJump: true, attributionControl: false }).setView([55.75, 37.62], 11);
+  // панель меняет высоту под содержимое — карта должна пересчитать свой размер
+  if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById('map'));
   let baseLayer = null, elevLayer = null;
   const planLayer = L.layerGroup().addTo(map);
   let planLine = null;
@@ -53,12 +54,22 @@
     return base === 'sat' ? ESRI : S.settings.get().tileUrl;
   }
 
+  /** Источники данных для текущих слоёв (показываются по кнопке «©» в панели). */
+  function renderAttribution() {
+    const parts = [state.base === 'sat' ? 'Снимки © Esri, Maxar, Earthstar Geographics' : 'Карта © участники OpenStreetMap'];
+    if (state.elev) parts.push('высоты: Terrain Tiles (Mapzen, AWS)');
+    parts.push('маршруты: BRouter', 'поиск: Nominatim');
+    const el = document.getElementById('attr-text');
+    if (el) el.textContent = parts.join(' · ');
+  }
+
   function applyBase() {
     if (baseLayer) map.removeLayer(baseLayer);
     baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 18, attribution: BASES[state.base].attribution }).addTo(map);
     document.body.classList.toggle('base-osm', state.base === 'osm');
     $$('#layer-pop button').forEach(b => b.classList.toggle('on', b.dataset.base === state.base));
     S.settings.set({ base: state.base });
+    renderAttribution();
   }
 
 
@@ -69,6 +80,7 @@
     } else if (elevLayer) map.removeLayer(elevLayer);
     $('#btn-elev').classList.toggle('on', state.elev);
     S.settings.set({ elev: state.elev });
+    renderAttribution();
   }
 
   map.on('dragstart', () => { state.follow = false; renderFollow(); });
@@ -196,6 +208,7 @@
     nav.dest = plan.wps[plan.wps.length - 1] || null;
     nav.along = 0; nav.off = 0;
     nav.active = true;
+    document.body.classList.add('navigating');
     state.follow = true;
     renderFollow();
     $('#nav-bar').hidden = false;
@@ -208,6 +221,7 @@
 
   function stopNav(silent) {
     nav.active = false;
+    document.body.classList.remove('navigating');
     $('#nav-bar').hidden = true;
     $('#nav-card').hidden = true;
     syncWake();
@@ -273,6 +287,7 @@
     }
     pts.push({ lat: f.lat, lon: f.lon, t: f.t, spd: f.spd, acc: f.acc, alt: f.alt });
     if (f.spd != null && f.spd > r.track.maxSpd) r.track.maxSpd = f.spd;
+    renderRec(); // дистанция и скорость во время записи обновляются сразу
     if (Date.now() - r.saveAt > 10000) saveRec();
   }
 
@@ -306,9 +321,9 @@
     b.textContent = state.rec ? 'Остановить запись' : 'Записать поездку';
     b.classList.toggle('danger', !!state.rec);
     b.classList.toggle('primary', !state.rec);
-    $('#rec-info').textContent = state.rec
-      ? `Идёт запись: ${G.formatDistance(state.rec.track.distance)}, макс. ${kmh(state.rec.track.maxSpd)} км/ч`
-      : '';
+    const info = $('#rec-info');
+    info.hidden = !state.rec;
+    info.textContent = state.rec ? `${G.formatDistance(state.rec.track.distance)} · макс. ${kmh(state.rec.track.maxSpd)} км/ч` : '';
   }
 
   async function recoverTracks() {
@@ -678,6 +693,7 @@
     IC.hydrate(document);
     bindUi();
     bindPanelHandle();
+    $('#attr-btn').addEventListener('click', () => { renderAttribution(); const t = $('#attr-text'); t.hidden = !t.hidden; });
     if (cfg.panelCollapsed) document.body.classList.add('panel-collapsed');
     applyBase();
     applyElev();
