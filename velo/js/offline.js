@@ -25,9 +25,9 @@
     return { count, sizeMb: (count * APPROX_TILE_KB) / 1024 };
   }
 
-  /** Скачивает тайлы в кэш. onProgress(done, total). Возвращает запись пакета. */
-  async function download({ name, bounds, zmin, zmax, onProgress, signal }) {
-    const tileTpl = S.settings.get().tileUrl;
+  /** Скачивает тайлы выбранного слоя (template) в кэш. onProgress(done, total). Возвращает запись пакета. */
+  async function download({ name, bounds, zmin, zmax, template, onProgress, signal }) {
+    const tileTpl = template || S.settings.get().tileUrl;
     const tiles = G.tilesForBounds(bounds, zmin, zmax);
     if (tiles.length > MAX_TILES) throw new Error(`Слишком большой участок: ${tiles.length} тайлов (максимум ${MAX_TILES}). Уменьшите зум или область.`);
     const cache = await caches.open(CACHE);
@@ -39,8 +39,10 @@
         const url = tileUrl(tileTpl, tiles[index++]);
         try {
           if (!(await cache.match(url))) {
-            const res = await fetch(url, { mode: 'cors', cache: 'no-store', signal });
-            if (res.ok) await cache.put(url, res.clone()); else failed++;
+            // у спутникового сервера нет CORS: тогда кладём «непрозрачный» ответ — его покажет карта, но не проверим
+            let res = await fetch(url, { mode: 'cors', cache: 'no-store', signal }).catch(e => (e.name === 'AbortError' ? Promise.reject(e) : null));
+            if (!res) res = await fetch(url, { mode: 'no-cors', cache: 'no-store', signal }).catch(() => null);
+            if (res && (res.ok || res.type === 'opaque')) await cache.put(url, res.clone()); else failed++;
           }
         } catch (e) {
           if (e.name === 'AbortError') throw e;

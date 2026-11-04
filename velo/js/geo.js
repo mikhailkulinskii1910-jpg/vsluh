@@ -99,5 +99,62 @@
     return out;
   }
 
-  return { R, distance, bearing, lineLength, projectOnPolyline, formatDistance, formatDuration, formatSpeed, lonLatToTile, tilesForBounds };
+  /** Точка на ломаной на расстоянии d (м) от начала. */
+  function pointAlong(coords, cum, d) {
+    if (d <= 0) return coords[0];
+    const last = coords.length - 1;
+    if (d >= cum[last]) return coords[last];
+    let lo = 0, hi = last;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (cum[mid] <= d) lo = mid; else hi = mid; }
+    const seg = cum[hi] - cum[lo] || 1, t = (d - cum[lo]) / seg;
+    return [coords[lo][0] + (coords[hi][0] - coords[lo][0]) * t, coords[lo][1] + (coords[hi][1] - coords[lo][1]) * t];
+  }
+
+  /** Накопленные расстояния вдоль ломаной. */
+  function cumulative(coords) {
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + distance(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]));
+    return cum;
+  }
+
+  /**
+   * Повороты по геометрии маршрута (без названий улиц).
+   * Возвращает [{along (м от старта), dir: 'left'|'right', kind: 'slight'|'turn'|'sharp'|'uturn'}].
+   */
+  function findTurns(coords, minDeg = 35, look = 25) {
+    if (coords.length < 3) return [];
+    const cum = cumulative(coords), total = cum[cum.length - 1];
+    const samples = [];
+    for (let i = 1; i < coords.length - 1; i++) {
+      const d = cum[i];
+      if (d < look * 0.5 || d > total - look * 0.5) continue;
+      const a = pointAlong(coords, cum, d - look), b = pointAlong(coords, cum, d + look);
+      const b1 = bearing(a[0], a[1], coords[i][0], coords[i][1]);
+      const b2 = bearing(coords[i][0], coords[i][1], b[0], b[1]);
+      samples.push({ along: d, delta: ((b2 - b1 + 540) % 360) - 180 });
+    }
+    // склеиваем соседние отклонения одного знака в один поворот
+    const groups = [];
+    let g = null;
+    for (const s of samples) {
+      if (Math.abs(s.delta) < 6) continue;
+      if (g && Math.sign(g.sum) === Math.sign(s.delta) && s.along - g.last <= 40) {
+        g.sum += s.delta; g.last = s.along;
+        if (Math.abs(s.delta) > Math.abs(g.peak)) { g.peak = s.delta; g.along = s.along; }
+      } else {
+        if (g) groups.push(g);
+        g = { sum: s.delta, peak: s.delta, along: s.along, last: s.along };
+      }
+    }
+    if (g) groups.push(g);
+    return groups
+      .filter(t => Math.abs(t.sum) >= minDeg)
+      .map(t => {
+        const a = Math.abs(t.sum);
+        const kind = a < 55 ? 'slight' : a < 120 ? 'turn' : a < 165 ? 'sharp' : 'uturn';
+        return { along: t.along, dir: t.sum > 0 ? 'right' : 'left', kind };
+      });
+  }
+
+  return { R, distance, bearing, lineLength, projectOnPolyline, formatDistance, formatDuration, formatSpeed, lonLatToTile, tilesForBounds, cumulative, pointAlong, findTurns };
 });

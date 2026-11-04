@@ -15,25 +15,60 @@
 <body>
 <main class="map-wrap">
   <div id="map"></div>
+
   <header class="hud">
     <div class="speed"><b id="spd">--</b><span>км/ч</span></div>
-    <div class="hud-r"><span id="gps">GPS: поиск…</span><span id="bat">🔋 —</span></div>
+    <div class="hud-r"><span id="gps">GPS: поиск…</span><span id="bat">—</span></div>
   </header>
+
+  <div class="search">
+    <label class="search-box">
+      <span data-icon="search" data-size="18"></span>
+      <input id="search-input" type="search" placeholder="Куда едем?" autocomplete="off" enterkeyhint="search">
+    </label>
+    <ul id="search-results" class="search-results" hidden></ul>
+  </div>
+
+  <nav class="map-tools" aria-label="Карта">
+    <button id="btn-follow" class="tool on" title="Следовать за мной"><span data-icon="target" data-size="20"></span></button>
+    <button id="btn-layers" class="tool" title="Слой карты"><span data-icon="layers" data-size="20"></span></button>
+    <button id="btn-elev" class="tool" title="Перепады высот"><span data-icon="mountain" data-size="20"></span></button>
+    <button id="btn-theme" class="tool" title="Тёмная тема"><span data-icon="moon" data-size="20"></span></button>
+    <div id="layer-pop" class="pop" hidden>
+      <button data-base="osm" class="on">Схема</button>
+      <button data-base="sat">Спутник</button>
+    </div>
+  </nav>
+
+  <aside id="nav-card" class="nav-card" hidden>
+    <div class="turn"><span id="turn-ico" data-icon="straight" data-size="34"></span></div>
+    <div class="nav-txt">
+      <b id="turn-dist">—</b>
+      <small id="turn-label">Прямо</small>
+    </div>
+  </aside>
+
   <div id="toast" class="toast" hidden></div>
 </main>
 
 <section class="panel">
   <div class="tab" data-tab="map">
+    <div id="nav-bar" class="nav-bar" hidden>
+      <div><small class="muted">Осталось</small><b id="nav-left">—</b></div>
+      <div><small class="muted">Прибытие</small><b id="nav-eta">—</b></div>
+      <button id="btn-nav-stop" class="danger">Стоп</button>
+    </div>
     <div class="row">
-      <button id="btn-rec" class="primary grow">● Записать поездку</button>
-      <button id="btn-follow" class="on">◎ Слежу</button>
+      <button id="btn-rec" class="primary grow"><span data-icon="rec" data-size="18"></span> Записать поездку</button>
     </div>
     <p id="rec-info" class="muted"></p>
-    <p class="muted small">Здесь видна ваша позиция. Игроки из лобби отображаются на карте вместе со скоростью и направлением движения. Вкладка «Лобби» — создать игру или войти по коду.</p>
+    <p class="muted small">Ваша позиция и игроки из лобби видны на карте: скорость, заряд и направление движения. Введите адрес сверху, чтобы построить маршрут.</p>
   </div>
 
   <div class="tab" data-tab="route" hidden>
     <p id="plan-info" class="info"></p>
+    <div id="plan-difficulty" class="difficulty" hidden></div>
+    <div id="plan-profile-chart" class="chart" hidden></div>
     <label class="field inline">Тип дороги
       <select id="plan-profile">
         <option value="trekking">Прогулочный (trekking)</option>
@@ -42,11 +77,14 @@
       </select>
     </label>
     <div class="row wrap">
-      <button id="btn-my-start">📍 Старт от меня</button>
-      <button id="btn-undo">↶ Отменить точку</button>
-      <button id="btn-clear">Очистить</button>
-      <button id="btn-save-route" class="primary">Сохранить</button>
-      <button id="btn-gpx-plan">GPX</button>
+      <button id="btn-go" class="primary grow"><span data-icon="nav" data-size="18"></span> Поехать</button>
+    </div>
+    <div class="row wrap">
+      <button id="btn-my-start"><span data-icon="pin" data-size="18"></span> Старт от меня</button>
+      <button id="btn-undo"><span data-icon="undo" data-size="18"></span> Точка</button>
+      <button id="btn-clear"><span data-icon="clear" data-size="18"></span> Очистить</button>
+      <button id="btn-save-route" class="primary"><span data-icon="check" data-size="18"></span> Сохранить</button>
+      <button id="btn-gpx-plan"><span data-icon="file" data-size="18"></span> GPX</button>
     </div>
     <h3>Сохранённые маршруты</h3>
     <div id="route-list"></div>
@@ -59,6 +97,7 @@
 
   <div class="tab" data-tab="offline" hidden>
     <h3>Скачать карту для офлайн</h3>
+    <p class="muted small">Скачивается слой, выбранный на карте: схема или спутник.</p>
     <label class="field">Область
       <select id="pack-area">
         <option value="view">Текущий вид на карте</option>
@@ -73,7 +112,7 @@
     </div>
     <p id="pack-est" class="info"></p>
     <div class="row">
-      <button id="btn-pack-go" class="primary grow">⬇ Скачать</button>
+      <button id="btn-pack-go" class="primary grow"><span data-icon="download" data-size="18"></span> Скачать</button>
       <button id="btn-pack-cancel" hidden>Отмена</button>
     </div>
     <div id="pack-progress" hidden>
@@ -85,10 +124,10 @@
     <p id="storage-info" class="muted small"></p>
     <details>
       <summary>Адреса карт и маршрутов</summary>
-      <label class="field">Адрес тайлов<input id="set-tile"></label>
+      <label class="field">Адрес тайлов схемы<input id="set-tile"></label>
       <label class="field">Сервер маршрутов (BRouter)<input id="set-router"></label>
       <div class="row"><button id="btn-save-settings">Сохранить</button></div>
-      <p class="muted small">Тайлы — OpenStreetMap. Правила OSM запрещают массовую загрузку тайлов, поэтому скачивайте небольшие области или укажите адрес своего тайлового сервера либо провайдера, который разрешает офлайн-кэш. Маршруты строятся онлайн; сохранённые маршруты, поездки и загруженные карты работают без сети.</p>
+      <p class="muted small">Схема — OpenStreetMap, спутник — Esri World Imagery, высоты — открытые Terrain Tiles. Правила OSM запрещают массовую загрузку тайлов: скачивайте небольшие области или укажите свой тайловый сервер. Маршруты строятся онлайн; сохранённые маршруты, поездки и загруженные карты работают без сети.</p>
     </details>
   </div>
 
@@ -96,6 +135,9 @@
     <div id="lobby-setup">
       <label class="field">Ваше имя<input id="lb-name" maxlength="20" placeholder="Например, Миша"></label>
       <label class="field">Сервер лобби<input id="lb-server" placeholder="wss://адрес-сервера/ws"></label>
+      <div class="row">
+        <button id="lb-skin" class="grow"><span data-icon="palette" data-size="18"></span> Мой курсор: <b id="lb-skin-name">Машинка</b></button>
+      </div>
       <div class="row"><button id="lb-create" class="primary grow">Создать лобби</button></div>
       <div class="divider">или войти по коду</div>
       <div class="row">
@@ -112,8 +154,8 @@
           <div id="lb-code-big" class="code"></div>
         </div>
         <div class="col">
-          <button id="lb-share">Поделиться</button>
-          <button id="lb-leave" class="danger">Выйти</button>
+          <button id="lb-share"><span data-icon="share" data-size="18"></span> Поделиться</button>
+          <button id="lb-leave" class="danger"><span data-icon="close" data-size="18"></span> Выйти</button>
         </div>
       </div>
       <p id="lb-meta" class="info"></p>
@@ -127,17 +169,41 @@
 </section>
 
 <nav class="tabbar">
-  <button data-tab="map" class="on">🗺<span>Карта</span></button>
-  <button data-tab="route">🧭<span>Маршрут</span></button>
-  <button data-tab="tracks">📈<span>Поездки</span></button>
-  <button data-tab="offline">⬇<span>Офлайн</span></button>
-  <button data-tab="lobby">👥<span>Лобби</span></button>
+  <button data-tab="map" class="on"><span data-icon="map" data-size="22"></span><span class="lbl">Карта</span></button>
+  <button data-tab="route"><span data-icon="route" data-size="22"></span><span class="lbl">Маршрут</span></button>
+  <button data-tab="tracks"><span data-icon="tracks" data-size="22"></span><span class="lbl">Поездки</span></button>
+  <button data-tab="offline"><span data-icon="download" data-size="22"></span><span class="lbl">Офлайн</span></button>
+  <button data-tab="lobby"><span data-icon="users" data-size="22"></span><span class="lbl">Лобби</span></button>
 </nav>
+
+<!-- выбор курсора -->
+<div id="modal" class="modal" hidden>
+  <div class="card">
+    <div class="row between">
+      <h3 id="modal-title">Мой курсор</h3>
+      <button id="modal-close" class="icon-btn" aria-label="Закрыть"><span data-icon="close" data-size="20"></span></button>
+    </div>
+    <input id="skin-search" placeholder="Найти курсор…" autocomplete="off">
+    <div id="skin-grid" class="skin-grid"></div>
+  </div>
+</div>
+
+<!-- повтор финиша -->
+<section id="replay" class="replay" hidden>
+  <div class="replay-head">
+    <b id="replay-title">Заезд завершён</b>
+    <button id="replay-skip" class="small-btn">Пропустить</button>
+  </div>
+  <div id="replay-card" class="replay-card" hidden></div>
+</section>
 
 <script src="vendor/leaflet.js"></script>
 <script src="js/geo.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/skins.js"></script>
 <script src="js/store.js"></script>
 <script src="js/net.js"></script>
+<script src="js/elevation.js"></script>
 <script src="js/offline.js"></script>
 <script src="js/app.js"></script>
 <script src="js/lobby.js"></script>

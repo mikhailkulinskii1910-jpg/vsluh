@@ -1,58 +1,98 @@
-/* «Велокарта»: карта, GPS, запись поездок, маршруты (BRouter), офлайн-пакеты.
-   Лобби, гонки и погони — в lobby.js; обмениваются через window.VeloApp. */
+/* «Велокарта»: карта (схема, спутник, тёмная тема, перепады высот), GPS, навигация,
+   маршруты с оценкой сложности, запись поездок, офлайн-пакеты.
+   Лобби, гонки и повтор финиша — в lobby.js; обмен через window.VeloApp. */
 (function (root) {
   const G = root.VeloGeo, S = root.VeloStore, OFF = root.VeloOffline;
+  const IC = root.VeloIcons, SK = root.VeloSkins, EL = root.VeloElevation;
   const $ = (sel, el = document) => el.querySelector(sel);
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const kmh = ms => (ms == null ? '—' : Math.round(ms * 3.6));
+  const icon = (n, size = 18) => IC.icon(n, size);
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach(fn => { try { fn(data); } catch (e) { console.error(e); } });
 
+  const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+  const BASES = {
+    osm: { title: 'Схема', attribution: '© OpenStreetMap' },
+    sat: { title: 'Спутник', attribution: 'Tiles © Esri — Esri, Maxar, Earthstar Geographics' },
+  };
+
   /* ---------- состояние ---------- */
+  const cfg = S.settings.get();
   const state = {
-    fix: null,           // последняя позиция {lat, lon, acc, t, spd, hdg}
-    follow: true,        // карта следует за мной
+    fix: null,
+    follow: true,
     battery: { level: null, charging: null },
-    rec: null,           // активная запись поездки
-    wake: null,          // WakeLock экрана
-    lobbyAwake: false,   // экран не гаснет, пока игрок в лобби
+    rec: null,
+    wake: null,
+    lobbyAwake: false,
     tab: 'map',
+    base: cfg.base === 'sat' ? 'sat' : 'osm',
+    theme: cfg.theme === 'dark' ? 'dark' : 'light',
+    elev: !!cfg.elev,
   };
-  const plan = {          // текущий маршрут в планировщике
-    wps: [], coords: null, distance: 0, time: 0, ascent: 0,
-    profile: S.settings.get().profile, name: '', id: null,
+  const plan = {
+    wps: [], coords: null, distance: 0, time: 0, ascent: 0, stats: null,
+    profile: cfg.profile || 'trekking', name: '', id: null,
   };
-  let buildSeq = 0, routeTimer = 0;
-  const overlays = new Map(); // ключ → слой на карте (показанные поездки и маршруты)
+  const nav = { active: false, coords: null, cum: null, total: 0, turns: [], dest: null, along: 0, off: 0, rerouting: false };
+  let buildSeq = 0, routeTimer = 0, searchTimer = 0;
+  const overlays = new Map();
 
   /* ---------- карта ---------- */
-  const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([55.75, 37.62], 11); // зум — жестами
-  let tileLayer = L.tileLayer(S.settings.get().tileUrl, { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+  const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([55.75, 37.62], 11);
+  let baseLayer = null, elevLayer = null;
   const planLayer = L.layerGroup().addTo(map);
   let planLine = null;
-  const meMarker = L.marker([55.75, 37.62], { icon: markerIcon({ color: '#1f6feb', name: 'Я', me: true }), zIndexOffset: 1000, interactive: false }).addTo(map);
+  const meMarker = L.marker([55.75, 37.62], { icon: L.divIcon({ className: 'vmk', iconSize: [0, 0], html: '' }), zIndexOffset: 1000, interactive: false }).addTo(map);
   meMarker.setOpacity(0);
+
+  function baseTemplate(base = state.base) {
+    return base === 'sat' ? ESRI : S.settings.get().tileUrl;
+  }
+
+  function applyBase() {
+    if (baseLayer) map.removeLayer(baseLayer);
+    baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 18, attribution: BASES[state.base].attribution }).addTo(map);
+    document.body.classList.toggle('base-osm', state.base === 'osm');
+    $$('#layer-pop button').forEach(b => b.classList.toggle('on', b.dataset.base === state.base));
+    S.settings.set({ base: state.base });
+  }
+
+  function applyTheme() {
+    document.body.classList.toggle('theme-dark', state.theme === 'dark');
+    $('#btn-theme').classList.toggle('on', state.theme === 'dark');
+    S.settings.set({ theme: state.theme });
+  }
+
+  function applyElev() {
+    if (state.elev) {
+      if (!elevLayer) elevLayer = EL.makeLayer();
+      elevLayer.addTo(map);
+    } else if (elevLayer) map.removeLayer(elevLayer);
+    $('#btn-elev').classList.toggle('on', state.elev);
+    S.settings.set({ elev: state.elev });
+  }
 
   map.on('dragstart', () => { state.follow = false; renderFollow(); });
   map.on('click', e => { if (state.tab === 'route') addWaypoint(e.latlng); });
+  window.addEventListener('resize', () => map.invalidateSize());
 
-  /** Иконка игрока: цветная точка, стрелка направления движения, подпись со скоростью. */
-  function markerIcon({ color, name, heading, speedMs, me }) {
-    const arrow = heading == null ? '' :
-      `<div class="arrow" style="transform:rotate(${Math.round(heading)}deg)"><i style="border-bottom-color:${color}"></i></div>`;
+  /** Курсор игрока: скин, повёрнутый по направлению движения, и подпись. */
+  function skinIcon({ color, skin, heading, name, me, off, speedMs }) {
+    const svg = SK.get(skin).svg;
     const sub = speedMs != null ? ` · ${kmh(speedMs)} км/ч` : '';
     return L.divIcon({
       className: 'vmk',
       iconSize: [0, 0],
-      html: `<div class="vm${me ? ' me' : ''}">${arrow}<span class="dot" style="background:${color}"></span><span class="tag">${esc(name)}${sub}</span></div>`,
+      html: `<div class="vm${me ? ' me' : ''}${off ? ' off' : ''}"><div class="skin" style="color:${color};transform:rotate(${Math.round(heading || 0)}deg)">${svg}</div>` +
+        `<span class="tag">${esc(name)}${sub}</span></div>`,
     });
   }
 
   function renderFollow() {
-    const b = $('#btn-follow');
-    b.classList.toggle('on', state.follow);
-    b.textContent = state.follow ? '◎ Слежу' : '◎ Центр';
+    $('#btn-follow').classList.toggle('on', state.follow);
   }
 
   /* ---------- HUD и GPS ---------- */
@@ -63,14 +103,14 @@
     $('#spd').textContent = f && f.spd != null ? kmh(f.spd) : '--';
     setGps(f ? `GPS ±${Math.round(f.acc || 0)} м` : 'GPS: поиск…');
     const b = state.battery;
-    $('#bat').textContent = b.level == null ? '🔋 —' : `🔋 ${Math.round(b.level * 100)}%${b.charging ? ' ⚡' : ''}`;
+    $('#bat').innerHTML = b.level == null ? `${icon('battery', 16)} —` : `${icon(b.charging ? 'bolt' : 'battery', 16)} ${Math.round(b.level * 100)}%`;
   }
 
   function updateMe() {
     const f = state.fix;
     if (!f) return;
     meMarker.setLatLng([f.lat, f.lon]).setOpacity(1);
-    meMarker.setIcon(markerIcon({ color: '#1f6feb', name: 'Я', heading: f.hdg, speedMs: f.spd, me: true }));
+    meMarker.setIcon(skinIcon({ color: '#1f6feb', skin: S.settings.get().skin || SK.DEFAULT, heading: f.hdg, name: 'Я', me: true, speedMs: f.spd }));
   }
 
   function onPos(p) {
@@ -83,21 +123,21 @@
       if (dt > 0 && spd == null) spd = d / dt;
       if (hdg == null && d > 4) hdg = G.bearing(prev.lat, prev.lon, c.latitude, c.longitude);
     }
-    if (spd != null && spd < 0.5) spd = 0;            // GPS дрожит на стоянке
+    if (spd != null && spd < 0.5) spd = 0;
     const fix = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, t: p.timestamp, spd, hdg: hdg ?? (prev ? prev.hdg : null) };
     const first = !state.fix;
     state.fix = fix;
     if (first) map.setView([fix.lat, fix.lon], 15);
     else if (state.follow) map.panTo([fix.lat, fix.lon], { animate: true, duration: 0.4 });
     if (state.rec) recordPoint(fix);
+    if (nav.active) updateNav();
     updateMe();
     updateHud();
     emit('fix', fix);
   }
 
   function onGeoError(e) {
-    const msg = e.code === 1 ? 'нет доступа к геолокации' : e.code === 2 ? 'позиция недоступна' : 'таймаут GPS';
-    setGps('GPS: ' + msg);
+    setGps('GPS: ' + (e.code === 1 ? 'нет доступа к геолокации' : e.code === 2 ? 'позиция недоступна' : 'таймаут GPS'));
   }
 
   function startGps() {
@@ -118,10 +158,10 @@
     }).catch(() => {});
   }
 
-  /* ---------- экран не гаснет (во время записи и в лобби) ---------- */
+  /* ---------- экран не гаснет ---------- */
   async function syncWake() {
     if (!('wakeLock' in navigator)) return;
-    const want = state.lobbyAwake || !!state.rec;
+    const want = state.lobbyAwake || !!state.rec || nav.active;
     try {
       if (want && !state.wake) {
         state.wake = await navigator.wakeLock.request('screen');
@@ -130,19 +170,100 @@
         await state.wake.release();
         state.wake = null;
       }
-    } catch { /* браузер не разрешил — не критично */ }
+    } catch { /* не критично */ }
   }
   function keepAwake(on) { state.lobbyAwake = !!on; syncWake(); }
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncWake(); });
 
+  /* ---------- навигация ---------- */
+  const TURN_ICON = { slight: ['slightLeft', 'slightRight'], turn: ['turnLeft', 'turnRight'], sharp: ['turnLeft', 'turnRight'], uturn: ['uturn', 'uturn'] };
+  const TURN_TEXT = { slight: ['Держитесь левее', 'Держитесь правее'], turn: ['Налево', 'Направо'], sharp: ['Резко налево', 'Резко направо'], uturn: ['Разворот', 'Разворот'] };
+
+  function fmtClock(ms) { return new Date(ms).toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit' }); }
+
+  function startNav() {
+    if (!plan.coords) return toast('Сначала постройте маршрут');
+    nav.coords = plan.coords;
+    nav.cum = G.cumulative(nav.coords);
+    nav.total = nav.cum[nav.cum.length - 1];
+    nav.turns = G.findTurns(nav.coords);
+    nav.dest = plan.wps[plan.wps.length - 1] || null;
+    nav.along = 0; nav.off = 0;
+    nav.active = true;
+    state.follow = true;
+    renderFollow();
+    $('#nav-bar').hidden = false;
+    $('#nav-card').hidden = false;
+    syncWake();
+    showTab('map');
+    if (state.fix) updateNav(); else toast('Жду GPS-сигнал…');
+    toast('Маршрут начат');
+  }
+
+  function stopNav(silent) {
+    nav.active = false;
+    $('#nav-bar').hidden = true;
+    $('#nav-card').hidden = true;
+    syncWake();
+    if (!silent) toast('Навигация остановлена');
+  }
+
+  function updateNav() {
+    const f = state.fix;
+    if (!nav.active || !f) return;
+    const pr = G.projectOnPolyline(nav.coords, f.lat, f.lon);
+    if (pr.dist > 60) {
+      nav.off++;
+      if (nav.off === 3) toast('Вы сошли с маршрута, перестраиваю…');
+      if (nav.off >= 3 && !nav.rerouting) reroute(f);
+    } else {
+      nav.off = 0;
+      nav.along = Math.max(nav.along, pr.along);
+    }
+    const left = Math.max(0, nav.total - nav.along);
+    if (left < 25 && nav.dest) {
+      toast('Вы на месте!', 4000);
+      return stopNav(true);
+    }
+    const next = nav.turns.find(t => t.along > nav.along + 8);
+    if (next) {
+      const idx = next.dir === 'left' ? 0 : 1;
+      $('#turn-ico').innerHTML = icon(TURN_ICON[next.kind][idx], 34);
+      $('#turn-label').textContent = TURN_TEXT[next.kind][idx];
+      $('#turn-dist').textContent = G.formatDistance(next.along - nav.along);
+    } else {
+      $('#turn-ico').innerHTML = icon('flag', 34);
+      $('#turn-label').textContent = 'Финиш';
+      $('#turn-dist').textContent = G.formatDistance(left);
+    }
+    const speed = f.spd && f.spd > 1 ? f.spd : 4.2; // без скорости считаем ~15 км/ч
+    $('#nav-left').textContent = G.formatDistance(left);
+    $('#nav-eta').textContent = fmtClock(Date.now() + (left / speed) * 1000);
+  }
+
+  async function reroute(f) {
+    nav.rerouting = true;
+    try {
+      const r = await fetchRoute([[f.lat, f.lon], [nav.dest.lat, nav.dest.lng]]);
+      Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: r.ascent, stats: null });
+      nav.coords = r.coords; nav.cum = G.cumulative(r.coords); nav.total = nav.cum[nav.cum.length - 1];
+      nav.turns = G.findTurns(r.coords); nav.along = 0; nav.off = 0;
+      drawPlan(); renderPlan();
+      toast('Маршрут перестроен');
+    } catch (e) {
+      toast('Не удалось перестроить: ' + e.message, 4000);
+      nav.off = 0;
+    } finally { nav.rerouting = false; }
+  }
+
   /* ---------- запись поездки ---------- */
   function recordPoint(f) {
     const r = state.rec, pts = r.track.points, last = pts[pts.length - 1];
-    if (f.acc != null && f.acc > 50) return;          // плохой сигнал не пишем
+    if (f.acc != null && f.acc > 50) return;
     if (last) {
       const d = G.distance(last.lat, last.lon, f.lat, f.lon);
-      if (d < 2 && f.t - last.t < 5000) return;        // стоим — не плодим точки
-      if (d < 300) r.track.distance += d;              // скачки GPS не считаем
+      if (d < 2 && f.t - last.t < 5000) return;
+      if (d < 300) r.track.distance += d;
     }
     pts.push({ lat: f.lat, lon: f.lon, t: f.t, spd: f.spd, acc: f.acc, alt: f.alt });
     if (f.spd != null && f.spd > r.track.maxSpd) r.track.maxSpd = f.spd;
@@ -176,14 +297,14 @@
 
   function renderRec() {
     const b = $('#btn-rec');
-    b.textContent = state.rec ? '■ Остановить запись' : '● Записать поездку';
+    b.innerHTML = state.rec ? `${icon('stop', 18)} Остановить запись` : `${icon('rec', 18)} Записать поездку`;
     b.classList.toggle('danger', !!state.rec);
+    b.classList.toggle('primary', !state.rec);
     $('#rec-info').textContent = state.rec
       ? `Идёт запись: ${G.formatDistance(state.rec.track.distance)}, макс. ${kmh(state.rec.track.maxSpd)} км/ч`
-      : 'Запись не идёт. Поездки сохраняются на телефоне и доступны во вкладке «Поездки».';
+      : 'Запись не идёт. Поездки сохраняются на телефоне — вкладка «Поездки».';
   }
 
-  /** Поездка, не закрытая из-за перезагрузки страницы, закрывается по последней точке. */
   async function recoverTracks() {
     const tracks = await S.all('tracks');
     for (const t of tracks) {
@@ -195,6 +316,23 @@
   }
 
   /* ---------- маршрут: планировщик и BRouter ---------- */
+  async function fetchRoute(points) {
+    const s = S.settings.get();
+    const lonlats = points.map(([lat, lon]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join('|');
+    const url = `${s.routerUrl}?lonlats=${lonlats}&profile=${encodeURIComponent(plan.profile)}&alternativeidx=0&format=geojson`;
+    const res = await fetch(url);
+    const text = await res.text();
+    if (!res.ok) throw new Error(text.trim().slice(0, 160) || `HTTP ${res.status}`);
+    const f = JSON.parse(text).features[0];
+    const coords = f.geometry.coordinates.map(c => [c[1], c[0]]);
+    return {
+      coords,
+      distance: +f.properties['track-length'] || G.lineLength(coords),
+      time: +f.properties['total-time'] || 0,
+      ascent: +f.properties['filtered ascend'] || 0,
+    };
+  }
+
   function addWaypoint(ll) { plan.wps.push(ll); redrawWps(); scheduleRoute(); }
 
   function redrawWps() {
@@ -207,7 +345,7 @@
   function scheduleRoute() {
     clearTimeout(routeTimer);
     if (plan.wps.length < 2) {
-      plan.coords = null;
+      plan.coords = null; plan.stats = null;
       if (planLine) { planLine.remove(); planLine = null; }
       renderPlan();
       return;
@@ -217,27 +355,31 @@
 
   async function buildRoute() {
     const my = ++buildSeq;
-    const s = S.settings.get();
-    const lonlats = plan.wps.map(p => `${p.lng.toFixed(6)},${p.lat.toFixed(6)}`).join('|');
-    const url = `${s.routerUrl}?lonlats=${lonlats}&profile=${encodeURIComponent(plan.profile)}&alternativeidx=0&format=geojson`;
     renderPlan('Строю маршрут…');
     try {
-      const res = await fetch(url);
-      const text = await res.text();
-      if (!res.ok) throw new Error(text.trim().slice(0, 160) || `HTTP ${res.status}`);
-      const f = JSON.parse(text).features[0];
+      const r = await fetchRoute(plan.wps.map(p => [p.lat, p.lng]));
       if (my !== buildSeq) return;
-      plan.coords = f.geometry.coordinates.map(c => [c[1], c[0]]);
-      plan.distance = +f.properties['track-length'] || G.lineLength(plan.coords);
-      plan.time = +f.properties['total-time'] || 0;
-      plan.ascent = +f.properties['filtered ascend'] || 0;
+      Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: r.ascent, stats: null });
       drawPlan();
       renderPlan();
+      loadDifficulty(my);
     } catch (e) {
       if (my === buildSeq) {
-        plan.coords = null;
+        plan.coords = null; plan.stats = null;
         renderPlan('Не удалось построить маршрут: ' + e.message);
       }
+    }
+  }
+
+  /** Сложность по высотам — подгружается после построения маршрута. */
+  async function loadDifficulty(my) {
+    try {
+      const samples = await EL.sampleRoute(plan.coords, 50);
+      if (my !== buildSeq) return;
+      plan.stats = EL.profileStats(samples);
+      renderPlan();
+    } catch (e) {
+      console.warn('высоты недоступны', e);
     }
   }
 
@@ -250,16 +392,29 @@
     if (coords && coords.length) map.fitBounds(L.latLngBounds(coords), { padding: [30, 30] });
   }
 
+  function difficultyHtml(st) {
+    if (!st) return '';
+    return `<span class="diff-tag ${st.tone}">${esc(st.label)}</span>
+      <span class="diff-stats">подъём ${st.ascent} м · спуск ${st.descent} м · макс. уклон ${st.maxGrade}%</span>`;
+  }
+
   function renderPlan(status) {
     const info = status || (plan.coords
-      ? `${G.formatDistance(plan.distance)} · ~${G.formatDuration(plan.time)} · подъём ${Math.round(plan.ascent)} м`
-      : plan.wps.length ? 'Поставьте ещё одну точку' : 'Нажимайте на карту, чтобы поставить точки маршрута');
+      ? `${G.formatDistance(plan.distance)} · ~${G.formatDuration(plan.time)}`
+      : plan.wps.length ? 'Поставьте ещё одну точку' : 'Нажимайте на карту или введите адрес сверху');
     $('#plan-info').textContent = info;
     $('#plan-profile').value = plan.profile;
+    const d = $('#plan-difficulty');
+    d.hidden = !plan.stats;
+    d.innerHTML = difficultyHtml(plan.stats);
+    const c = $('#plan-profile-chart');
+    c.hidden = !plan.stats;
+    c.innerHTML = plan.stats ? EL.profileSvg(plan.stats.profile) + `<small>высоты ${plan.stats.minEle}–${plan.stats.maxEle} м</small>` : '';
+    $('#btn-go').disabled = !plan.coords;
   }
 
   function clearPlan() {
-    plan.wps = []; plan.coords = null; plan.id = null; plan.name = '';
+    plan.wps = []; plan.coords = null; plan.id = null; plan.name = ''; plan.stats = null;
     redrawWps(); scheduleRoute(); drawPlan();
   }
 
@@ -270,6 +425,7 @@
     const r = {
       id: plan.id || 'rt-' + Date.now(), name, createdAt: Date.now(), profile: plan.profile,
       coords: plan.coords, distance: plan.distance, time: plan.time, wps: plan.wps.map(p => [p.lat, p.lng]),
+      stats: plan.stats,
     };
     await S.put('routes', r);
     plan.id = r.id; plan.name = name;
@@ -281,9 +437,37 @@
     const r = await S.get('routes', id);
     if (!r) return;
     plan.wps = r.wps.map(([lat, lon]) => L.latLng(lat, lon));
-    plan.coords = r.coords; plan.distance = r.distance; plan.time = r.time; plan.ascent = 0;
-    plan.profile = r.profile || plan.profile; plan.id = r.id; plan.name = r.name;
+    Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: 0, stats: r.stats || null, profile: r.profile || plan.profile, id: r.id, name: r.name });
     redrawWps(); drawPlan(); renderPlan(); fitTo(r.coords);
+    showTab('route');
+  }
+
+  /* ---------- поиск адреса (Nominatim) ---------- */
+  async function searchPlaces(q) {
+    const list = $('#search-results');
+    if (!q || q.length < 3) { list.hidden = true; return; }
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=ru&q=${encodeURIComponent(q)}`);
+      const items = await res.json();
+      list.innerHTML = items.length ? items.map((it, i) =>
+        `<li data-i="${i}">${esc(it.display_name.split(',').slice(0, 3).join(','))}<small>${esc(it.type || '')}</small></li>`).join('')
+        : '<li>Ничего не найдено</li>';
+      list._items = items;
+    } catch {
+      list.innerHTML = '<li>Поиск недоступен (нет сети)</li>';
+    }
+    list.hidden = false;
+  }
+
+  function chooseDestination(it) {
+    const dest = L.latLng(+it.lat, +it.lon);
+    plan.name = it.display_name.split(',')[0];
+    plan.wps = state.fix ? [L.latLng(state.fix.lat, state.fix.lon), dest] : [dest];
+    if (!state.fix) toast('Нет GPS: старт не задан — отметьте его нажатием на карту', 4500);
+    $('#search-results').hidden = true;
+    $('#search-input').value = plan.name;
+    redrawWps(); scheduleRoute();
+    map.setView(dest, 14);
     showTab('route');
   }
 
@@ -295,8 +479,9 @@
     if (fit) fitTo(coords);
     return true;
   }
+  function dropOverlay(key) { if (overlays.has(key)) { overlays.get(key).remove(); overlays.delete(key); } }
 
-  /* ---------- экспорт GPX ---------- */
+  /* ---------- GPX ---------- */
   function toGpx(name, pts) {
     const trkpts = pts.map(p => {
       const time = p.t ? `<time>${new Date(p.t).toISOString()}</time>` : '';
@@ -314,7 +499,7 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
 
-  /* ---------- список поездок ---------- */
+  /* ---------- списки ---------- */
   async function renderTracks() {
     const list = $('#track-list');
     const tracks = (await S.all('tracks')).sort((a, b) => b.startedAt - a.startedAt);
@@ -323,7 +508,8 @@
       const end = t.endedAt || Date.now();
       const dur = (end - t.startedAt) / 1000;
       const avg = dur > 0 ? (t.distance / dur) * 3.6 : 0;
-      const live = !t.endedAt ? ' <span class="badge">идёт запись</span>' : '';
+      const live = !t.endedAt ? ' <span class="badge red">идёт запись</span>' : '';
+      const shown = overlays.has('trk:' + t.id);
       return `<article class="item">
         <div class="item-h"><b>${esc(t.name)}</b>${live}</div>
         <div class="stats">
@@ -331,31 +517,34 @@
           <span>ср. ${avg.toFixed(1)} км/ч</span><span>макс. ${kmh(t.maxSpd)} км/ч</span>
         </div>
         <div class="row">
-          <button data-act="show-track" data-id="${esc(t.id)}" class="${overlays.has('trk:' + t.id) ? 'on' : ''}">${overlays.has('trk:' + t.id) ? 'Скрыть' : 'Показать'}</button>
-          <button data-act="gpx-track" data-id="${esc(t.id)}">GPX</button>
-          <button data-act="del-track" data-id="${esc(t.id)}" class="danger">Удалить</button>
+          <button data-act="show-track" data-id="${esc(t.id)}" class="${shown ? 'on' : ''}">${shown ? 'Скрыть' : 'Показать'}</button>
+          <button data-act="gpx-track" data-id="${esc(t.id)}">${icon('file', 16)} GPX</button>
+          <button data-act="del-track" data-id="${esc(t.id)}" class="danger">${icon('trash', 16)}</button>
         </div></article>`;
     }).join('');
   }
 
-  /* ---------- сохранённые маршруты ---------- */
   async function renderRoutes() {
     const list = $('#route-list');
     const routes = (await S.all('routes')).sort((a, b) => b.createdAt - a.createdAt);
     if (!routes.length) { list.innerHTML = '<p class="muted">Сохранённых маршрутов пока нет.</p>'; return; }
-    list.innerHTML = routes.map(r => `<article class="item">
+    list.innerHTML = routes.map(r => {
+      const shown = overlays.has('rt:' + r.id);
+      return `<article class="item">
         <div class="item-h"><b>${esc(r.name)}</b></div>
+        ${r.stats ? `<div class="difficulty">${difficultyHtml(r.stats)}</div>` : ''}
         <div class="stats"><span>${G.formatDistance(r.distance)}</span><span>~${G.formatDuration(r.time)}</span><span>${esc(r.profile)}</span></div>
         <div class="row">
           <button data-act="open-route" data-id="${esc(r.id)}">Открыть</button>
-          <button data-act="show-route" data-id="${esc(r.id)}" class="${overlays.has('rt:' + r.id) ? 'on' : ''}">${overlays.has('rt:' + r.id) ? 'Скрыть' : 'Показать'}</button>
-          <button data-act="gpx-route" data-id="${esc(r.id)}">GPX</button>
-          <button data-act="del-route" data-id="${esc(r.id)}" class="danger">Удалить</button>
-        </div></article>`).join('');
+          <button data-act="show-route" data-id="${esc(r.id)}" class="${shown ? 'on' : ''}">${shown ? 'Скрыть' : 'Показать'}</button>
+          <button data-act="gpx-route" data-id="${esc(r.id)}">${icon('file', 16)} GPX</button>
+          <button data-act="del-route" data-id="${esc(r.id)}" class="danger">${icon('trash', 16)}</button>
+        </div></article>`;
+    }).join('');
   }
 
   /* ---------- офлайн-карты ---------- */
-  let dl = null; // { abort, pack }
+  let dl = null;
 
   function currentArea() { return $('#pack-area').value; }
 
@@ -370,7 +559,8 @@
     if (!(zmin >= 0 && zmax <= 18 && zmin <= zmax)) { $('#pack-est').textContent = 'Проверьте уровни зума (0–18)'; return; }
     const e = OFF.estimate(packBounds(), zmin, zmax);
     const over = e.count > OFF.MAX_TILES;
-    $('#pack-est').textContent = `${e.count} тайлов · ~${OFF.fmtMb(e.sizeMb)}` + (over ? ` — больше лимита ${OFF.MAX_TILES}, уменьшите зум или область` : '');
+    $('#pack-est').textContent = `${e.count} тайлов · ~${OFF.fmtMb(e.sizeMb)} · слой: ${BASES[state.base].title}` +
+      (over ? ` — больше лимита ${OFF.MAX_TILES}, уменьшите зум или область` : '');
     $('#btn-pack-go').disabled = over || !!dl;
   }
 
@@ -388,7 +578,7 @@
   }
 
   async function startPack() {
-    const name = currentArea() === 'view' ? 'Текущий вид' : OFF.AREAS[currentArea()].title;
+    const name = (currentArea() === 'view' ? 'Текущий вид' : OFF.AREAS[currentArea()].title) + ' · ' + BASES[state.base].title;
     const zmin = +$('#pack-zmin').value, zmax = +$('#pack-zmax').value;
     const ac = new AbortController();
     dl = { abort: ac };
@@ -397,7 +587,7 @@
     $('#btn-pack-go').disabled = true;
     try {
       const pack = await OFF.download({
-        name, bounds: packBounds(), zmin, zmax, signal: ac.signal,
+        name, bounds: packBounds(), zmin, zmax, template: baseTemplate(), signal: ac.signal,
         onProgress: (done, total) => {
           $('#pack-bar').style.width = Math.round((done / total) * 100) + '%';
           $('#pack-status').textContent = `Скачано ${done} из ${total}`;
@@ -424,13 +614,13 @@
       return `<article class="item">
         <div class="item-h"><b>${esc(p.name)}</b></div>
         <div class="stats"><span>зум ${p.zmin}–${p.zmax}</span><span>${p.tiles} тайлов</span><span>~${OFF.fmtMb(e.sizeMb)}</span>${p.failed ? `<span>ошибок: ${p.failed}</span>` : ''}</div>
-        <div class="row"><button data-act="del-pack" data-id="${esc(p.id)}" class="danger">Удалить</button></div></article>`;
+        <div class="row"><button data-act="del-pack" data-id="${esc(p.id)}" class="danger">${icon('trash', 16)} Удалить</button></div></article>`;
     }).join('') : '<p class="muted">Офлайн-карт пока нет. Выберите область и скачайте.</p>';
     const si = await OFF.storageInfo().catch(() => null);
-    $('#storage-info').textContent = si ? `Занято приложением и кэшем: ${si.usedMb.toFixed(0)} МБ из ~${(si.quotaMb / 1024).toFixed(1)} ГБ доступно браузеру` : '';
+    $('#storage-info').textContent = si ? `Занято приложением и кэшем: ${OFF.fmtMb(si.usedMb)} · доступно браузеру ~${(si.quotaMb / 1024).toFixed(1)} ГБ` : '';
   }
 
-  /* ---------- общие подсказки ---------- */
+  /* ---------- подсказки ---------- */
   let toastTimer = 0;
   function toast(text, ms = 3000) {
     const t = $('#toast');
@@ -451,41 +641,64 @@
     emit('tab', name);
   }
 
-  /* ---------- обработчики интерфейса ---------- */
+  /* ---------- интерфейс ---------- */
   function bindUi() {
     $$('.tabbar button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
     $('#btn-follow').addEventListener('click', () => {
       state.follow = !state.follow;
       renderFollow();
       if (state.follow && state.fix) map.panTo([state.fix.lat, state.fix.lon]);
     });
+    $('#btn-layers').addEventListener('click', () => { $('#layer-pop').hidden = !$('#layer-pop').hidden; });
+    $$('#layer-pop button').forEach(b => b.addEventListener('click', () => {
+      state.base = b.dataset.base;
+      applyBase();
+      $('#layer-pop').hidden = true;
+    }));
+    $('#btn-elev').addEventListener('click', () => { state.elev = !state.elev; applyElev(); if (state.elev) toast('Перепады высот: светлее — выше'); });
+    $('#btn-theme').addEventListener('click', () => { state.theme = state.theme === 'dark' ? 'light' : 'dark'; applyTheme(); });
+
+    const si = $('#search-input');
+    si.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(si.value.trim()), 700); });
+    si.addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); searchPlaces(si.value.trim()); } });
+    $('#search-results').addEventListener('click', e => {
+      const li = e.target.closest('li[data-i]');
+      if (li) chooseDestination($('#search-results')._items[+li.dataset.i]);
+    });
+
     $('#btn-rec').addEventListener('click', toggleRec);
+    $('#btn-go').addEventListener('click', startNav);
+    $('#btn-nav-stop').addEventListener('click', () => stopNav());
     $('#btn-undo').addEventListener('click', () => { plan.wps.pop(); redrawWps(); scheduleRoute(); });
     $('#btn-clear').addEventListener('click', clearPlan);
     $('#btn-save-route').addEventListener('click', saveRoute);
-    $('#btn-gpx-plan').addEventListener('click', () => plan.coords ? download(plan.name || 'маршрут', toGpx(plan.name || 'Маршрут', plan.coords.map(([lat, lon]) => ({ lat, lon })))) : toast('Сначала постройте маршрут'));
+    $('#btn-gpx-plan').addEventListener('click', () => plan.coords
+      ? download(plan.name || 'маршрут', toGpx(plan.name || 'Маршрут', plan.coords.map(([lat, lon]) => ({ lat, lon }))))
+      : toast('Сначала постройте маршрут'));
     $('#btn-my-start').addEventListener('click', () => {
       if (!state.fix) return toast('Нет GPS-позиции');
       if (!plan.wps.length) addWaypoint(L.latLng(state.fix.lat, state.fix.lon));
       else { plan.wps.unshift(L.latLng(state.fix.lat, state.fix.lon)); redrawWps(); scheduleRoute(); }
     });
-    $('#plan-profile').addEventListener('change', e => { plan.profile = e.target.value; S.settings.set({ profile: plan.profile }); if (plan.wps.length >= 2) scheduleRoute(); });
+    $('#plan-profile').addEventListener('change', e => {
+      plan.profile = e.target.value;
+      S.settings.set({ profile: plan.profile });
+      if (plan.wps.length >= 2) scheduleRoute();
+    });
 
     $('#track-list').addEventListener('click', async e => {
       const b = e.target.closest('button'); if (!b) return;
       const id = b.dataset.id;
       if (b.dataset.act === 'show-track') {
         const t = await S.get('tracks', id);
-        if (!t) return;
-        const on = toggleOverlay('trk:' + id, t.points.map(p => [p.lat, p.lon]), '#e53935', true);
-        if (!on) return renderTracks();
-        renderTracks();
+        if (t) { toggleOverlay('trk:' + id, t.points.map(p => [p.lat, p.lon]), '#e53935', true); renderTracks(); }
       } else if (b.dataset.act === 'gpx-track') {
         const t = await S.get('tracks', id);
         if (t) download(t.name, toGpx(t.name, t.points));
       } else if (b.dataset.act === 'del-track') {
         if (!confirm('Удалить поездку?')) return;
-        if (overlays.has('trk:' + id)) { overlays.get('trk:' + id).remove(); overlays.delete('trk:' + id); }
+        dropOverlay('trk:' + id);
         await S.del('tracks', id);
         renderTracks();
       }
@@ -501,7 +714,7 @@
       else if (act === 'gpx-route') download(r.name, toGpx(r.name, r.coords.map(([lat, lon]) => ({ lat, lon }))));
       else if (act === 'del-route') {
         if (!confirm('Удалить маршрут?')) return;
-        if (overlays.has('rt:' + id)) { overlays.get('rt:' + id).remove(); overlays.delete('rt:' + id); }
+        dropOverlay('rt:' + id);
         await S.del('routes', id);
         renderRoutes();
       }
@@ -529,19 +742,21 @@
       const routerUrl = $('#set-router').value.trim() || S.DEFAULTS.routerUrl;
       if (!tileUrl.includes('{z}') || !tileUrl.includes('{x}') || !tileUrl.includes('{y}')) return toast('В адресе тайлов должны быть {z} {x} {y}', 4000);
       S.settings.set({ tileUrl, routerUrl });
-      map.removeLayer(tileLayer);
-      tileLayer = L.tileLayer(tileUrl, { maxZoom: 18, attribution: '© OpenStreetMap' }).addTo(map);
+      applyBase();
       toast('Настройки сохранены');
     });
 
-    window.addEventListener('resize', () => map.invalidateSize());
     window.addEventListener('online', updateHud);
-    window.addEventListener('offline', () => setGps('нет сети — работают только офлайн-карты'));
+    window.addEventListener('offline', () => setGps('нет сети — работают офлайн-карты и сохранённые маршруты'));
   }
 
   /* ---------- запуск ---------- */
   function init() {
+    IC.hydrate(document);
     bindUi();
+    applyBase();
+    applyTheme();
+    applyElev();
     renderFollow();
     renderRec();
     renderPlan();
@@ -555,14 +770,15 @@
   }
 
   root.VeloApp = {
-    map, toast, showTab, fitTo, keepAwake, toGpx, download,
+    map, toast, showTab, fitTo, keepAwake, toGpx, download, esc,
     on(type, fn) { (listeners[type] ||= []).push(fn); },
     getFix: () => state.fix,
     getBattery: () => state.battery,
     getPlanRoute: () => (plan.coords ? { name: plan.name || 'Текущий маршрут', coords: plan.coords, total: plan.distance } : null),
     listRoutes: () => S.all('routes'),
     getRoute: id => S.get('routes', id),
-    markerIcon, toggleOverlay, esc,
+    skinIcon, toggleOverlay,
+    isNavigating: () => nav.active,
   };
 
   document.addEventListener('DOMContentLoaded', init);

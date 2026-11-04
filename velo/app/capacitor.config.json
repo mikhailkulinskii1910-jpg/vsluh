@@ -1,0 +1,12 @@
+{
+  "appId": "ru.velokarta.app",
+  "appName": "Велокарта",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true
+  }
+}

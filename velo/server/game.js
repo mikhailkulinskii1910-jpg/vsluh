@@ -14,6 +14,9 @@ const STALE_MS = 4000;        // позиция старше — считаем,
 const OFFLINE_REMOVE_MS = 120000;
 const MAX_MEMBERS = 30;
 const MAX_ROUTE_POINTS = 5000;
+const TRAIL_EVERY_MS = 2000;  // как часто запоминаем точку для повтора финиша
+const TRAIL_MAX = 1800;       // около часа гонки
+const DEFAULT_SKIN = 'car';
 const DEFAULT_GRACE_SEC = 120; // сколько ждём остальных после первого финиша
 
 function newCode(existing) {
@@ -49,6 +52,7 @@ function createMember(room, id, token, name, now) {
     online: true, seenAt: now, t: 0,
     lat: null, lon: null, acc: null, spd: null, hdg: null, bat: null, charging: null,
     role: null, progress: 0, finishedAt: null, place: null,
+    skin: DEFAULT_SKIN, trail: [], lastTrailAt: 0,
   };
   room.members.set(id, m);
   if (!room.hostId) room.hostId = id;
@@ -72,6 +76,7 @@ function sanitizeFix(f) {
     bat: num(f.bat, 0, 1),
     charging: typeof f.charging === 'boolean' ? f.charging : null,
     t: num(f.t, 0, 1e15) || 0,
+    skin: typeof f.skin === 'string' && /^[a-z0-9]{1,40}$/.test(f.skin) ? f.skin : undefined,
   };
 }
 
@@ -80,11 +85,37 @@ function updateState(room, id, rawFix, now) {
   const m = room.members.get(id);
   const fix = sanitizeFix(rawFix);
   if (!m || !fix) return null;
-  Object.assign(m, fix, { seenAt: now, online: true });
+  for (const k of Object.keys(fix)) if (fix[k] !== undefined) m[k] = fix[k];
+  m.seenAt = now;
+  m.online = true;
+  recordTrail(room, m, now);
   const events = [];
   if (room.config.mode === 'race') updateRace(room, m, now, events);
   else updateChase(room, m, now, events);
   return events;
+}
+
+/** Запоминает путь игрока во время заезда — для анимации финиша. */
+function recordTrail(room, m, now) {
+  const g = room.game;
+  if (g.status !== 'running' || m.lat == null || now - m.lastTrailAt < TRAIL_EVERY_MS || m.trail.length >= TRAIL_MAX) return;
+  m.lastTrailAt = now;
+  m.trail.push([now - g.startAt, +m.lat.toFixed(6), +m.lon.toFixed(6)]);
+}
+
+/** Повтор заезда: траектории всех участников и порядок финиша. */
+function buildReplay(room, now) {
+  const g = room.game;
+  return {
+    id: now,
+    startAt: g.startAt,
+    total: room.route ? Math.round(room.route.total) : 0,
+    members: [...room.members.values()].filter(m => m.trail.length).map(m => ({
+      id: m.id, name: m.name, color: m.color, skin: m.skin, place: m.place,
+      finishedMs: m.finishedAt != null ? m.finishedAt - g.startAt : null,
+      trail: m.trail,
+    })),
+  };
 }
 
 function updateRace(room, m, now, events) {
@@ -102,7 +133,7 @@ function updateRace(room, m, now, events) {
   if (!g.graceEndsAt) g.graceEndsAt = now + room.config.graceSec * 1000; // первый финишировал — ждём остальных
   events.push({ type: 'finished', id: m.id, place: m.place });
   const racers = [...room.members.values()];
-  if (racers.every(o => o.finishedAt != null)) endGame(room, 'all', null, null);
+  if (racers.every(o => o.finishedAt != null)) endGame(room, 'all', null, null, now);
 }
 
 function updateChase(room, m, now, events) {
@@ -121,7 +152,7 @@ function updateChase(room, m, now, events) {
       if (now - g.contacts.get(key) >= room.config.catchS * 1000) {
         g.caught = { chaserId: chaser.id, runnerId: runner.id };
         events.push({ type: 'caught', chaserId: chaser.id, runnerId: runner.id });
-        endGame(room, 'caught', 'chaser', chaser.id);
+        endGame(room, 'caught', 'chaser', chaser.id, now);
         return;
       }
     } else {
@@ -174,24 +205,26 @@ function startGame(room, now) {
     if (!chasers.size || chasers.size >= members.length) return 'Выберите догоняющих (не всех игроков)';
     members.forEach(m => { m.role = chasers.has(m.id) ? 'chaser' : 'runner'; });
   }
-  members.forEach(m => { m.progress = 0; m.finishedAt = null; m.place = null; if (room.config.mode === 'race') m.role = null; });
+  members.forEach(m => { m.progress = 0; m.finishedAt = null; m.place = null; m.trail = []; m.lastTrailAt = 0; if (room.config.mode === 'race') m.role = null; });
+  room.replay = null;
   room.game = freshGame();
   room.game.status = 'countdown';
   room.game.startAt = now + START_DELAY_MS;
   return null;
 }
 
-function endGame(room, reason, winnerRole, winnerId) {
+function endGame(room, reason, winnerRole, winnerId, now) {
   room.game.status = 'finished';
   room.game.reason = reason;
   room.game.winnerRole = winnerRole;
   room.game.winnerId = winnerId;
   room.game.contacts.clear();
+  if (room.config.mode === 'race' && room.game.startAt) room.replay = buildReplay(room, now);
 }
 
-function stopGame(room) {
+function stopGame(room, now = Date.now()) {
   if (room.game.status === 'idle' || room.game.status === 'finished') return null;
-  endGame(room, 'stopped', null, null);
+  endGame(room, 'stopped', null, null, now);
   return null;
 }
 
@@ -225,11 +258,11 @@ function tick(room, now) {
       }
     }
     if (now >= g.endsAt) {
-      if (room.config.mode === 'chase') endGame(room, 'time', 'runner', null);
-      else endGame(room, 'time', null, null);
+      if (room.config.mode === 'chase') endGame(room, 'time', 'runner', null, now);
+      else endGame(room, 'time', null, null, now);
       events.push({ type: 'ended', reason: 'time' });
     } else if (room.config.mode === 'race' && g.graceEndsAt && now >= g.graceEndsAt) {
-      endGame(room, 'grace', null, null);
+      endGame(room, 'grace', null, null, now);
       events.push({ type: 'ended', reason: 'grace' });
     }
   }
@@ -238,7 +271,7 @@ function tick(room, now) {
 
 function publicMember(room, m, now) {
   return {
-    id: m.id, name: m.name, color: m.color, online: m.online, host: m.id === room.hostId,
+    id: m.id, name: m.name, color: m.color, skin: m.skin, online: m.online, host: m.id === room.hostId,
     lat: m.lat, lon: m.lon, acc: m.acc, spd: m.spd, hdg: m.hdg, bat: m.bat, charging: m.charging,
     t: m.t, role: m.role, progress: Math.round(m.progress), place: m.place,
     finishedMs: m.finishedAt != null && room.game.startAt ? m.finishedAt - room.game.startAt : null,

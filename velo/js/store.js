@@ -42,6 +42,10 @@
     tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     routerUrl: 'https://brouter.de/brouter',
     profile: 'trekking',
+    base: 'osm',       // osm | sat
+    theme: 'light',    // light | dark
+    elev: false,       // слой перепадов высот
+    skin: 'car',       // курсор игрока
   };
 
   const settings = {

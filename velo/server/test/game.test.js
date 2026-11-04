@@ -171,3 +171,46 @@ test('гонка: после первого финиша ждём остальн
   assert.equal(room.game.reason, 'grace');
   assert.equal(game.snapshot(room, 50000).game.results[0].id, ids[0]);
 });
+
+test('гонка: после финиша сохраняется повтор с траекториями и курсорами', () => {
+  const { room, ids } = roomWith(['a', 'b'], 'race');
+  game.setRoute(room, { name: 'x', coords: [[55, 37], [at(55, 400), 37]] });
+  game.setConfig(room, { graceSec: 0 });
+  game.startGame(room, 0); game.tick(room, game.START_DELAY_MS);
+  game.updateState(room, ids[0], { ...fix(55, 37), skin: 'dino' }, 10000);
+  game.updateState(room, ids[0], fix(at(55, 200), 37), 12500);
+  game.updateState(room, ids[0], fix(at(55, 398), 37), 14000);   // финиш
+  game.tick(room, 14000);                                        // окно ожидания 0 с — заезд закрыт
+  assert.equal(room.game.status, 'finished');
+  assert.ok(room.replay, 'повтор должен быть сохранён');
+  const a = room.replay.members.find(m => m.id === ids[0]);
+  assert.equal(a.skin, 'dino');
+  assert.equal(a.place, 1);
+  assert.ok(a.trail.length >= 2 && a.trail[0][0] >= 0);
+  assert.equal(a.finishedMs, 14000 - 10000);
+});
+
+test('неверный курсор отбрасывается, остаётся прежний', () => {
+  const { room, ids } = roomWith(['a'], 'race');
+  game.updateState(room, ids[0], { ...fix(55, 37), skin: 'drop table;' }, 1000);
+  assert.equal(room.members.get(ids[0]).skin, 'car');
+  game.updateState(room, ids[0], { ...fix(55, 37), skin: 'ufo' }, 2000);
+  assert.equal(room.members.get(ids[0]).skin, 'ufo');
+  game.updateState(room, ids[0], fix(55, 37), 3000);
+  assert.equal(room.members.get(ids[0]).skin, 'ufo');
+});
+
+test('навигация: повороты по геометрии маршрута', () => {
+  const pts = [[55, 37]];
+  let lat = 55, lon = 37;
+  const step = (dn, de) => { lat += dn / 111195; lon += de / (111195 * Math.cos(lat * Math.PI / 180)); pts.push([lat, lon]); };
+  for (let i = 0; i < 20; i++) step(50, 0);   // север 1 км
+  for (let i = 0; i < 10; i++) step(0, 50);   // поворот направо и 500 м на восток
+  const turns = G.findTurns(pts);
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].dir, 'right');
+  assert.ok(Math.abs(turns[0].along - 1000) < 60, `along=${turns[0].along}`);
+  const straight = [[55, 37]];
+  for (let i = 1; i <= 40; i++) straight.push([55 + (i * 50) / 111195, 37]);
+  assert.deepEqual(G.findTurns(straight), []);
+});

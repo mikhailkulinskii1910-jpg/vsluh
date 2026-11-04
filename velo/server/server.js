@@ -61,6 +61,12 @@ function broadcastRoom(room, extra = {}) {
   for (const ws of sockets) {
     if (ws.roomCode === room.code && ws.readyState === ws.OPEN) ws.send(payload);
   }
+  // повтор заезда отправляем один раз, когда гонка закончилась
+  if (room.replay && room.replaySent !== room.replay.id) {
+    const rp = JSON.stringify({ type: 'replay', replay: room.replay });
+    for (const ws of sockets) if (ws.roomCode === room.code && ws.readyState === ws.OPEN) ws.send(rp);
+    room.replaySent = room.replay.id;
+  }
   room.lastBroadcast = now;
   room.dirty = false;
   room.pendingEvents = [];
@@ -73,6 +79,7 @@ function attach(ws, room, member) {
   room.lastActivity = Date.now();
   send(ws, { type: 'joined', code: room.code, you: member.id, token: member.token, room: game.snapshot(room, Date.now()) });
   if (room.route) send(ws, { type: 'route', route: room.route });
+  if (room.replay) send(ws, { type: 'replay', replay: room.replay });
   room.dirty = true;
 }
 
@@ -176,7 +183,7 @@ function hostOnly(ws, msg) {
     }
     case 'config': err = game.setConfig(room, msg.config); room.dirty = true; break;
     case 'start': err = game.startGame(room, now); room.dirty = true; break;
-    case 'stop': err = game.stopGame(room); room.dirty = true; break;
+    case 'stop': err = game.stopGame(room, now); room.dirty = true; break;
     default: return;
   }
   if (err) return fail(ws, err);
