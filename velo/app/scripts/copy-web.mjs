@@ -10,7 +10,7 @@ const dst = join(here, '..', 'www');    // velo/app/www
 
 rmSync(dst, { recursive: true, force: true });
 mkdirSync(dst, { recursive: true });
-const files = ['index.html', 'style.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'sw.js', 'vendor', 'js'];
+const files = ['index.html', 'style.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'vendor', 'js'];
 for (const f of files) {
   const from = join(src, f);
   if (!existsSync(from)) throw new Error('нет файла: ' + from);
