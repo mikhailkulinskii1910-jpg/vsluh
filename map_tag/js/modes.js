@@ -56,7 +56,7 @@ export const modesMixin = {
       if (this.nextChaos == null) this.nextChaos = this.cfg.hideSec + 90 + Math.random() * 60;
       if (this.t >= this.nextChaos) {
         this.nextChaos = this.t + 120 + Math.random() * 60;
-        const kinds = ['blind', 'siren', 'rain', 'surge'].concat(this.hasPowerups ? [] : []).filter((k) => k !== 'rain' || this.hasPowerups);
+        const kinds = ['blind', 'siren', 'rain', 'surge', 'fog', 'frenzy'].concat(this.hasPowerups ? [] : []).filter((k) => k !== 'rain' || this.hasPowerups);
         const k = kinds[Math.floor(Math.random() * kinds.length)];
         this.chaosApply(k, true);
         this.netSend('chaos', { k, t: this.t });
@@ -149,6 +149,7 @@ export const modesMixin = {
   /** Кто побеждает, когда вышло время. */
   timeoutWinner() {
     if (this.social && this.social()) return this.hiders().length || this.escaped ? 'hiders' : 'hunters';
+    const aw = this.arenaTimeout(); if (aw) return aw;
     if (this.gmode === 'tag') return 'hiders';
     if (this.gmode === 'vip') return this.players.some((p) => p.id === this.vipId && p.role === 'hider') ? 'hiders' : 'hunters';
     if (this.gmode === 'treasure' || this.gmode === 'hill') return 'hunters';   // не успели собрать / удержать
@@ -162,8 +163,10 @@ export const modesMixin = {
     if (k === 'blind' && host) this.revealReadyAt = Math.max(this.revealReadyAt, T + 30);
     if (k === 'siren') for (const h of this.hiders()) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 10);
     if (k === 'rain' && host) for (let i = 0; i < 5; i++) this.supplies.push(this.newSupply());
+    if (k === 'fog') this.fogUntil = T + 20;
+    if (k === 'frenzy') for (const u of this.hunters()) u.boostUntil = T + 15;
     if (k === 'surge') for (const h of this.players) if (h.sim && h.role === 'hider') h.stamina = 100;
-    const mine = { blind: this.me.role === 'hunter' ? 'red' : 'green', siren: this.me.role === 'hider' ? 'red' : 'green', rain: 'green', surge: this.me.role === 'hider' ? 'green' : 'yellow' }[k];
+    const mine = { blind: this.me.role === 'hunter' ? 'red' : 'green', siren: this.me.role === 'hider' ? 'red' : 'green', rain: 'green', surge: this.me.role === 'hider' ? 'green' : 'yellow', fog: this.me.role === 'hider' ? 'green' : 'red', frenzy: this.me.role === 'hunter' ? 'green' : 'red' }[k];
     this.alert(mine, '🎲 ' + t('chaos_' + k), 'sparkle');
     this.vibrate([100, 60, 100]);
     this.events.push({ k: 'ch', t: Math.round(T), e: k });
@@ -201,6 +204,7 @@ export const modesMixin = {
 
   /** Цель бота с учётом режима (или null). */
   modeBotTarget(p) {
+    const at = this.arenaBotTarget(p); if (at) return at;
     if (this.phase() !== 'hunt') return null;
     if (this.gmode === 'hill') {
       const r = (Math.random() - 0.5) * HILL_R;

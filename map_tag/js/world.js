@@ -158,13 +158,21 @@ export const worldMixin = {
         if (hits.length && T - this.camSeen > 15) { this.camSeen = T; this.alert('blue', t('camSaw', { n: hits.map((h) => h.name).join(', ') }), 'eye'); }
       } else if (me.role === 'hider' && dist(me, o) <= OBJ.camera.r && T - this.camSeen > 10) { this.camSeen = T; this.alert('red', t('camYou'), 'eye'); this.vibrate([120]); }
     }
+    // сердцебиение: охотник ближе 35 м — телефон «стучит», чем ближе, тем чаще
+    if (ph === 'hunt' && me.role === 'hider') {
+      const d = Math.min(...this.hunters().map((u) => dist(u, me)), 1e9);
+      if (d < 35 && T >= (this.beatAt || 0)) { this.beatAt = T + (d < 15 ? 1.2 : 2.5); this.vibrate([60, 90, 60]); if (!this.beatWarned) { this.beatWarned = true; this.alert('red', t('heartbeat'), 'signal'); } }
+      if (d > 60) this.beatWarned = false;
+    }
     if (ph !== 'hunt' || this.indoor() || this.ch.noout) { this.outLeft = null; return; }
     // смертельная зона
     if (this.killZ.length && this.inKill(me)) { this.selfElim('kill'); return; }
     // вне зоны: 30 секунд или сразу, если слишком далеко
     if (me.outSince != null) {
-      if ((me.outDist || 0) > this.farLimit) { this.selfElim('far'); return; }
-      const left = OUT_LIMIT - (T - Math.max(me.outSince, this.cfg.hideSec));
+      if (this.cfg.outLimit !== 0 && (me.outDist || 0) > this.farLimit) { this.selfElim('far'); return; }
+      const lim = this.cfg.outLimit != null ? this.cfg.outLimit : OUT_LIMIT;
+      if (!lim) { this.outLeft = null; return; }
+      const left = lim - (T - Math.max(me.outSince, this.cfg.hideSec));
       this.outLeft = left;
       if (left <= 0) { this.selfElim('out'); return; }
       const s = Math.ceil(left);
@@ -207,6 +215,7 @@ export const worldMixin = {
     const me = this.me;
     if (me.role === 'dead') return true;
     if (me.role === 'hunter' && !this.ch.wall && this.hiddenInBush(p, d)) return false;
+    if (me.role === 'hunter' && !this.ch.wall && p.role === 'hider' && this.t < (this.fogUntil || 0) && d > 15) return false;
     return show;
   },
   /** Колокол: охотник рядом звонит — прячущиеся в 60 м слышат и видны 5 с. */
@@ -313,7 +322,7 @@ export const worldMixin = {
   },
   worldBanner() {
     const me = this.me, out = [];
-    if (this.outLeft != null && me.role !== 'dead') out.push(`<div class="out-timer"><div class="ot-ic"><span id="outArrow" style="display:inline-block">⬆</span></div><div class="ot-tx"><b>${t('outBack')}</b><span>${t('outRule', { s: OUT_LIMIT })} · <b id="outDist"></b></span></div><div class="ot-num" id="outT">0:${String(Math.max(0, Math.ceil(this.outLeft))).padStart(2, '0')}</div></div>`);
+    if (this.outLeft != null && me.role !== 'dead') out.push(`<div class="out-timer"><div class="ot-ic"><span id="outArrow" style="display:inline-block">⬆</span></div><div class="ot-tx"><b>${t('outBack')}</b><span>${t('outRule')} · <b id="outDist"></b></span></div><div class="ot-num" id="outT">0:${String(Math.max(0, Math.ceil(this.outLeft))).padStart(2, '0')}</div></div>`);
     if (me.role === 'dead' && !this.social()) out.push(`<div class="banner red"><div class="bi">☠</div><div>${t('elimYou', { r: t('elim_' + (me.elim || 'out')) })}${this.graveZ.length ? `<br><b>🪦 ${t('graveGo')} · <span id="graveD"></span></b>` : ''}</div></div>`);
     if (me.role === 'hider' && me.safeOn) out.push(`<div class="banner blue"><div class="bi">🛡</div><div>${t('safeOn', { s: Math.max(0, Math.ceil(SAFE_MAX - (this.t - (me.safeSince != null ? me.safeSince : this.t)))) })}</div></div>`);
     if (me.role === 'hider' && this.inBush(me)) out.push(`<div class="banner green"><div class="bi">🌳</div><div>${t('bushOn')}</div></div>`);

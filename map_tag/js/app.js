@@ -13,7 +13,7 @@ import { OBJ, OBJ_KINDS, OUT_LIMIT } from './world.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.4';
+const VERSION = '2.5';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -184,6 +184,7 @@ function advancedBlock(lb, c) {
   return `<label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('shrinkArea')}</b><br><span class="adv-hint">${t('shrinkAreaS')}</span></span><input type="checkbox" id="advShrink" ${shrink ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
     <label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('catchCode')}</b><br><span class="adv-hint">${t('catchCodeS')}</span></span><input type="checkbox" id="advCode" ${lb.catchCode !== false ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
     <label class="adv-row row" style="justify-content:space-between;flex-wrap:nowrap;cursor:pointer"><span><b>${t('transportOk')}</b><br><span class="adv-hint">${t('transportOkS')}</span></span><input type="checkbox" id="advTransport" ${lb.transport !== false ? 'checked' : ''} style="width:30px;height:30px;accent-color:var(--accent);flex:none"></label>
+    <div class="adv-row"><b>${t('outLimit')}</b><div class="adv-hint">${t('outLimitS')}</div><div class="seg" style="display:flex;margin-top:8px">${[15, 30, 60, 0].map((v) => `<button data-ol="${v}" class="${(lb.outLimit != null ? lb.outLimit : 30) === v ? 'on' : ''}" style="flex:1">${v ? v + ' ' + t('sec') : t('hv_off')}</button>`).join('')}</div></div>
     <div class="adv-row"><b>${t('botLevel')}</b><div class="seg" style="display:flex;margin-top:8px">${['easy', 'normal', 'hard'].map((v) => `<button data-bl="${v}" class="${(lb.botLevel || 'normal') === v ? 'on' : ''}" style="flex:1">${t('bl_' + v)}</button>`).join('')}</div></div>
     ${row('radius', t('areaRadius'), c.radius, 100, 2000, 10, c.radius + ' ' + t('m'), t('m'))}
     ${shrink ? row('final', t('finalRadius'), Math.round(c.shrinkTo * 100), 30, 100, 1, Math.round(c.shrinkTo * 100) + '%', '%', t('finalRadiusS')) : ''}
@@ -204,6 +205,7 @@ function bindAdvanced(el, lb, rerender) {
     set(k, Math.max(lim[0], Math.min(lim[1], v))); rerender();
   });
   el.querySelectorAll('[data-bl]').forEach((b) => b.onclick = () => { lb.botLevel = b.dataset.bl; rerender(); });
+  el.querySelectorAll('[data-ol]').forEach((b) => b.onclick = () => { lb.outLimit = +b.dataset.ol; rerender(); });
   const cc = el.querySelector('#advCode'); if (cc) cc.onchange = () => { lb.catchCode = cc.checked; save(); };
   const tr = el.querySelector('#advTransport'); if (tr) tr.onchange = () => { lb.transport = tr.checked; save(); };
   const sh = el.querySelector('#advShrink'); if (sh) sh.onchange = () => { set('shrink', sh.checked); rerender(); };
@@ -443,8 +445,8 @@ const SCREENS = {
         <div class="saved">${t('saved')}</div></div>`;
 
     const step1 = `
-      <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button></div>
-      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['indoor', '🏠'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
+      <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button><button class="chip" id="randMode" style="margin-left:auto;min-height:36px;padding:0 12px">🎲 ${t('randMode')}</button></div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['indoor', '🏠'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['flag', '🚩'], ['infection', '💉'], ['bounty', '🎯'], ['checkpoint', '🏴'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -526,6 +528,7 @@ const SCREENS = {
     el.querySelectorAll('[data-opt]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.opt.split(':'); lb[k] = v === 'on'; rerender(); });
     el.querySelectorAll('[data-chaos]').forEach((b) => b.onclick = () => { lb.chaos = b.dataset.chaos === 'on'; rerender(); });
     el.querySelectorAll('[data-gm]').forEach((b) => b.onclick = () => { lb.gmode = b.dataset.gm; lb.adv = {}; rerender(); });
+    const rg = el.querySelector('#randMode'); if (rg) rg.onclick = () => { const all = [...el.querySelectorAll('[data-gm]')].map((b) => b.dataset.gm).filter((g) => g !== lb.gmode); lb.gmode = all[Math.floor(Math.random() * all.length)]; lb.adv = {}; toast('🎲 ' + t('gm_' + lb.gmode)); rerender(); };
     el.querySelectorAll('[data-hk]').forEach((b) => b.onclick = () => { const [k, v] = b.dataset.hk.split(':'); lb[k] = v; rerender(); });
     el.querySelectorAll('[data-q]').forEach((b) => b.onclick = () => modal(`<p>${b.dataset.q === 'vis' ? t('visHelp') : b.dataset.q === 'helpers' ? t('helpersHelp') : b.dataset.q === 'gmode' ? t('gmodeHelp') : t('extraHelp')}</p><button class="btn block" data-x>${t('done')}</button>`, (m, close) => m.querySelector('[data-x]').onclick = close));
     el.querySelector('#leave').onclick = () => { if (NET && NET.role === 'host') { NET.room.send('abort', {}); NET.room.clearLobby(); setTimeout(netClose, 500); } S.lobby = null; save(); go('home'); };
@@ -662,7 +665,7 @@ const SCREENS = {
         bots: players.filter((p) => p.bot).length, hunters: players.filter((p) => p.role === 'hunter').length,
         roles: players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '',
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', outLimit: lb.outLimit != null ? lb.outLimit : 30, chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '',
         safeZones: zoneArr((lb.map || {}).safe), killZones: zoneArr((lb.map || {}).kill), graveZones: zoneArr((lb.map || {}).grave),
         objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || [])].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
@@ -750,6 +753,7 @@ const SCREENS = {
       </div>` : ''}
       <h3 class="h-sect">${t('players')}</h3>
       <div class="crew-list">${players.map(row).join('')}</div>
+      ${awardsHtml(res)}
       ${telHtml(res.tel)}
       <h3 class="h-sect">${t('yourGame')}</h3>
       <div class="card" style="padding:6px 18px">
@@ -908,6 +912,24 @@ function polyGeo(pts) {
   return { area, radius: Math.sqrt(area / Math.PI), center: { lat: lat0 + cy / ky, lng: lng0 + cx / kx } };
 }
 function defaultNames() { const n = (S.lobby && S.lobby.bots) || 3; return [S.name || (getLang() === 'ru' ? 'Я' : 'Me'), ...(BOT_NAMES[getLang()] || BOT_NAMES.ru).slice(0, n)]; }
+
+/** Награды раунда: лучший охотник, последний выживший, первый пойманный. */
+function awardsHtml(res) {
+  const ps = res.players || [];
+  if (ps.length < 2) return '';
+  const nm = (p) => esc(p.me ? t('you') : p.name);
+  const out = [];
+  const top = ps.filter((p) => p.catches > 0).sort((a, b) => b.catches - a.catches)[0];
+  if (top) out.push(['🏹', t('awHunter'), `${nm(top)} · ${top.catches}`]);
+  const hid = ps.filter((p) => p.startRole === 'hider');
+  const surv = hid.filter((p) => p.caughtAt == null);
+  const last = surv.length ? surv : hid.filter((p) => p.caughtAt != null).sort((a, b) => b.caughtAt - a.caughtAt).slice(0, 1);
+  if (last.length) out.push(['🦎', surv.length ? t('awSurvivor') : t('awLast'), last.slice(0, 3).map(nm).join(', ') + (surv.length ? '' : ' · ' + fmt(last[0].caughtAt))]);
+  const first = hid.filter((p) => p.caughtAt != null).sort((a, b) => a.caughtAt - b.caughtAt)[0];
+  if (first && hid.length > 1) out.push(['🐣', t('awFirst'), `${nm(first)} · ${fmt(first.caughtAt)}`]);
+  if (res.stats && res.stats.dist > 50) out.push(['👟', t('awDist'), fmtDist(res.stats.dist)]);
+  return out.length ? `<h3 class="h-sect">🏅 ${t('awards')}</h3><div class="awards">${out.map(([ic, k, v]) => `<div class="aw"><div class="aw-ic">${ic}</div><div class="aw-k">${k}</div><div class="aw-v">${v}</div></div>`).join('')}</div>` : '';
+}
 
 /** Графики высоты, скорости и заряда батареи за раунд. */
 function telHtml(tel) {

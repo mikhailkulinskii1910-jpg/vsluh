@@ -318,7 +318,8 @@ video.scan { width: 100%; border-radius: 18px; background: #000; aspect-ratio: 1
 .tray .pw svg { width: 26px; height: 26px; display: block; margin: 0 auto 4px; }
 .tray .pw .x { position: absolute; top: 4px; right: 6px; font-size: 11px; color: var(--gold); font-weight: 700; }
 .wait-cover { position: absolute; inset: 0; z-index: 1500; background: rgba(10,13,20,.82); display: grid; place-items: center; text-align: center; padding: 30px; }
-.wait-cover .big { font-size: 80px; font-weight: 700; color: var(--hunter); font-variant-numeric: tabular-nums; }
+.wait-cover .big:not(.btn) { font-size: 80px; font-weight: 700; color: var(--hunter); font-variant-numeric: tabular-nums; }
+.wait-cover .btn { max-width: 100%; }
 .demo-hint { font-size: 13px; color: #c8d1e0; background: rgba(16,19,27,.85); border-radius: 12px; padding: 6px 10px; justify-self: center; }
 
 /* маркеры карты */
@@ -589,3 +590,6 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .bld-plan { width: 160px; height: 120px; display: block; margin: 0 auto 6px; }
 .bld-plan polygon { fill: rgba(143, 208, 255, .15); stroke: #8fd0ff; stroke-width: 3; stroke-linejoin: round; }
 .bld-name { font-size: 13px; opacity: .7; margin-bottom: 6px; }
+.awards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.aw { background: var(--card2); border: 1px solid var(--line); border-radius: 16px; padding: 12px; text-align: center; }
+.aw-ic { font-size: 28px; } .aw-k { color: var(--muted); font-size: 13px; margin-top: 2px; } .aw-v { font-weight: 700; margin-top: 4px; word-break: break-word; }

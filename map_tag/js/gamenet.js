@@ -49,7 +49,7 @@ export const netMixin = {
         s: this.supplies.map((q) => [q.id, Math.round(q.x), Math.round(q.y)]),
         m: m ? [Math.round(m.x), Math.round(m.y), m.r, r1(m.deadline), m.need, r1(m.progress), m.started ? 1 : 0] : null,
         rr: r1(this.revealReadyAt), fr: r1(this.freezeReadyAt), nm: this.nextMissionAt === Infinity ? -1 : r1(this.nextMissionAt), pr,
-        md: this.modesState(), ex: this.extrasState(), so: this.socialState(), wo: this.worldState(),
+        md: this.modesState(), ex: this.extrasState(), so: this.socialState(), wo: this.worldState(), ar: this.arenaState(),
       });
     } else {
       const me = this.me;
@@ -73,6 +73,7 @@ export const netMixin = {
     if (this.extrasNet(type, d, from)) return;
     if (this.socialNet(type, d, from)) return;
     if (this.worldNet(type, d, from)) return;
+    if (this.arenaNet(type, d)) return;
     if (type === 'ext' && this.isClient) { this.cfg.huntSec = d.huntSec; return; }
     switch (type) {
       case 'pos': {   // позиция участника — получают все
@@ -98,6 +99,7 @@ export const netMixin = {
         if (d.ex) this.extrasApply(d.ex);
         if (d.so) this.socialApply(d.so);
         if (d.wo) this.worldApply(d.wo);
+        if (d.ar) this.arenaApply(d.ar);
         this.revealReadyAt = d.rr; this.freezeReadyAt = d.fr; this.nextMissionAt = d.nm < 0 ? Infinity : d.nm;
         this.netPrints(d.pr);
         break;
