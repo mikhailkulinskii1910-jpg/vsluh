@@ -11,6 +11,7 @@ import { extrasMixin } from './extras.js';
 import { socialMixin } from './social.js';
 import { worldMixin } from './world.js';
 import { arenaMixin } from './arena.js';
+import { indoorMixin } from './indoor.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -20,6 +21,7 @@ const COLORS = ['#ffb86b', '#8fd0ff', '#c3a6ff', '#ffd66b', '#7ee0c3', '#ff9ec7'
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const EMOTES = ['😂', '😱', '😈', '👋', '🙈', '🏃', '🔥', '🤫', '😎', '🥶', '💀', '👀'];
 const fmt = (s) => { s = Math.max(0, Math.ceil(s)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -72,7 +74,7 @@ export class Game {
     this.wallsInit(); this.worldInit();
     this.makePlayers();
     if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
-    this.modesInit(); this.extrasInit(); this.socialInit(); this.arenaInit();
+    this.modesInit(); this.extrasInit(); this.socialInit(); this.arenaInit(); this.roomsInit();
     if (this.hasPowerups && !this.isClient) for (let i = 0, n = this.ptSupply.length || 6 + Math.round(this.R / 150); i < n; i++) this.supplies.push(this.newSupply());
     if (this.isClient) this.nextMissionAt = Infinity;
     if (this.net) this.netInit();
@@ -386,7 +388,7 @@ export class Game {
     this.worldLocal(dt);
 
     if (ph === 'hunt') {
-      if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); this.modesStep(dt); this.arenaStep(dt); if (this.ended) return; this.extrasStep(dt); this.socialStep(); if (this.ended) return; }
+      if (!this.isClient) { this.checkCatches(); this.checkSupplies(); this.updateMission(dt); this.botAbilities(); this.modesStep(dt); this.arenaStep(dt); if (this.ended) return; this.roomsStep(); this.extrasStep(dt); this.socialStep(); if (this.ended) return; }
       if (this.ch.autocatch && me.role === 'hunter' && !this.isClient) for (const h of this.hiders()) if (!h.remote && h !== me && dist(h, me) < 30) this.catchPlayer(me, h);
       if (!this.shrinkWarned && !this.indoor() && this.t > this.cfg.hideSec + 5) { this.shrinkWarned = true; this.alert('green', t('zoneShrink'), 'target'); }
       if (!this.isClient && this.hiders().length === 0) { this.finish('hunters'); return; }
@@ -634,6 +636,7 @@ export class Game {
       return;
     }
     h.caughtAt = this.t; h.caughtBy = hunter.name; hunter.catches = (hunter.catches || 0) + 1;
+    if (hunter.bot) hunter.emote = { e: '😈', until: this.t + 4 }; if (h.bot) h.emote = { e: '😱', until: this.t + 4 };
     this.events.push({ k: 'c', t: Math.round(this.t), a: this.players.indexOf(hunter), b: this.players.indexOf(h), x: Math.round(h.x), y: Math.round(h.y) });
     if (!this.jailCatch(hunter, h)) {
       h.wasCaught = true; h.role = 'hunter'; h.running = false; h.target = null; h.holdMission = false;
@@ -859,9 +862,9 @@ export class Game {
       if (vis.has(p.id)) {
         const lk = this.lookSocial(p) || {};
         const col = (lk.role || p.role) === 'hunter' ? '#f26d7d' : p.role === 'dead' ? '#555' : lk.color || p.color;
-        const key = (lk.role || p.role) + (T < p.frozenUntil ? 'f' : '') + (p.id === this.vipId ? me.role : '') + (lk.name || '') + (this.isStunned(p) ? 's' : '') + this.arenaBadge(p);
+        const key = (lk.role || p.role) + (T < p.frozenUntil ? 'f' : '') + (p.id === this.vipId ? me.role : '') + (lk.name || '') + (this.isStunned(p) ? 's' : '') + this.arenaBadge(p) + (p.emote && T < p.emote.until ? p.emote.e : '');
         if (!m) { m = L.marker(this.ll(p), { interactive: false }).addTo(map); this.layers.players.set(p.id, m); }
-        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'vip' && p.id === this.vipId && me.role === 'hider' && p.role === 'hider' ? '<span class="mk-av">👑</span>' : this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${this.arenaBadge(p)}${esc(lk.name || p.name)}${this.isStunned(p) ? ' 💫' : ''}</div></div>` })); }
+        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk">${p.emote && T < p.emote.until ? `<div class="mk-emo">${p.emote.e}</div>` : ''}<div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'vip' && p.id === this.vipId && me.role === 'hider' && p.role === 'hider' ? '<span class="mk-av">👑</span>' : this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${this.arenaBadge(p)}${esc(lk.name || p.name)}${this.isStunned(p) ? ' 💫' : ''}</div></div>` })); }
         m.setLatLng(this.ll(p));
       } else if (m) { m.remove(); this.layers.players.delete(p.id); }
     }
@@ -1023,7 +1026,7 @@ export class Game {
       const unread = this.opts.chatUnread ? this.opts.chatUnread() : 0;
       const vo = this.opts.voice ? this.opts.voice() : { on: false };
       const voiceSq = vo.on ? `<button class="sq ${vo.talk ? 'talking' : ''}" data-a="vmic" aria-label="mic" style="font-size:24px">${vo.mic ? '🎙' : '🔇'}</button>` : '';
-      const chatSq = this.net ? `${voiceSq}<button class="sq" data-a="chat" aria-label="chat" style="color:var(--teal)">${I.mail}${unread ? `<span class="cnt" style="background:var(--hunter)">${unread}</span>` : ''}</button>` : '';
+      const chatSq = this.net ? `${voiceSq}<button class="sq" data-a="emote" aria-label="emote" style="font-size:24px">😀</button><button class="sq" data-a="chat" aria-label="chat" style="color:var(--teal)">${I.mail}${unread ? `<span class="cnt" style="background:var(--hunter)">${unread}</span>` : ''}</button>` : '';
       const chatBtn = this.net && !this.hasPowerups ? `<div class="side-col">${chatSq}</div>` : '';
       const side = this.hasPowerups ? `<div class="side-col">${chatSq}<button class="sq" data-a="tray" style="color:var(--supply)">${I.bolt}${me.powerups.length ? `<span class="cnt">${me.powerups.length}</span>` : ''}</button><button class="sq" data-a="tray">${this.trayOpen ? I.chevD : I.chevU}</button></div>` : '';
       if (me.role === 'spectator' || me.role === 'dead' || me.role === 'escaped') {
@@ -1071,6 +1074,7 @@ export class Game {
       case 'demo': if (this.cfg.mode !== 'demo') this.switchDemo(); break;
       case 'heading': this.askHeading(); break;
       case 'pause': this.togglePause(); break;
+      case 'emote': this.opts.modal(`<h2>${t('emoteTitle')}</h2><div class="emo-grid">${EMOTES.map((e) => `<button class="emo" data-e="${e}">${e}</button>`).join('')}</div>`, (box, close) => { box.querySelectorAll('[data-e]').forEach((b) => b.onclick = () => { close(); this.sendEmote(b.dataset.e); }); }); break;
       case 'bell': if (this.isClient) this.netSend('bellreq', {}); else this.ringBell(me); break;
       case 'legend': this.opts.openLegend && this.opts.openLegend(); break;
       case 'drone': this.droneToggle(); break;
@@ -1123,6 +1127,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin, arenaMixin);
+Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin, arenaMixin, indoorMixin);
 
 export { fmt };

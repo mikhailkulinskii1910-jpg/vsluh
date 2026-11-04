@@ -74,6 +74,7 @@ export const netMixin = {
     if (this.socialNet(type, d, from)) return;
     if (this.worldNet(type, d, from)) return;
     if (this.arenaNet(type, d)) return;
+    if (this.indoorNet(type, d, from)) return;
     if (type === 'ext' && this.isClient) { this.cfg.huntSec = d.huntSec; return; }
     switch (type) {
       case 'pos': {   // позиция участника — получают все

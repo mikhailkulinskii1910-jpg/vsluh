@@ -31,7 +31,7 @@ export const extrasMixin = {
     this.drone = null; this.droneReadyAt = 0; this.droneCtl = false;
     this.traps = []; this.tel = []; this.lastTelT = -10; this.battery = null;
     if (navigator.getBattery) navigator.getBattery().then((b) => { this.batteryObj = b; }).catch(() => {});
-    if (this.gmode === 'indoor') { this.nextMissionAt = Infinity; this.hasPowerups = false; this.supplies = []; this.noiseReadyAt = 0; this.botIndoorAt = (cfg.hideSec || 0) + 45 + Math.random() * 45; }
+    if (this.gmode === 'indoor') { this.nextMissionAt = Infinity; this.hasPowerups = false; this.supplies = []; this.noiseReadyAt = 0; this.hasFreeze = false; this.botIndoorAt = (cfg.hideSec || 0) + 45 + Math.random() * 45; }
   },
 
   // ---------- стены ----------
@@ -185,7 +185,7 @@ export const extrasMixin = {
     const me = this.me, alive = this.hiders().length, hunters = this.hunters().length;
     let plan = '';
     if (this.poly) { const P = this.poly, x0 = Math.min(...P.map((q) => q.x)), x1 = Math.max(...P.map((q) => q.x)), y0 = Math.min(...P.map((q) => q.y)), y1 = Math.max(...P.map((q) => q.y)), s = 200 / Math.max(1, x1 - x0, y1 - y0); plan = `<svg class="bld-plan" viewBox="-10 -10 ${(x1 - x0) * s + 20} ${(y1 - y0) * s + 20}"><polygon points="${P.map((q) => `${((q.x - x0) * s).toFixed(1)},${((y1 - q.y) * s).toFixed(1)}`).join(' ')}"/></svg><div class="bld-name">${this.cfg.buildingName ? this.cfg.buildingName.replace(/[<>&"]/g, '') : ''} · ${Math.round(x1 - x0)}×${Math.round(y1 - y0)} ${t('m')}</div>`; }
-    return `<div class="indoor">${plan || '<div class="ic">🏠</div>'}<h2>${t('gm_indoor')}</h2><p>${t('indoorHint')}</p>
+    return `<div class="indoor">${plan || '<div class="ic">🏠</div>'}<h2>${t('gm_indoor')}</h2><p>${t('indoorHint')}</p>${this.roomsHtml()}
       <div class="duo" style="margin-top:12px"><div class="tile"><div class="v" style="color:var(--hider)">${alive}</div><div class="l">${t('hidersPl')}</div></div><div class="tile"><div class="v" style="color:var(--hunter)">${hunters}</div><div class="l">${t('huntersPl')}</div></div></div>
       <div class="role-big ${me.role}">${t(me.role)}</div></div>`;
   },
@@ -252,7 +252,8 @@ export const extrasMixin = {
     if (this.indoor()) {
       let el = this.root.querySelector('.indoor-cover');
       if (!el) { el = document.createElement('div'); el.className = 'indoor-cover'; this.root.querySelector('#game').insertBefore(el, this.root.querySelector('.hud-top')); }
-      const html = this.indoorPanel(); if (el.innerHTML !== html) el.innerHTML = html;
+      const html = this.indoorPanel(); if (el._html !== html) { el._html = html; el.innerHTML = html; }
+      this.bindIndoor(el);
     }
   },
   /** Дополнительные кнопки в нижней панели. */

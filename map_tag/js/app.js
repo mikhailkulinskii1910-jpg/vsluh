@@ -10,10 +10,11 @@ import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
 import { renderMapEditor, drawMapExtras, mapPoints, buildingAt, lineBand } from './mapeditor.js';
 import { OBJ, OBJ_KINDS, OUT_LIMIT, ZX, ZX_KINDS } from './world.js';
+import { DEFAULT_ROOMS } from './indoor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.9';
+const VERSION = '3.0';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -503,7 +504,7 @@ const SCREENS = {
     const step2 = `
       <button class="set-sum" data-step="1">${I.gear}<b>${t('settings')}</b><span>${[t('gm_' + (lb.gmode || 'classic')), t(lb.size), t(lb.vis === 'city' ? 'openCity' : lb.vis), t(lb.light), t(lb.extra), ...(lb.compass && lb.compass !== 'off' ? [t('compass')] : []), ...(lb.detector && lb.detector !== 'off' ? [t('detector')] : []), ...(lb.fog && lb.fog !== 'off' ? [t('fog')] : []), ...(lb.chaos ? ['🎲 ' + t('chaos')] : [])].join(' · ')}</span></button>
       ${summary}
-      ${lb.gmode === 'indoor' ? `<div class="card bld-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span style="font-size:30px">🏢</span><div style="flex:1;min-width:0"><div class="kicker2">${t('bldTitle')}</div><b>${lb.building ? esc(lb.building.name || t('bldNoName')) : t('bldNone')}</b></div><button class="btn" id="bldAuto" style="flex:none">${I.crosshair}${t('bldAuto')}</button></div><p style="color:var(--muted);font-size:14px;margin:8px 0 0">${t('bldHint')}</p></div>` : ''}
+      ${lb.gmode === 'indoor' ? `<div class="card bld-card"><div class="row" style="flex-wrap:nowrap;gap:12px"><span style="font-size:30px">🏢</span><div style="flex:1;min-width:0"><div class="kicker2">${t('bldTitle')}</div><b>${lb.building ? esc(lb.building.name || t('bldNoName')) : t('bldNone')}</b></div><button class="btn" id="bldAuto" style="flex:none">${I.crosshair}${t('bldAuto')}</button></div><p style="color:var(--muted);font-size:14px;margin:8px 0 0">${t('bldHint')}</p><label class="field" style="margin-top:12px">🚪 ${t('roomsLbl')}</label><input class="input" id="roomsIn" maxlength="240" value="${esc((lb.rooms || DEFAULT_ROOMS[getLang() === 'en' ? 'en' : 'ru']).join(', '))}"><p style="color:var(--muted);font-size:13px;margin:6px 0 0">${t('roomsHint')}</p></div>` : ''}
       <div class="map-card">
         <div class="map-tools"><button class="icon-btn" id="pFit" aria-label="zone">${I.north}</button><button class="icon-btn" id="myloc" aria-label="me">${I.crosshair}</button><button class="btn" id="mapEd" style="min-height:48px;padding:0 12px">✏️ ${t('mapEditor')}</button>
           <div class="seg" style="margin-left:auto">${['circle', 'custom'].map((z) => `<button data-zs="${z}" class="${(lb.shape || 'circle') === z ? 'on' : ''}">${t(z === 'circle' ? 'shapeCircle' : 'shapeCustom')}</button>`).join('')}</div></div>
@@ -659,6 +660,7 @@ const SCREENS = {
         toast(t('bldPicked', { n: b.name || t('bldNoName') }));
       } catch { if (!quiet) toast(t('edBuildingsFail')); }
     };
+    const ri = el.querySelector('#roomsIn'); if (ri) ri.onchange = () => { lb.rooms = ri.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 12); if (lb.rooms.length < 2) lb.rooms = null; save(); hostPublish(); };
     const ba = el.querySelector('#bldAuto');
     if (ba) {
       ba.onclick = () => {
@@ -693,7 +695,7 @@ const SCREENS = {
         bots: players.filter((p) => p.bot).length, hunters: players.filter((p) => p.role === 'hunter').length,
         roles: players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
-        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', outLimit: lb.outLimit != null ? lb.outLimit : 30, chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '',
+        compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', outLimit: lb.outLimit != null ? lb.outLimit : 30, chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '', rooms: lb.rooms || null,
         zonesX: Object.fromEntries(ZX_KINDS.map((k) => [k, zoneArr(zl(lb, k))])),
         safeZones: zoneArr(zl(lb, 'safe')), killZones: zoneArr(zl(lb, 'kill')), graveZones: zoneArr(zl(lb, 'grave')),
         objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || []), ...lineZones(lb, 'barriers', 1.5)].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
