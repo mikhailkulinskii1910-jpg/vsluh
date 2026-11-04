@@ -29,7 +29,7 @@
     lobbyAwake: false,
     tab: 'map',
     base: cfg.base === 'sat' ? 'sat' : 'osm',
-    theme: ['night', 'graphite'].includes(cfg.theme) ? cfg.theme : (cfg.theme === 'dark' ? 'night' : 'light'),
+    theme: ['light', 'night', 'graphite'].includes(cfg.theme) ? cfg.theme : 'night',
     elev: !!cfg.elev,
   };
   const plan = {
@@ -65,6 +65,7 @@
 
   function applyTheme() {
     const b = document.body.classList;
+    b.toggle('theme-light', state.theme === 'light');
     b.toggle('theme-dark', state.theme !== 'light');
     b.toggle('theme-night', state.theme === 'night');
     b.toggle('theme-graphite', state.theme === 'graphite');
@@ -644,9 +645,31 @@
     toastTimer = setTimeout(() => { t.hidden = true; }, ms);
   }
 
+  /* ---------- панель: свернуть / развернуть ---------- */
+  function setPanelCollapsed(c) {
+    document.body.classList.toggle('panel-collapsed', c);
+    S.settings.set({ panelCollapsed: c });
+    setTimeout(() => map.invalidateSize(), 260); // карта занимает освободившееся место
+  }
+
+  function bindPanelHandle() {
+    const h = $('#panel-toggle');
+    h.addEventListener('click', () => setPanelCollapsed(!document.body.classList.contains('panel-collapsed')));
+    // жест: провести вниз — свернуть, вверх — развернуть
+    let y0 = null;
+    h.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true });
+    h.addEventListener('touchend', e => {
+      if (y0 == null) return;
+      const dy = e.changedTouches[0].clientY - y0;
+      if (Math.abs(dy) > 30) setPanelCollapsed(dy > 0);
+      y0 = null;
+    });
+  }
+
   /* ---------- вкладки ---------- */
   function showTab(name) {
     state.tab = name;
+    if (document.body.classList.contains('panel-collapsed')) setPanelCollapsed(false); // выбрали вкладку — панель открывается
     $$('.tab').forEach(t => { t.hidden = t.dataset.tab !== name; });
     $$('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
     if (name === 'tracks') renderTracks();
@@ -768,6 +791,8 @@
   function init() {
     IC.hydrate(document);
     bindUi();
+    bindPanelHandle();
+    if (cfg.panelCollapsed) document.body.classList.add('panel-collapsed');
     applyBase();
     applyTheme();
     applyElev();

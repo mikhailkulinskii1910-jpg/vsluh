@@ -43,7 +43,7 @@
     routerUrl: 'https://brouter.de/brouter',
     profile: 'trekking',
     base: 'osm',       // osm | sat
-    theme: 'light',    // light | dark
+    theme: 'night',    // light | night | graphite
     elev: false,       // слой перепадов высот
     skin: 'car',       // курсор игрока
   };
