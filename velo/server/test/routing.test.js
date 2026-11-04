@@ -43,12 +43,24 @@ test('профиль без тегов — доля неизвестна (null)'
   assert.equal(r.bikeFlags, null);
 });
 
-test('выбор: больше велодорожек в пределах допуска 2%', () => {
+test('выбор: допуск 0% — даже +1,5% ради велодорожек не берётся', () => {
   const fast = { distance: 10000, ascent: 0, bikeShare: 0.05 };
-  const bike = { distance: 10150, ascent: 0, bikeShare: 0.60 }; // +1,5%
+  const bike = { distance: 10150, ascent: 0, bikeShare: 0.60 };
   const best = R.pickBest([fast, bike]);
-  assert.equal(best.bikeShare, 0.60);
-  assert.equal(best.extraM, 150);
+  assert.equal(best.bikeShare, 0.05);
+  assert.equal(best.extraM, 0);
+});
+
+test('выбор: среди равных по стоимости — больше велодорожек', () => {
+  const a = { distance: 10760, ascent: 34, bikeShare: 0.0 };
+  const b = { distance: 10760, ascent: 34, bikeShare: 0.84 };
+  assert.equal(R.pickBest([a, b]).bikeShare, 0.84);
+});
+
+test('выбор: самый короткий вариант с велодорожками (Сокольники → Измайлово)', () => {
+  const fast = { distance: 7380, ascent: 29, bikeShare: 0.15 };
+  const safety = { distance: 7000, ascent: 35, bikeShare: 0.38 };
+  assert.equal(R.pickBest([fast, safety]).bikeShare, 0.38);
 });
 
 test('выбор: +5,8% ради велодорожек — уже вне допуска (Красная пл. → ВДНХ)', () => {
@@ -64,10 +76,10 @@ test('выбор: долгий вариант с велодорожками за
   assert.equal(R.pickBest([fast, detour]).bikeShare, 0.1);
 });
 
-test('выбор: при равной доле велодорожек — более короткий', () => {
+test('выбор: с допуском — при равной доле велодорожек более короткий', () => {
   const a = { distance: 7240, ascent: 0, bikeShare: 0.34 };
   const b = { distance: 7000, ascent: 0, bikeShare: 0.345 };
-  assert.equal(R.pickBest([a, b]).distance, 7000);
+  assert.equal(R.pickBest([a, b], 0.07).distance, 7000);
 });
 
 test('раскраска: отрезки по типу дороги', () => {
