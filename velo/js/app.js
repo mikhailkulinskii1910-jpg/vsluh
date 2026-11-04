@@ -30,10 +30,12 @@
     tab: 'map',
     base: cfg.base === 'sat' ? 'sat' : 'osm',
     elev: !!cfg.elev,
+    bike: cfg.bike !== false,
   };
   const plan = {
     wps: [], coords: null, distance: 0, time: 0, ascent: 0, stats: null,
-    profile: cfg.profile || 'trekking', name: '', id: null,
+    profile: cfg.routeMode2 ? (cfg.profile || 'best') : 'best', name: '', id: null,
+    bikeShare: null, bikeFlags: null, extraM: null, candidates: 1,
   };
   const nav = { active: false, coords: null, cum: null, total: 0, turns: [], dest: null, along: 0, off: 0, rerouting: false };
   let buildSeq = 0, routeTimer = 0, searchTimer = 0;
@@ -57,17 +59,32 @@
   /** Источники данных для текущих слоёв (показываются по кнопке «©» в панели). */
   function renderAttribution() {
     const parts = [state.base === 'sat' ? 'Снимки © Esri, Maxar, Earthstar Geographics' : 'Карта © участники OpenStreetMap'];
+    if (state.bike) parts.push('велодорожки: CyclOSM');
     if (state.elev) parts.push('высоты: Terrain Tiles (Mapzen, AWS)');
     parts.push('маршруты: BRouter', 'поиск: Nominatim');
     const el = document.getElementById('attr-text');
     if (el) el.textContent = parts.join(' · ');
   }
 
+  /** Слой велодорожек CyclOSM поверх любой подложки (выделяет велодорожки и велополосы). */
+  let bikeLayer = null;
+  function applyBikeLayer() {
+    if (bikeLayer) { map.removeLayer(bikeLayer); bikeLayer = null; }
+    if (state.bike) {
+      bikeLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm-lite/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19, className: 'bike-tiles', zIndex: 5 }).addTo(map);
+    }
+    const b = document.querySelector('#layer-pop [data-bike]');
+    if (b) b.classList.toggle('on', state.bike);
+    S.settings.set({ bike: state.bike });
+    renderAttribution();
+  }
+
   function applyBase() {
     if (baseLayer) map.removeLayer(baseLayer);
-    baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 18, attribution: BASES[state.base].attribution }).addTo(map);
+    baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 19, className: 'base-tiles' }).addTo(map);
+    applyBikeLayer();
     document.body.classList.toggle('base-osm', state.base === 'osm');
-    $$('#layer-pop button').forEach(b => b.classList.toggle('on', b.dataset.base === state.base));
+    $$('#layer-pop [data-base]').forEach(b => b.classList.toggle('on', b.dataset.base === state.base));
     S.settings.set({ base: state.base });
     renderAttribution();
   }
@@ -319,7 +336,7 @@
     nav.rerouting = true;
     try {
       const r = await fetchRoute([[f.lat, f.lon], [nav.dest.lat, nav.dest.lng]]);
-      Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: r.ascent, stats: null });
+      applyRoute(r);
       nav.coords = r.coords; nav.cum = G.cumulative(r.coords); nav.total = nav.cum[nav.cum.length - 1];
       nav.turns = G.findTurns(r.coords); nav.along = 0; nav.off = 0;
       drawPlan(); renderPlan();
@@ -391,21 +408,41 @@
   }
 
   /* ---------- маршрут: планировщик и BRouter ---------- */
-  async function fetchRoute(points) {
-    const s = S.settings.get();
+  const RT = root.VeloRouting;
+
+  /** Один запрос к BRouter: профиль и номер альтернативы. */
+  async function fetchOne(points, profile, alt = 0) {
+    const s2 = S.settings.get();
     const lonlats = points.map(([lat, lon]) => `${lon.toFixed(6)},${lat.toFixed(6)}`).join('|');
-    const url = `${s.routerUrl}?lonlats=${lonlats}&profile=${encodeURIComponent(plan.profile)}&alternativeidx=0&format=geojson`;
+    const url = `${s2.routerUrl}?lonlats=${lonlats}&profile=${encodeURIComponent(profile)}&alternativeidx=${alt}&format=geojson`;
     const res = await fetch(url);
     const text = await res.text();
     if (!res.ok) throw new Error(text.trim().slice(0, 160) || `HTTP ${res.status}`);
-    const f = JSON.parse(text).features[0];
-    const coords = f.geometry.coordinates.map(c => [c[1], c[0]]);
-    return {
-      coords,
-      distance: +f.properties['track-length'] || G.lineLength(coords),
-      time: +f.properties['total-time'] || 0,
-      ascent: +f.properties['filtered ascend'] || 0,
-    };
+    const r = RT.parseBRouter(JSON.parse(text));
+    if (!r.distance) r.distance = G.lineLength(r.coords);
+    return r;
+  }
+
+  /**
+   * Маршрут по выбранному режиму. «Больше велодорожек» (best): строим варианты нескольких профилей
+   * параллельно и берём тот, где больше всего велодорожек, если он не дороже самого выгодного более чем на 7%.
+   */
+  async function fetchRoute(points) {
+    if (plan.profile !== 'best') return fetchOne(points, plan.profile);
+    const jobs = [['safety', 0], ['trekking', 0], ['fastbike', 0]];
+    if (points.length === 2) jobs.push(['trekking', 1]); // альтернативы BRouter строит только для двух точек
+    const settled = await Promise.allSettled(jobs.map(([pr, al]) => fetchOne(points, pr, al)));
+    const cands = settled.filter(x => x.status === 'fulfilled').map(x => x.value);
+    if (!cands.length) throw settled[0].reason || new Error('сервер маршрутов недоступен');
+    return RT.pickBest(cands);
+  }
+
+  /** Записать построенный маршрут в план. */
+  function applyRoute(r) {
+    Object.assign(plan, {
+      coords: r.coords, distance: r.distance, time: r.time, ascent: r.ascent, stats: null,
+      bikeShare: r.bikeShare, bikeFlags: r.bikeFlags, extraM: r.extraM ?? null, candidates: r.candidates || 1,
+    });
   }
 
   function addWaypoint(ll) { plan.wps.push(ll); redrawWps(); scheduleRoute(); }
@@ -434,7 +471,7 @@
     try {
       const r = await fetchRoute(plan.wps.map(p => [p.lat, p.lng]));
       if (my !== buildSeq) return;
-      Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: r.ascent, stats: null });
+      applyRoute(r);
       drawPlan();
       renderPlan();
       loadDifficulty(my);
@@ -458,13 +495,28 @@
     }
   }
 
+  const BIKE_COLOR = '#4ade80';
+  /** Маршрут на карте: участки по велодорожкам — зелёные, остальные — белые. */
   function drawPlan() {
     if (planLine) planLine.remove();
-    planLine = plan.coords ? L.polyline(plan.coords, { color: '#ffffff', weight: 5, opacity: 0.9 }).addTo(map) : null;
+    planLine = null;
+    if (!plan.coords) return;
+    planLine = L.layerGroup(RT.splitByBike(plan.coords, plan.bikeFlags).map(run =>
+      L.polyline(run.coords, { color: run.bike ? BIKE_COLOR : '#ffffff', weight: run.bike ? 7 : 5, opacity: 1 }))).addTo(map);
   }
 
   function fitTo(coords) {
     if (coords && coords.length) map.fitBounds(L.latLngBounds(coords), { padding: [30, 30] });
+  }
+
+  function routeSummary() {
+    const parts = [G.formatDistance(plan.distance), '~' + G.formatDuration(plan.time)];
+    if (plan.bikeShare != null) parts.push(`велодорожки ${Math.round(plan.bikeShare * 100)}%`);
+    if (plan.profile === 'best' && plan.extraM != null && plan.candidates > 1) {
+      const min = Math.round(plan.extraM / 266); // ≈16 км/ч
+      parts.push(min < 1 ? 'без потери времени' : `+${min} мин ради велодорожек`);
+    }
+    return parts.join(' · ');
   }
 
   function difficultyHtml(st) {
@@ -475,8 +527,8 @@
 
   function renderPlan(status) {
     const info = status || (plan.coords
-      ? `${G.formatDistance(plan.distance)} · ~${G.formatDuration(plan.time)}`
-      : plan.wps.length ? 'Поставьте ещё одну точку' : 'Нажимайте на карту или введите адрес сверху');
+      ? routeSummary()
+      : plan.wps.length ? 'Поставьте ещё одну точку на карте или найдите адрес' : 'Нажимайте на карту или введите адрес сверху');
     $('#plan-info').textContent = info;
     $('#plan-profile').value = plan.profile;
     const d = $('#plan-difficulty');
@@ -489,7 +541,7 @@
   }
 
   function clearPlan() {
-    plan.wps = []; plan.coords = null; plan.id = null; plan.name = ''; plan.stats = null;
+    plan.wps = []; plan.coords = null; plan.id = null; plan.name = ''; plan.stats = null; plan.bikeFlags = null; plan.bikeShare = null;
     redrawWps(); scheduleRoute(); drawPlan();
   }
 
@@ -500,7 +552,7 @@
     const r = {
       id: plan.id || 'rt-' + Date.now(), name, createdAt: Date.now(), profile: plan.profile,
       coords: plan.coords, distance: plan.distance, time: plan.time, wps: plan.wps.map(p => [p.lat, p.lng]),
-      stats: plan.stats,
+      stats: plan.stats, bikeShare: plan.bikeShare ?? null, bikeFlags: plan.bikeFlags || null,
     };
     await S.put('routes', r);
     plan.id = r.id; plan.name = name;
@@ -512,21 +564,39 @@
     const r = await S.get('routes', id);
     if (!r) return;
     plan.wps = r.wps.map(([lat, lon]) => L.latLng(lat, lon));
-    Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: 0, stats: r.stats || null, profile: r.profile || plan.profile, id: r.id, name: r.name });
+    Object.assign(plan, { coords: r.coords, distance: r.distance, time: r.time, ascent: 0, stats: r.stats || null, profile: r.profile || plan.profile, id: r.id, name: r.name, bikeShare: r.bikeShare ?? null, bikeFlags: r.bikeFlags || null, extraM: null, candidates: 1 });
     redrawWps(); drawPlan(); renderPlan(); fitTo(r.coords);
     showTab('route');
   }
 
   /* ---------- поиск адреса (Nominatim) ---------- */
+  /** Короткий адрес результата: улица и дом, район или город. */
+  function shortAddress(it) {
+    const ad = it.address || {};
+    const street = [ad.road || ad.pedestrian || ad.footway, ad.house_number].filter(Boolean).join(', ');
+    const area = ad.suburb || ad.city_district || ad.city || ad.town || ad.village || ad.state || '';
+    return [street, area].filter(Boolean).join(' · ');
+  }
+
   async function searchPlaces(q) {
     const list = $('#search-results');
     if (!q || q.length < 3) { list.hidden = true; return; }
+    const f = state.fix;
+    // поиск ближе к вам: окно вокруг текущей позиции (результаты вне его не отбрасываются)
+    const bias = f ? `&viewbox=${(f.lon - 0.6).toFixed(3)},${(f.lat + 0.4).toFixed(3)},${(f.lon + 0.6).toFixed(3)},${(f.lat - 0.4).toFixed(3)}&bounded=0` : '';
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=ru&q=${encodeURIComponent(q)}`);
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&accept-language=ru${bias}&q=${encodeURIComponent(q)}`);
       const items = await res.json();
-      list.innerHTML = items.length ? items.map((it, i) =>
-        `<li data-i="${i}">${esc(it.display_name.split(',').slice(0, 3).join(','))}<small>${esc(it.type || '')}</small></li>`).join('')
-        : '<li>Ничего не найдено</li>';
+      if (f) {
+        items.forEach(it => { it._d = G.distance(f.lat, f.lon, +it.lat, +it.lon); });
+        items.sort((x, y) => x._d - y._d);
+      }
+      list.innerHTML = items.length ? items.map((it, i) => {
+        const ad = it.address || {};
+        const title = it.name || [ad.road || ad.pedestrian, ad.house_number].filter(Boolean).join(', ') || it.display_name.split(',')[0];
+        const sub = [shortAddress(it), it._d != null ? G.formatDistance(it._d) : ''].filter(Boolean).join(' · ');
+        return `<li data-i="${i}">${esc(title)}<small>${esc(sub)}</small></li>`;
+      }).join('') : '<li>Ничего не найдено</li>';
       list._items = items;
     } catch {
       list.innerHTML = '<li>Поиск недоступен (нет сети)</li>';
@@ -536,7 +606,7 @@
 
   function chooseDestination(it) {
     const dest = L.latLng(+it.lat, +it.lon);
-    plan.name = it.display_name.split(',')[0];
+    plan.name = it.name || it.display_name.split(',')[0];
     plan.wps = state.fix ? [L.latLng(state.fix.lat, state.fix.lon), dest] : [dest];
     if (!state.fix) toast('Нет GPS: старт не задан — отметьте его нажатием на карту', 4500);
     $('#search-results').hidden = true;
@@ -670,11 +740,12 @@
       if (state.follow && state.fix) map.panTo([state.fix.lat, state.fix.lon]);
     });
     $('#btn-layers').addEventListener('click', () => { $('#layer-pop').hidden = !$('#layer-pop').hidden; });
-    $$('#layer-pop button').forEach(b => b.addEventListener('click', () => {
+    $$('#layer-pop [data-base]').forEach(b => b.addEventListener('click', () => {
       state.base = b.dataset.base;
       applyBase();
       $('#layer-pop').hidden = true;
     }));
+    $('#layer-pop [data-bike]').addEventListener('click', () => { state.bike = !state.bike; applyBikeLayer(); });
     $('#btn-elev').addEventListener('click', () => { state.elev = !state.elev; applyElev(); if (state.elev) toast('Перепады высот: светлее — выше'); });
 
     const si = $('#search-input');
@@ -701,7 +772,7 @@
     });
     $('#plan-profile').addEventListener('change', e => {
       plan.profile = e.target.value;
-      S.settings.set({ profile: plan.profile });
+      S.settings.set({ profile: plan.profile, routeMode2: true });
       if (plan.wps.length >= 2) scheduleRoute();
     });
 

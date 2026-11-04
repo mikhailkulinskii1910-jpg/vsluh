@@ -41,7 +41,7 @@
     serverUrl: '',
     tileUrl: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     routerUrl: 'https://brouter.de/brouter',
-    profile: 'trekking',
+    profile: 'best',   // best — больше велодорожек без заметной потери времени
     base: 'osm',       // osm | sat
     theme: 'night',    // light | night | graphite
     elev: false,       // слой перепадов высот
