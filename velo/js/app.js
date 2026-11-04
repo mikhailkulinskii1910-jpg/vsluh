@@ -58,8 +58,9 @@
 
   /** Источники данных для текущих слоёв (показываются по кнопке «©» в панели). */
   function renderAttribution() {
-    const parts = [state.base === 'sat' ? 'Снимки © Esri, Maxar, Earthstar Geographics' : 'Карта © участники OpenStreetMap'];
-    if (state.bike) parts.push('велодорожки: CyclOSM');
+    const parts = [state.base === 'sat' ? 'Снимки © Esri, Maxar, Earthstar Geographics'
+      : vectorOn ? 'Карта © OpenFreeMap, OpenMapTiles, участники OpenStreetMap' : 'Карта © участники OpenStreetMap'];
+    if (state.bike && !vectorOn) parts.push('велодорожки: CyclOSM');
     if (state.elev) parts.push('высоты: Terrain Tiles (Mapzen, AWS)');
     parts.push('маршруты: BRouter', 'поиск: Nominatim');
     const el = document.getElementById('attr-text');
@@ -70,7 +71,12 @@
   let bikeLayer = null;
   function applyBikeLayer() {
     if (bikeLayer) { map.removeLayer(bikeLayer); bikeLayer = null; }
-    if (state.bike) {
+    if (vectorOn) {
+      // векторная схема рисует велодорожки сама — переключаем видимость слоя стиля
+      const m = baseLayer.getMaplibreMap && baseLayer.getMaplibreMap();
+      const setVis = () => { if (m && m.getLayer('cycleway')) m.setLayoutProperty('cycleway', 'visibility', state.bike ? 'visible' : 'none'); };
+      if (m) { if (m.isStyleLoaded()) setVis(); else m.once('styledata', setVis); }
+    } else if (state.bike) {
       bikeLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm-lite/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19, className: 'bike-tiles', zIndex: 5 }).addTo(map);
     }
     const b = document.querySelector('#layer-pop [data-bike]');
@@ -79,11 +85,20 @@
     renderAttribution();
   }
 
+  /* Схема — векторная (MapLibre, OpenFreeMap): чёткая на любом экране. Без WebGL — растровая OSM. */
+  const VS = root.VeloVectorStyle;
+  let vectorOn = false;
+
   function applyBase() {
     if (baseLayer) map.removeLayer(baseLayer);
-    baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 19, className: 'base-tiles' }).addTo(map);
+    vectorOn = state.base === 'osm' && !!(VS && VS.supported() && L.maplibreGL);
+    if (vectorOn) {
+      baseLayer = L.maplibreGL({ style: VS.build({ bike: state.bike }), interactive: false }).addTo(map);
+    } else {
+      baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 19, className: 'base-tiles' }).addTo(map);
+    }
     applyBikeLayer();
-    document.body.classList.toggle('base-osm', state.base === 'osm');
+    document.body.classList.toggle('base-osm', state.base === 'osm' && !vectorOn); // фильтр инверсии — только для растровой схемы
     $$('#layer-pop [data-base]').forEach(b => b.classList.toggle('on', b.dataset.base === state.base));
     S.settings.set({ base: state.base });
     renderAttribution();
