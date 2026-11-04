@@ -41,6 +41,8 @@
 
   /* ---------- карта ---------- */
   const map = L.map('map', { zoomControl: false, worldCopyJump: true }).setView([55.75, 37.62], 11);
+  // подпись OSM обязательна по лицензии: показываем свёрнутой кнопкой «©», по нажатию — полный текст
+  map.attributionControl.getContainer().addEventListener('click', e => { e.preventDefault(); e.currentTarget.classList.toggle('open'); }); // нажатие раскрывает подпись, а не открывает ссылку
   let baseLayer = null, elevLayer = null;
   const planLayer = L.layerGroup().addTo(map);
   let planLine = null;
@@ -306,7 +308,7 @@
     b.classList.toggle('primary', !state.rec);
     $('#rec-info').textContent = state.rec
       ? `Идёт запись: ${G.formatDistance(state.rec.track.distance)}, макс. ${kmh(state.rec.track.maxSpd)} км/ч`
-      : 'Запись не идёт. Поездки сохраняются на телефоне — вкладка «Поездки».';
+      : '';
   }
 
   async function recoverTracks() {

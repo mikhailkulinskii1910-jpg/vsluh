@@ -25,7 +25,10 @@ button .ico { margin-right: 2px; }
 body.base-osm .leaflet-tile-pane { filter: invert(1) grayscale(1) contrast(1.3) brightness(.9); }
 .leaflet-control-attribution { background: rgba(0,0,0,.7) !important; color: #888 !important; }
 .leaflet-container { font-family: inherit; }
-.leaflet-control-attribution { font-size: 10px; }
+.leaflet-control-attribution { font-size: 10px; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; white-space: nowrap; color: transparent !important; text-align: center; line-height: 20px; cursor: pointer; background: rgba(0,0,0,.6) !important; padding: 0 !important; }
+.leaflet-control-attribution::before { content: '©'; color: #888; font-size: 12px; }
+.leaflet-control-attribution.open { width: auto; height: auto; border-radius: 6px; padding: 2px 6px !important; color: #888 !important; line-height: 1.4; }
+.leaflet-control-attribution.open::before { content: none; }
 
 .hud {
   position: absolute; top: calc(env(safe-area-inset-top) + 8px); left: 10px; right: 10px; z-index: 500;
