@@ -45,7 +45,7 @@ export const extrasMixin = {
   /** Шаг с учётом стен: если впереди стена — скользим вдоль неё, иначе стоим. */
   tryMove(p, nx, ny) {
     const B = (q) => this.blockedFor(p, q);
-    if ((!this.walls.length && !this.killZ.length) || !B({ x: nx, y: ny }) || B(p)) { this.moveTo(p, nx, ny); return true; }
+    if ((!this.walls.length && !this.killZ.length && !this.graveZ.length) || !B({ x: nx, y: ny }) || B(p)) { this.moveTo(p, nx, ny); return true; }
     if (!B({ x: nx, y: p.y })) { this.moveTo(p, nx, p.y); return true; }
     if (!B({ x: p.x, y: ny })) { this.moveTo(p, p.x, ny); return true; }
     p.target = null; p.running = false;   // упёрлись — бот выберет новую цель

@@ -60,11 +60,24 @@ public class MainActivity extends Activity {
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setUserAgentString(s.getUserAgentString() + " MapTagApp/1.0");
 
+        // после обновления APK сбрасываем кэш WebView, иначе он отдаёт старые файлы приложения
+        try {
+            long upd = getPackageManager().getPackageInfo(getPackageName(), 0).lastUpdateTime;
+            android.content.SharedPreferences pr = getSharedPreferences("mt", MODE_PRIVATE);
+            if (pr.getLong("upd", 0) != upd) { web.clearCache(true); pr.edit().putLong("upd", upd).apply(); }
+        } catch (Exception ignored) { }
         web.addJavascriptInterface(new Bridge(), "MapTagNative");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
-                return loader.shouldInterceptRequest(req.getUrl());
+                WebResourceResponse r = loader.shouldInterceptRequest(req.getUrl());
+                if (r != null) {   // файлы приложения не кэшировать
+                    java.util.Map<String, String> h = new java.util.HashMap<>();
+                    if (r.getResponseHeaders() != null) h.putAll(r.getResponseHeaders());
+                    h.put("Cache-Control", "no-cache, no-store");
+                    r.setResponseHeaders(h);
+                }
+                return r;
             }
 
             @Override

@@ -59,13 +59,15 @@ export const worldMixin = {
   /** Можно ли поставить объект / игрока: не в стене и не ближе MARGIN к ней, не в смертельной зоне. */
   spotOk(pt, m = MARGIN) {
     if (this.killZ && this.killZ.length && this.inKill(pt)) return false;
+    if (this.graveZ && this.graveZ.length && this.inGrave(pt)) return false;
     if (!this.walls || !this.walls.length) return true;
     if (this.inWall(pt)) return false;
     for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; if (this.inWall({ x: pt.x + Math.cos(a) * m, y: pt.y + Math.sin(a) * m })) return false; }
     return true;
   },
   /** Ходить нельзя: стена, а ботам — ещё и смертельная зона. */
-  blockedFor(p, pt) { return (this.walls.length && this.inWall(pt)) || (p.bot && this.killZ.length && this.inKill(pt)); },
+  /** Ходить нельзя: стены; ботам — смертельная зона; живым — зона выбывших. */
+  blockedFor(p, pt) { return (this.walls.length && this.inWall(pt)) || (p.bot && this.killZ.length && this.inKill(pt)) || (p.role !== 'dead' && p.role !== 'spectator' && this.graveZ.length && this.inGrave(pt)); },
   inBush(p) { return this.objs.some((o) => o.k === 'bush' && dist(o, p) <= OBJ.bush.r); },
   hiddenInBush(h, d) { return h.role === 'hider' && ((d > 6 && this.inBush(h)) || (d > 10 && this.inZ('shadow', h)) || (d > 20 && this.foggy(h))); },
   inSmoke(p) { return (this.smokes || []).some((s) => this.t < s.until && dist(s, p) <= 25); },
@@ -222,6 +224,12 @@ export const worldMixin = {
       if (d > 60) this.beatWarned = false;
     }
     if (ph !== 'hunt' || this.indoor() || this.ch.noout) { this.outLeft = null; return; }
+    // зона выбывших: живым нельзя (в GPS — предупреждение, видно всем, через 15 с выбывание)
+    if (this.graveZ.length && this.inGrave(me)) {
+      if (this.graveSince == null) { this.graveSince = T; this.alert('red', t('graveNo'), 'target'); this.vibrate([300, 100, 300]); }
+      me.exposedUntil = Math.max(me.exposedUntil || 0, T + 2);
+      if (T - this.graveSince > 15) { this.graveSince = null; this.selfElim('grave'); return; }
+    } else this.graveSince = null;
     // смертельная зона
     if (this.killZ.length && this.inKill(me)) { this.selfElim('kill'); return; }
     // вне зоны: 30 секунд или сразу, если слишком далеко

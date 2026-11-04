@@ -188,7 +188,7 @@ const ru = {
   ed_safe: 'Безопасная', ed_kill: 'Смертельная', ed_grave: 'Выбывшие', ed_obj: 'Объект', edClearObjs: 'Убрать объекты',
   edHint_safe: 'Обведите безопасную зону 🛡: прячущихся в ней не ловят 20 секунд подряд, потом перерыв 60 с.', edHint_kill: 'Обведите смертельную зону ☠: кто зайдёт во время охоты — сразу выбывает. Боты её обходят.', edHint_grave: 'Обведите зону для выбывших 🪦: сюда идут выбывшие игроки и ждут конца раунда.', edHint_obj: 'Выберите объект и касайтесь карты, чтобы поставить. Если объектов нет — они расставятся сами.',
   opt_objects: 'Объекты на карте', legend: 'Легенда', legObjs: 'Объекты', legZones: 'Зоны', legOut: 'Граница зоны', legOutD: 'Вне зоны дольше {s} секунд — выбывание. Ушли слишком далеко — выбывание сразу. Телефон вибрирует, на экране красный таймер.',
-  zoneD_safe: 'Прячущихся не ловят 20 секунд подряд, потом 60 с перерыв.', zoneD_kill: 'Зашли во время охоты — сразу выбыли.', zoneD_grave: 'Здесь ждут выбывшие игроки.', zoneD_barrier: 'Здание или стена: не пройти ни игрокам, ни ботам.',
+  zoneD_safe: 'Прячущихся не ловят 20 секунд подряд, потом 60 с перерыв.', zoneD_kill: 'Зашли во время охоты — сразу выбыли.', zoneD_grave: 'Здесь ждут выбывшие игроки. Живым входить нельзя.', zoneD_barrier: 'Здание или стена: не пройти ни игрокам, ни ботам.',
   maskAs: 'Писать от имени', bldTitle: 'Здание для игры', bldNoName: 'Здание без названия', bldNone: 'не выбрано', bldAuto: 'Найти', bldHint: 'Контур здания под вами (или под точкой на карте) станет картой игры. Можно выбрать вручную в редакторе.', bldSearch: 'Ищем здание…', bldNotFound: 'Рядом нет зданий на карте OpenStreetMap', bldPicked: 'Карта игры — здание: {n}',
   gm_flag: 'Захват флага', gm_flagS: 'несите флаги 🚩 на базу', gm_infection: 'Инфекция', gm_infectionS: 'заражённые лечатся антидотом 💉', gm_bounty: 'Охота за головами', gm_bountyS: 'ловить можно только цель 🎯', gm_checkpoint: 'Чекпоинты', gm_checkpointS: 'захватите 5 точек по очереди',
   curedYou: 'Антидот! Вы снова прячущийся 💉', curedOther: '{n} вылечился(лась) антидотом', bountyHit: 'Вы не цель — охотник заморозил вас на 15 с', bountyWrong: '{n} — не цель: заморожен(а) на 15 с', flagPick: '{n} взял(а) флаг 🚩', flagDrop: 'Несущего поймали — флаг упал на землю', flagDone: '{n} донёс(ла) флаг! {a}/{b}',
@@ -209,6 +209,7 @@ const ru = {
   zoneD_fog: 'Видно только на 20 м — и изнутри, и снаружи.', zoneD_ice: 'Скользко: скорость ×1,5.', zoneD_alarm: 'Прячущийся вошёл — охотники видят его 6 секунд.', zoneD_lookout: 'Стоящий внутри видит соперников на 60 м.',
   zoneIn_fog: 'Туман: видно только на 20 м', zoneIn_ice: 'Лёд: вы скользите быстрее', zoneIn_alarm: 'Тревога: охотники знают, что вы здесь!', zoneIn_lookout: 'Вышка обзора: вы видите соперников на 60 м',
   alarmYou: 'Сработала тревога 🚨 — охотники видят вас 6 секунд!', alarmRang: 'Тревога 🚨: {n} засветился(лась)', smokeUp: '{n} поджёг(ла) дымовую шашку 💨', lhOn: 'Маяк 🗼: засечено прячущихся — {k}', medOn: 'Аптечка ⛑: вы снова в форме',
+  graveNo: 'Сюда нельзя — это зона выбывших 🪦! Выйдите за 15 секунд', elim_grave: 'зашёл(ла) в зону выбывших',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -394,7 +395,7 @@ const en = {
   ed_safe: 'Safe', ed_kill: 'Deadly', ed_grave: 'Out zone', ed_obj: 'Object', edClearObjs: 'Remove objects',
   edHint_safe: 'Outline a safe zone 🛡: Hiders inside can’t be caught for 20 seconds in a row, then a 60 s break.', edHint_kill: 'Outline a deadly zone ☠: anyone who enters during the hunt is out at once. Bots avoid it.', edHint_grave: 'Outline a zone for players who are out 🪦: they go there and wait for the round to end.', edHint_obj: 'Pick an object and tap the map to place it. With none placed, objects are spread automatically.',
   opt_objects: 'Objects on the map', legend: 'Legend', legObjs: 'Objects', legZones: 'Zones', legOut: 'Zone border', legOutD: 'Outside the zone for over {s} seconds — you are out. Too far away — out at once. Your phone vibrates and a red timer shows.',
-  zoneD_safe: 'Hiders can’t be caught for 20 seconds in a row, then a 60 s break.', zoneD_kill: 'Enter during the hunt — out at once.', zoneD_grave: 'Players who are out wait here.', zoneD_barrier: 'A building or wall: neither players nor bots can pass.',
+  zoneD_safe: 'Hiders can’t be caught for 20 seconds in a row, then a 60 s break.', zoneD_kill: 'Enter during the hunt — out at once.', zoneD_grave: 'Players who are out wait here. Others may not enter.', zoneD_barrier: 'A building or wall: neither players nor bots can pass.',
   maskAs: 'Write as', bldTitle: 'Building for the game', bldNoName: 'Unnamed building', bldNone: 'not chosen', bldAuto: 'Find', bldHint: 'The outline of the building you are in (or under the map point) becomes the game map. You can also pick one in the editor.', bldSearch: 'Looking for a building…', bldNotFound: 'No buildings nearby on OpenStreetMap', bldPicked: 'Game map — building: {n}',
   gm_flag: 'Capture the flag', gm_flagS: 'carry flags 🚩 to the base', gm_infection: 'Infection', gm_infectionS: 'the infected can be cured 💉', gm_bounty: 'Bounty hunt', gm_bountyS: 'only the target 🎯 can be caught', gm_checkpoint: 'Checkpoints', gm_checkpointS: 'capture 5 points in turn',
   curedYou: 'Antidote! You are a Hider again 💉', curedOther: '{n} was cured with an antidote', bountyHit: 'You are not the target — the Hunter froze you for 15 s', bountyWrong: '{n} is not the target: frozen for 15 s', flagPick: '{n} took a flag 🚩', flagDrop: 'The carrier was caught — the flag dropped', flagDone: '{n} delivered a flag! {a}/{b}',
@@ -415,6 +416,7 @@ const en = {
   zoneD_fog: 'You only see 20 m — inside and from outside.', zoneD_ice: 'Slippery: speed ×1.5.', zoneD_alarm: 'A Hider who enters is visible to Hunters for 6 seconds.', zoneD_lookout: 'Whoever stands inside sees opponents within 60 m.',
   zoneIn_fog: 'Fog: you only see 20 m', zoneIn_ice: 'Ice: you slide faster', zoneIn_alarm: 'Alarm: the Hunters know you are here!', zoneIn_lookout: 'Lookout tower: you see opponents within 60 m',
   alarmYou: 'The alarm went off 🚨 — Hunters see you for 6 seconds!', alarmRang: 'Alarm 🚨: {n} was exposed', smokeUp: '{n} set off a smoke bomb 💨', lhOn: 'Lighthouse 🗼: Hiders spotted — {k}', medOn: 'Medkit ⛑: you are back in shape',
+  graveNo: 'Keep out — this is the zone for players who are out 🪦! Leave within 15 seconds', elim_grave: 'entered the zone for players who are out',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 
