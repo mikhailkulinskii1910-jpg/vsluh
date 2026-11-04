@@ -13,7 +13,7 @@ import { OBJ, OBJ_KINDS, OUT_LIMIT, ZX, ZX_KINDS } from './world.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.8.3';
+const VERSION = '2.9';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -310,18 +310,45 @@ function go(screen, arg) {
 
 const SCREENS = {
   home(el) {
+    const st = S.stats, lb = S.lobby;
+    // уровень игрока из статистики
+    const xp = st.games * 20 + st.wins * 30 + st.caught * 10 + st.missions * 15;
+    const lvl = Math.floor(Math.sqrt(xp / 50)) + 1, lo = (lvl - 1) ** 2 * 50, hi = lvl ** 2 * 50;
+    const pct = Math.round((xp - lo) / Math.max(1, hi - lo) * 100);
+    // режим дня — одинаковый у всех в этот день
+    const MODES = [['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['flag', '🚩'], ['infection', '💉'], ['bounty', '🎯'], ['checkpoint', '🏴']];
+    const day = Math.floor(Date.now() / 864e5), [dm, di] = MODES[(day * 7 + 3) % MODES.length];
+    const tip = t('tip' + ((day % 8) + 1));
+    const km = (st.dist / 1000).toFixed(1);
     el.innerHTML = `${topbar(false)}
-      <h1 class="home-title">${t('homeTitle')}</h1>
-      <div class="home-sub">${t('homeSub')}</div>
-      <div class="menu">
-        <button class="menu-btn m-join" data-go="join"><span class="mi">${I.users}</span><span class="lbl">${t('join')}</span><span class="arr">${I.arrowR}</span></button>
-        <button class="menu-btn m-host" data-go="host"><span class="mi">${I.map}</span><span class="lbl">${t('host')}</span><span class="arr">${I.arrowR}</span></button>
-        <button class="menu-btn m-stats" data-go="stats"><span class="mi">${I.user}</span><span class="lbl">${t('stats')}</span><span class="arr">${I.arrowR}</span></button>
-        <button class="menu-btn m-quick" id="quick"><span class="mi">⚡</span><span class="lbl">${t('quickGame')}<br><small>${t('quickGameS')}</small></span><span class="arr">${I.arrowR}</span></button>
-        <button class="menu-btn m-learn" data-go="learn"><span class="mi">${I.book}</span><span class="lbl">${t('learn')}</span><span class="arr">${I.arrowR}</span></button>
-      </div>${supportBlock()}`;
+      <div class="hero-card">
+        <div class="hc-top">
+          <div class="hc-av">${S.avatar || esc((S.name || '?')[0].toUpperCase())}</div>
+          <div class="hc-who"><div class="hc-hi">${S.name ? t('hiName', { n: esc(S.name) }) : t('homeTitle')}</div><div class="hc-sub">${t('homeSub')}</div></div>
+          <div class="hc-lvl"><b>${lvl}</b><span>${t('lvl')}</span></div>
+        </div>
+        <div class="hc-xp"><i style="width:${pct}%"></i></div>
+        <div class="hc-stats"><div><b>${st.games}</b><span>${t('hsGames')}</span></div><div><b>${st.wins}</b><span>${t('hsWins')}</span></div><div><b>${st.caught}</b><span>${t('hsCaught')}</span></div><div><b>${km}</b><span>${t('hsKm')}</span></div></div>
+      </div>
+      ${lb ? `<button class="resume" data-go="lobby"><span class="rs-ic">🎮</span><span class="rs-t"><b>${t('resumeLobby')}</b><small>${t('gm_' + (lb.gmode || 'classic'))} · ${t('playersN', { n: (lb.players || []).length })}</small></span><span class="arr">${I.arrowR}</span></button>` : ''}
+      <div class="big2">
+        <button class="big-tile bt-host" data-go="host"><span class="bt-ic">${I.map}</span><b>${t('host')}</b><small>${t('hostS')}</small></button>
+        <button class="big-tile bt-join" data-go="join"><span class="bt-ic">${I.users}</span><b>${t('join')}</b><small>${t('joinS')}</small></button>
+      </div>
+      <button class="day-card" id="dayMode"><span class="dc-ic">${di}</span><span class="dc-t"><small>${t('modeOfDay')}</small><b>${t('gm_' + dm)}</b><span>${t('gm_' + dm + 'S')}</span></span><span class="dc-go">${t('play')}</span></button>
+      <div class="tiles4">
+        <button class="tile4" id="quick"><span>⚡</span><b>${t('quickGame')}</b><small>${t('quickGameS')}</small></button>
+        <button class="tile4" id="homeEd"><span>🗺</span><b>${t('mapEditor')}</b><small>${t('homeEdS')}</small></button>
+        <button class="tile4" data-go="stats"><span>🏅</span><b>${t('profileShort')}</b><small>${t('achTitle')} · ${Object.keys(S.ach || {}).length}</small></button>
+        <button class="tile4" data-go="learn"><span>📖</span><b>${t('rulesShort')}</b><small>${t('rulesS')}</small></button>
+      </div>
+      <div class="tip-card"><span>💡</span><div><b>${t('tipTitle')}</b><p>${tip}</p></div></div>
+      ${supportBlock()}`;
     bindCommon(el);
     el.querySelector('#quick').onclick = () => SCREENS.quick();
+    const needLobby = () => { if (!S.name) S.name = t('playerDefault'); if (!S.lobby) S.lobby = defaultLobby(); };
+    el.querySelector('#dayMode').onclick = () => { needLobby(); S.lobby.gmode = dm; S.lobby.adv = {}; S.lobby.step = 1; save(); go('lobby'); };
+    el.querySelector('#homeEd').onclick = () => { needLobby(); save(); go('mapEditor'); };
   },
 
   quick() {
