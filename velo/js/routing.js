@@ -75,11 +75,11 @@
   function cost(r) { return r.distance + 8 * r.ascent; }
 
   /**
-   * Выбор варианта: среди тех, что дороже самого выгодного не больше чем на tol (7%),
+   * Выбор варианта: среди тех, что дороже самого выгодного не больше чем на tol (2%),
    * берём вариант с наибольшей долей велодорожек; при равенстве (±1%) — более короткий.
    * extraM — сколько «метров стоимости» добавил выбор по сравнению с самым выгодным.
    */
-  function pickBest(cands, tol = 0.07) {
+  function pickBest(cands, tol = 0.02) {
     const minCost = Math.min(...cands.map(cost));
     const ok = cands.filter(r => r.bikeShare != null && cost(r) <= minCost * (1 + tol));
     let pick;

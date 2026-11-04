@@ -43,13 +43,19 @@ test('профиль без тегов — доля неизвестна (null)'
   assert.equal(r.bikeFlags, null);
 });
 
-test('выбор: больше велодорожек в пределах допуска по стоимости', () => {
+test('выбор: больше велодорожек в пределах допуска 2%', () => {
+  const fast = { distance: 10000, ascent: 0, bikeShare: 0.05 };
+  const bike = { distance: 10150, ascent: 0, bikeShare: 0.60 }; // +1,5%
+  const best = R.pickBest([fast, bike]);
+  assert.equal(best.bikeShare, 0.60);
+  assert.equal(best.extraM, 150);
+});
+
+test('выбор: +5,8% ради велодорожек — уже вне допуска (Красная пл. → ВДНХ)', () => {
   const fast = { distance: 9340, ascent: 17, bikeShare: 0.03 };
   const safety = { distance: 9870, ascent: 20, bikeShare: 0.42 };
   const trek = { distance: 10640, ascent: 17, bikeShare: 0.04 };
-  const best = R.pickBest([fast, safety, trek]);
-  assert.equal(best.bikeShare, 0.42);
-  assert.ok(best.extraM > 0 && best.extraM < 700);
+  assert.equal(R.pickBest([fast, safety, trek]).bikeShare, 0.03);
 });
 
 test('выбор: долгий вариант с велодорожками за пределами допуска не берётся', () => {
