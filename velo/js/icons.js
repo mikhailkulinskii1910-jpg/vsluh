@@ -8,6 +8,7 @@
     mountain: '<path d="M2 20 9 7l4 6 2.5-3L22 20z"/><path d="M7 13.5l1.5 1.5"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 5 5"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
+    bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
     straight: '<path d="M12 21V4"/><path d="m6 10 6-6 6 6"/>',
     turnLeft: '<path d="M9 19v-6a4 4 0 0 0-4-4H4"/><path d="m7.5 6.5-3.5 3.5 3.5 3.5"/>',
     turnRight: '<path d="M15 19v-6a4 4 0 0 1 4-4h1"/><path d="m16.5 6.5 3.5 3.5-3.5 3.5"/>',

@@ -8,7 +8,7 @@
   const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const kmh = ms => (ms == null ? '—' : Math.round(ms * 3.6));
-  const icon = (n, size = 18) => IC.icon(n, size);
+  const icon = (n, size = 18, cls = '') => IC.icon(n, size, cls);
   const listeners = {};
   const emit = (type, data) => (listeners[type] || []).forEach(fn => { try { fn(data); } catch (e) { console.error(e); } });
 
@@ -121,7 +121,7 @@
     $('#spd').textContent = f && f.spd != null ? kmh(f.spd) : '--';
     setGps(f ? `GPS ±${Math.round(f.acc || 0)} м` : 'GPS: поиск…');
     const b = state.battery;
-    $('#bat').textContent = b.level == null ? '—' : `${Math.round(b.level * 100)}%${b.charging ? ' +' : ''}`;
+    $('#bat').innerHTML = b.level == null ? '—' : `${Math.round(b.level * 100)}%${b.charging ? ' ' + icon('bolt', 12, 'charging') : ''}`;
   }
 
   function updateMe() {
@@ -158,9 +158,62 @@
     setGps('GPS: ' + (e.code === 1 ? 'нет доступа к геолокации' : e.code === 2 ? 'позиция недоступна' : 'таймаут GPS'));
   }
 
+  /* GPS: в браузере — watchPosition; в Android-приложении во время записи, навигации и лобби —
+     фоновая служба (плагин background-geolocation), чтобы позиция шла и при выключенном экране. */
+  const CAP = root.Capacitor;
+  const NATIVE_BG = !!(CAP && CAP.isNativePlatform && CAP.isNativePlatform() && CAP.isPluginAvailable && CAP.isPluginAvailable('BackgroundGeolocation'));
+  let gpsAllowed = false, webWatch = null, bgWatch = null, bgPending = false;
+
+  function startWebGps() {
+    if (webWatch != null || !navigator.geolocation) return;
+    webWatch = navigator.geolocation.watchPosition(onPos, onGeoError, { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 });
+  }
+  function stopWebGps() {
+    if (webWatch == null) return;
+    navigator.geolocation.clearWatch(webWatch);
+    webWatch = null;
+  }
+
+  /** Включает фоновую службу геолокации, когда идёт запись, навигация или лобби; иначе — обычный GPS. */
+  async function syncBackgroundGps() {
+    if (!NATIVE_BG || !gpsAllowed || bgPending) return;
+    const want = state.lobbyAwake || !!state.rec || nav.active;
+    if (want && bgWatch == null) {
+      bgPending = true;
+      try {
+        bgWatch = CAP.nativeCallback('BackgroundGeolocation', 'addWatcher', {
+          backgroundTitle: 'Велокарта',
+          backgroundMessage: 'Запись поездки и позиция в лобби продолжаются',
+          requestPermissions: true,
+          stale: false,
+          distanceFilter: 2,
+        }, (loc, err) => {
+          if (err) { onGeoError({ code: err.code === 'NOT_AUTHORIZED' ? 1 : 2 }); return; }
+          if (!loc) return;
+          onPos({
+            coords: { latitude: loc.latitude, longitude: loc.longitude, accuracy: loc.accuracy, altitude: loc.altitude, speed: loc.speed, heading: loc.bearing },
+            timestamp: loc.time || Date.now(),
+          });
+        });
+        stopWebGps(); // фоновая служба уже присылает позиции — второй источник не нужен
+      } catch (e) {
+        console.warn('фоновая геолокация недоступна', e);
+        bgWatch = null;
+        startWebGps();
+      } finally { bgPending = false; }
+    } else if (!want && bgWatch != null) {
+      const id = bgWatch;
+      bgWatch = null;
+      startWebGps();
+      try { await CAP.nativePromise('BackgroundGeolocation', 'removeWatcher', { id }); } catch { /* уже снят */ }
+    }
+  }
+
   function startGps() {
-    if (!navigator.geolocation) return setGps('GPS недоступен в этом браузере');
-    navigator.geolocation.watchPosition(onPos, onGeoError, { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 });
+    if (!navigator.geolocation && !NATIVE_BG) return setGps('GPS недоступен в этом браузере');
+    gpsAllowed = true;
+    startWebGps();
+    syncBackgroundGps();
   }
 
   if (navigator.getBattery) {
@@ -178,6 +231,7 @@
 
   /* ---------- экран не гаснет ---------- */
   async function syncWake() {
+    syncBackgroundGps();
     if (!('wakeLock' in navigator)) return;
     const want = state.lobbyAwake || !!state.rec || nav.active;
     try {

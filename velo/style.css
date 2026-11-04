@@ -328,3 +328,6 @@ button.link-btn.danger { color: var(--red); }
 .code { font-size: 28px; }
 /* во время навигации строка поиска не перекрывает карточку поворота */
 body.navigating .search { display: none; }
+
+/* значок зарядки */
+.ico.charging { color: var(--green); vertical-align: -1px; }

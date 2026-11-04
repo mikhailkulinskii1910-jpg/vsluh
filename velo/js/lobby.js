@@ -4,7 +4,7 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => [...document.querySelectorAll(sel)];
   const esc = App.esc;
-  const icon = (n, s = 16) => IC.icon(n, s);
+  const icon = (n, s = 16, cls = '') => IC.icon(n, s, cls);
   const net = new root.VeloLobby.Lobby();
 
   const ui = {
@@ -29,6 +29,8 @@
   }
 
   function defaultServerUrl() {
+    const configured = (root.VELO_CONFIG || {}).serverUrl;
+    if (configured) return configured; // адрес из js/config.js — для APK и сборок с отдельным сервером
     const { protocol, host, hostname } = location;
     if (!protocol.startsWith('http') || hostname.endsWith('github.io')) return '';
     return (protocol === 'https:' ? 'wss://' : 'ws://') + host + '/ws';
@@ -148,7 +150,7 @@
     const rows = R.members.map(m => {
       const dist = fix && m.lat != null ? G.distance(fix.lat, fix.lon, m.lat, m.lon) : null;
       const stale = !m.online || m.seenAgoMs > 5000;
-      const bat = m.bat == null ? '—' : `${Math.round(m.bat * 100)}%${m.charging ? ' +' : ''}`;
+      const bat = m.bat == null ? '—' : `${Math.round(m.bat * 100)}%${m.charging ? ' ' + icon('bolt', 12, 'charging') : ''}`;
       const role = m.role === 'chaser' ? `<span class="badge red">догоняет</span>`
         : m.role === 'runner' ? `<span class="badge">беглец</span>` : '';
       const place = m.place ? `<span class="badge gold">${m.place} место</span>` : '';

@@ -1,0 +1,5 @@
+app
+releases
+server/node_modules
+server/test
+*.md
