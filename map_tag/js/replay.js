@@ -1,4 +1,5 @@
 // Повтор раунда: все игроки на карте, следы, события (раскрытия, поимки, задания), сужение зоны, шкала времени.
+import { addTiles, tileStyle, setTileStyle, TILES, TILE_KEYS } from './mapstyle.js';
 import { t, getLang } from './i18n.js';
 import { I } from './icons.js';
 
@@ -44,7 +45,7 @@ export function renderReplay(el, r, { onBack }) {
     </div></div>`;
 
   const map = L.map(el.querySelector('#map'), { preferCanvas: true, zoomControl: false, zoomSnap: 0.25 }).setView([r.center.lat, r.center.lng], 15);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  addTiles(map);
   map.attributionControl.setPrefix(false);
   const zst = { color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false };
   const zone = rec.poly ? L.polygon(rec.poly.map((q) => ll(q[0], q[1])), zst).addTo(map) : L.circle([r.center.lat, r.center.lng], { radius: r.R, ...zst }).addTo(map);

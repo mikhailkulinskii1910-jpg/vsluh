@@ -1,4 +1,5 @@
 // Игровой движок: карта, боты, способности, задания, тайники
+import { addTiles, tileStyle, setTileStyle, TILES, TILE_KEYS } from './mapstyle.js';
 import { t } from './i18n.js';
 import { I } from './icons.js';
 import { POWERUPS, pwById, pwName, pwDesc } from './content.js';
@@ -185,7 +186,10 @@ export class Game {
     this.root = root;
     root.innerHTML = `<div id="game"><div id="map"></div><div class="hud-top" id="hudTop"></div><div class="hud-bottom" id="hudBot"></div><div id="cover"></div></div>`;
     const map = this.map = L.map(root.querySelector('#map'), { preferCanvas: true, zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView(this.ll({ x: 0, y: 0 }), this.R > 450 ? 15 : 16);
-    if (this.gmode !== 'indoor') L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+    if (this.gmode !== 'indoor') this.tiles = addTiles(map);
+    // направление взгляда (компас телефона) — конус у своей метки
+    this.headFn = (e) => { const h = e.webkitCompassHeading != null ? e.webkitCompassHeading : e.absolute && e.alpha != null ? 360 - e.alpha : null; if (h != null) this.heading = h; };
+    window.addEventListener('deviceorientationabsolute', this.headFn); window.addEventListener('deviceorientation', this.headFn);
     map.attributionControl.setPrefix(false);
     const zst = { color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false };
     this.zoneLayer = (this.poly ? L.polygon(this.zoneLatLngs(), zst) : L.circle(this.ll({ x: 0, y: 0 }), { radius: this.R, ...zst })).addTo(map);
@@ -214,6 +218,7 @@ export class Game {
     if (this.watchId != null) navigator.geolocation.clearWatch(this.watchId);
     try { this.wakeLock && this.wakeLock.release(); } catch {}
     this.radarStop();
+    if (this.headFn) { window.removeEventListener('deviceorientationabsolute', this.headFn); window.removeEventListener('deviceorientation', this.headFn); }
     if (this.map) this.map.remove();
   }
 
@@ -225,6 +230,7 @@ export class Game {
     const onPos = (pos) => {
       if (this.cfg.mode !== 'gps' || this.ended) return;
       this.gotFix = true;
+      this.gpsAcc = pos.coords.accuracy;
       if (pos.coords.altitude != null && !isNaN(pos.coords.altitude)) this.lastAlt = pos.coords.altitude;
       if (this.ch.spoof) return;   // чит: настоящее гео игнорируется
       const p = this.xy(pos.coords.latitude, pos.coords.longitude);
@@ -246,7 +252,6 @@ export class Game {
       const prev = this.gpsPrev;
       if (prev) {
         const d = Math.hypot(p.x - prev.x, p.y - prev.y), dt = Math.max(0.5, now - prev.t);
-        this.gpsAcc = pos.coords.accuracy;
         if (pos.coords.accuracy < 50 || d > pos.coords.accuracy) {
           const sp = pos.coords.speed != null && !isNaN(pos.coords.speed) ? pos.coords.speed : d / dt;
           this.me.speed = this.me.speed * 0.5 + sp * 0.5;
@@ -291,6 +296,7 @@ export class Game {
   isFrozen(p) { return this.t < p.frozenUntil && this.t >= p.warnUntil; }
 
   moveTo(p, x, y) {
+    if (p === this.me) { const dx = x - p.x, dy = y - p.y; if (Math.hypot(dx, dy) > 0.8) p.dirDeg = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360; }
     if (!isFinite(x) || !isFinite(y)) { p.target = null; return; }
     const d = Math.hypot(x - p.x, y - p.y);
     if (p === this.me) {
@@ -837,13 +843,24 @@ export class Game {
   meIcon() {
     const c = this.me.role === 'hunter' ? '#f26d7d' : this.me.role === 'spectator' ? '#9aa6bd' : '#5fd38d';
     const av = this.cfg.avatar;
-    return L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: `<div class="mk-me" style="background:${c}">${av ? `<span class="mk-av">${av}</span>` : ''}</div>` });
+    return L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: `<div class="mk-dir"></div><div class="mk-me" style="background:${c}">${av ? `<span class="mk-av">${av}</span>` : ''}</div>` });
   }
 
   render() {
     const me = this.me, T = this.t, map = this.map;
     if (this.poly) this.zoneLayer.setLatLngs(this.zoneLatLngs()); else this.zoneLayer.setRadius(this.zoneR());
     this.meMarker.setLatLng(this.ll(me));
+    // конус направления: компас, иначе — направление движения
+    const el = this.meMarker.getElement(), dir = el && el.querySelector('.mk-dir');
+    if (dir) {
+      const hd = this.heading != null ? this.heading : me.dirDeg;
+      dir.style.display = hd != null ? '' : 'none'; if (hd != null) dir.style.transform = `rotate(${Math.round(hd)}deg)`;
+    }
+    // круг точности GPS
+    if (this.cfg.mode === 'gps' && this.gpsAcc && this.gmode !== 'indoor') {
+      if (!this.accCircle) this.accCircle = L.circle(this.ll(me), { radius: this.gpsAcc, color: '#4f9dff', weight: 1, fillColor: '#4f9dff', fillOpacity: 0.12, interactive: false }).addTo(map);
+      else { this.accCircle.setLatLng(this.ll(me)); this.accCircle.setRadius(Math.min(200, this.gpsAcc)); }
+    } else if (this.accCircle) { this.accCircle.remove(); this.accCircle = null; }
     if (this.meRole !== me.role) { this.meRole = me.role; this.meMarker.setIcon(this.meIcon()); }
     if (this.follow && this.cfg.mode === 'gps') map.panTo(this.ll(me), { animate: false });
 
@@ -986,7 +1003,7 @@ export class Game {
           <div class="line-row"><span>${t('alive')}</span><b>${t('hider')}: ${alive} · ${t('hunters')}: ${hcount}</b></div>
           <div class="line-row"><span>${t('zoneR')}</span><b id="zR"></b></div>
           <div class="line-row"><span>${t('moveMode')}</span><div class="seg"><button data-a="gps" class="${this.cfg.mode === 'gps' ? 'on' : ''}">${t('gps')}</button><button data-a="demo" class="${this.cfg.mode === 'demo' ? 'on' : ''}">${t('demo')}</button></div></div>
-          <div class="row" style="gap:8px;flex-wrap:nowrap"><button class="btn" data-a="legend" style="flex:1">🗺 ${t('legend')}</button><button class="btn" data-a="cheats" style="flex:1;color:var(--hunter)">${I.lock}${t('cheats')}</button><button class="btn" data-a="sos" style="flex:1;color:#fff;background:#c0392b;border-color:#c0392b">🆘 SOS</button></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn" data-a="tiles" style="flex:1">${TILES[tileStyle()].ic} ${t('tile_' + tileStyle())}</button><button class="btn" data-a="legend" style="flex:1">📖 ${t('legend')}</button><button class="btn" data-a="cheats" style="flex:1;color:var(--hunter)">${I.lock}${t('cheats')}</button><button class="btn" data-a="sos" style="flex:1;color:#fff;background:#c0392b;border-color:#c0392b">🆘 SOS</button></div>
           ${this.isClient ? '' : `<button class="btn block" data-a="pause">${this.paused ? '▶ ' + t('resume') : '⏸ ' + t('pause')}</button>`}
           <button class="btn danger block" data-a="leave">${I.leave}${t('leaveGame')}</button>
         </div>` : ''}
@@ -1079,6 +1096,7 @@ export class Game {
       case 'pause': this.togglePause(); break;
       case 'emote': this.opts.modal(`<h2>${t('emoteTitle')}</h2><div class="emo-grid">${EMOTES.map((e) => `<button class="emo" data-e="${e}">${e}</button>`).join('')}</div>`, (box, close) => { box.querySelectorAll('[data-e]').forEach((b) => b.onclick = () => { close(); this.sendEmote(b.dataset.e); }); }); break;
       case 'trap': this.placeTrap(); break;
+      case 'tiles': { const k = TILE_KEYS[(TILE_KEYS.indexOf(tileStyle()) + 1) % TILE_KEYS.length]; setTileStyle(k); if (this.tiles) this.tiles.remove(); if (this.gmode !== 'indoor') this.tiles = addTiles(this.map); this.opts.toast(TILES[k].ic + ' ' + t('tile_' + k)); this.renderHud(true); break; }
       case 'bell': if (this.isClient) this.netSend('bellreq', {}); else this.ringBell(me); break;
       case 'legend': this.opts.openLegend && this.opts.openLegend(); break;
       case 'drone': this.droneToggle(); break;

@@ -1,4 +1,5 @@
 // Map Tag — экраны приложения
+import { addTiles, tileStyle, setTileStyle, TILES, TILE_KEYS } from './mapstyle.js';
 import { t, setLang, getLang } from './i18n.js';
 import { I } from './icons.js';
 import { POWERUPS, pwName, pwDesc, tutorialSteps, PATCH_NOTES } from './content.js';
@@ -14,7 +15,7 @@ import { DEFAULT_ROOMS } from './indoor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '3.1.1';
+const VERSION = '3.2';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -450,7 +451,7 @@ const SCREENS = {
     el.querySelectorAll('[data-cm]').forEach((b) => b.onclick = () => { S.clientMode = b.dataset.cm; save(); const y = window.scrollY; go('clientLobby'); window.scrollTo(0, y); });
     if (st.center) {
       const m = L.map(el.querySelector('#cmap'), { preferCanvas: true, zoomControl: false, dragging: true }).setView([st.center.lat, st.center.lng], 15);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
+      addTiles(m);
       m.attributionControl.setPrefix(false);
       const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
       const z = st.poly && st.poly.length >= 3 ? L.polygon(st.poly.map((q) => [q.lat, q.lng]), zst).addTo(m) : null;
@@ -615,7 +616,7 @@ const SCREENS = {
     // --- карта ---
     const center = lb.center || { lat: 55.7520, lng: 37.6175 };
     const pm = L.map(el.querySelector('#pmap'), { preferCanvas: true, zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView([center.lat, center.lng], 15);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(pm);
+    addTiles(pm);
     pm.attributionControl.setPrefix(false);
     const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08 };
     const custom = lb.shape === 'custom';
@@ -1100,6 +1101,7 @@ function openSettings() {
         <div style="color:var(--muted);margin:16px 0 0 4px">${t('theme')}</div><div id="thp"></div>
         ${S.cheatsUnlocked ? `<button class="set-row" data-s="cheats" style="border-color:var(--hunter)"><div><div class="tt" style="color:var(--hunter)">${I.lock.replace('<svg', '<svg width="18" height="18" style="vertical-align:-3px"')} ${t('cheats')}</div><div class="ss">${t('cheatsS')}</div></div></button>` : ''}
         <label class="set-row"><div><div class="tt">${t('announce')}</div><div class="ss">${t('announceS')}</div></div><input type="checkbox" id="ann" ${S.announce !== false ? 'checked' : ''}></label>
+        <div class="set-row" style="flex-direction:column;align-items:stretch;gap:8px"><div class="tt">${t('tileStyle')}</div><div class="tile-pick">${TILE_KEYS.map((k) => `<button class="tp ${tileStyle() === k ? 'on' : ''}" data-tile="${k}"><span>${TILES[k].ic}</span>${t('tile_' + k)}</button>`).join('')}</div></div>
         <label class="set-row"><div><div class="tt">${t('darkMap')}</div><div class="ss">${t('darkMapS')}</div></div><input type="checkbox" id="dkm" ${S.darkMap ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('bigText')}</div><div class="ss">${t('bigTextS')}</div></div><input type="checkbox" id="bigT" ${S.bigText ? 'checked' : ''}></label>
         <label class="set-row"><div><div class="tt">${t('eco')}</div><div class="ss">${t('ecoS')}</div></div><input type="checkbox" id="eco" ${S.eco ? 'checked' : ''}></label>
@@ -1115,6 +1117,7 @@ function openSettings() {
       themePicker(box.querySelector('#thp'));
       box.querySelector('#dev').onchange = (e) => { S.dev = e.target.checked; save(); };
       box.querySelector('#ann').onchange = (e) => { S.announce = e.target.checked; save(); };
+      box.querySelectorAll('[data-tile]').forEach((b) => b.onclick = () => { setTileStyle(b.dataset.tile); box.querySelectorAll('[data-tile]').forEach((x) => x.classList.toggle('on', x === b)); });
       box.querySelector('#dkm').onchange = (e) => { S.darkMap = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#bigT').onchange = (e) => { S.bigText = e.target.checked; save(); applyPrefs(); };
       box.querySelector('#eco').onchange = (e) => { S.eco = e.target.checked; save(); applyPrefs(); };

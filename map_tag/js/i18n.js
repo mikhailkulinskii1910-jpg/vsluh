@@ -223,6 +223,7 @@ const ru = {
   radarScale: 'круг — {m} м', radarCompass: 'по компасу', radarNoCompass: 'север вверху', floorNow: 'этаж {f} от старта', trapPlaced: 'Капкан поставлен под вами 🕸', trapMax: 'Не больше {n} капканов',
   gm_lastman: 'Последний герой', gm_lastmanS: 'пойманные выбывают', gm_stalker: 'Невидимый охотник', gm_stalkerS: 'охотник виден раз в 30 с', stalkPulse: 'Охотник показался на 4 секунды!', elim_caught: 'пойман(а)',
   edPtsN: 'Точек: {n}',
+  tileStyle: 'Стиль карты', tile_osm: 'Обычная', tile_dark: 'Тёмная', tile_light: 'Светлая', tile_sat: 'Спутник', tile_topo: 'Рельеф',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -443,6 +444,7 @@ const en = {
   radarScale: 'ring — {m} m', radarCompass: 'compass on', radarNoCompass: 'north up', floorNow: 'floor {f} from start', trapPlaced: 'Snare placed under you 🕸', trapMax: 'No more than {n} snares',
   gm_lastman: 'Last one standing', gm_lastmanS: 'the caught are out', gm_stalker: 'Invisible hunter', gm_stalkerS: 'the Hunter shows every 30 s', stalkPulse: 'The Hunter is visible for 4 seconds!', elim_caught: 'caught',
   edPtsN: 'Points: {n}',
+  tileStyle: 'Map style', tile_osm: 'Standard', tile_dark: 'Dark', tile_light: 'Light', tile_sat: 'Satellite', tile_topo: 'Terrain',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 

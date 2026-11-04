@@ -7,8 +7,8 @@ android {
         applicationId = "ru.maptag.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 28
-        versionName = "3.1.1"
+        versionCode = 29
+        versionName = "3.2"
     }
     signingConfigs {
         create("release") {

@@ -526,7 +526,7 @@ html.big-text .ab .t { font-size: 19px; }
 html.big-text .opt .t, html.big-text .btn { font-size: 17px; }
 html.eco *, html.eco *::before, html.eco *::after { animation: none !important; transition: none !important; }
 html.eco .theme-bg, html.eco #matrix { display: none !important; }
-html.dark-map:not([data-theme]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.7); }
+html.dark-map:not([data-theme]) .leaflet-container:not(.tiles-styled) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.9) saturate(.7); }
 html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .out-banner #outArrow { font-size: 20px; transition: transform .4s; }
 .gmodes { grid-template-columns: repeat(2, 1fr); }
@@ -652,3 +652,8 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 #edPanel { max-height: 42vh; overflow-y: auto; }
 .ed-head { flex-wrap: nowrap; align-items: flex-start; } .ed-hint { font-size: 15px; flex: 1; min-width: 0; }
 .ed-draft { flex-wrap: nowrap; gap: 8px; margin-top: 8px; } .ed-tip { color: var(--muted); font-size: 13px; margin-top: 6px; }
+
+.mk-dir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; margin-left: -14px; margin-top: -34px; border-left: 14px solid transparent; border-right: 14px solid transparent; border-bottom: 30px solid rgba(79,157,255,.45); transform-origin: 14px 34px; pointer-events: none; filter: blur(.5px); }
+.tile-pick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.tp { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 11px; cursor: pointer; }
+.tp span { font-size: 22px; } .tp.on { border: 2px solid var(--accent); background: var(--accent-soft); }

@@ -1,5 +1,6 @@
 // Редактор карты: граница зоны, запретные зоны, свои точки тайников, заданий, тюрьмы и сокровищ.
 // Карты сохраняются на телефоне и передаются друзьям кодом.
+import { addTiles, tileStyle, setTileStyle, TILES, TILE_KEYS } from './mapstyle.js';
 import { t } from './i18n.js';
 import { I } from './icons.js';
 import { OBJ, OBJ_KINDS, ZX, ZX_KINDS } from './world.js';
@@ -105,7 +106,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     <div class="hud-bottom"><div class="hud-more" id="edPanel"></div></div></div>`;
 
   const map = L.map(el.querySelector('#map'), { preferCanvas: true, zoomControl: false, zoomSnap: 0.25 }).setView([center.lat, center.lng], 16);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  addTiles(map);
   map.attributionControl.setPrefix(false);
   const layer = L.layerGroup().addTo(map);
   const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08, interactive: false };

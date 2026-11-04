@@ -147,6 +147,7 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['3.2', ['Стили карты: обычная, тёмная, светлая, спутник и рельеф — в настройках и прямо в игре (меню ⌄).', 'Круг точности GPS вокруг вас и конус направления взгляда (по компасу или по движению).']],
     ['3.1', ['«В помещении» без карты: радар показывает, в какой стороне все игроки (по компасу телефона), и разницу этажей ↑↓. Этажи считаются по барометру (в APK) или по высоте GPS.', 'Охотник ставит капкан 🕸 прямо под собой — например, в дверном проёме (до 3 штук, раз в 45 с).', 'Режимы: Последний герой 🏆 (пойманные выбывают) и Невидимый охотник 🕶 (виден раз в 30 с).', 'Исправлено: в режиме «В помещении» организатора могло выкинуть из игры в лобби.']],
     ['3.0', ['«В помещении» с комнатами: прячущиеся тайно отмечают комнату, охотник проверяет комнаты (🔥 тепло / ❄ пусто), подсказки каждые 75 с, перебежки видны охотникам; свои названия комнат в лобби; боты тоже ищут по комнатам.', 'Объекты: Капкан 🕸, Компас 🧭, Радиовышка 📻, Ящик ракет 🎆.', 'Эмоции 😀 над своей меткой в онлайн-игре; боты радуются и пугаются при поимке.']],
     ['2.9', ['Новое главное меню: карточка игрока с уровнем и статистикой, кнопка «Вернуться в лобби», крупные «Создать игру» и «Присоединиться», режим дня, быстрый доступ к редактору и совет дня.', 'Зоны в редакторе можно сохранить линией; карты рисуются быстрее.']],
@@ -171,6 +172,7 @@ export const PATCH_NOTES = {
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['3.2', ['Map styles: standard, dark, light, satellite and terrain — in settings and in-game (⌄ menu).', 'GPS accuracy circle around you and a view-direction cone (compass or movement).']],
     ['3.1', ['Indoors without a map: a radar shows which way every player is (by the phone compass) and the floor difference ↑↓. Floors come from the barometer (in the APK) or GPS altitude.', 'Hunters place a snare 🕸 right under themselves — e.g. in a doorway (up to 3, every 45 s).', 'Modes: Last one standing 🏆 (the caught are out) and Invisible hunter 🕶 (visible every 30 s).', 'Fixed: in Indoors mode the host could be kicked from the game back to the lobby.']],
     ['3.0', ['Indoors with rooms: Hiders secretly mark a room, the Hunter checks rooms (🔥 warm / ❄ empty), hints every 75 s, room switches are announced; custom room names in the lobby; bots search rooms too.', 'Objects: Snare 🕸, Compass 🧭, Radio tower 📻, Flare box 🎆.', 'Emotes 😀 above your marker in online games; bots cheer and panic on catches.']],
     ['2.9', ['New main menu: player card with level and stats, “Back to the lobby”, big “Create game” and “Join” tiles, mode of the day, quick editor access and a tip of the day.', 'Editor zones can be saved as lines; maps render faster.']],
