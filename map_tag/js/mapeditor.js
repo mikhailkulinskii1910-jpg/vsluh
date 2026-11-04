@@ -2,14 +2,14 @@
 // Карты сохраняются на телефоне и передаются друзьям кодом.
 import { t } from './i18n.js';
 import { I } from './icons.js';
-import { OBJ, OBJ_KINDS } from './world.js';
+import { OBJ, OBJ_KINDS, ZX, ZX_KINDS } from './world.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const TOOLS = [['zone', '⬡'], ['nogo', '⛔'], ['barrier', '🧱'], ['safe', '🛡'], ['kill', '☠'], ['grave', '🪦'], ['obj', '🎁'], ['supply', '◆'], ['mission', '★'], ['jail', '⛓'], ['hill', '⛰'], ['treasure', '🪙'], ['erase', '✕']];
+const TOOLS = [['zone', '⬡'], ['nogo', '⛔'], ['barrier', '🧱'], ['safe', '🛡'], ['kill', '☠'], ['grave', '🪦'], ...ZX_KINDS.map((k) => [k, ZX[k].ic]), ['obj', '🎁'], ['supply', '◆'], ['mission', '★'], ['jail', '⛓'], ['hill', '⛰'], ['treasure', '🪙'], ['erase', '✕']];
 const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 /** Многоугольные инструменты → ключ в карте. */
-const POLY = { nogo: 'nogo', barrier: 'barriers', safe: 'safe', kill: 'kill', grave: 'grave' };
-const ZST = { safe: ['#3fb6ff', 0.2, '🛡'], kill: ['#b0001a', 0.35, '☠'], grave: ['#8a8f99', 0.28, '🪦'] };
+const POLY = { nogo: 'nogo', barrier: 'barriers', safe: 'safe', kill: 'kill', grave: 'grave', ...Object.fromEntries(ZX_KINDS.map((k) => [k, k])) };
+const ZST = { safe: ['#3fb6ff', 0.2, '🛡'], kill: ['#b0001a', 0.35, '☠'], grave: ['#8a8f99', 0.28, '🪦'], ...Object.fromEntries(ZX_KINDS.map((k) => [k, [ZX[k].col, ZX[k].op, ZX[k].ic]])) };
 const emptyMap = () => ({ nogo: [], barriers: [], walls: [], safe: [], kill: [], grave: [], objs: [], supply: [], mission: [], jail: null, hill: null, treasure: [] });
 
 /** Запрос к Overpass API (OpenStreetMap) с запасными серверами. */
@@ -65,7 +65,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   lb.map = { ...emptyMap(), ...(lb.map || {}) };
   lb.poly = lb.poly || [];
   let tool = 'zone', draft = [], draftTool = null, objKind = S._edObj || 'bush';
-  const DCOL = { nogo: '#d63a4a', barrier: '#8b6b4a', safe: '#3fb6ff', kill: '#b0001a', grave: '#8a8f99' };
+  const DCOL = { nogo: '#d63a4a', barrier: '#8b6b4a', safe: '#3fb6ff', kill: '#b0001a', grave: '#8a8f99', ...Object.fromEntries(ZX_KINDS.map((k) => [k, ZX[k].col])) };
   /** Замкнуть черновик в зону того инструмента, которым его начали рисовать. */
   const closeDraft = (quiet) => {
     const k = POLY[draftTool];
@@ -91,7 +91,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   const layer = L.layerGroup().addTo(map);
   const zst = { color: '#2c7a4b', weight: 3, dashArray: '10 8', fillColor: '#5fd38d', fillOpacity: 0.08, interactive: false };
 
-  const counts = () => `${t('ed_zone')}: ${lb.shape === 'custom' && lb.poly.length >= 3 ? lb.poly.length + ' ' + t('edPts') : t('shapeCircle')} · ⛔ ${lb.map.nogo.length} · 🧱 ${(lb.map.barriers || []).length} · 🛡 ${(lb.map.safe || []).length} · ☠ ${(lb.map.kill || []).length} · 🪦 ${(lb.map.grave || []).length} · 🎁 ${(lb.map.objs || []).length} · 🏢 ${(lb.map.walls || []).length} · ◆ ${lb.map.supply.length} · ★ ${lb.map.mission.length} · ⛓ ${lb.map.jail ? 1 : 0} · ⛰ ${lb.map.hill ? 1 : 0} · 🪙 ${lb.map.treasure.length}`;
+  const counts = () => `${t('ed_zone')}: ${lb.shape === 'custom' && lb.poly.length >= 3 ? lb.poly.length + ' ' + t('edPts') : t('shapeCircle')} · ⛔ ${lb.map.nogo.length} · 🧱 ${(lb.map.barriers || []).length} · 🛡 ${(lb.map.safe || []).length} · ☠ ${(lb.map.kill || []).length} · 🪦 ${(lb.map.grave || []).length} · ${ZX_KINDS.map((k) => ZX[k].ic + ' ' + (lb.map[k] || []).length).join(' · ')} · 🎁 ${(lb.map.objs || []).length} · 🏢 ${(lb.map.walls || []).length} · ◆ ${lb.map.supply.length} · ★ ${lb.map.mission.length} · ⛓ ${lb.map.jail ? 1 : 0} · ⛰ ${lb.map.hill ? 1 : 0} · 🪙 ${lb.map.treasure.length}`;
   function draw() {
     layer.clearLayers();
     if (lb.shape === 'custom' && lb.poly.length) {
@@ -138,7 +138,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (lb.map.jail && near(lb.map.jail)) return () => { lb.map.jail = null; };
     if (lb.map.hill && near(lb.map.hill)) return () => { lb.map.hill = null; };
     { const i = (lb.map.objs || []).findIndex(near); if (i >= 0) return () => lb.map.objs.splice(i, 1); }
-    for (const key of ['barriers', 'walls', 'safe', 'kill', 'grave']) for (let i = 0; i < (lb.map[key] || []).length; i++) { const poly = L.polygon(lb.map[key][i].map((q) => [q.lat, q.lng])); if (poly.getBounds().contains(latlng)) return () => lb.map[key].splice(i, 1); }
+    for (const key of ['barriers', 'walls', 'safe', 'kill', 'grave', ...ZX_KINDS]) for (let i = 0; i < (lb.map[key] || []).length; i++) { const poly = L.polygon(lb.map[key][i].map((q) => [q.lat, q.lng])); if (poly.getBounds().contains(latlng)) return () => lb.map[key].splice(i, 1); }
     for (let i = 0; i < lb.map.nogo.length; i++) {
       const poly = L.polygon(lb.map.nogo[i].map((q) => [q.lat, q.lng]));
       if (poly.getBounds().contains(latlng)) return () => lb.map.nogo.splice(i, 1);

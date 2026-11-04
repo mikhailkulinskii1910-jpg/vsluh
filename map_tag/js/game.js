@@ -322,7 +322,7 @@ export class Game {
     if (d < 1.5) { p.running = false; return true; }
     const canRun = run && p.stamina > 3;
     p.running = canRun;
-    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1) * (this.t < (p.boostUntil || 0) ? 1.6 : 1);
+    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1) * (this.t < (p.boostUntil || 0) ? 1.6 : 1) * (this.inZ('swamp', p) ? 0.5 : 1);
     const s = Math.min(d, v * dt);
     if (this.isStunned(p)) { p.speed = 0; p.running = false; return false; }
     this.tryMove(p, p.x + dx / d * s, p.y + dy / d * s);
@@ -576,7 +576,7 @@ export class Game {
       if (h === this.me && this.ch.immune) continue;
       if (h.remote && h.netCh && h.netCh.i) continue;
       let miss = false;
-      if (this.t < h.smokeUntil || this.inBush(h)) miss = true;
+      if (this.t < h.smokeUntil || this.inBush(h) || this.inZ('shadow', h) || this.jammed(h)) miss = true;
       else if (h.jams > 0) { h.jams--; miss = true; }
       else if (this.t < h.silenceUntil && h.speed < 0.4) miss = true;
       if (miss) { if (h === this.me) this.alert('green', t('revealMissed'), 'shield'); continue; }
@@ -603,7 +603,7 @@ export class Game {
     for (const h of this.hiders()) {
       if (h === this.me && this.ch.immune) continue;
       if (h.remote && h.netCh && h.netCh.i) continue;
-      if (!this.hunters().some((u) => dist(u, h) < range)) continue;
+      if (!this.hunters().some((u) => dist(u, h) < range) || this.jammed(h)) continue;
       if (h.wards > 0) { h.wards--; warded.push(h.id); if (h === this.me) this.alert('green', t('wardSaved'), 'shield'); continue; }
       h.warnUntil = this.t + 8; h.frozenUntil = this.t + 8 + 25; n++; ids.push(h.id);
       if (h === this.me) { h.frozenDrift = 0; h.frozenPenalty = false; this.runToggle = false; this.vibrate([300, 100, 300]); }
@@ -687,7 +687,7 @@ export class Game {
       case 'freezeBoost': this.freezeReadyAt = Math.max(T, this.freezeReadyAt - this.freezeCd / 2); break;
       case 'ghost': p.ghostUntil = T + 60; break;
       case 'ward': p.wards++; break;
-      case 'sonar': if (p === this.me) { const hs = this.hiders().filter((h) => dist(h, p) <= 80); hs.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 6); }); this.alert('blue', t('sonarOn', { k: hs.length }), 'scan'); } break;
+      case 'sonar': if (p === this.me) { const hs = this.hiders().filter((h) => dist(h, p) <= 80 && !this.jammed(h)); hs.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 6); }); this.alert('blue', t('sonarOn', { k: hs.length }), 'scan'); } break;
       case 'lookout': if (p === this.me) { this.showHuntersUntil = T + 20; this.alert('blue', t('lookoutOn', { s: 20 }), 'eye'); } break;
       case 'decoy': {
         let s = this.randZone(0.8); const a = rnd(0, 6.28);

@@ -84,7 +84,7 @@ export const extrasMixin = {
     }
     if (this.t >= d.nextScan) {
       d.nextScan = this.t + DRONE_SCAN;
-      const hits = this.hiders().filter((h) => dist(h, d) <= DRONE_R && !(h.shieldDrone));
+      const hits = this.hiders().filter((h) => !this.jammed(h) && dist(h, d) <= DRONE_R && !(h.shieldDrone));
       if (hits.length) {
         hits.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, this.t + 3); });
         this.alert('blue', t('droneHit', { n: hits.map((h) => h.name).join(', ') }), 'eye');

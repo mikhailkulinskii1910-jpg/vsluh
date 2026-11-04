@@ -20,6 +20,15 @@ export const OBJ = {
   bell: { ic: '🔔', r: 6, col: '#ff9f43' },      // охотник звонит: прячущиеся в 60 м слышат звонок и видны 5 с
 };
 export const OBJ_KINDS = Object.keys(OBJ);
+/** Дополнительные зоны редактора: цвет, значок. */
+export const ZX = {
+  swamp: { col: '#6b7d2a', ic: '🟫', op: 0.35 },    // болото: медленнее вдвое, выносливость тает
+  shadow: { col: '#2b2440', ic: '🌑', op: 0.45 },   // тень: прячущихся не видно дальше 10 м, «Раскрытие» мимо
+  light: { col: '#ffe066', ic: '🔦', op: 0.3 },     // прожектор: прячущиеся внутри видны охотникам
+  jam: { col: '#9b59b6', ic: '📵', op: 0.25 },      // глушилка: «Раскрытие», «Заморозка», дрон, камеры и сонар не действуют
+  bonus: { col: '#f3c13a', ic: '💰', op: 0.22 },    // сокровищница: 8 с внутри — случайный бонус (раз в 60 с)
+};
+export const ZX_KINDS = Object.keys(ZX);
 
 export const worldMixin = {
   /** До создания игроков: зоны редактора в локальных координатах. */
@@ -28,6 +37,7 @@ export const worldMixin = {
     const toXY = (w) => w.map((q) => this.xy(q[0] != null ? q[0] : q.lat, q[1] != null ? q[1] : q.lng));
     const polys = (a) => (a || []).filter((w) => w && w.length >= 3).map(toXY);
     this.safeZ = polys(cfg.safeZones); this.killZ = polys(cfg.killZones); this.graveZ = polys(cfg.graveZones);
+    this.zx = {}; for (const k of ZX_KINDS) this.zx[k] = polys((cfg.zonesX || {})[k]);
     this.objs = []; this.objsMade = false;
     this.farLimit = Math.max(60, this.R * 0.5);
     this.radarCd = {}; this.boostCd = {}; this.camSeen = 0; this.lastOutSec = null;
@@ -36,6 +46,7 @@ export const worldMixin = {
   // ---------- проверки ----------
   inSafe(p) { return this.safeZ.some((P) => inPoly(p.x, p.y, P)); },
   inKill(p) { return this.killZ.some((P) => inPoly(p.x, p.y, P)); },
+  inZ(k, p) { const L = this.zx && this.zx[k]; return !!(L && L.length && L.some((P) => inPoly(p.x, p.y, P))); },
   inGrave(p) { return this.graveZ.some((P) => inPoly(p.x, p.y, P)); },
   /** Можно ли поставить объект / игрока: не в стене и не ближе MARGIN к ней, не в смертельной зоне. */
   spotOk(pt, m = MARGIN) {
@@ -48,7 +59,8 @@ export const worldMixin = {
   /** Ходить нельзя: стена, а ботам — ещё и смертельная зона. */
   blockedFor(p, pt) { return (this.walls.length && this.inWall(pt)) || (p.bot && this.killZ.length && this.inKill(pt)); },
   inBush(p) { return this.objs.some((o) => o.k === 'bush' && dist(o, p) <= OBJ.bush.r); },
-  hiddenInBush(h, d) { return h.role === 'hider' && d > 6 && this.inBush(h); },
+  hiddenInBush(h, d) { return h.role === 'hider' && ((d > 6 && this.inBush(h)) || (d > 10 && this.inZ('shadow', h))); },
+  jammed(p) { return this.inZ('jam', p); },
   safeOn(h) { return !!h.safeOn; },
   polyCenter(P) { return { x: P.reduce((s, q) => s + q.x, 0) / P.length, y: P.reduce((s, q) => s + q.y, 0) / P.length }; },
   nearestGrave(p) { let best = null; for (const P of this.graveZ) { const c = this.polyCenter(P), d = dist(c, p); if (!best || d < best.d) best = { c, d }; } return best; },
@@ -83,6 +95,20 @@ export const worldMixin = {
   worldStep(dt) {
     if (!this.objsMade) this.worldMakeObjects();
     const T = this.t, hunt = this.phase() === 'hunt';
+    // прожектор и сокровищница
+    for (const h of this.players) {
+      if (h.role !== 'hider') continue;
+      if (h.sim && this.inZ('light', h)) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 2);
+      if (hunt && this.inZ('bonus', h) && T >= (h.bonusCd || 0)) {
+        h.bonusT = (h.bonusT || 0) + dt;
+        if (h.bonusT >= 8) {
+          h.bonusT = 0; h.bonusCd = T + 60;
+          const pool = this.enabledPw.filter((id) => { const pw = pwById(id); return pw && (pw.side === 'both' || pw.side === 'hider'); });
+          const id = pool[Math.floor(Math.random() * pool.length)];
+          if (id) { if (h.remote) this.netSend('picked', { by: h.id, pw: id }); else { h.powerups.push(id); if (h === this.me) { this.hasPowerups = true; this.alert('green', t('bonusGot', { p: pwName(pwById(id)) }), 'supply'); this.vibrate([60]); this.renderHud(true); } } }
+        }
+      } else h.bonusT = 0;
+    }
     // безопасные зоны
     for (const h of this.players) {
       if (h.role !== 'hider' || !this.safeZ.length) { h.safeOn = false; continue; }
@@ -143,6 +169,9 @@ export const worldMixin = {
       if (this.inSafe(me) && T >= (me.safeCdUntil || 0)) { if (me.safeSince == null) me.safeSince = T; if (T - me.safeSince > SAFE_MAX) { me.safeCdUntil = T + SAFE_CD; me.safeSince = null; } me.safeOn = me.safeSince != null; }
       else { if (!this.inSafe(me)) me.safeSince = null; me.safeOn = false; }
     }
+    // прожектор: меня видно; болото: выносливость тает
+    if (me.role === 'hider' && ph === 'hunt' && this.inZ('light', me)) me.exposedUntil = Math.max(me.exposedUntil || 0, T + 2.5);
+    if (me.role === 'hider' && this.inZ('swamp', me)) me.stamina = Math.max(0, me.stamina - 6 * dt);
     // радар
     if (me.role === 'hider' && ph === 'hunt') {
       const r = this.objs.find((o) => o.k === 'radar' && dist(o, me) <= OBJ.radar.r && T >= (this.radarCd[o.id] || 0));
@@ -153,7 +182,7 @@ export const worldMixin = {
     if (ph === 'hunt') for (const o of this.objs) {
       if (o.k !== 'camera') continue;
       if (me.role === 'hunter') {
-        const hits = this.hiders().filter((h) => dist(h, o) <= OBJ.camera.r && !this.inBush(h));
+        const hits = this.hiders().filter((h) => dist(h, o) <= OBJ.camera.r && !this.inBush(h) && !this.jammed(h));
         hits.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 2); });
         if (hits.length && T - this.camSeen > 15) { this.camSeen = T; this.alert('blue', t('camSaw', { n: hits.map((h) => h.name).join(', ') }), 'eye'); }
       } else if (me.role === 'hider' && dist(me, o) <= OBJ.camera.r && T - this.camSeen > 10) { this.camSeen = T; this.alert('red', t('camYou'), 'eye'); this.vibrate([120]); }
@@ -297,8 +326,10 @@ export const worldMixin = {
       this.safeZ.forEach((P) => pg(P, { color: '#3fb6ff', weight: 2, fillColor: '#3fb6ff', fillOpacity: 0.18 }));
       this.killZ.forEach((P) => pg(P, { color: '#7a0010', weight: 3, fillColor: '#b0001a', fillOpacity: 0.35, dashArray: '2 6' }));
       this.graveZ.forEach((P) => pg(P, { color: '#8a8f99', weight: 2, fillColor: '#8a8f99', fillOpacity: 0.25, dashArray: '6 6' }));
+      for (const k of ZX_KINDS) this.zx[k].forEach((P) => pg(P, { color: ZX[k].col, weight: 2, fillColor: ZX[k].col, fillOpacity: ZX[k].op }));
       const lab = (P, ic) => L.marker(this.ll(this.polyCenter(P)), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-zone">${ic}</div>` }) }).addTo(this.wzLayer);
       this.safeZ.forEach((P) => lab(P, '🛡')); this.killZ.forEach((P) => lab(P, '☠')); this.graveZ.forEach((P) => lab(P, '🪦'));
+      for (const k of ZX_KINDS) this.zx[k].forEach((P) => lab(P, ZX[k].ic));
       this.objLayer = L.layerGroup().addTo(map); this.objSig = '';
     }
     const T = this.t, me = this.me;
@@ -325,6 +356,8 @@ export const worldMixin = {
     if (this.outLeft != null && me.role !== 'dead') out.push(`<div class="out-timer"><div class="ot-ic"><span id="outArrow" style="display:inline-block">⬆</span></div><div class="ot-tx"><b>${t('outBack')}</b><span>${t('outRule')} · <b id="outDist"></b></span></div><div class="ot-num" id="outT">0:${String(Math.max(0, Math.ceil(this.outLeft))).padStart(2, '0')}</div></div>`);
     if (me.role === 'dead' && !this.social()) out.push(`<div class="banner red"><div class="bi">☠</div><div>${t('elimYou', { r: t('elim_' + (me.elim || 'out')) })}${this.graveZ.length ? `<br><b>🪦 ${t('graveGo')} · <span id="graveD"></span></b>` : ''}</div></div>`);
     if (me.role === 'hider' && me.safeOn) out.push(`<div class="banner blue"><div class="bi">🛡</div><div>${t('safeOn', { s: Math.max(0, Math.ceil(SAFE_MAX - (this.t - (me.safeSince != null ? me.safeSince : this.t)))) })}</div></div>`);
+    const zin = ZX_KINDS.filter((k) => this.inZ(k, me));
+    for (const k of zin) out.push(`<div class="banner ${k === 'light' ? 'red' : k === 'swamp' ? 'yellow' : 'blue'}"><div class="bi">${ZX[k].ic}</div><div>${t('zoneIn_' + k)}</div></div>`);
     if (me.role === 'hider' && this.inBush(me)) out.push(`<div class="banner green"><div class="bi">🌳</div><div>${t('bushOn')}</div></div>`);
     return out.join('');
   },
@@ -334,6 +367,6 @@ export const worldMixin = {
     if (this.bellNear()) return `<button class="ab" data-a="bell" style="color:#ff9f43">🔔<span class="t">${t('bell')}</span><span class="s">${t('ready')}</span></button>`;
     return '';
   },
-  worldSig() { const me = this.me; return [this.outLeft != null, me.safeOn ? 1 : 0, me.role === 'hider' && this.inBush(me), this.bellNear()].join(''); },
+  worldSig() { const me = this.me; return [ZX_KINDS.filter((k) => this.inZ(k, me)).join('+'), this.outLeft != null, me.safeOn ? 1 : 0, me.role === 'hider' && this.inBush(me), this.bellNear()].join(''); },
 };
 const T0 = (p) => p.role === 'hider';

@@ -198,6 +198,10 @@ const ru = {
   outLimit: 'Выбывание за зоной', outLimitS: 'Сколько можно быть вне зоны во время охоты. «Выкл» — только предупреждение.', randMode: 'Случайный', awards: 'Награды', awHunter: 'Лучший охотник', awSurvivor: 'Выжили', awLast: 'Продержался дольше всех', awFirst: 'Пойман первым', awDist: 'Пройдено вами',
   sonarOn: 'Сонар: засечено прячущихся — {k}', heartbeat: 'Сердце колотится — охотник совсем рядом!',
   edClosed: 'Зона «{n}» замкнута', edCloseTip: 'Замкнуть: коснитесь большой первой точки.',
+  ed_swamp: 'Болото', ed_shadow: 'Тень', ed_light: 'Прожектор', ed_jam: 'Глушилка', ed_bonus: 'Сокровищница',
+  edHint_swamp: 'Обведите болото 🟫: внутри все вдвое медленнее, у прячущихся тает выносливость.', edHint_shadow: 'Обведите тень 🌑: прячущихся внутри не видно дальше 10 м, «Раскрытие» проходит мимо.', edHint_light: 'Обведите прожектор 🔦: прячущиеся внутри всегда видны охотникам.', edHint_jam: 'Обведите глушилку 📵: на тех, кто внутри, не действуют «Раскрытие», «Заморозка», дрон, камеры и сонар.', edHint_bonus: 'Обведите сокровищницу 💰: прячущийся, простоявший внутри 8 секунд, получает случайный бонус (раз в минуту).',
+  zoneD_swamp: 'Все вдвое медленнее, выносливость прячущихся тает.', zoneD_shadow: 'Прячущихся не видно дальше 10 м, «Раскрытие» мимо.', zoneD_light: 'Прячущиеся внутри видны охотникам.', zoneD_jam: '«Раскрытие», «Заморозка», дрон, камеры и сонар не действуют.', zoneD_bonus: '8 секунд внутри — случайный бонус, раз в минуту.',
+  zoneIn_swamp: 'Болото: вы двигаетесь вдвое медленнее', zoneIn_shadow: 'Тень: издалека вас не видно', zoneIn_light: 'Прожектор: охотники вас видят!', zoneIn_jam: 'Глушилка: способности здесь не работают', zoneIn_bonus: 'Сокровищница: постойте 8 секунд — получите бонус', bonusGot: 'Сокровищница: {p}!',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -393,6 +397,10 @@ const en = {
   outLimit: 'Out-of-zone elimination', outLimitS: 'How long you may stay outside the zone during the hunt. Off — warning only.', randMode: 'Random', awards: 'Awards', awHunter: 'Best hunter', awSurvivor: 'Survived', awLast: 'Lasted longest', awFirst: 'Caught first', awDist: 'You walked',
   sonarOn: 'Sonar: Hiders spotted — {k}', heartbeat: 'Your heart is pounding — a Hunter is very close!',
   edClosed: '“{n}” zone closed', edCloseTip: 'To close: tap the big first point.',
+  ed_swamp: 'Swamp', ed_shadow: 'Shadow', ed_light: 'Spotlight', ed_jam: 'Jammer', ed_bonus: 'Treasury',
+  edHint_swamp: 'Outline a swamp 🟫: everyone inside moves at half speed, Hiders lose stamina.', edHint_shadow: 'Outline a shadow 🌑: Hiders inside can’t be seen beyond 10 m, Reveal misses.', edHint_light: 'Outline a spotlight 🔦: Hiders inside are always visible to Hunters.', edHint_jam: 'Outline a jammer 📵: Reveal, Freeze, drone, cameras and sonar don’t affect anyone inside.', edHint_bonus: 'Outline a treasury 💰: a Hider who stays inside for 8 seconds gets a random power-up (once a minute).',
+  zoneD_swamp: 'Everyone moves at half speed, Hiders lose stamina.', zoneD_shadow: 'Hiders can’t be seen beyond 10 m, Reveal misses.', zoneD_light: 'Hiders inside are visible to Hunters.', zoneD_jam: 'Reveal, Freeze, drone, cameras and sonar don’t work.', zoneD_bonus: '8 seconds inside — a random power-up, once a minute.',
+  zoneIn_swamp: 'Swamp: you move at half speed', zoneIn_shadow: 'Shadow: you can’t be seen from afar', zoneIn_light: 'Spotlight: Hunters can see you!', zoneIn_jam: 'Jammer: abilities don’t work here', zoneIn_bonus: 'Treasury: stay 8 seconds for a power-up', bonusGot: 'Treasury: {p}!',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 

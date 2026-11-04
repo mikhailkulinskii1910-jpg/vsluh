@@ -9,11 +9,11 @@ import { beep, soundOn, setSound } from './sound.js';
 import { renderReplay } from './replay.js';
 import { Room, newId } from './net.js';
 import { renderMapEditor, drawMapExtras, mapPoints, buildingAt } from './mapeditor.js';
-import { OBJ, OBJ_KINDS, OUT_LIMIT } from './world.js';
+import { OBJ, OBJ_KINDS, OUT_LIMIT, ZX, ZX_KINDS } from './world.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.5.1';
+const VERSION = '2.6';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -666,6 +666,7 @@ const SCREENS = {
         roles: players.map((p) => ({ id: online ? p.id : undefined, name: p.bot || p.remote ? p.name : S.name, role: p.role, bot: !!p.bot, avatar: p.bot ? null : p.remote ? p.avatar || null : S.avatar || null })),
         myRole: (players.find((p) => !p.bot && !p.remote) || {}).role || 'hider', transport: lb.transport !== false,
         compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', outLimit: lb.outLimit != null ? lb.outLimit : 30, chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '',
+        zonesX: Object.fromEntries(['swamp', 'shadow', 'light', 'jam', 'bonus'].map((k) => [k, zoneArr((lb.map || {})[k])])),
         safeZones: zoneArr((lb.map || {}).safe), killZones: zoneArr((lb.map || {}).kill), graveZones: zoneArr((lb.map || {}).grave),
         objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || [])].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: (lb.map || {}).nogo || [], points: mapPoints(lb),
@@ -1013,7 +1014,7 @@ function openLegend() {
     <h3 class="h-sect" style="margin-top:4px">${t('legObjs')}</h3>
     ${OBJ_KINDS.map((k) => row(OBJ[k].ic, t('obj_' + k), t('objD_' + k))).join('')}
     <h3 class="h-sect">${t('legZones')}</h3>
-    ${row('🛡', t('ed_safe'), t('zoneD_safe'))}${row('☠', t('ed_kill'), t('zoneD_kill'))}${row('🪦', t('ed_grave'), t('zoneD_grave'))}${row('🧱', t('ed_barrier'), t('zoneD_barrier'))}
+    ${row('🛡', t('ed_safe'), t('zoneD_safe'))}${row('☠', t('ed_kill'), t('zoneD_kill'))}${row('🪦', t('ed_grave'), t('zoneD_grave'))}${row('🧱', t('ed_barrier'), t('zoneD_barrier'))}${ZX_KINDS.map((k) => row(ZX[k].ic, t('ed_' + k), t('zoneD_' + k))).join('')}
     ${row('⏱', t('legOut'), t('legOutD', { s: OUT_LIMIT }))}`, (b, close) => { b.querySelector('[data-x]').onclick = close; });
 }
 
