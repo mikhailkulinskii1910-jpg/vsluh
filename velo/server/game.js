@@ -17,6 +17,7 @@ const MAX_ROUTE_POINTS = 5000;
 const TRAIL_EVERY_MS = 2000;  // как часто запоминаем точку для повтора финиша
 const TRAIL_MAX = 1800;       // около часа гонки
 const DEFAULT_SKIN = 'car';
+const HOST_OFFLINE_MS = 30000; // хост без связи дольше — права переходят онлайн-игроку
 const DEFAULT_GRACE_SEC = 120; // сколько ждём остальных после первого финиша
 
 function newCode(existing) {
@@ -237,9 +238,13 @@ function tick(room, now) {
       events.push({ type: 'left', id: m.id });
     }
   }
-  if (room.hostId && !room.members.has(room.hostId)) {
-    room.hostId = room.members.size ? room.members.keys().next().value : null;
-    if (room.hostId) events.push({ type: 'host', id: room.hostId });
+  const host = room.hostId && room.members.get(room.hostId);
+  const hostGone = room.hostId && !host;
+  const hostAway = host && !host.online && now - host.seenAt > HOST_OFFLINE_MS;
+  if (hostGone || hostAway) {
+    const next = pickHost(room);
+    if (next && next !== room.hostId) { room.hostId = next; events.push({ type: 'host', id: next }); }
+    else if (hostGone) room.hostId = next;
   }
   const g = room.game;
   if (g.status === 'countdown' && now >= g.startAt) {
@@ -267,6 +272,13 @@ function tick(room, now) {
     }
   }
   return events;
+}
+
+/** Новый хост: первый игрок на связи, иначе любой оставшийся. */
+function pickHost(room) {
+  const list = [...room.members.values()];
+  const online = list.find(m => m.online);
+  return (online || list[0] || {}).id || null;
 }
 
 function publicMember(room, m, now) {
@@ -311,5 +323,5 @@ function snapshot(room, now) {
 module.exports = {
   COLORS, START_DELAY_MS, FINISH_RADIUS_M, ON_ROUTE_M, STALE_MS, MAX_MEMBERS,
   newCode, createRoom, createMember, sanitizeFix, updateState, setRoute, setConfig,
-  startGame, stopGame, tick, snapshot, publicMember,
+  startGame, stopGame, tick, snapshot, publicMember, pickHost, HOST_OFFLINE_MS,
 };

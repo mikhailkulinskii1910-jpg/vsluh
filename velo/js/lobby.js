@@ -73,6 +73,11 @@
 
   function leave() {
     net.send({ type: 'leave' });
+    resetRoomUi();
+  }
+
+  /** Сброс экрана лобби без сообщения серверу (вышли, лобби закрыто или сервер перезапущен). */
+  function resetRoomUi() {
     net.clearSession();
     ui.R = null; ui.you = null; ui.sig = '';
     clearRoute();
@@ -128,7 +133,18 @@
   });
   net.on('replay', m => playReplay(m.replay));
   net.on('route', m => drawRoute(m.route));
-  net.on('error', m => { setStatus(m.message, true); App.toast(m.message, 4000); });
+  net.on('error', m => {
+    if (/Не удалось вернуться/.test(m.message) && ui.R) {
+      // сервер перезапускался или лобби уже удалено — старый экран лобби не держим
+      resetRoomUi();
+      const msg = 'Лобби закрыто: сервер перезапускался или все вышли. Создайте новое или войдите по коду.';
+      setStatus(msg, false);
+      App.toast(msg, 5000);
+      return;
+    }
+    setStatus(m.message, true);
+    App.toast(m.message, 4000);
+  });
   net.on('disconnected', () => { if (ui.R) renderHeader('Связь потеряна, переподключаюсь…'); });
   net.on('connected', () => { if (ui.R) renderHeader(); });
 
@@ -504,7 +520,8 @@
     $('#lb-join').addEventListener('click', join);
     $('#lb-leave').addEventListener('click', () => { if (confirm('Выйти из лобби?')) leave(); });
     $('#lb-share').addEventListener('click', async () => {
-      const text = `Присоединяйся к велозаезду в Велокарте! Код лобби: ${ui.R.code}`;
+      const link = inviteLink(ui.R.code);
+      const text = `Присоединяйся к велозаезду в Велокарте! Код лобби: ${ui.R.code}${link ? '\n' + link : ''}`;
       try {
         if (navigator.share) await navigator.share({ title: 'Велокарта', text });
         else { await navigator.clipboard.writeText(text); App.toast('Код скопирован'); }
@@ -547,8 +564,24 @@
   }
 
   /* Восстанавливаем лобби после перезагрузки страницы (сессия в sessionStorage). */
+  /** Ссылка-приглашение: веб-адрес приложения с ?join=КОД (в APK — адрес из js/config.js webUrl). */
+  function inviteLink(code) {
+    const cfgUrl = (root.VELO_CONFIG || {}).webUrl;
+    const native = root.Capacitor && root.Capacitor.isNativePlatform && root.Capacitor.isNativePlatform();
+    const baseUrl = cfgUrl || (!native && location.protocol.startsWith('http') ? location.origin + location.pathname : '');
+    return baseUrl ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}join=${encodeURIComponent(code)}` : '';
+  }
+
   function restore() {
     showRoom(false);
+    // открыли ссылку-приглашение: код подставляем и показываем вкладку лобби
+    const joinCode = new URLSearchParams(location.search).get('join');
+    if (joinCode && !net.session) {
+      $('#lb-code').value = joinCode.toUpperCase().slice(0, 6);
+      App.showTab('lobby');
+      setStatus('Код из приглашения подставлен — введите имя и нажмите «Войти»');
+      history.replaceState(null, '', location.pathname);
+    }
     if (net.session && serverUrl()) {
       setStatus('Возвращаюсь в лобби…');
       connect().catch(e => setStatus(e.message, true));

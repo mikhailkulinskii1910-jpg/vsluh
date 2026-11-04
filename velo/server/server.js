@@ -13,6 +13,9 @@ const ROOT = path.resolve(__dirname, '..');
 const ROOM_IDLE_MS = 10 * 60 * 1000;
 const BROADCAST_MS = 1000;
 const MAX_MSG_PER_SEC = 20;
+const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 5000;      // защита от массового создания лобби
+const MAX_CONN_PER_IP = Number(process.env.MAX_CONN_PER_IP) || 20;
+const ipConns = new Map(); // ip → число открытых соединений
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -27,6 +30,10 @@ const sockets = new Set(); // все WebSocket-соединения
 const server = http.createServer((req, res) => {
   let urlPath;
   try { urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname); } catch { res.writeHead(400); return res.end(); }
+  if (urlPath === '/healthz') { // проверка для хостинга: сервер жив
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ ok: true, rooms: rooms.size, connections: sockets.size }));
+  }
   if (urlPath === '/') urlPath = '/index.html';
   if (urlPath.startsWith('/server/') || urlPath.startsWith('/node_modules/') || urlPath.includes('..')) {
     res.writeHead(404); return res.end('Not found');
@@ -73,6 +80,14 @@ function broadcastRoom(room, extra = {}) {
 }
 
 function attach(ws, room, member) {
+  // у игрока одно активное соединение: старое (после смены сети) отвязываем и закрываем,
+  // иначе его закрытие позже пометит игрока «не в сети»
+  for (const other of sockets) {
+    if (other !== ws && other.roomCode === room.code && other.memberId === member.id) {
+      other.roomCode = null; other.memberId = null;
+      try { other.close(4000, 'replaced'); } catch { /* уже закрыто */ }
+    }
+  }
   ws.roomCode = room.code;
   ws.memberId = member.id;
   member.online = true;
@@ -91,7 +106,17 @@ function fail(ws, message) {
   send(ws, { type: 'error', message });
 }
 
-wss.on('connection', (ws) => {
+/** IP клиента (за обратным прокси — первый адрес из X-Forwarded-For). */
+function clientIp(req) {
+  const xf = req.headers['x-forwarded-for'];
+  return (xf ? String(xf).split(',')[0] : req.socket.remoteAddress || '').trim();
+}
+
+wss.on('connection', (ws, req) => {
+  ws.ip = clientIp(req);
+  const n = (ipConns.get(ws.ip) || 0) + 1;
+  if (n > MAX_CONN_PER_IP) { ws.close(1013, 'too many connections'); return; }
+  ipConns.set(ws.ip, n);
   sockets.add(ws);
   ws.isAlive = true;
   ws.msgCount = 0;
@@ -99,6 +124,8 @@ wss.on('connection', (ws) => {
   ws.on('pong', () => { ws.isAlive = true; });
   ws.on('close', () => {
     sockets.delete(ws);
+    const left = (ipConns.get(ws.ip) || 1) - 1;
+    if (left > 0) ipConns.set(ws.ip, left); else ipConns.delete(ws.ip);
     const m = memberOf(ws), room = roomOf(ws);
     if (m) { m.online = false; room.dirty = true; room.lastActivity = Date.now(); }
   });
@@ -115,6 +142,7 @@ wss.on('connection', (ws) => {
     switch (msg.type) {
       case 'create': {
         if (roomOf(ws)) return fail(ws, 'Вы уже в лобби');
+        if (rooms.size >= MAX_ROOMS) return fail(ws, 'Сервер перегружен, попробуйте позже');
         const code = game.newCode(rooms);
         const room = game.createRoom(code, now);
         room.lastActivity = now;
@@ -159,7 +187,7 @@ wss.on('connection', (ws) => {
         ws.roomCode = null; ws.memberId = null;
         room.lastActivity = now;
         if (room.members.size === 0) { rooms.delete(room.code); return; } // последний вышел — лобби и его данные удаляются сразу
-        if (room.hostId === m.id) room.hostId = room.members.keys().next().value || null;
+        if (room.hostId === m.id) room.hostId = game.pickHost(room);
         if (room.members.size) broadcastRoom(room);
         return;
       }
@@ -196,7 +224,7 @@ function newId() {
 }
 
 /* ---------- фоновый цикл: отсчёт, таймеры, рассылка, уборка ---------- */
-setInterval(() => {
+const loopTimer = setInterval(() => {
   const now = Date.now();
   for (const room of [...rooms.values()]) {
     const events = game.tick(room, now);
@@ -210,7 +238,7 @@ setInterval(() => {
 }, 250);
 
 /* Пинг, чтобы мёртвые соединения не висели. */
-setInterval(() => {
+const pingTimer = setInterval(() => {
   for (const ws of sockets) {
     if (!ws.isAlive) { ws.terminate(); continue; }
     ws.isAlive = false;
@@ -219,7 +247,17 @@ setInterval(() => {
 }, 25000);
 
 server.listen(PORT, () => {
-  console.log(`Велокарта: http://localhost:${PORT}  (WebSocket: /ws)`);
+  if (process.env.NODE_ENV !== 'test') console.log(`Велокарта: http://localhost:${server.address().port}  (WebSocket: /ws)`);
 });
 
-module.exports = { server };
+/** Остановка: таймеры, соединения, HTTP-сервер (для тестов и корректного завершения на хостинге). */
+function close() {
+  clearInterval(loopTimer);
+  clearInterval(pingTimer);
+  for (const ws of sockets) ws.terminate();
+  wss.close();
+  return new Promise(res => server.close(() => res()));
+}
+process.on('SIGTERM', () => { close().then(() => process.exit(0)); });
+
+module.exports = { server, close, rooms };

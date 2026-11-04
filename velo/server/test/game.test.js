@@ -214,3 +214,16 @@ test('навигация: повороты по геометрии маршру�
   for (let i = 1; i <= 40; i++) straight.push([55 + (i * 50) / 111195, 37]);
   assert.deepEqual(G.findTurns(straight), []);
 });
+
+test('хост без связи дольше 30 с — права переходят игроку на связи', () => {
+  const { room, ids } = roomWith(['host', 'b'], 'race');
+  const [h, b] = ids;
+  room.members.get(h).online = false;
+  room.members.get(h).seenAt = 0;
+  room.members.get(b).seenAt = 40000;
+  game.tick(room, 20000);
+  assert.equal(room.hostId, h);              // 20 с — ещё ждём
+  const ev = game.tick(room, 31000);
+  assert.equal(room.hostId, b);
+  assert.ok(ev.some(e => e.type === 'host' && e.id === b));
+});

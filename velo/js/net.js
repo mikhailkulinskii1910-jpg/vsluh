@@ -50,9 +50,10 @@
           if (msg.type === 'error' && /Не удалось вернуться/.test(msg.message)) { this.clearSession(); }
           this.emit(msg.type, msg);
         };
-        ws.onclose = () => {
+        ws.onclose = (ev) => {
           if (this.ws !== sock) { if (!opened) reject(new Error('Соединение закрыто')); return; }
           this.ws = null;
+          if (ev && ev.code === 1013) this.emit('error', { type: 'error', message: 'Слишком много подключений с этого адреса, повторю позже' });
           if (!opened) { reject(new Error('Не удалось подключиться к серверу')); }
           this.emit('disconnected');
           if (this.wanted && this.session) {
