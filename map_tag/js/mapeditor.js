@@ -33,6 +33,21 @@ export async function buildingAt(lat, lng) {
   return cands[0] || null;
 }
 
+/** Линия → узкая полоса (многоугольник) шириной 2·w метров: так линия работает как зона. */
+export function lineBand(pts, w) {
+  const lat0 = pts[0].lat, kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+  const P = pts.map((q) => ({ x: (q.lng - pts[0].lng) * kx, y: (q.lat - lat0) * ky }));
+  const nrm = (a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = Math.hypot(dx, dy) || 1; return { x: -dy / l, y: dx / l }; };
+  const L = [], R = [];
+  for (let i = 0; i < P.length; i++) {
+    const n1 = i > 0 ? nrm(P[i - 1], P[i]) : nrm(P[i], P[i + 1]), n2 = i < P.length - 1 ? nrm(P[i], P[i + 1]) : n1;
+    let nx = n1.x + n2.x, ny = n1.y + n2.y; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    const k = Math.min(3, 1 / Math.max(0.3, nx * n1.x + ny * n1.y));   // угол: удлиняем, но не больше ×3
+    L.push({ x: P[i].x + nx * w * k, y: P[i].y + ny * w * k }); R.push({ x: P[i].x - nx * w * k, y: P[i].y - ny * w * k });
+  }
+  return [...L, ...R.reverse()].map((q) => ({ lat: Math.round((lat0 + q.y / ky) * 1e6) / 1e6, lng: Math.round((pts[0].lng + q.x / kx) * 1e6) / 1e6 }));
+}
+
 export function mapPoints(lb) {
   const m = lb.map || {};
   return { supply: m.supply || [], mission: m.mission || [], jail: m.jail || null, hill: m.hill || null, treasure: m.treasure || [] };
@@ -64,13 +79,14 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   if (!lb) return go('home');
   lb.map = { ...emptyMap(), ...(lb.map || {}) };
   lb.poly = lb.poly || [];
-  let tool = 'zone', draft = [], draftTool = null, committed = false, objKind = S._edObj || 'bush';
+  let tool = 'zone', draft = [], draftTool = null, objKind = S._edObj || 'bush';
   const DCOL = { nogo: '#d63a4a', barrier: '#8b6b4a', safe: '#3fb6ff', kill: '#b0001a', grave: '#8a8f99', ...Object.fromEntries(ZX_KINDS.map((k) => [k, ZX[k].col])) };
-  /** Замкнуть черновик в зону того инструмента, которым его начали рисовать. */
-  const closeDraft = (quiet) => {
-    // зона уже сохранена сама (с 3-й точки) — просто начинаем новую
-    if (committed && !quiet && draft.length >= 3) toast(t('edClosed', { n: t('ed_' + draftTool) }));
-    draft = []; draftTool = null; committed = false;
+  /** Сохранить черновик: closed — замкнутая зона (от 3 точек), иначе линия (от 2 точек) — полоса шириной W м. */
+  const closeDraft = (quiet, closed) => {
+    const k = POLY[draftTool];
+    if (k && closed && draft.length >= 3) { (lb.map[k] = lb.map[k] || []).push(draft); if (!quiet) toast(t('edClosed', { n: t('ed_' + draftTool) })); }
+    else if (k && draft.length >= 2) { (lb.map[k] = lb.map[k] || []).push(lineBand(draft, draftTool === 'barrier' ? 2 : 6)); if (!quiet) toast(t('edLined', { n: t('ed_' + draftTool) })); }
+    draft = []; draftTool = null;
   };
   const center = lb.center || (lb.poly[0]) || { lat: 55.7520, lng: 37.6175 };
 
@@ -104,8 +120,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     drawMapExtras(layer, { map: lb.map });
     if (draft.length) {
       const col = DCOL[draftTool] || '#d63a4a';
-      if (draft.length >= 3) L.polygon(draft.map((q) => [q.lat, q.lng]), { color: col, weight: 3, dashArray: '4 6', fillColor: col, fillOpacity: 0.15, interactive: false }).addTo(layer);
-      else L.polyline(draft.map((q) => [q.lat, q.lng]), { color: col, weight: 3, dashArray: '4 6', interactive: false }).addTo(layer);
+      L.polyline(draft.map((q) => [q.lat, q.lng]), { color: col, weight: 3, dashArray: '4 6', interactive: false }).addTo(layer);
       L.circleMarker([draft[0].lat, draft[0].lng], { radius: 11, color: col, weight: 3, fillColor: '#fff', fillOpacity: 0.9, interactive: false }).addTo(layer);
       draft.forEach((q) => L.circleMarker([q.lat, q.lng], { radius: 5, color: '#fff', weight: 2, fillColor: '#d63a4a', fillOpacity: 1, interactive: false }).addTo(layer));
     }
@@ -116,7 +131,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   function panel() {
     const p = el.querySelector('#edPanel');
     p.classList.toggle('mini', !!S._edMini);
-    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}${POLY[tool] ? `<div style="color:var(--muted);font-size:13px;margin-top:4px">${t('edCloseTip')}</div>` : ''}</div>${POLY[tool] && draft.length ? `<button class="icon-btn" data-ed="undoDraft" aria-label="undo" style="width:38px;height:38px;flex:none;font-size:20px">↶</button>` : ''}${POLY[tool] && draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:none;min-height:38px;padding:0 12px">➕ ${t('edNewZone')}</button>` : ''}<button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
+    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}${POLY[tool] ? `<div style="color:var(--muted);font-size:13px;margin-top:4px">${t('edCloseTip')}</div>` : ''}</div>${POLY[tool] && draft.length >= 2 ? `<button class="btn" data-ed="lineDraft" style="flex:none;min-height:38px;padding:0 10px">〰 ${t('edLine')}</button>` : ''}${POLY[tool] && draft.length ? `<button class="icon-btn" data-ed="undoDraft" aria-label="undo" style="width:38px;height:38px;flex:none;font-size:20px">↶</button>` : ''}${POLY[tool] && draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:none;min-height:38px;padding:0 10px">✓ ${t('edClose')}</button>` : ''}<button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
       <div style="color:var(--muted);font-size:13px;margin-top:6px">${counts()}</div>
       ${tool === 'zone' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoZone" style="flex:1">${t('undoPt')}</button><button class="btn" data-ed="circle" style="flex:1">${t('edToCircle')}</button></div>` : ''}
       ${tool === 'barrier' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="buildings" style="flex:2">🏢 ${t('edBuildings')}</button><button class="btn" data-ed="clearWalls" style="flex:1">${t('edClearWalls')}</button></div>` : ''}
@@ -148,16 +163,13 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   }
 
   map.on('click', (e) => {
-    if (committed && !(lb.map[POLY[draftTool]] || []).includes(draft)) { draft = []; draftTool = null; committed = false; }
     const q = { lat: e.latlng.lat, lng: e.latlng.lng };
     if (tool === 'zone') { lb.shape = 'custom'; lb.poly.push(q); }
     else if (POLY[tool]) {
       if (draftTool && draftTool !== tool) closeDraft();
       // касание рядом с первой точкой — замкнуть
-      if (draft.length >= 3 && map.latLngToContainerPoint([draft[0].lat, draft[0].lng]).distanceTo(map.latLngToContainerPoint(e.latlng)) < 28) { closeDraft(); save(); draw(); return; }
+      if (draft.length >= 3 && map.latLngToContainerPoint([draft[0].lat, draft[0].lng]).distanceTo(map.latLngToContainerPoint(e.latlng)) < 28) { closeDraft(false, true); save(); draw(); return; }
       draftTool = tool; draft.push(q);
-      // с 3-й точки зона сохраняется автоматически, следующие точки её расширяют
-      if (draft.length >= 3 && !committed) { const k = POLY[tool]; (lb.map[k] = lb.map[k] || []).push(draft); committed = true; }
     }
     else if (tool === 'obj') { (lb.map.objs = lb.map.objs || []).push({ k: objKind, ...q }); }
     else if (tool === 'jail') lb.map.jail = q;
@@ -173,15 +185,15 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (a === 'circle') { lb.shape = 'circle'; if (lb.poly.length >= 3 && !lb.center) lb.center = lb.poly[0]; }
     if (a === 'undoDraft') {
       draft.pop();
-      if (committed && draft.length < 3) { const L = lb.map[POLY[draftTool]] || []; const i = L.indexOf(draft); if (i >= 0) L.splice(i, 1); committed = false; }
       if (!draft.length) draftTool = null;
     }
-    if (a === 'closeNogo' && draft.length >= 3) closeDraft();
+    if (a === 'closeNogo' && draft.length >= 3) closeDraft(false, true);
+    if (a === 'lineDraft' && draft.length >= 2) closeDraft(false, false);
     if (a.startsWith('ok:')) { objKind = S._edObj = a.slice(3); panel(); return; }
     if (a === 'clearObjs') { lb.map.objs = []; }
     if (a === 'buildings') { loadBuildings(); return; }
     if (a === 'clearWalls') { lb.map.walls = []; }
-    if (a === 'clear') { lb.map = emptyMap(); lb.poly = []; lb.shape = 'circle'; draft = []; draftTool = null; committed = false; }
+    if (a === 'clear') { lb.map = emptyMap(); lb.poly = []; lb.shape = 'circle'; draft = []; draftTool = null; }
     if (a === 'save') {
       modal(`<h2>${t('edSave')}</h2><input class="input" id="mn" maxlength="30" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
         b.querySelector('[data-x]').onclick = close;
