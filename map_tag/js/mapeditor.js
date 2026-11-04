@@ -64,7 +64,14 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   if (!lb) return go('home');
   lb.map = { ...emptyMap(), ...(lb.map || {}) };
   lb.poly = lb.poly || [];
-  let tool = 'zone', draft = [], objKind = S._edObj || 'bush';
+  let tool = 'zone', draft = [], draftTool = null, objKind = S._edObj || 'bush';
+  const DCOL = { nogo: '#d63a4a', barrier: '#8b6b4a', safe: '#3fb6ff', kill: '#b0001a', grave: '#8a8f99' };
+  /** Замкнуть черновик в зону того инструмента, которым его начали рисовать. */
+  const closeDraft = (quiet) => {
+    const k = POLY[draftTool];
+    if (k && draft.length >= 3) { (lb.map[k] = lb.map[k] || []).push(draft); if (!quiet) toast(t('edClosed', { n: t('ed_' + draftTool) })); }
+    draft = []; draftTool = null;
+  };
   const center = lb.center || (lb.poly[0]) || { lat: 55.7520, lng: 37.6175 };
 
   el.innerHTML = `<div id="game"><div id="map"></div>
@@ -96,7 +103,10 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     }
     drawMapExtras(layer, { map: lb.map });
     if (draft.length) {
-      L.polyline(draft.map((q) => [q.lat, q.lng]), { color: '#d63a4a', weight: 3, dashArray: '4 6', interactive: false }).addTo(layer);
+      const col = DCOL[draftTool] || '#d63a4a';
+      if (draft.length >= 3) L.polygon(draft.map((q) => [q.lat, q.lng]), { color: col, weight: 3, dashArray: '4 6', fillColor: col, fillOpacity: 0.15, interactive: false }).addTo(layer);
+      else L.polyline(draft.map((q) => [q.lat, q.lng]), { color: col, weight: 3, dashArray: '4 6', interactive: false }).addTo(layer);
+      L.circleMarker([draft[0].lat, draft[0].lng], { radius: 11, color: col, weight: 3, fillColor: '#fff', fillOpacity: 0.9, interactive: false }).addTo(layer);
       draft.forEach((q) => L.circleMarker([q.lat, q.lng], { radius: 5, color: '#fff', weight: 2, fillColor: '#d63a4a', fillOpacity: 1, interactive: false }).addTo(layer));
     }
     el.querySelectorAll('[data-tool]').forEach((b) => b.classList.toggle('on', b.dataset.tool === tool));
@@ -106,12 +116,12 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   function panel() {
     const p = el.querySelector('#edPanel');
     p.classList.toggle('mini', !!S._edMini);
-    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}</div><button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
+    p.innerHTML = `<div class="row" style="flex-wrap:nowrap;align-items:flex-start"><div style="font-size:15px;flex:1">${t('edHint_' + tool)}${POLY[tool] ? `<div style="color:var(--muted);font-size:13px;margin-top:4px">${t('edCloseTip')}</div>` : ''}</div>${POLY[tool] && draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:none;min-height:38px;padding:0 12px">✓ ${t('edClose')}</button>` : ''}<button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
       <div style="color:var(--muted);font-size:13px;margin-top:6px">${counts()}</div>
       ${tool === 'zone' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoZone" style="flex:1">${t('undoPt')}</button><button class="btn" data-ed="circle" style="flex:1">${t('edToCircle')}</button></div>` : ''}
       ${tool === 'barrier' ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="buildings" style="flex:2">🏢 ${t('edBuildings')}</button><button class="btn" data-ed="clearWalls" style="flex:1">${t('edClearWalls')}</button></div>` : ''}
       ${tool === 'obj' ? `<div class="obj-pick">${OBJ_KINDS.map((k) => `<button class="chip ${k === objKind ? 'on' : ''}" data-ed="ok:${k}">${OBJ[k].ic} ${t('obj_' + k)}</button>`).join('')}</div><div style="color:var(--muted);font-size:13px;margin-top:6px">${t('objD_' + objKind)}</div><div class="row" style="margin-top:8px"><button class="btn" data-ed="clearObjs" style="flex:1">${t('edClearObjs')}</button></div>` : ''}
-      ${POLY[tool] ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoDraft" style="flex:1" ${draft.length ? '' : 'disabled'}>${t('undoPt')}</button><button class="btn primary" data-ed="closeNogo" style="flex:1" ${draft.length >= 3 ? '' : 'disabled'}>${t('edClose')}</button></div>` : ''}
+      ${POLY[tool] ? `<div class="row" style="margin-top:8px"><button class="btn" data-ed="undoDraft" style="flex:1" ${draft.length ? '' : 'disabled'}>${t('undoPt')}</button></div>` : ''}
       <div class="row" style="margin-top:8px;gap:6px">
         <button class="btn" data-ed="save" style="flex:1;padding:0 8px;font-size:14px">💾 ${t('edSave')}</button>
         <button class="btn" data-ed="maps" style="flex:1;padding:0 8px;font-size:14px">📂 ${t('edMaps')}</button>
@@ -140,7 +150,12 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   map.on('click', (e) => {
     const q = { lat: e.latlng.lat, lng: e.latlng.lng };
     if (tool === 'zone') { lb.shape = 'custom'; lb.poly.push(q); }
-    else if (POLY[tool]) draft.push(q);
+    else if (POLY[tool]) {
+      if (draftTool && draftTool !== tool) closeDraft();
+      // касание рядом с первой точкой — замкнуть
+      if (draft.length >= 3 && map.latLngToContainerPoint([draft[0].lat, draft[0].lng]).distanceTo(map.latLngToContainerPoint(e.latlng)) < 28) { closeDraft(); save(); draw(); return; }
+      draftTool = tool; draft.push(q);
+    }
     else if (tool === 'obj') { (lb.map.objs = lb.map.objs || []).push({ k: objKind, ...q }); }
     else if (tool === 'jail') lb.map.jail = q;
     else if (tool === 'hill') lb.map.hill = q;
@@ -153,13 +168,13 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (a === 'mini') { S._edMini = !S._edMini; panel(); return; }
     if (a === 'undoZone') lb.poly.pop();
     if (a === 'circle') { lb.shape = 'circle'; if (lb.poly.length >= 3 && !lb.center) lb.center = lb.poly[0]; }
-    if (a === 'undoDraft') draft.pop();
-    if (a === 'closeNogo' && draft.length >= 3) { const k = POLY[tool] || 'nogo'; (lb.map[k] = lb.map[k] || []).push(draft); draft = []; }
+    if (a === 'undoDraft') { draft.pop(); if (!draft.length) draftTool = null; }
+    if (a === 'closeNogo' && draft.length >= 3) closeDraft();
     if (a.startsWith('ok:')) { objKind = S._edObj = a.slice(3); panel(); return; }
     if (a === 'clearObjs') { lb.map.objs = []; }
     if (a === 'buildings') { loadBuildings(); return; }
     if (a === 'clearWalls') { lb.map.walls = []; }
-    if (a === 'clear') { lb.map = emptyMap(); lb.poly = []; lb.shape = 'circle'; draft = []; }
+    if (a === 'clear') { lb.map = emptyMap(); lb.poly = []; lb.shape = 'circle'; draft = []; draftTool = null; }
     if (a === 'save') {
       modal(`<h2>${t('edSave')}</h2><input class="input" id="mn" maxlength="30" placeholder="${t('presetName')}"><div class="row" style="margin-top:14px"><button class="btn" data-x style="flex:1">${t('cancel')}</button><button class="btn primary" data-ok style="flex:1">OK</button></div>`, (b, close) => {
         b.querySelector('[data-x]').onclick = close;
@@ -212,8 +227,8 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     if (pts.length >= 2) map.fitBounds(L.latLngBounds(pts.map((q) => [q.lat, q.lng])), { padding: [60, 60] });
     else if (pts.length) map.setView([pts[0].lat, pts[0].lng], 16);
   }
-  el.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => { tool = b.dataset.tool; if (!POLY[tool]) draft = []; draw(); });
-  el.querySelector('#edDone').onclick = () => { if (draft.length >= 3 && POLY[tool]) { const k = POLY[tool]; (lb.map[k] = lb.map[k] || []).push(draft); } save(); map.remove(); go('lobby'); };
+  el.querySelectorAll('[data-tool]').forEach((b) => b.onclick = () => { const nt = b.dataset.tool; if (nt !== draftTool && draft.length) closeDraft(); tool = nt; save(); draw(); });
+  el.querySelector('#edDone').onclick = () => { closeDraft(true); save(); map.remove(); go('lobby'); };
   el.querySelector('#edFit').onclick = fit;
   draw(); setTimeout(() => { map.invalidateSize(); fit(); }, 60);
 }

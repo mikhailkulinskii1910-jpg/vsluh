@@ -197,6 +197,7 @@ const ru = {
   chaos_fog: 'Туман! 20 секунд охотники не видят прячущихся дальше 15 м', chaos_frenzy: 'Ярость: охотники быстрее на 15 секунд!',
   outLimit: 'Выбывание за зоной', outLimitS: 'Сколько можно быть вне зоны во время охоты. «Выкл» — только предупреждение.', randMode: 'Случайный', awards: 'Награды', awHunter: 'Лучший охотник', awSurvivor: 'Выжили', awLast: 'Продержался дольше всех', awFirst: 'Пойман первым', awDist: 'Пройдено вами',
   sonarOn: 'Сонар: засечено прячущихся — {k}', heartbeat: 'Сердце колотится — охотник совсем рядом!',
+  edClosed: 'Зона «{n}» замкнута', edCloseTip: 'Замкнуть: коснитесь большой первой точки.',
   basicRules: 'Основные правила', stepOf: 'Шаг {a} из {b}', patchNotes: 'Что нового',
 };
 
@@ -391,6 +392,7 @@ const en = {
   chaos_fog: 'Fog! For 20 seconds Hunters can’t see Hiders beyond 15 m', chaos_frenzy: 'Frenzy: Hunters are faster for 15 seconds!',
   outLimit: 'Out-of-zone elimination', outLimitS: 'How long you may stay outside the zone during the hunt. Off — warning only.', randMode: 'Random', awards: 'Awards', awHunter: 'Best hunter', awSurvivor: 'Survived', awLast: 'Lasted longest', awFirst: 'Caught first', awDist: 'You walked',
   sonarOn: 'Sonar: Hiders spotted — {k}', heartbeat: 'Your heart is pounding — a Hunter is very close!',
+  edClosed: '“{n}” zone closed', edCloseTip: 'To close: tap the big first point.',
   basicRules: 'Basic rules', stepOf: 'Step {a} of {b}', patchNotes: 'What’s new',
 };
 
