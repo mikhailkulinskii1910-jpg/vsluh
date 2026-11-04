@@ -147,6 +147,7 @@ export function tutorialSteps() {
 
 export const PATCH_NOTES = {
   ru: [
+    ['2.9', ['Новое главное меню: карточка игрока с уровнем и статистикой, кнопка «Вернуться в лобби», крупные «Создать игру» и «Присоединиться», режим дня, быстрый доступ к редактору и совет дня.', 'Зоны в редакторе можно сохранить линией; карты рисуются быстрее.']],
     ['2.8', ['Основной режим — GPS: новое лобби сразу в GPS.', 'Учёт погрешности GPS: у границы зоны запас, неточные координаты (хуже 35 м) не выбивают, «слишком далеко» — 3 секунды подряд, смертельная зона — 2 секунды.', 'Объекты и флаги срабатывают с 10–13 м. Ускоритель в GPS: невидимость прячущемуся, дальность поимки охотнику. Болото: бег выдаёт. Лёд: без следов. «Ярость»: дальность поимки ×1,5.']],
     ['2.7', ['Зоны: Туман 🌫 (видно только на 20 м), Лёд 🧊 (скорость ×1,5), Тревога 🚨 (вошедшего видят охотники), Вышка обзора 👁 (видно соперников на 60 м).', 'Объекты: Мина 💣 (оглушает охотника), Дымовая шашка 💨 (облако тумана), Маяк 🗼 (охотник находит прячущихся рядом), Аптечка ⛑ (снимает заморозку и оглушение).']],
     ['2.6', ['5 новых зон в редакторе: Болото 🟫 (вдвое медленнее), Тень 🌑 (не видно издалека), Прожектор 🔦 (прячущихся видно), Глушилка 📵 (способности не действуют), Сокровищница 💰 (бонус за 8 секунд).', 'Зоны в редакторе замыкаются касанием первой точки, смена инструмента больше не склеивает зоны.']],
@@ -168,6 +169,7 @@ export const PATCH_NOTES = {
     ['1.0', ['Первая версия: создание игры, лобби с кодом и QR, настройка формы игры.', 'Карта с сужающейся зоной, «Раскрытие», «Заморозка», «Поймал».', 'Выносливость и следы, задания, тайники и 12 бонусов.', 'Боты за остальных игроков, демо-режим перемещения касанием.', 'Профиль со статистикой и повторами, русский и английский язык.']],
   ],
   en: [
+    ['2.9', ['New main menu: player card with level and stats, “Back to the lobby”, big “Create game” and “Join” tiles, mode of the day, quick editor access and a tip of the day.', 'Editor zones can be saved as lines; maps render faster.']],
     ['2.8', ['GPS is the main mode: new lobbies start in GPS.', 'GPS error handled: a margin at the zone border, inaccurate fixes (worse than 35 m) never eliminate, “too far” needs 3 seconds, a deadly zone 2 seconds.', 'Objects and flags trigger from 10–13 m. GPS booster: invisibility for Hiders, catch range for Hunters. Swamp: running gives you away. Ice: no footprints. Frenzy: ×1.5 catch range.']],
     ['2.7', ['Zones: Fog 🌫 (see only 20 m), Ice 🧊 (speed ×1.5), Alarm 🚨 (Hunters see whoever enters), Lookout tower 👁 (see opponents within 60 m).', 'Objects: Mine 💣 (stuns a Hunter), Smoke bomb 💨 (a fog cloud), Lighthouse 🗼 (a Hunter finds nearby Hiders), Medkit ⛑ (removes freeze and stun).']],
     ['2.6', ['5 new editor zones: Swamp 🟫 (half speed), Shadow 🌑 (unseen from afar), Spotlight 🔦 (Hiders visible), Jammer 📵 (abilities blocked), Treasury 💰 (power-up after 8 seconds).', 'Editor zones close by tapping the first point; switching tools no longer merges zones.']],
