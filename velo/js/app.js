@@ -29,7 +29,6 @@
     lobbyAwake: false,
     tab: 'map',
     base: cfg.base === 'sat' ? 'sat' : 'osm',
-    theme: ['light', 'night', 'graphite'].includes(cfg.theme) ? cfg.theme : 'night',
     elev: !!cfg.elev,
   };
   const plan = {
@@ -60,26 +59,6 @@
     S.settings.set({ base: state.base });
   }
 
-  const THEME_NAMES = { light: 'светлая', night: 'ночная', graphite: 'графит' };
-  const NEXT_THEME = { light: 'night', night: 'graphite', graphite: 'light' };
-
-  function applyTheme() {
-    const b = document.body.classList;
-    b.toggle('theme-light', state.theme === 'light');
-    b.toggle('theme-dark', state.theme !== 'light');
-    b.toggle('theme-night', state.theme === 'night');
-    b.toggle('theme-graphite', state.theme === 'graphite');
-    const btn = $('#btn-theme');
-    btn.classList.toggle('on', state.theme !== 'light');
-    btn.title = 'Тема: ' + THEME_NAMES[state.theme];
-    S.settings.set({ theme: state.theme });
-    // акцентный цвет берём из темы: линия маршрута и свой маркер
-    if (typeof drawPlan === 'function') drawPlan();
-    if (state.fix) updateMe();
-  }
-
-  /** Акцентный цвет текущей темы (линии маршрута, свой курсор). */
-  function accent() { return getComputedStyle(document.body).getPropertyValue('--blue').trim() || '#1f6feb'; }
 
   function applyElev() {
     if (state.elev) {
@@ -106,6 +85,16 @@
     });
   }
 
+  /** Своя позиция — простая стрелка, повёрнутая по направлению движения. */
+  function arrowIcon(heading) {
+    const rot = Math.round(heading || 0);
+    return L.divIcon({
+      className: 'vmk',
+      iconSize: [0, 0],
+      html: `<div class="me-arrow" style="transform:rotate(${rot}deg)">${icon('arrow', 28)}</div>`,
+    });
+  }
+
   function renderFollow() {
     $('#btn-follow').classList.toggle('on', state.follow);
   }
@@ -118,14 +107,14 @@
     $('#spd').textContent = f && f.spd != null ? kmh(f.spd) : '--';
     setGps(f ? `GPS ±${Math.round(f.acc || 0)} м` : 'GPS: поиск…');
     const b = state.battery;
-    $('#bat').innerHTML = b.level == null ? `${icon('battery', 16)} —` : `${icon(b.charging ? 'bolt' : 'battery', 16)} ${Math.round(b.level * 100)}%`;
+    $('#bat').textContent = b.level == null ? '—' : `${Math.round(b.level * 100)}%${b.charging ? ' +' : ''}`;
   }
 
   function updateMe() {
     const f = state.fix;
     if (!f) return;
     meMarker.setLatLng([f.lat, f.lon]).setOpacity(1);
-    meMarker.setIcon(skinIcon({ color: accent(), skin: S.settings.get().skin || SK.DEFAULT, heading: f.hdg, name: 'Я', me: true, speedMs: f.spd }));
+    meMarker.setIcon(arrowIcon(f.hdg));
   }
 
   function onPos(p) {
@@ -312,7 +301,7 @@
 
   function renderRec() {
     const b = $('#btn-rec');
-    b.innerHTML = state.rec ? `${icon('stop', 18)} Остановить запись` : `${icon('rec', 18)} Записать поездку`;
+    b.textContent = state.rec ? 'Остановить запись' : 'Записать поездку';
     b.classList.toggle('danger', !!state.rec);
     b.classList.toggle('primary', !state.rec);
     $('#rec-info').textContent = state.rec
@@ -400,7 +389,7 @@
 
   function drawPlan() {
     if (planLine) planLine.remove();
-    planLine = plan.coords ? L.polyline(plan.coords, { color: accent(), weight: 5, opacity: 0.85 }).addTo(map) : null;
+    planLine = plan.coords ? L.polyline(plan.coords, { color: '#ffffff', weight: 5, opacity: 0.9 }).addTo(map) : null;
   }
 
   function fitTo(coords) {
@@ -533,8 +522,8 @@
         </div>
         <div class="row">
           <button data-act="show-track" data-id="${esc(t.id)}" class="${shown ? 'on' : ''}">${shown ? 'Скрыть' : 'Показать'}</button>
-          <button data-act="gpx-track" data-id="${esc(t.id)}">${icon('file', 16)} GPX</button>
-          <button data-act="del-track" data-id="${esc(t.id)}" class="danger">${icon('trash', 16)}</button>
+          <button data-act="gpx-track" data-id="${esc(t.id)}">GPX</button>
+          <button data-act="del-track" data-id="${esc(t.id)}" class="danger">Удалить</button>
         </div></article>`;
     }).join('');
   }
@@ -552,8 +541,8 @@
         <div class="row">
           <button data-act="open-route" data-id="${esc(r.id)}">Открыть</button>
           <button data-act="show-route" data-id="${esc(r.id)}" class="${shown ? 'on' : ''}">${shown ? 'Скрыть' : 'Показать'}</button>
-          <button data-act="gpx-route" data-id="${esc(r.id)}">${icon('file', 16)} GPX</button>
-          <button data-act="del-route" data-id="${esc(r.id)}" class="danger">${icon('trash', 16)}</button>
+          <button data-act="gpx-route" data-id="${esc(r.id)}">GPX</button>
+          <button data-act="del-route" data-id="${esc(r.id)}" class="danger">Удалить</button>
         </div></article>`;
     }).join('');
   }
@@ -616,7 +605,6 @@
       $('#layer-pop').hidden = true;
     }));
     $('#btn-elev').addEventListener('click', () => { state.elev = !state.elev; applyElev(); if (state.elev) toast('Перепады высот: светлее — выше'); });
-    $('#btn-theme').addEventListener('click', () => { state.theme = NEXT_THEME[state.theme]; applyTheme(); });
 
     const si = $('#search-input');
     si.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(si.value.trim()), 700); });
@@ -690,7 +678,6 @@
     bindPanelHandle();
     if (cfg.panelCollapsed) document.body.classList.add('panel-collapsed');
     applyBase();
-    applyTheme();
     applyElev();
     renderFollow();
     renderRec();

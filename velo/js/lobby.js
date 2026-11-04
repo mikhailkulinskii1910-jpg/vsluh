@@ -145,14 +145,14 @@
     const rows = R.members.map(m => {
       const dist = fix && m.lat != null ? G.distance(fix.lat, fix.lon, m.lat, m.lon) : null;
       const stale = !m.online || m.seenAgoMs > 5000;
-      const bat = m.bat == null ? '—' : `${Math.round(m.bat * 100)}%${m.charging ? ' ' + icon('bolt', 12) : ''}`;
-      const role = m.role === 'chaser' ? `<span class="badge red">${icon('target', 13)} догоняет</span>`
-        : m.role === 'runner' ? `<span class="badge">${icon('run', 13)} беглец</span>` : '';
-      const place = m.place ? `<span class="badge gold">${icon('trophy', 13)} ${m.place}</span>` : '';
+      const bat = m.bat == null ? '—' : `${Math.round(m.bat * 100)}%${m.charging ? ' +' : ''}`;
+      const role = m.role === 'chaser' ? `<span class="badge red">догоняет</span>`
+        : m.role === 'runner' ? `<span class="badge">беглец</span>` : '';
+      const place = m.place ? `<span class="badge gold">${m.place} место</span>` : '';
       return `<li class="${stale ? 'stale' : ''}">
         <span class="sw" style="background:${m.color}"></span>
-        <div class="who"><b>${esc(m.name)}${m.id === ui.you ? ' (вы)' : ''}${m.host ? ` ${icon('crown', 13)}` : ''}</b>
-          <small>${stale ? 'нет связи' : `${m.spd == null ? '—' : Math.round(m.spd * 3.6)} км/ч`} · ${icon('battery', 13)} ${bat}${dist != null && m.id !== ui.you ? ` · ${G.formatDistance(dist)}` : ''}</small>
+        <div class="who"><b>${esc(m.name)}${m.id === ui.you ? ' (вы)' : ''}${m.host ? ' · хост' : ''}</b>
+          <small>${stale ? 'нет связи' : `${m.spd == null ? '—' : Math.round(m.spd * 3.6)} км/ч`} · ${bat}${dist != null && m.id !== ui.you ? ` · ${G.formatDistance(dist)}` : ''}</small>
         </div>
         <div class="tags">${role}${place}</div>
       </li>`;
@@ -183,8 +183,8 @@
     const chasers = new Set(R.config.chaserIds);
     box.innerHTML = `
       <div class="seg">
-        <button data-mode="race" class="${R.config.mode === 'race' ? 'on' : ''}" ${busy ? 'disabled' : ''}>${icon('trophy', 16)} Гонка</button>
-        <button data-mode="chase" class="${R.config.mode === 'chase' ? 'on' : ''}" ${busy ? 'disabled' : ''}>${icon('target', 16)} Погоня</button>
+        <button data-mode="race" class="${R.config.mode === 'race' ? 'on' : ''}" ${busy ? 'disabled' : ''}>Гонка</button>
+        <button data-mode="chase" class="${R.config.mode === 'chase' ? 'on' : ''}" ${busy ? 'disabled' : ''}>Погоня</button>
       </div>
       ${R.config.mode === 'race' ? `
         <label class="field">Маршрут
@@ -206,8 +206,8 @@
           <label class="field">Держать, с<input id="lb-catchs" type="number" min="0.5" max="30" step="0.5" value="${R.config.catchS}" ${busy ? 'disabled' : ''}></label>
         </div>`}
       <div class="row">
-        <button id="lb-start" class="primary grow" ${busy ? 'disabled' : ''}>${icon('play', 16)} Старт (отсчёт 10 с)</button>
-        <button id="lb-stop" class="danger" ${busy ? '' : 'disabled'}>${icon('stop', 16)} Стоп</button>
+        <button id="lb-start" class="primary grow" ${busy ? 'disabled' : ''}>Старт (отсчёт 10 с)</button>
+        <button id="lb-stop" class="danger" ${busy ? '' : 'disabled'}>Стоп</button>
       </div>`;
     if (R.config.mode === 'race' && ui.routeKey) { const sel = $('#lb-route'); if (sel) sel.value = ui.routeKey; }
   }
@@ -251,7 +251,7 @@
         const pct = total ? Math.min(100, Math.round((m.progress / total) * 100)) : 0;
         return `<div class="bar-row"><span class="bn">${esc(m.name)}</span>
           <div class="bar"><i style="width:${m.place ? 100 : pct}%;background:${m.color}"></i></div>
-          <span class="bp">${m.place ? m.place + ' ' + icon('flag', 13) : pct + '%'}</span></div>`;
+          <span class="bp">${m.place ? m.place + ' место' : pct + '%'}</span></div>`;
       }).join('');
       return;
     }
@@ -426,7 +426,7 @@
     const fmt = ms => ms == null ? '—' : G.formatDuration(ms / 1000);
     const rowOf = m => `<li><span class="pl">${m.place || '—'}</span>
       <span><span class="nm">${esc(m.name)}${m.id === me ? ' (вы)' : ''}</span><small>${m.place ? 'финиш ' + fmt(m.finishedMs) : 'не финишировал'}</small></span>
-      <span style="color:${m.color}">${icon('nav', 20)}</span></li>`;
+      <i style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${m.color}"></i></li>`;
     const mine = results.find(m => m.id === me);
     $('#replay-title').textContent = mine ? (mine.place === 1 ? 'Вы первые!' : `Вы — ${mine.place} место`) : 'Заезд завершён';
     $('#replay-card').innerHTML = `<ol>${[...results, ...others].map(rowOf).join('') || '<li class="muted">Нет данных</li>'}</ol>`;

@@ -33,7 +33,6 @@
     <button id="btn-follow" class="tool on" title="Следовать за мной"><span data-icon="target" data-size="20"></span></button>
     <button id="btn-layers" class="tool" title="Слой карты"><span data-icon="layers" data-size="20"></span></button>
     <button id="btn-elev" class="tool" title="Перепады высот"><span data-icon="mountain" data-size="20"></span></button>
-    <button id="btn-theme" class="tool" title="Тема карты"><span data-icon="moon" data-size="20"></span></button>
     <div id="layer-pop" class="pop" hidden>
       <button data-base="osm" class="on">Схема</button>
       <button data-base="sat">Спутник</button>
@@ -60,7 +59,7 @@
       <button id="btn-nav-stop" class="danger">Стоп</button>
     </div>
     <div class="row">
-      <button id="btn-rec" class="primary grow"><span data-icon="rec" data-size="18"></span> Записать поездку</button>
+      <button id="btn-rec" class="primary grow">Записать поездку</button>
     </div>
     <p id="rec-info" class="muted"></p>
     <p class="muted small">Ваша позиция и игроки из лобби видны на карте: скорость, заряд и направление движения. Введите адрес сверху, чтобы построить маршрут.</p>
@@ -78,14 +77,14 @@
       </select>
     </label>
     <div class="row wrap">
-      <button id="btn-go" class="primary grow"><span data-icon="nav" data-size="18"></span> Поехать</button>
+      <button id="btn-go" class="primary grow">Поехать</button>
     </div>
     <div class="row wrap">
-      <button id="btn-my-start"><span data-icon="pin" data-size="18"></span> Старт от меня</button>
-      <button id="btn-undo"><span data-icon="undo" data-size="18"></span> Точка</button>
-      <button id="btn-clear"><span data-icon="clear" data-size="18"></span> Очистить</button>
-      <button id="btn-save-route" class="primary"><span data-icon="check" data-size="18"></span> Сохранить</button>
-      <button id="btn-gpx-plan"><span data-icon="file" data-size="18"></span> GPX</button>
+      <button id="btn-my-start">Старт от меня</button>
+      <button id="btn-undo">Точка</button>
+      <button id="btn-clear">Очистить</button>
+      <button id="btn-save-route" class="primary">Сохранить</button>
+      <button id="btn-gpx-plan">GPX</button>
     </div>
     <h3>Сохранённые маршруты</h3>
     <div id="route-list"></div>
@@ -101,7 +100,7 @@
       <label class="field">Ваше имя<input id="lb-name" maxlength="20" placeholder="Например, Миша"></label>
       <label class="field">Сервер лобби<input id="lb-server" placeholder="wss://адрес-сервера/ws"></label>
       <div class="row">
-        <button id="lb-skin" class="grow"><span data-icon="palette" data-size="18"></span> Мой курсор: <b id="lb-skin-name">Машинка</b></button>
+        <button id="lb-skin" class="grow">Мой курсор: <b id="lb-skin-name">Машинка</b></button>
       </div>
       <div class="row"><button id="lb-create" class="primary grow">Создать лобби</button></div>
       <div class="divider">или войти по коду</div>
@@ -124,7 +123,7 @@
           <div id="lb-code-big" class="code"></div>
         </div>
         <div class="col">
-          <button id="lb-share"><span data-icon="share" data-size="18"></span> Поделиться</button>
+          <button id="lb-share">Поделиться</button>
           <button id="lb-leave" class="danger"><span data-icon="close" data-size="18"></span> Выйти</button>
         </div>
       </div>
@@ -140,10 +139,10 @@
 </section>
 
 <nav class="tabbar">
-  <button data-tab="map" class="on"><span data-icon="map" data-size="22"></span><span class="lbl">Карта</span></button>
-  <button data-tab="route"><span data-icon="route" data-size="22"></span><span class="lbl">Маршрут</span></button>
-  <button data-tab="tracks"><span data-icon="tracks" data-size="22"></span><span class="lbl">Поездки</span></button>
-  <button data-tab="lobby"><span data-icon="users" data-size="22"></span><span class="lbl">Лобби</span></button>
+  <button data-tab="map" class="on"><span class="lbl">Карта</span></button>
+  <button data-tab="route"><span class="lbl">Маршрут</span></button>
+  <button data-tab="tracks"><span class="lbl">Поездки</span></button>
+  <button data-tab="lobby"><span class="lbl">Лобби</span></button>
 </nav>
 
 <!-- согласие при первом запуске -->
