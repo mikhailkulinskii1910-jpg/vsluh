@@ -12,6 +12,7 @@ import { socialMixin } from './social.js';
 import { worldMixin } from './world.js';
 import { arenaMixin } from './arena.js';
 import { indoorMixin } from './indoor.js';
+import { radarMixin } from './radar.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -74,7 +75,7 @@ export class Game {
     this.wallsInit(); this.worldInit();
     this.makePlayers();
     if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
-    this.modesInit(); this.extrasInit(); this.socialInit(); this.arenaInit(); this.roomsInit();
+    this.modesInit(); this.extrasInit(); this.socialInit(); this.arenaInit(); this.roomsInit(); this.radarInit();
     if (this.hasPowerups && !this.isClient) for (let i = 0, n = this.ptSupply.length || 6 + Math.round(this.R / 150); i < n; i++) this.supplies.push(this.newSupply());
     if (this.isClient) this.nextMissionAt = Infinity;
     if (this.net) this.netInit();
@@ -184,7 +185,7 @@ export class Game {
     this.root = root;
     root.innerHTML = `<div id="game"><div id="map"></div><div class="hud-top" id="hudTop"></div><div class="hud-bottom" id="hudBot"></div><div id="cover"></div></div>`;
     const map = this.map = L.map(root.querySelector('#map'), { preferCanvas: true, zoomControl: false, attributionControl: true, zoomSnap: 0.25 }).setView(this.ll({ x: 0, y: 0 }), this.R > 450 ? 15 : 16);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
+    if (this.gmode !== 'indoor') L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(map);
     map.attributionControl.setPrefix(false);
     const zst = { color: '#2c7a4b', weight: 4, dashArray: '12 10', fill: false, interactive: false };
     this.zoneLayer = (this.poly ? L.polygon(this.zoneLatLngs(), zst) : L.circle(this.ll({ x: 0, y: 0 }), { radius: this.R, ...zst })).addTo(map);
@@ -196,7 +197,7 @@ export class Game {
     map.on('contextmenu', (e) => { if (this.net && this.opts.ping) { const q = this.xy(e.latlng.lat, e.latlng.lng); this.opts.ping(Math.round(q.x), Math.round(q.y)); } });
     map.on('dragstart', () => { this.follow = false; });
 
-    if (this.cfg.mode === 'gps' && this.gmode !== 'indoor') this.startGps();
+    if (this.cfg.mode === 'gps') this.startGps();   // в помещении GPS нужен радару и этажам
     try { window.MapTagNative && window.MapTagNative.gameStart('Map Tag — ' + (this.me.role === 'hunter' ? t('hunter') : t('hider'))); } catch {}
     this.requestWakeLock();
     if (this.cfg.compass && this.cfg.compass !== 'off') this.startHeading();
@@ -212,6 +213,7 @@ export class Game {
     try { window.MapTagNative && window.MapTagNative.gameStop(); } catch {}
     if (this.watchId != null) navigator.geolocation.clearWatch(this.watchId);
     try { this.wakeLock && this.wakeLock.release(); } catch {}
+    this.radarStop();
     if (this.map) this.map.remove();
   }
 
@@ -382,6 +384,7 @@ export class Game {
     this.modesLocal(dt);
     this.extrasLocal(dt);
     this.arenaLocal();
+    this.radarLocal();
     this.announceTick();
     if (ph !== 'end' && !this.indoor()) this.checkZone(dt);   // стрелка к зоне — и во время пряток
     if (!this.isClient) { this.worldStep(dt); if (this.ended) return; }
@@ -1035,7 +1038,7 @@ export class Game {
         }
       } else if (hunter) {
         bot.innerHTML = `${this.ch.spoof ? `<div class="demo-hint">${t('spoofHint')}</div>` : ''}${this.seekHtml()}${tray}<div class="act-row">${chatBtn}${side}
-          ${this.extraButtons()}${this.socialButtons()}${this.worldButtons()}
+          ${this.extraButtons()}${this.socialButtons()}${this.worldButtons()}${this.trapButton()}
           ${this.gmode === 'ghosts' || this.social() || this.indoor() ? '' : `<button class="ab reveal" data-a="reveal">${I.signal}<span class="t">${t('reveal')}</span><span class="s" id="rS"></span></button>`}
           ${this.hasFreeze ? `<button class="ab freeze" data-a="freeze">${I.snow}<span class="t">${t('freeze')}</span><span class="s" id="fS"></span></button>` : ''}
           <button class="ab catch" data-a="catch">${I.crosshair}<span class="t">${t('catch')}</span><span class="s">${t('choosePlayer')}</span></button>
@@ -1075,6 +1078,7 @@ export class Game {
       case 'heading': this.askHeading(); break;
       case 'pause': this.togglePause(); break;
       case 'emote': this.opts.modal(`<h2>${t('emoteTitle')}</h2><div class="emo-grid">${EMOTES.map((e) => `<button class="emo" data-e="${e}">${e}</button>`).join('')}</div>`, (box, close) => { box.querySelectorAll('[data-e]').forEach((b) => b.onclick = () => { close(); this.sendEmote(b.dataset.e); }); }); break;
+      case 'trap': this.placeTrap(); break;
       case 'bell': if (this.isClient) this.netSend('bellreq', {}); else this.ringBell(me); break;
       case 'legend': this.opts.openLegend && this.opts.openLegend(); break;
       case 'drone': this.droneToggle(); break;
@@ -1127,6 +1131,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin, arenaMixin, indoorMixin);
+Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin, arenaMixin, indoorMixin, radarMixin);
 
 export { fmt };

@@ -14,7 +14,7 @@ import { DEFAULT_ROOMS } from './indoor.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '3.0';
+const VERSION = '3.1';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -317,7 +317,7 @@ const SCREENS = {
     const lvl = Math.floor(Math.sqrt(xp / 50)) + 1, lo = (lvl - 1) ** 2 * 50, hi = lvl ** 2 * 50;
     const pct = Math.round((xp - lo) / Math.max(1, hi - lo) * 100);
     // режим дня — одинаковый у всех в этот день
-    const MODES = [['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['flag', '🚩'], ['infection', '💉'], ['bounty', '🎯'], ['checkpoint', '🏴']];
+    const MODES = [['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['flag', '🚩'], ['infection', '💉'], ['bounty', '🎯'], ['checkpoint', '🏴'], ['lastman', '🏆'], ['stalker', '🕶']];
     const day = Math.floor(Date.now() / 864e5), [dm, di] = MODES[(day * 7 + 3) % MODES.length];
     const tip = t('tip' + ((day % 8) + 1));
     const km = (st.dist / 1000).toFixed(1);
@@ -474,7 +474,7 @@ const SCREENS = {
 
     const step1 = `
       <div class="sect">${t('gmode')}<button class="qbtn" data-q="gmode">${I.help}</button><button class="chip" id="randMode" style="margin-left:auto;min-height:36px;padding:0 12px">🎲 ${t('randMode')}</button></div>
-      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['indoor', '🏠'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['flag', '🚩'], ['infection', '💉'], ['bounty', '🎯'], ['checkpoint', '🏴'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
+      <div class="opts c2 gmodes">${[['classic', '🏃'], ['jail', '⛓'], ['treasure', '🪙'], ['sardines', '🐟'], ['hill', '⛰'], ['ghosts', '👻'], ['zombie', '🧟'], ['vip', '👑'], ['bomb', '💣'], ['tag', '🏷'], ['predator', '🦖'], ['royale', '🎯'], ['blind', '🙈'], ['indoor', '🏠'], ['impostor', '🔪'], ['mimic', '🎭'], ['phantom', '🫥'], ['flag', '🚩'], ['infection', '💉'], ['bounty', '🎯'], ['checkpoint', '🏴'], ['lastman', '🏆'], ['stalker', '🕶'], ['blitz', '⚡']].map(([k, ic]) => `<button class="opt ${(lb.gmode || 'classic') === k ? 'on' : ''}" data-gm="${k}"><span style="font-size:28px">${ic}</span><span class="t">${t('gm_' + k)}</span><span class="s">${t('gm_' + k + 'S')}</span></button>`).join('')}</div>
       <div class="sect">${t('sizeLen')}</div>
       <div class="opts c3">${opt('size', 'small', 'sprout', t('small'), sizeSub('small'), lb.size === 'small')}${opt('size', 'medium', 'tree', t('medium'), sizeSub('medium'), lb.size === 'medium')}${opt('size', 'large', 'mountain', t('large'), sizeSub('large'), lb.size === 'large')}</div>
       <div class="sect">${t('visibility')}<button class="qbtn" data-q="vis">${I.help}</button></div>
@@ -656,9 +656,10 @@ const SCREENS = {
       try {
         const b = await buildingAt(lat, lng);
         if (!b) { if (!quiet) toast(t('bldNotFound')); return; }
+        if (current !== 'lobby' || S.lobby !== lb) return;   // ответ пришёл, когда игра уже началась — ничего не трогаем
         lb.shape = 'custom'; lb.poly = b.poly; lb.building = { name: b.name, lat, lng }; save(); rerender();
         toast(t('bldPicked', { n: b.name || t('bldNoName') }));
-      } catch { if (!quiet) toast(t('edBuildingsFail')); }
+      } catch { if (!quiet && current === 'lobby') toast(t('edBuildingsFail')); }
     };
     const ri = el.querySelector('#roomsIn'); if (ri) ri.onchange = () => { lb.rooms = ri.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 12); if (lb.rooms.length < 2) lb.rooms = null; save(); hostPublish(); };
     const ba = el.querySelector('#bldAuto');

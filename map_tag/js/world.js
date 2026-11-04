@@ -302,6 +302,7 @@ export const worldMixin = {
     if (me.role === 'dead') return true;
     if (me.role === 'hunter' && !this.ch.wall && this.hiddenInBush(p, d)) return false;
     if (me.role === 'hunter' && !this.ch.wall && p.role === 'hider' && this.t < (p.invisUntil || 0) && d > 8) return false;
+    if (this.gmode === 'stalker' && me.role === 'hider' && p.role === 'hunter' && !this.ch.wall && this.phase() === 'hunt') return (this.t - this.cfg.hideSec) % 30 < 4 || d < 8;
     if (me.role === 'hunter' && !this.ch.wall && p.role === 'hider' && this.t < (this.fogUntil || 0) && d > 15) return false;
     if (!this.ch.wall && me.role !== 'spectator' && d > 20 && (this.foggy(me) || this.foggy(p))) return false;
     if (this.inZ('lookout', me) && d < 60 && p.role !== me.role && (p.role === 'hider' || p.role === 'hunter') && !this.hiddenInBush(p, d)) return true;

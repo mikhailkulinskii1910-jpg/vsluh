@@ -9,7 +9,7 @@ import { t } from './i18n.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const FLAG_R = 7, BASE_R = 22, ANTI_R = 6, CP_R = 15, CP_NEED = 10, CP_N = 5, BOUNTY_T = 60;
-export const ARENA_MODES = ['flag', 'infection', 'bounty', 'checkpoint'];
+export const ARENA_MODES = ['flag', 'infection', 'bounty', 'checkpoint', 'lastman', 'stalker'];
 
 export const arenaMixin = {
   arena() { return ARENA_MODES.includes(this.gmode); },
@@ -82,6 +82,7 @@ export const arenaMixin = {
   /** Каждый телефон: несу флаг / я цель — меня видно. */
   arenaLocal() {
     if (!this.arena() || this.phase() !== 'hunt') return;
+    if (this.gmode === 'stalker') { const k = Math.floor((this.t - this.cfg.hideSec) / 30); if (k !== this.stalkK) { this.stalkK = k; if (k > 0 && this.me.role === 'hider') { this.alert('red', t('stalkPulse'), 'eye'); this.vibrate([150]); } } }
     const me = this.me, i = this.pi(me);
     if ((this.gmode === 'flag' && this.flags.some((f) => f.c === i)) || (this.gmode === 'bounty' && this.bountyI === i)) me.exposedUntil = Math.max(me.exposedUntil || 0, this.t + 3.5);
   },
@@ -92,6 +93,7 @@ export const arenaMixin = {
   },
   /** Поимка в режимах арены. true — обработано (обычное превращение не нужно). */
   arenaCatch(hunter, h) {
+    if (this.gmode === 'lastman') { hunter.catches = (hunter.catches || 0) + 1; if (hunter === this.me) this.stats.caught++; this.eliminate(h, 'caught'); return true; }
     if (this.gmode !== 'bounty' || this.pi(h) === this.bountyI) return false;
     if (this.t < (h.frozenUntil || 0)) return true;
     h.warnUntil = this.t; h.frozenUntil = this.t + 15; h.target = null;

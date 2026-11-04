@@ -185,7 +185,8 @@ export const extrasMixin = {
     const me = this.me, alive = this.hiders().length, hunters = this.hunters().length;
     let plan = '';
     if (this.poly) { const P = this.poly, x0 = Math.min(...P.map((q) => q.x)), x1 = Math.max(...P.map((q) => q.x)), y0 = Math.min(...P.map((q) => q.y)), y1 = Math.max(...P.map((q) => q.y)), s = 200 / Math.max(1, x1 - x0, y1 - y0); plan = `<svg class="bld-plan" viewBox="-10 -10 ${(x1 - x0) * s + 20} ${(y1 - y0) * s + 20}"><polygon points="${P.map((q) => `${((q.x - x0) * s).toFixed(1)},${((y1 - q.y) * s).toFixed(1)}`).join(' ')}"/></svg><div class="bld-name">${this.cfg.buildingName ? this.cfg.buildingName.replace(/[<>&"]/g, '') : ''} · ${Math.round(x1 - x0)}×${Math.round(y1 - y0)} ${t('m')}</div>`; }
-    return `<div class="indoor">${plan || '<div class="ic">🏠</div>'}<h2>${t('gm_indoor')}</h2><p>${t('indoorHint')}</p>${this.roomsHtml()}
+    const bn = this.cfg.buildingName ? `<div class="bld-name">🏢 ${this.cfg.buildingName.replace(/[<>&"]/g, '')}</div>` : '';
+    return `<div class="indoor">${this.radarHtml()}${bn}<p style="margin:6px 0 0">${t('indoorHint')}</p>${this.roomsHtml()}
       <div class="duo" style="margin-top:12px"><div class="tile"><div class="v" style="color:var(--hider)">${alive}</div><div class="l">${t('hidersPl')}</div></div><div class="tile"><div class="v" style="color:var(--hunter)">${hunters}</div><div class="l">${t('huntersPl')}</div></div></div>
       <div class="role-big ${me.role}">${t(me.role)}</div></div>`;
   },

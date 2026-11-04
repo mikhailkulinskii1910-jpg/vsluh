@@ -53,7 +53,7 @@ export const netMixin = {
       });
     } else {
       const me = this.me;
-      this.netSend('pos', { x: Math.round(me.x), y: Math.round(me.y), iv: r1(me.invisUntil || 0), r: me.running ? 1 : 0, ex: r1(me.exposedUntil || 0), pr, ch: { u: !!this.ch.untouch, i: !!this.ch.immune, m: !!this.ch.magnet } });
+      this.netSend('pos', { x: Math.round(me.x), y: Math.round(me.y), iv: r1(me.invisUntil || 0), h: me.h != null ? r1(me.h) : null, r: me.running ? 1 : 0, ex: r1(me.exposedUntil || 0), pr, ch: { u: !!this.ch.untouch, i: !!this.ch.immune, m: !!this.ch.magnet } });
     }
   },
 
@@ -81,7 +81,7 @@ export const netMixin = {
         const p = P(from); if (!p || p.sim) break;
         if (p.lastPos) { const dtt = Math.max(0.5, this.t - p.lastPos.t); p.speed = Math.hypot(d.x - p.lastPos.x, d.y - p.lastPos.y) / dtt; }
         p.lastPos = { x: d.x, y: d.y, t: this.t };
-        p.nx = d.x; p.ny = d.y; p.running = !!d.r; p.exposedUntil = Math.max(p.exposedUntil || 0, d.ex || 0); p.netCh = d.ch || {}; p.invisUntil = d.iv || 0; p.lastSeen = this.t; p.left = false;
+        p.nx = d.x; p.ny = d.y; p.running = !!d.r; p.exposedUntil = Math.max(p.exposedUntil || 0, d.ex || 0); p.netCh = d.ch || {}; p.invisUntil = d.iv || 0; if (d.h != null) p.h = d.h; p.lastSeen = this.t; p.left = false;
         this.netPrints(d.pr);
         break;
       }

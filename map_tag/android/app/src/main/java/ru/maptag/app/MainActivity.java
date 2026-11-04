@@ -36,6 +36,11 @@ public class MainActivity extends Activity {
     }
     private static final int REQ_LOC = 1, REQ_CAM = 2, REQ_PERM = 3;
     private boolean gameRunning = false;
+    private volatile float pressureHpa = 0;
+    private final android.hardware.SensorEventListener baro = new android.hardware.SensorEventListener() {
+        @Override public void onSensorChanged(android.hardware.SensorEvent e) { pressureHpa = e.values[0]; }
+        @Override public void onAccuracyChanged(android.hardware.Sensor s, int a) { }
+    };
 
     private WebView web;
     private GeolocationPermissions.Callback geoCallback;
@@ -112,6 +117,11 @@ public class MainActivity extends Activity {
             }
         });
         setContentView(web);
+        try {
+            android.hardware.SensorManager sm = (android.hardware.SensorManager) getSystemService(SENSOR_SERVICE);
+            android.hardware.Sensor ps = sm == null ? null : sm.getDefaultSensor(android.hardware.Sensor.TYPE_PRESSURE);
+            if (ps != null) sm.registerListener(baro, ps, android.hardware.SensorManager.SENSOR_DELAY_NORMAL);
+        } catch (Exception ignored) { }
         GameService.listener = (Location l) -> runOnUiThread(() -> web.evaluateJavascript(
                 "window.__nativeLoc&&__nativeLoc(" + l.getLatitude() + "," + l.getLongitude() + "," + l.getAccuracy() + "," + (l.hasSpeed() ? l.getSpeed() : -1) + ")", null));
 
@@ -215,6 +225,10 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void gameStop() { runOnUiThread(() -> { gameRunning = false; GameService.stop(MainActivity.this); }); }
+
+        /** Давление, гПа (барометр) — для подсчёта этажей; 0, если датчика нет. */
+        @JavascriptInterface
+        public float pressure() { return pressureHpa; }
 
         /** Заряд батареи, %. */
         @JavascriptInterface
