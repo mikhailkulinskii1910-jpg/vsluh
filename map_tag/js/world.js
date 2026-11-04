@@ -25,7 +25,12 @@ export const OBJ = {
   snare: { ic: '🕸', r: 6, col: '#a0a0a0' },       // капкан: прячущийся попал — виден охотникам 8 с; прячущимся не виден; перезарядка 45 с
   compass: { ic: '🧭', r: 6, col: '#4fc3f7' },     // компас: показывает направление и расстояние до ближайшего соперника; перезарядка 60 с
   radio: { ic: '📻', r: 7, col: '#ffa726' },       // радиовышка: все видят всех 4 с; перезарядка 120 с
-  flarebox: { ic: '🎆', r: 6, col: '#ef5350' },    // ящик ракет: охотник запускает ракету — через 10 с видны все прячущиеся; перезарядка 90 с     // снимает заморозку и оглушение, полная выносливость; перезарядка 45 с      // охотник звонит: прячущиеся в 60 м слышат звонок и видны 5 с
+  flarebox: { ic: '🎆', r: 6, col: '#ef5350' },
+  mirror: { ic: '🪞', r: 6, col: '#b3e5fc' },      // зеркало: прячущийся — охотники 20 с видят его двойника в стороне
+  clock: { ic: '⏰', r: 6, col: '#ffcc80' },       // часы: прячущийся −20 с охоты, охотник +20 с
+  clover: { ic: '🍀', r: 6, col: '#66bb6a' },      // клевер: прячущемуся — щит
+  freezer: { ic: '🥶', r: 6, col: '#81d4fa' },     // морозилка: охотник — прячущиеся в 50 м замерзают на 5 с
+  target: { ic: '🎯', r: 6, col: '#ff5252' },      // мишень: охотник — ближайший прячущийся виден 10 с    // ящик ракет: охотник запускает ракету — через 10 с видны все прячущиеся; перезарядка 90 с     // снимает заморозку и оглушение, полная выносливость; перезарядка 45 с      // охотник звонит: прячущиеся в 60 м слышат звонок и видны 5 с
 };
 export const OBJ_KINDS = Object.keys(OBJ);
 /** Дополнительные зоны редактора: цвет, значок. */
@@ -38,7 +43,12 @@ export const ZX = {
   fog: { col: '#c9d1dc', ic: '🌫', op: 0.5 },       // туман: внутри видно только на 20 м, снаружи внутрь — тоже 20 м
   ice: { col: '#9fe3ff', ic: '🧊', op: 0.3 },       // лёд: скользко — скорость ×1.5
   alarm: { col: '#ff4757', ic: '🚨', op: 0.18 },    // тревога: прячущийся вошёл — охотники видят его 6 с
-  lookout: { col: '#2ecc71', ic: '👁', op: 0.18 },  // вышка обзора: стоящий внутри видит соперников на 60 м    // сокровищница: 8 с внутри — случайный бонус (раз в 60 с)
+  lookout: { col: '#2ecc71', ic: '👁', op: 0.18 },
+  electric: { col: '#ffeb3b', ic: '⚡', op: 0.22 },  // электрозона: охотник вошёл — оглушён на 3 с
+  echo: { col: '#ce93d8', ic: '🔊', op: 0.2 },      // эхо: бег внутри слышат соперники — с направлением
+  arena: { col: '#ff7043', ic: '🎪', op: 0.18 },    // арена: охотник внутри ловит с двойного расстояния
+  heal: { col: '#f48fb1', ic: '❤', op: 0.2 },       // лечебная: выносливость быстро восстанавливается, заморозка и оглушение проходят вдвое быстрее
+  chaos: { col: '#7e57c2', ic: '🌀', op: 0.22 },    // хаос: кто вошёл — запускает случайное событие (раз в 2 минуты)  // вышка обзора: стоящий внутри видит соперников на 60 м    // сокровищница: 8 с внутри — случайный бонус (раз в 60 с)
 };
 export const ZX_KINDS = Object.keys(ZX);
 
@@ -94,7 +104,7 @@ export const worldMixin = {
       fixed.forEach((o, i) => list.push({ id: 'o' + i, k: o.k, ...this.xy(o.lat, o.lng), readyAt: 0 }));
     } else if (cfg.objects !== false && !this.indoor()) {
       const k = Math.max(0.6, Math.min(2.2, this.R / 300));
-      const want = { bush: Math.round(4 * k), radar: Math.max(1, Math.round(k)), chest: this.hasPowerups ? Math.max(1, Math.round(1.5 * k)) : 0, camera: Math.max(1, Math.round(k)), boost: Math.round(2 * k), bell: Math.max(1, Math.round(k)), mine: Math.round(1.5 * k), smoke: Math.max(1, Math.round(k)), lighthouse: Math.max(1, Math.round(k)), medkit: Math.round(k), snare: Math.round(1.5 * k), compass: Math.max(1, Math.round(k)), radio: 1, flarebox: Math.max(1, Math.round(0.7 * k)), portal: cfg.mode === 'demo' ? 2 : 0 };
+      const want = { bush: Math.round(4 * k), radar: Math.max(1, Math.round(k)), chest: this.hasPowerups ? Math.max(1, Math.round(1.5 * k)) : 0, camera: Math.max(1, Math.round(k)), boost: Math.round(2 * k), bell: Math.max(1, Math.round(k)), mine: Math.round(1.5 * k), smoke: Math.max(1, Math.round(k)), lighthouse: Math.max(1, Math.round(k)), medkit: Math.round(k), snare: Math.round(1.5 * k), compass: Math.max(1, Math.round(k)), radio: 1, mirror: Math.max(1, Math.round(k)), clock: 1, clover: Math.round(k), freezer: Math.max(1, Math.round(0.7 * k)), target: Math.max(1, Math.round(0.7 * k)), flarebox: Math.max(1, Math.round(0.7 * k)), portal: cfg.mode === 'demo' ? 2 : 0 };
       const gap = Math.max(25, this.R * 0.12);
       let n = 0;
       for (const [kind, cnt] of Object.entries(want)) for (let i = 0; i < cnt; i++) {
@@ -121,11 +131,23 @@ export const worldMixin = {
       if (o.k === 'mine') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('mine') && !this.isStunned(q)); if (u) { o.readyAt = T + 60; this.netSend('stun', { ids: [u.id], until: T + 5, by: '💣' }); this.onStun([u.id], T + 5, '💣'); } }
       if (o.k === 'snare') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('snare')); if (h) { o.readyAt = T + 45; if (h.sim) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 8); this.netSend('snared', { id: h.id, n: h.name }); this.onSnare(h); } }
       if (o.k === 'radio') { const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && dist(q, o) <= this.objR('radio')); if (p) { o.readyAt = T + 120; this.netSend('radio', { n: p.name }); this.onRadio(p.name); } }
+      if (o.k === 'mirror') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('mirror')); if (h) { o.readyAt = T + 60; const a = Math.random() * 6.28, r = 60 + Math.random() * 50; this.fakes = (this.fakes || []).concat([{ x: Math.round(h.x + Math.cos(a) * r), y: Math.round(h.y + Math.sin(a) * r), until: T + 20, name: h.name, c: h.color }]); this.netSend('fx2', { k: 'mirror', n: h.name }); this.onFx2('mirror', h.name); } }
+      if (o.k === 'clock') { const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && dist(q, o) <= this.objR('clock')); if (p) { o.readyAt = T + 90; const d = p.role === 'hider' ? -20 : 20; this.cfg.huntSec = Math.max(this.t - this.cfg.hideSec + 30, this.cfg.huntSec + d); this.netSend('ext', { huntSec: this.cfg.huntSec }); this.netSend('fx2', { k: 'clock', n: p.name, d }); this.onFx2('clock', p.name, d); } }
+      if (o.k === 'clover') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('clover')); if (h) { o.readyAt = T + 120; h.shield = (h.shield || 0) + 1; this.netSend('fx2', { k: 'clover', n: h.name, id: h.id }); this.onFx2('clover', h.name, h.id); } }
+      if (o.k === 'freezer') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('freezer')); if (u) { o.readyAt = T + 90; const hs = this.hiders().filter((h) => dist(h, u) <= 50 && !this.jammed(h)); hs.forEach((h) => { h.warnUntil = T; h.frozenUntil = T + 5; h.target = null; }); if (this.isHost && hs.length) this.netSend('freeze', { ids: hs.map((h) => h.id), wu: T, fu: T + 5, warded: [], fr: this.freezeReadyAt }); this.netSend('fx2', { k: 'freezer', n: u.name, d: hs.length }); this.onFx2('freezer', u.name, hs.length); } }
+      if (o.k === 'target') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('target')); if (u) { o.readyAt = T + 60; const h = this.hiders().sort((a, b) => dist(a, u) - dist(b, u))[0]; if (h) { if (h.sim) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 10); this.netSend('fx2', { k: 'target', n: h.name, id: h.id }); this.onFx2('target', h.name, h.id); } } }
       if (o.k === 'flarebox') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('flarebox')); if (u) { o.readyAt = T + 90; this.applyPower(u, 'flare'); } }
       if (o.k === 'smoke') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('smoke')); if (h) { o.readyAt = T + 90; this.smokes.push({ x: o.x, y: o.y, until: T + 30 }); this.netSend('smokeup', { n: h.name }); this.onSmoke(h.name); } }
     }
     // тревога для ботов
     if (hunt) for (const h of this.hiders()) if (h.sim && h !== this.me) { const a = this.inZ('alarm', h); if (a && !h.inAlarm && T >= (h.alarmCd || 0)) { h.alarmCd = T + 30; h.exposedUntil = Math.max(h.exposedUntil || 0, T + 6); this.netSend('alarm', { n: h.name }); this.onAlarm(h.name, false); } h.inAlarm = a; }
+    // зоны: электро (охотникам), хаос (всем), лечебная (ботам)
+    this.fakes = (this.fakes || []).filter((f) => T < f.until);
+    if (hunt) for (const p of this.players) {
+      if (p.role === 'hunter') { const e = this.inZ('electric', p); if (e && !p.inElec && !this.isStunned(p) && T >= (p.elecCd || 0)) { p.elecCd = T + 20; this.netSend('stun', { ids: [p.id], until: T + 3, by: '⚡' }); this.onStun([p.id], T + 3, '⚡'); } p.inElec = e; }
+      if (p.role === 'hider' || p.role === 'hunter') { const c = this.inZ('chaos', p); if (c && !p.inChaos && T >= (this.chaosZoneAt || 0)) { this.chaosZoneAt = T + 120; const ks = ['blind', 'siren', 'surge', 'fog', 'frenzy'].concat(this.hasPowerups ? ['rain'] : []); const k = ks[Math.floor(Math.random() * ks.length)]; this.netSend('chaos', { k }); this.chaosApply(k, true); } p.inChaos = c; }
+      if (p.bot && this.inZ('heal', p)) p.stamina = Math.min(100, (p.stamina || 0) + 20 * dt);
+    }
     // прожектор и сокровищница
     for (const h of this.players) {
       if (h.role !== 'hider') continue;
@@ -213,6 +235,9 @@ export const worldMixin = {
         const lh = this.objs.find((o) => o.k === 'lighthouse' && dist(o, me) <= this.objR('lighthouse') && T >= (this.radarCd[o.id] || 0));
         if (lh) { this.lhT = (this.lhT || 0) + dt; if (this.lhT >= 3) { this.lhT = 0; this.radarCd[lh.id] = T + 90; const hs = this.hiders().filter((h) => dist(h, lh) <= 100 && !this.jammed(h)); hs.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 4); }); this.alert('blue', t('lhOn', { k: hs.length }), 'eye'); } } else this.lhT = 0;
       }
+      // лечебная зона и эхо — у себя
+      if (this.inZ('heal', me)) { me.stamina = Math.min(100, me.stamina + 20 * dt); if (T < me.frozenUntil) me.frozenUntil -= dt; if (T < (me.stunUntil || 0)) me.stunUntil -= dt; }
+      if (this.inZ('echo', me) && (me.running || me.speed > 2.5) && T - (this.echoAt || -99) > 12) { this.echoAt = T; this.netSend('echo', { x: Math.round(me.x), y: Math.round(me.y), r: me.role }); this.alert('yellow', t('echoYou'), 'signal'); }
       const cp = this.objs.find((o) => o.k === 'compass' && dist(o, me) <= this.objR('compass') && T >= (this.radarCd[o.id] || 0));
       if (cp) {
         this.radarCd[cp.id] = T + 60;
@@ -337,11 +362,12 @@ export const worldMixin = {
 
   // ---------- сеть ----------
   worldState() {
-    return { ob: this.objs.map((o) => [o.id, o.k, o.x, o.y, Math.round(o.readyAt), o.pair || 0]), sm: (this.smokes || []).map((s) => [Math.round(s.x), Math.round(s.y), Math.round(s.until)]), dd: this.players.map((p, i) => (p.role === 'dead' ? i : -1)).filter((i) => i >= 0), sf: this.players.map((p, i) => (p.safeOn ? i : -1)).filter((i) => i >= 0) };
+    return { ob: this.objs.map((o) => [o.id, o.k, o.x, o.y, Math.round(o.readyAt), o.pair || 0]), sm: (this.smokes || []).map((s) => [Math.round(s.x), Math.round(s.y), Math.round(s.until)]), fk: (this.fakes || []).map((f) => [f.x, f.y, Math.round(f.until), f.name, f.c]), dd: this.players.map((p, i) => (p.role === 'dead' ? i : -1)).filter((i) => i >= 0), sf: this.players.map((p, i) => (p.safeOn ? i : -1)).filter((i) => i >= 0) };
   },
   worldApply(d) {
     if (!d) return;
     if (d.sm) this.smokes = d.sm.map(([x, y, until]) => ({ x, y, until }));
+    if (d.fk) this.fakes = d.fk.map(([x, y, until, name, c]) => ({ x, y, until, name, c }));
     if (d.ob) this.objs = d.ob.map(([id, k, x, y, readyAt, pair]) => ({ id, k, x, y, readyAt, pair: pair || null }));
     (d.dd || []).forEach((i) => { const p = this.players[i]; if (p && p.role !== 'dead' && !this.social()) this.eliminate(p, p.elim || 'out', true); });
     if (d.sf) this.players.forEach((p, i) => { if (p !== this.me) p.safeOn = d.sf.includes(i); });
@@ -358,6 +384,16 @@ export const worldMixin = {
     this.meEmo = L.marker(this.ll(this.me), { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: '', iconSize: [40, 40], iconAnchor: [20, 46], html: `<div class="mk-emo me">${e}</div>` }) }).addTo(this.map);
     setTimeout(() => { if (this.meEmo) { this.meEmo.remove(); this.meEmo = null; } }, 4000);
   },
+  /** События новых объектов (у всех). */
+  onFx2(k, n, d) {
+    const me = this.me;
+    if (k === 'mirror') this.alert(me.role === 'hider' ? 'green' : 'blue', me.role === 'hider' ? t('mirrorH', { n }) : t('mirrorU'), 'copy');
+    if (k === 'clock') this.alert(d < 0 ? (me.role === 'hider' ? 'green' : 'red') : (me.role === 'hunter' ? 'green' : 'red'), t(d < 0 ? 'clockH' : 'clockU', { n }), 'clock');
+    if (k === 'clover') { const p = this.players.find((q) => q.id === d); if (p === me && this.isClient) me.shield = (me.shield || 0) + 1; this.alert(p === me ? 'green' : 'blue', p === me ? t('cloverYou') : t('cloverOther', { n }), 'shield'); }
+    if (k === 'freezer') this.alert(me.role === 'hunter' ? 'green' : 'red', t('freezerOn', { n, k: d }), 'snow');
+    if (k === 'target') { const p = this.players.find((q) => q.id === d); if (p === me) { me.exposedUntil = Math.max(me.exposedUntil || 0, this.t + 10); this.alert('red', t('targetYou'), 'target'); this.vibrate([300]); } else if (me.role === 'hunter') { if (p) p.exposedUntil = Math.max(p.exposedUntil || 0, this.t + 10); this.alert('green', t('targetOther', { n }), 'target'); } }
+    this.renderHud(true);
+  },
   onSnare(h) {
     if (h === this.me) { h.exposedUntil = Math.max(h.exposedUntil || 0, this.t + 8); this.alert('red', t('snareYou'), 'lock'); this.vibrate([400]); }
     else if (this.me.role === 'hunter') this.alert('green', t('snareOther', { n: h.name }), 'lock');
@@ -371,6 +407,8 @@ export const worldMixin = {
   onSmoke(n) { this.alert(this.me.role === 'hider' ? 'green' : 'yellow', t('smokeUp', { n }), 'cloud'); },
   worldNet(type, d, from) {
     if (type === 'alarm') { const p = this.players.find((q) => q.id === from); if (p) p.exposedUntil = Math.max(p.exposedUntil || 0, this.t + 6); this.onAlarm(d.n, false); return true; }
+    if (type === 'fx2' && this.isClient) { this.onFx2(d.k, d.n, d.d != null ? d.d : d.id); return true; }
+    if (type === 'echo') { const me = this.me; if (d.r !== me.role && (me.role === 'hider' || me.role === 'hunter')) { const ang = (Math.atan2(d.x - me.x, d.y - me.y) * 180 / Math.PI + 360) % 360; this.alert('yellow', t('echoHeard', { d: t('dir' + Math.round(ang / 45) % 8), m: Math.round(Math.hypot(d.x - me.x, d.y - me.y) / 10) * 10 }), 'signal'); this.vibrate([80]); } return true; }
     if (type === 'emote') { const p = this.players.find((q) => q.id === from); if (p) p.emote = { e: String(d.e).slice(0, 4), until: this.t + 4 }; return true; }
     if (type === 'snared' && this.isClient) { const h = this.players.find((q) => q.id === d.id); if (h) this.onSnare(h); return true; }
     if (type === 'radio' && this.isClient) { this.onRadio(d.n); return true; }
@@ -424,7 +462,7 @@ export const worldMixin = {
     }
     const T = this.t, me = this.me;
     const vis = this.objs.filter((o) => !(o.k === 'mine' && me.role === 'hunter') && !(o.k === 'snare' && me.role === 'hider'));
-    const sig = vis.map((o) => o.id + (T < o.readyAt ? 'w' : '')).join(',') + '|' + (this.smokes || []).filter((s) => T < s.until).map((s) => s.x + ',' + s.y).join(';');
+    const sig = vis.map((o) => o.id + (T < o.readyAt ? 'w' : '')).join(',') + '|' + (this.smokes || []).filter((s) => T < s.until).map((s) => s.x + ',' + s.y).join(';') + '|' + (this.fakes || []).filter((f) => T < f.until).map((f) => f.x).join(';');
     if (sig !== this.objSig) {
       this.objSig = sig; this.objLayer.clearLayers();
       for (const o of vis) {
@@ -432,6 +470,7 @@ export const worldMixin = {
         if (o.k === 'bush' || o.k === 'camera') L.circle(this.ll(o), { radius: this.objR(o.k), color: def.col, weight: o.k === 'camera' ? 1 : 0, dashArray: '3 5', fillColor: def.col, fillOpacity: o.k === 'bush' ? 0.35 : 0.1, interactive: false }).addTo(this.objLayer);
         L.marker(this.ll(o), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-obj k-${o.k} ${wait ? 'wait' : ''}">${def.ic}</div>` }) }).addTo(this.objLayer);
       }
+      if (me.role === 'hunter') for (const f of (this.fakes || []).filter((q) => T < q.until)) L.marker(this.ll(f), { interactive: false, icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${f.c || '#5fd38d'}"></div><div class="mk-name">${String(f.name).replace(/[<>&"]/g, '')}</div></div>` }) }).addTo(this.objLayer);
       for (const s of (this.smokes || []).filter((q) => T < q.until)) L.circle(this.ll(s), { radius: 25, color: '#b0b8c4', weight: 0, fillColor: '#c9d1dc', fillOpacity: 0.55, interactive: false }).addTo(this.objLayer);
     }
     // вне зоны — красная рамка экрана

@@ -574,7 +574,7 @@ export class Game {
   }
 
   freezeRange() { return Math.max(110, this.R * 0.28) * (this.gmode === 'predator' ? 1.5 : 1); }
-  catchRange() { if (this.indoor()) return 1e9; return this.ch.reach ? 250 : (this.cfg.mode === 'gps' ? 30 : 18) * (this.t < (this.reachUntil || 0) || this.t < (this.frenzyUntil || 0) ? 1.5 : 1); }
+  catchRange() { if (this.indoor()) return 1e9; return this.ch.reach ? 250 : (this.cfg.mode === 'gps' ? 30 : 18) * (this.t < (this.reachUntil || 0) || this.t < (this.frenzyUntil || 0) ? 1.5 : 1) * (this.inZ('arena', this.me) ? 2 : 1); }
   flareShows(p) { return this.flare && this.flare.shown && this.flare.pos[p.id]; }
 
   // ---------- способности ----------

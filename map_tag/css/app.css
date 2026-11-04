@@ -657,3 +657,4 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .tile-pick { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .tp { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 11px; cursor: pointer; }
 .tp span { font-size: 22px; } .tp.on { border: 2px solid var(--accent); background: var(--accent-soft); }
+.mk-obj.k-mirror { border-color: #b3e5fc; } .mk-obj.k-clock { border-color: #ffcc80; } .mk-obj.k-clover { border-color: #66bb6a; } .mk-obj.k-freezer { border-color: #81d4fa; } .mk-obj.k-target { border-color: #ff5252; }

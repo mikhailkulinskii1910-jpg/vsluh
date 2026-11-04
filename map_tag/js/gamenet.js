@@ -159,7 +159,7 @@ export const netMixin = {
         if (d.k === 'reveal' && p.role === 'hunter' && this.t >= this.revealReadyAt) this.doReveal(p);
         else if (d.k === 'freeze' && p.role === 'hunter' && this.t >= this.freezeReadyAt) this.doFreeze(p);
         else if (d.k === 'catch') {
-          const h = P(d.h), lim = d.r ? 260 : this.cfg.mode === 'gps' ? 45 : 30;
+          const h = P(d.h), lim = (d.r ? 260 : this.cfg.mode === 'gps' ? 45 : 30) * (this.inZ('arena', p) ? 2 : 1);
           if (p.role === 'hunter' && h && h.role === 'hider' && dist(p, h) <= lim) this.catchPlayer(p, h);
           else this.netSend('nocatch', {}, from);
         }

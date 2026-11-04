@@ -33,7 +33,7 @@ function sha256(str) {
   return H.map((v) => (v >>> 0).toString(16).padStart(8, '0')).join('');
 }
 const roleName = (r) => ({ hunter: ru() ? 'Охотник' : 'Hunter', hider: ru() ? 'Прячущийся' : 'Hider', spectator: ru() ? 'Зритель' : 'Spectator', dead: ru() ? 'Выбыл' : 'Out', escaped: ru() ? 'Спасён' : 'Escaped' })[r] || r;
-const objName = (k) => ({ bush: ['Куст', 'Bush'], radar: ['Радар', 'Radar'], chest: ['Сундук', 'Chest'], camera: ['Камера', 'Camera'], boost: ['Ускоритель', 'Booster'], portal: ['Портал', 'Portal'], bell: ['Колокол', 'Bell'], mine: ['Мина', 'Mine'], smoke: ['Дымовая шашка', 'Smoke bomb'], lighthouse: ['Маяк', 'Lighthouse'], medkit: ['Аптечка', 'Medkit'], snare: ['Капкан', 'Snare'], compass: ['Компас', 'Compass'], radio: ['Радиовышка', 'Radio tower'], flarebox: ['Ящик ракет', 'Flare box'] })[k][ru() ? 0 : 1];
+const objName = (k) => ({ bush: ['Куст', 'Bush'], radar: ['Радар', 'Radar'], chest: ['Сундук', 'Chest'], camera: ['Камера', 'Camera'], boost: ['Ускоритель', 'Booster'], portal: ['Портал', 'Portal'], bell: ['Колокол', 'Bell'], mine: ['Мина', 'Mine'], smoke: ['Дымовая шашка', 'Smoke bomb'], lighthouse: ['Маяк', 'Lighthouse'], medkit: ['Аптечка', 'Medkit'], snare: ['Капкан', 'Snare'], compass: ['Компас', 'Compass'], radio: ['Радиовышка', 'Radio tower'], flarebox: ['Ящик ракет', 'Flare box'], mirror: ['Зеркало', 'Mirror'], clock: ['Часы', 'Clock'], clover: ['Клевер', 'Clover'], freezer: ['Морозилка', 'Freezer'], target: ['Мишень', 'Target'] })[k][ru() ? 0 : 1];
 export const checkPass = (p) => sha256(String(p).trim()) === PASS_HASH;
 
 export const CHEATS = [
