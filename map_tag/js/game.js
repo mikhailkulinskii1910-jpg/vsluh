@@ -242,6 +242,7 @@ export class Game {
       const prev = this.gpsPrev;
       if (prev) {
         const d = Math.hypot(p.x - prev.x, p.y - prev.y), dt = Math.max(0.5, now - prev.t);
+        this.gpsAcc = pos.coords.accuracy;
         if (pos.coords.accuracy < 50 || d > pos.coords.accuracy) {
           const sp = pos.coords.speed != null && !isNaN(pos.coords.speed) ? pos.coords.speed : d / dt;
           this.me.speed = this.me.speed * 0.5 + sp * 0.5;
@@ -299,7 +300,7 @@ export class Game {
       }
     }
     // следы при беге
-    if (p.role === 'hider' && p.running && this.t >= p.ghostUntil && !(p === this.me && this.ch.stealth) && this.phase() !== 'end') {
+    if (p.role === 'hider' && p.running && this.t >= p.ghostUntil && !this.inZ('ice', p) && !(p === this.me && this.ch.stealth) && this.phase() !== 'end') {
       if (!p.lastPrint || Math.hypot(x - p.lastPrint.x, y - p.lastPrint.y) >= 12) {
         const a = Math.atan2(x - p.x, y - p.y) * 180 / Math.PI;
         this.addPrint({ x, y, a, owner: p.id });
@@ -441,7 +442,8 @@ export class Game {
 
   checkZone(dt) {
     const me = this.me, zr = this.zoneR();
-    const out = !this.inZone(me);
+    // GPS «дрожит» у границы: вне зоны — только если дальше погрешности
+    const out = !this.inZone(me) && (!this.gps() || this.distToZone(me) > Math.max(6, Math.min(this.gpsAcc || 10, 25)));
     if (out) {
       if (me.outSince == null) { me.outSince = this.t; if (me.role === 'hider' && this.phase() !== 'hunt') this.alert('red', t('outZone'), 'target'); }
       if (me.role === 'hider' && this.phase() === 'hunt' && this.t - me.outSince > 20) {
@@ -561,7 +563,7 @@ export class Game {
   }
 
   freezeRange() { return Math.max(110, this.R * 0.28) * (this.gmode === 'predator' ? 1.5 : 1); }
-  catchRange() { if (this.indoor()) return 1e9; return this.ch.reach ? 250 : this.cfg.mode === 'gps' ? 30 : 18; }
+  catchRange() { if (this.indoor()) return 1e9; return this.ch.reach ? 250 : (this.cfg.mode === 'gps' ? 30 : 18) * (this.t < (this.reachUntil || 0) || this.t < (this.frenzyUntil || 0) ? 1.5 : 1); }
   flareShows(p) { return this.flare && this.flare.shown && this.flare.pos[p.id]; }
 
   // ---------- способности ----------
@@ -576,7 +578,7 @@ export class Game {
       if (h === this.me && this.ch.immune) continue;
       if (h.remote && h.netCh && h.netCh.i) continue;
       let miss = false;
-      if (this.t < h.smokeUntil || this.inBush(h) || this.inZ('shadow', h) || this.jammed(h)) miss = true;
+      if (this.t < h.smokeUntil || this.t < (h.invisUntil || 0) || this.inBush(h) || this.inZ('shadow', h) || this.jammed(h)) miss = true;
       else if (h.jams > 0) { h.jams--; miss = true; }
       else if (this.t < h.silenceUntil && h.speed < 0.4) miss = true;
       if (miss) { if (h === this.me) this.alert('green', t('revealMissed'), 'shield'); continue; }

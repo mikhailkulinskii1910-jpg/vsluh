@@ -30,6 +30,7 @@ export const arenaMixin = {
     if (this.gmode === 'bounty' || this.gmode === 'checkpoint' || this.gmode === 'flag') this.nextMissionAt = Infinity;
   },
   pi(p) { return this.players.indexOf(p); },
+  gR(r) { return this.cfg.mode === 'gps' ? Math.max(12, Math.round(r * 1.6)) : r; },
 
   // ---------- организатор / офлайн ----------
   arenaStep(dt) {
@@ -39,7 +40,7 @@ export const arenaMixin = {
       for (const f of this.flags) {
         let c = this.players[f.c];
         if (c && c.role !== 'hider') { f.c = -1; c = null; this.netSend('aev', { k: 'fdrop' }); this.arenaEv('fdrop'); }
-        if (!c) { const h = this.hiders().find((q) => dist(q, f) <= FLAG_R); if (h) { f.c = this.pi(h); this.netSend('aev', { k: 'fpick', n: h.name }); this.arenaEv('fpick', h.name); } continue; }
+        if (!c) { const h = this.hiders().find((q) => dist(q, f) <= this.gR(FLAG_R)); if (h) { f.c = this.pi(h); this.netSend('aev', { k: 'fpick', n: h.name }); this.arenaEv('fpick', h.name); } continue; }
         f.x = c.x; f.y = c.y; if (c.sim) c.exposedUntil = Math.max(c.exposedUntil || 0, T + 2);
         if (dist(c, this.base) <= BASE_R) {
           this.flags = this.flags.filter((x) => x !== f); this.flagGot++;
@@ -51,7 +52,7 @@ export const arenaMixin = {
     if (this.gmode === 'infection') {
       if (T >= this.nextAnti && this.antis.length < 3) { const p = this.randZone(0.85, 0.1); this.antis.push({ id: 'a' + Math.round(T), x: Math.round(p.x), y: Math.round(p.y) }); this.nextAnti = T + 45; this.netSend('aev', { k: 'anew' }); this.arenaEv('anew'); }
       for (const a of [...this.antis]) {
-        const u = this.hunters().find((q) => q.wasCaught && dist(q, a) <= ANTI_R);
+        const u = this.hunters().find((q) => q.wasCaught && dist(q, a) <= this.gR(ANTI_R));
         if (!u) continue;
         this.antis = this.antis.filter((x) => x !== a);
         this.cure(u); this.netSend('aev', { k: 'cured', i: this.pi(u) });

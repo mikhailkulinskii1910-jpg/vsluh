@@ -13,7 +13,7 @@ import { OBJ, OBJ_KINDS, OUT_LIMIT, ZX, ZX_KINDS } from './world.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '2.7.1';
+const VERSION = '2.8';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -35,7 +35,7 @@ const VIS = { forest: 0.85, mixed: 1, city: 1.15 };
 const LIGHT = { day: 1, dark: 0.85 };
 const defaultLobby = () => ({
   code: genCode(), size: 'medium', vis: 'mixed', light: 'day', extra: 'spice', step: 1,
-  center: null, bots: 5, hunters: 2, myRole: 'random', mode: 'demo', adv: {},
+  center: null, bots: 5, hunters: 2, myRole: 'random', mode: 'gps', adv: {},
   revealCd: null, freezeCd: null, powerups: POWERUPS.map((p) => p.id),
 });
 function genCode() { const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s = ''; for (let i = 0; i < 6; i++) s += a[Math.floor(Math.random() * a.length)]; return s; }
@@ -495,7 +495,7 @@ const SCREENS = {
         ${lb.manage ? `<div class="row" style="margin-top:12px"><button class="btn" id="addBot" style="flex:1">+ ${t('addBot')}</button><button class="btn" id="shuffle" style="flex:1">${I.swap}${t('shuffle')}</button></div>` : ''}
         <button class="btn block" id="wheel" style="margin-top:12px">${I.target}${t('whoIsIt')}</button>
         <div class="line-row" style="margin-top:6px"><span>${t('moveMode')}</span><div class="seg">${['gps', 'demo'].map((r) => `<button data-mode="${r}" class="${lb.mode === r ? 'on' : ''}">${t(r)}</button>`).join('')}</div></div>
-        ${lb.mode === 'demo' ? `<p style="color:var(--muted);font-size:14px;margin:6px 0 0">${t('demoHelp')}</p>` : ''}
+        <p style="color:var(--muted);font-size:14px;margin:6px 0 0">${lb.mode === 'demo' ? t('demoHelp') : t('gpsHelp')}</p>
       </div>
       <details class="adv" ${lb.advOpen ? 'open' : ''}><summary>${t('advanced')}</summary>${advancedBlock(lb, c)}</details>
       <p style="color:var(--muted)">${t('replayNote')}</p>

@@ -164,7 +164,7 @@ export const modesMixin = {
     if (k === 'siren') for (const h of this.hiders()) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 10);
     if (k === 'rain' && host) for (let i = 0; i < 5; i++) this.supplies.push(this.newSupply());
     if (k === 'fog') this.fogUntil = T + 20;
-    if (k === 'frenzy') for (const u of this.hunters()) u.boostUntil = T + 15;
+    if (k === 'frenzy') { for (const u of this.hunters()) u.boostUntil = T + 15; this.frenzyUntil = T + 15; }
     if (k === 'surge') for (const h of this.players) if (h.sim && h.role === 'hider') h.stamina = 100;
     const mine = { blind: this.me.role === 'hunter' ? 'red' : 'green', siren: this.me.role === 'hider' ? 'red' : 'green', rain: 'green', surge: this.me.role === 'hider' ? 'green' : 'yellow', fog: this.me.role === 'hider' ? 'green' : 'red', frenzy: this.me.role === 'hunter' ? 'green' : 'red' }[k];
     this.alert(mine, '🎲 ' + t('chaos_' + k), 'sparkle');
