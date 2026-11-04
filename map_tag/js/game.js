@@ -322,7 +322,7 @@ export class Game {
     if (d < 1.5) { p.running = false; return true; }
     const canRun = run && p.stamina > 3;
     p.running = canRun;
-    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1) * (this.t < (p.boostUntil || 0) ? 1.6 : 1) * (this.inZ('swamp', p) ? 0.5 : 1);
+    const v = (canRun ? 3.6 : 1.5) * this.pace * (p === this.me && this.ch.speed ? 3 : 1) * (p.bot ? this.botK().speed : 1) * (this.t < (p.boostUntil || 0) ? 1.6 : 1) * (this.inZ('swamp', p) ? 0.5 : 1) * (this.inZ('ice', p) ? 1.5 : 1);
     const s = Math.min(d, v * dt);
     if (this.isStunned(p)) { p.speed = 0; p.running = false; return false; }
     this.tryMove(p, p.x + dx / d * s, p.y + dy / d * s);

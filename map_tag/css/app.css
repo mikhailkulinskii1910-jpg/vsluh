@@ -593,3 +593,4 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .awards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
 .aw { background: var(--card2); border: 1px solid var(--line); border-radius: 16px; padding: 12px; text-align: center; }
 .aw-ic { font-size: 28px; } .aw-k { color: var(--muted); font-size: 13px; margin-top: 2px; } .aw-v { font-weight: 700; margin-top: 4px; word-break: break-word; }
+.mk-obj.k-mine { border-color: #e74c3c; } .mk-obj.k-smoke { border-color: #b0b8c4; } .mk-obj.k-lighthouse { border-color: #ffd166; } .mk-obj.k-medkit { border-color: #ff6b81; }

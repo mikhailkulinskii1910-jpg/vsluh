@@ -17,7 +17,11 @@ export const OBJ = {
   camera: { ic: '📹', r: 16, col: '#f26d7d' },   // прячущиеся в обзоре видны охотникам
   boost: { ic: '⚡', r: 6, col: '#ffd84a' },     // полная выносливость и ускорение на 10 с
   portal: { ic: '🌀', r: 5, col: '#b48cff' },    // переносит к парному порталу (только демо)
-  bell: { ic: '🔔', r: 6, col: '#ff9f43' },      // охотник звонит: прячущиеся в 60 м слышат звонок и видны 5 с
+  bell: { ic: '🔔', r: 6, col: '#ff9f43' },
+  mine: { ic: '💣', r: 6, col: '#e74c3c' },      // охотник наступил — оглушён на 5 с; охотникам не видна; перезарядка 60 с
+  smoke: { ic: '💨', r: 6, col: '#b0b8c4' },     // прячущийся задел — облако дыма 25 м на 30 с (как туман)
+  lighthouse: { ic: '🗼', r: 8, col: '#ffd166' }, // охотник постоял 3 с — прячущиеся в 100 м видны 4 с; перезарядка 90 с
+  medkit: { ic: '⛑', r: 6, col: '#ff6b81' },     // снимает заморозку и оглушение, полная выносливость; перезарядка 45 с      // охотник звонит: прячущиеся в 60 м слышат звонок и видны 5 с
 };
 export const OBJ_KINDS = Object.keys(OBJ);
 /** Дополнительные зоны редактора: цвет, значок. */
@@ -26,7 +30,11 @@ export const ZX = {
   shadow: { col: '#2b2440', ic: '🌑', op: 0.45 },   // тень: прячущихся не видно дальше 10 м, «Раскрытие» мимо
   light: { col: '#ffe066', ic: '🔦', op: 0.3 },     // прожектор: прячущиеся внутри видны охотникам
   jam: { col: '#9b59b6', ic: '📵', op: 0.25 },      // глушилка: «Раскрытие», «Заморозка», дрон, камеры и сонар не действуют
-  bonus: { col: '#f3c13a', ic: '💰', op: 0.22 },    // сокровищница: 8 с внутри — случайный бонус (раз в 60 с)
+  bonus: { col: '#f3c13a', ic: '💰', op: 0.22 },
+  fog: { col: '#c9d1dc', ic: '🌫', op: 0.5 },       // туман: внутри видно только на 20 м, снаружи внутрь — тоже 20 м
+  ice: { col: '#9fe3ff', ic: '🧊', op: 0.3 },       // лёд: скользко — скорость ×1.5
+  alarm: { col: '#ff4757', ic: '🚨', op: 0.18 },    // тревога: прячущийся вошёл — охотники видят его 6 с
+  lookout: { col: '#2ecc71', ic: '👁', op: 0.18 },  // вышка обзора: стоящий внутри видит соперников на 60 м    // сокровищница: 8 с внутри — случайный бонус (раз в 60 с)
 };
 export const ZX_KINDS = Object.keys(ZX);
 
@@ -59,7 +67,9 @@ export const worldMixin = {
   /** Ходить нельзя: стена, а ботам — ещё и смертельная зона. */
   blockedFor(p, pt) { return (this.walls.length && this.inWall(pt)) || (p.bot && this.killZ.length && this.inKill(pt)); },
   inBush(p) { return this.objs.some((o) => o.k === 'bush' && dist(o, p) <= OBJ.bush.r); },
-  hiddenInBush(h, d) { return h.role === 'hider' && ((d > 6 && this.inBush(h)) || (d > 10 && this.inZ('shadow', h))); },
+  hiddenInBush(h, d) { return h.role === 'hider' && ((d > 6 && this.inBush(h)) || (d > 10 && this.inZ('shadow', h)) || (d > 20 && this.foggy(h))); },
+  inSmoke(p) { return (this.smokes || []).some((s) => this.t < s.until && dist(s, p) <= 25); },
+  foggy(p) { return this.inZ('fog', p) || this.inSmoke(p); },
   jammed(p) { return this.inZ('jam', p); },
   safeOn(h) { return !!h.safeOn; },
   polyCenter(P) { return { x: P.reduce((s, q) => s + q.x, 0) / P.length, y: P.reduce((s, q) => s + q.y, 0) / P.length }; },
@@ -74,7 +84,7 @@ export const worldMixin = {
       fixed.forEach((o, i) => list.push({ id: 'o' + i, k: o.k, ...this.xy(o.lat, o.lng), readyAt: 0 }));
     } else if (cfg.objects !== false && !this.indoor()) {
       const k = Math.max(0.6, Math.min(2.2, this.R / 300));
-      const want = { bush: Math.round(4 * k), radar: Math.max(1, Math.round(k)), chest: this.hasPowerups ? Math.max(1, Math.round(1.5 * k)) : 0, camera: Math.max(1, Math.round(k)), boost: Math.round(2 * k), bell: Math.max(1, Math.round(k)), portal: cfg.mode === 'demo' ? 2 : 0 };
+      const want = { bush: Math.round(4 * k), radar: Math.max(1, Math.round(k)), chest: this.hasPowerups ? Math.max(1, Math.round(1.5 * k)) : 0, camera: Math.max(1, Math.round(k)), boost: Math.round(2 * k), bell: Math.max(1, Math.round(k)), mine: Math.round(1.5 * k), smoke: Math.max(1, Math.round(k)), lighthouse: Math.max(1, Math.round(k)), medkit: Math.round(k), portal: cfg.mode === 'demo' ? 2 : 0 };
       const gap = Math.max(25, this.R * 0.12);
       let n = 0;
       for (const [kind, cnt] of Object.entries(want)) for (let i = 0; i < cnt; i++) {
@@ -95,6 +105,14 @@ export const worldMixin = {
   worldStep(dt) {
     if (!this.objsMade) this.worldMakeObjects();
     const T = this.t, hunt = this.phase() === 'hunt';
+    this.smokes = (this.smokes || []).filter((s) => T < s.until);
+    if (hunt) for (const o of this.objs) {
+      if (T < o.readyAt) continue;
+      if (o.k === 'mine') { const u = this.hunters().find((q) => dist(q, o) <= OBJ.mine.r && !this.isStunned(q)); if (u) { o.readyAt = T + 60; this.netSend('stun', { ids: [u.id], until: T + 5, by: '💣' }); this.onStun([u.id], T + 5, '💣'); } }
+      if (o.k === 'smoke') { const h = this.hiders().find((q) => dist(q, o) <= OBJ.smoke.r); if (h) { o.readyAt = T + 90; this.smokes.push({ x: o.x, y: o.y, until: T + 30 }); this.netSend('smokeup', { n: h.name }); this.onSmoke(h.name); } }
+    }
+    // тревога для ботов
+    if (hunt) for (const h of this.hiders()) if (h.sim && h !== this.me) { const a = this.inZ('alarm', h); if (a && !h.inAlarm && T >= (h.alarmCd || 0)) { h.alarmCd = T + 30; h.exposedUntil = Math.max(h.exposedUntil || 0, T + 6); this.netSend('alarm', { n: h.name }); this.onAlarm(h.name, false); } h.inAlarm = a; }
     // прожектор и сокровищница
     for (const h of this.players) {
       if (h.role !== 'hider') continue;
@@ -172,6 +190,16 @@ export const worldMixin = {
     // прожектор: меня видно; болото: выносливость тает
     if (me.role === 'hider' && ph === 'hunt' && this.inZ('light', me)) me.exposedUntil = Math.max(me.exposedUntil || 0, T + 2.5);
     if (me.role === 'hider' && this.inZ('swamp', me)) me.stamina = Math.max(0, me.stamina - 6 * dt);
+    // тревога, маяк, аптечка — у себя
+    if (ph === 'hunt') {
+      if (me.role === 'hider') { const a = this.inZ('alarm', me); if (a && !me.inAlarm && T >= (me.alarmCd || 0)) { me.alarmCd = T + 30; me.exposedUntil = Math.max(me.exposedUntil || 0, T + 6); this.netSend('alarm', { n: me.name }); this.onAlarm(me.name, true); } me.inAlarm = a; }
+      if (me.role === 'hunter') {
+        const lh = this.objs.find((o) => o.k === 'lighthouse' && dist(o, me) <= OBJ.lighthouse.r && T >= (this.radarCd[o.id] || 0));
+        if (lh) { this.lhT = (this.lhT || 0) + dt; if (this.lhT >= 3) { this.lhT = 0; this.radarCd[lh.id] = T + 90; const hs = this.hiders().filter((h) => dist(h, lh) <= 100 && !this.jammed(h)); hs.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 4); }); this.alert('blue', t('lhOn', { k: hs.length }), 'eye'); } } else this.lhT = 0;
+      }
+      const mk = this.objs.find((o) => o.k === 'medkit' && dist(o, me) <= OBJ.medkit.r && T >= (this.boostCd['m' + o.id] || 0));
+      if (mk && (this.isFrozen(me) || this.isStunned(me) || me.stamina < 60 || T < me.warnUntil)) { this.boostCd['m' + mk.id] = T + 45; me.frozenUntil = 0; me.warnUntil = 0; me.stunUntil = 0; me.stamina = 100; this.alert('green', t('medOn'), 'shield'); this.renderHud(true); }
+    }
     // радар
     if (me.role === 'hider' && ph === 'hunt') {
       const r = this.objs.find((o) => o.k === 'radar' && dist(o, me) <= OBJ.radar.r && T >= (this.radarCd[o.id] || 0));
@@ -245,6 +273,8 @@ export const worldMixin = {
     if (me.role === 'dead') return true;
     if (me.role === 'hunter' && !this.ch.wall && this.hiddenInBush(p, d)) return false;
     if (me.role === 'hunter' && !this.ch.wall && p.role === 'hider' && this.t < (this.fogUntil || 0) && d > 15) return false;
+    if (!this.ch.wall && me.role !== 'spectator' && d > 20 && (this.foggy(me) || this.foggy(p))) return false;
+    if (this.inZ('lookout', me) && d < 60 && p.role !== me.role && (p.role === 'hider' || p.role === 'hunter') && !this.hiddenInBush(p, d)) return true;
     return show;
   },
   /** Колокол: охотник рядом звонит — прячущиеся в 60 м слышат и видны 5 с. */
@@ -276,15 +306,23 @@ export const worldMixin = {
 
   // ---------- сеть ----------
   worldState() {
-    return { ob: this.objs.map((o) => [o.id, o.k, o.x, o.y, Math.round(o.readyAt), o.pair || 0]), dd: this.players.map((p, i) => (p.role === 'dead' ? i : -1)).filter((i) => i >= 0), sf: this.players.map((p, i) => (p.safeOn ? i : -1)).filter((i) => i >= 0) };
+    return { ob: this.objs.map((o) => [o.id, o.k, o.x, o.y, Math.round(o.readyAt), o.pair || 0]), sm: (this.smokes || []).map((s) => [Math.round(s.x), Math.round(s.y), Math.round(s.until)]), dd: this.players.map((p, i) => (p.role === 'dead' ? i : -1)).filter((i) => i >= 0), sf: this.players.map((p, i) => (p.safeOn ? i : -1)).filter((i) => i >= 0) };
   },
   worldApply(d) {
     if (!d) return;
+    if (d.sm) this.smokes = d.sm.map(([x, y, until]) => ({ x, y, until }));
     if (d.ob) this.objs = d.ob.map(([id, k, x, y, readyAt, pair]) => ({ id, k, x, y, readyAt, pair: pair || null }));
     (d.dd || []).forEach((i) => { const p = this.players[i]; if (p && p.role !== 'dead' && !this.social()) this.eliminate(p, p.elim || 'out', true); });
     if (d.sf) this.players.forEach((p, i) => { if (p !== this.me) p.safeOn = d.sf.includes(i); });
   },
+  onAlarm(n, mine) {
+    if (mine) { this.alert('red', t('alarmYou'), 'signal'); this.vibrate([300, 100, 300]); }
+    else if (this.me.role === 'hunter') this.alert('blue', t('alarmRang', { n }), 'signal');
+  },
+  onSmoke(n) { this.alert(this.me.role === 'hider' ? 'green' : 'yellow', t('smokeUp', { n }), 'cloud'); },
   worldNet(type, d, from) {
+    if (type === 'alarm') { const p = this.players.find((q) => q.id === from); if (p) p.exposedUntil = Math.max(p.exposedUntil || 0, this.t + 6); this.onAlarm(d.n, false); return true; }
+    if (type === 'smokeup' && this.isClient) { this.onSmoke(d.n); return true; }
     const P = (id) => this.players.find((q) => q.id === id);
     if (type === 'elimreq' && this.isHost) { const p = P(from); if (p) this.eliminate(p, d.r); return true; }
     if (type === 'elim' && this.isClient) { const p = P(d.id); if (p) this.eliminate(p, d.r, true); return true; }
@@ -333,8 +371,8 @@ export const worldMixin = {
       this.objLayer = L.layerGroup().addTo(map); this.objSig = '';
     }
     const T = this.t, me = this.me;
-    const vis = this.objs.filter((o) => !(o.k === 'camera' && false));
-    const sig = vis.map((o) => o.id + (T < o.readyAt ? 'w' : '')).join(',');
+    const vis = this.objs.filter((o) => !(o.k === 'mine' && me.role === 'hunter'));
+    const sig = vis.map((o) => o.id + (T < o.readyAt ? 'w' : '')).join(',') + '|' + (this.smokes || []).filter((s) => T < s.until).map((s) => s.x + ',' + s.y).join(';');
     if (sig !== this.objSig) {
       this.objSig = sig; this.objLayer.clearLayers();
       for (const o of vis) {
@@ -342,6 +380,7 @@ export const worldMixin = {
         if (o.k === 'bush' || o.k === 'camera') L.circle(this.ll(o), { radius: def.r, color: def.col, weight: o.k === 'camera' ? 1 : 0, dashArray: '3 5', fillColor: def.col, fillOpacity: o.k === 'bush' ? 0.35 : 0.1, interactive: false }).addTo(this.objLayer);
         L.marker(this.ll(o), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-obj k-${o.k} ${wait ? 'wait' : ''}">${def.ic}</div>` }) }).addTo(this.objLayer);
       }
+      for (const s of (this.smokes || []).filter((q) => T < q.until)) L.circle(this.ll(s), { radius: 25, color: '#b0b8c4', weight: 0, fillColor: '#c9d1dc', fillOpacity: 0.55, interactive: false }).addTo(this.objLayer);
     }
     // вне зоны — красная рамка экрана
     const g = this.root && this.root.querySelector('#game');
