@@ -697,6 +697,9 @@
     renderPlan();
     showTab('map');
     recoverTracks().catch(console.error);
+    // офлайн-режим удалён: убираем старый service worker и кэш тайлов у тех, кто открывал прежние версии
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(rs => rs.forEach(r => r.unregister())).catch(() => {});
+    if (window.caches) caches.keys().then(ks => ks.filter(k => k.startsWith('velo-')).forEach(k => caches.delete(k))).catch(() => {});
     root.VeloLegal.mountConsent({ onAccept: startGps });
     setInterval(updateHud, 1000);
   }
