@@ -57,7 +57,8 @@ export const worldMixin = {
   worldInit() {
     const cfg = this.cfg;
     const toXY = (w) => w.map((q) => this.xy(q[0] != null ? q[0] : q.lat, q[1] != null ? q[1] : q.lng));
-    const polys = (a) => (a || []).filter((w) => w && w.length >= 3).map(toXY);
+    const fOf = (w) => { const q = w[0] || {}; const f = q[2] != null ? q[2] : q.f; return f == null ? null : f; };
+    const polys = (a) => (a || []).filter((w) => w && w.length >= 3).map((w) => { const P = toXY(w); P.f = fOf(w); return P; });
     this.safeZ = polys(cfg.safeZones); this.killZ = polys(cfg.killZones); this.graveZ = polys(cfg.graveZones);
     this.zx = {}; for (const k of ZX_KINDS) this.zx[k] = polys((cfg.zonesX || {})[k]);
     this.objs = []; this.objsMade = false;
@@ -66,10 +67,12 @@ export const worldMixin = {
   },
 
   // ---------- проверки ----------
-  inSafe(p) { return this.safeZ.some((P) => inPoly(p.x, p.y, P)); },
-  inKill(p) { return this.killZ.some((P) => inPoly(p.x, p.y, P)); },
-  inZ(k, p) { const L = this.zx && this.zx[k]; return !!(L && L.length && L.some((P) => inPoly(p.x, p.y, P))); },
-  inGrave(p) { return this.graveZ.some((P) => inPoly(p.x, p.y, P)); },
+  inSafe(p) { return this.safeZ.some((P) => this.okF(P.f, p) && inPoly(p.x, p.y, P)); },
+  inKill(p) { return this.killZ.some((P) => this.okF(P.f, p) && inPoly(p.x, p.y, P)); },
+  inZ(k, p) { const L = this.zx && this.zx[k]; return !!(L && L.length && L.some((P) => this.okF(P.f, p) && inPoly(p.x, p.y, P))); },
+  inGrave(p) { return this.graveZ.some((P) => this.okF(P.f, p) && inPoly(p.x, p.y, P)); },
+  /** Объект рядом и на том же этаже. */
+  nearO(a, b, k) { const o = a.k ? a : b, p = a.k ? b : a; return this.okF(o.f, p) && dist(a, b) <= this.objR(k); },
   /** Можно ли поставить объект / игрока: не в стене и не ближе MARGIN к ней, не в смертельной зоне. */
   spotOk(pt, m = MARGIN) {
     if (this.killZ && this.killZ.length && this.inKill(pt)) return false;
@@ -81,12 +84,12 @@ export const worldMixin = {
   },
   /** Ходить нельзя: стена, а ботам — ещё и смертельная зона. */
   /** Ходить нельзя: стены; ботам — смертельная зона; живым — зона выбывших. */
-  blockedFor(p, pt) { return (this.walls.length && this.inWall(pt)) || (p.bot && this.killZ.length && this.inKill(pt)) || (p.role !== 'dead' && p.role !== 'spectator' && this.graveZ.length && this.inGrave(pt)); },
+  blockedFor(p, pt) { return (this.walls.length && this.inWall(pt, this.flOf(p))) || (p.bot && this.killZ.length && this.inKill(pt)) || (p.role !== 'dead' && p.role !== 'spectator' && this.graveZ.length && this.inGrave(pt)); },
   /** GPS: точность ±10 м, поэтому объекты срабатывают с большего расстояния. */
   gps() { return this.cfg.mode === 'gps' && !this.ch.spoof; },
   objR(k) { const r = OBJ[k].r; return this.gps() ? Math.max(10, Math.round(r * 1.6)) : r; },
   gpsOk() { return !this.gps() || (this.gpsAcc || 0) <= 35; },
-  inBush(p) { return this.objs.some((o) => o.k === 'bush' && dist(o, p) <= this.objR('bush')); },
+  inBush(p) { return this.objs.some((o) => o.k === 'bush' && this.nearO(o, p, 'bush')); },
   hiddenInBush(h, d) { return h.role === 'hider' && ((d > 6 && this.inBush(h)) || (d > 10 && this.inZ('shadow', h)) || (d > 20 && this.foggy(h))); },
   inSmoke(p) { return (this.smokes || []).some((s) => this.t < s.until && dist(s, p) <= 25); },
   foggy(p) { return this.inZ('fog', p) || this.inSmoke(p); },
@@ -101,7 +104,7 @@ export const worldMixin = {
     const cfg = this.cfg, list = [];
     const fixed = (cfg.objs || []).filter((o) => OBJ[o.k]);
     if (fixed.length) {
-      fixed.forEach((o, i) => list.push({ id: 'o' + i, k: o.k, ...this.xy(o.lat, o.lng), readyAt: 0 }));
+      fixed.forEach((o, i) => list.push({ id: 'o' + i, k: o.k, ...this.xy(o.lat, o.lng), readyAt: 0, f: o.f != null ? o.f : null }));
     } else if (cfg.objects !== false && !this.indoor()) {
       const k = Math.max(0.6, Math.min(2.2, this.R / 300));
       const want = { bush: Math.round(4 * k), radar: Math.max(1, Math.round(k)), chest: this.hasPowerups ? Math.max(1, Math.round(1.5 * k)) : 0, camera: Math.max(1, Math.round(k)), boost: Math.round(2 * k), bell: Math.max(1, Math.round(k)), mine: Math.round(1.5 * k), smoke: Math.max(1, Math.round(k)), lighthouse: Math.max(1, Math.round(k)), medkit: Math.round(k), snare: Math.round(1.5 * k), compass: Math.max(1, Math.round(k)), radio: 1, mirror: Math.max(1, Math.round(k)), clock: 1, clover: Math.round(k), freezer: Math.max(1, Math.round(0.7 * k)), target: Math.max(1, Math.round(0.7 * k)), flarebox: Math.max(1, Math.round(0.7 * k)), portal: cfg.mode === 'demo' ? 2 : 0 };
@@ -128,16 +131,16 @@ export const worldMixin = {
     this.smokes = (this.smokes || []).filter((s) => T < s.until);
     if (hunt) for (const o of this.objs) {
       if (T < o.readyAt) continue;
-      if (o.k === 'mine') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('mine') && !this.isStunned(q)); if (u) { o.readyAt = T + 60; this.netSend('stun', { ids: [u.id], until: T + 5, by: '💣' }); this.onStun([u.id], T + 5, '💣'); } }
-      if (o.k === 'snare') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('snare')); if (h) { o.readyAt = T + 45; if (h.sim) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 8); this.netSend('snared', { id: h.id, n: h.name }); this.onSnare(h); } }
-      if (o.k === 'radio') { const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && dist(q, o) <= this.objR('radio')); if (p) { o.readyAt = T + 120; this.netSend('radio', { n: p.name }); this.onRadio(p.name); } }
-      if (o.k === 'mirror') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('mirror')); if (h) { o.readyAt = T + 60; const a = Math.random() * 6.28, r = 60 + Math.random() * 50; this.fakes = (this.fakes || []).concat([{ x: Math.round(h.x + Math.cos(a) * r), y: Math.round(h.y + Math.sin(a) * r), until: T + 20, name: h.name, c: h.color }]); this.netSend('fx2', { k: 'mirror', n: h.name }); this.onFx2('mirror', h.name); } }
-      if (o.k === 'clock') { const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && dist(q, o) <= this.objR('clock')); if (p) { o.readyAt = T + 90; const d = p.role === 'hider' ? -20 : 20; this.cfg.huntSec = Math.max(this.t - this.cfg.hideSec + 30, this.cfg.huntSec + d); this.netSend('ext', { huntSec: this.cfg.huntSec }); this.netSend('fx2', { k: 'clock', n: p.name, d }); this.onFx2('clock', p.name, d); } }
-      if (o.k === 'clover') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('clover')); if (h) { o.readyAt = T + 120; h.shield = (h.shield || 0) + 1; this.netSend('fx2', { k: 'clover', n: h.name, id: h.id }); this.onFx2('clover', h.name, h.id); } }
-      if (o.k === 'freezer') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('freezer')); if (u) { o.readyAt = T + 90; const hs = this.hiders().filter((h) => dist(h, u) <= 50 && !this.jammed(h)); hs.forEach((h) => { h.warnUntil = T; h.frozenUntil = T + 5; h.target = null; }); if (this.isHost && hs.length) this.netSend('freeze', { ids: hs.map((h) => h.id), wu: T, fu: T + 5, warded: [], fr: this.freezeReadyAt }); this.netSend('fx2', { k: 'freezer', n: u.name, d: hs.length }); this.onFx2('freezer', u.name, hs.length); } }
-      if (o.k === 'target') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('target')); if (u) { o.readyAt = T + 60; const h = this.hiders().sort((a, b) => dist(a, u) - dist(b, u))[0]; if (h) { if (h.sim) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 10); this.netSend('fx2', { k: 'target', n: h.name, id: h.id }); this.onFx2('target', h.name, h.id); } } }
-      if (o.k === 'flarebox') { const u = this.hunters().find((q) => dist(q, o) <= this.objR('flarebox')); if (u) { o.readyAt = T + 90; this.applyPower(u, 'flare'); } }
-      if (o.k === 'smoke') { const h = this.hiders().find((q) => dist(q, o) <= this.objR('smoke')); if (h) { o.readyAt = T + 90; this.smokes.push({ x: o.x, y: o.y, until: T + 30 }); this.netSend('smokeup', { n: h.name }); this.onSmoke(h.name); } }
+      if (o.k === 'mine') { const u = this.hunters().find((q) => this.nearO(q, o, 'mine') && !this.isStunned(q)); if (u) { o.readyAt = T + 60; this.netSend('stun', { ids: [u.id], until: T + 5, by: '💣' }); this.onStun([u.id], T + 5, '💣'); } }
+      if (o.k === 'snare') { const h = this.hiders().find((q) => this.nearO(q, o, 'snare')); if (h) { o.readyAt = T + 45; if (h.sim) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 8); this.netSend('snared', { id: h.id, n: h.name }); this.onSnare(h); } }
+      if (o.k === 'radio') { const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && this.nearO(q, o, 'radio')); if (p) { o.readyAt = T + 120; this.netSend('radio', { n: p.name }); this.onRadio(p.name); } }
+      if (o.k === 'mirror') { const h = this.hiders().find((q) => this.nearO(q, o, 'mirror')); if (h) { o.readyAt = T + 60; const a = Math.random() * 6.28, r = 60 + Math.random() * 50; this.fakes = (this.fakes || []).concat([{ x: Math.round(h.x + Math.cos(a) * r), y: Math.round(h.y + Math.sin(a) * r), until: T + 20, name: h.name, c: h.color }]); this.netSend('fx2', { k: 'mirror', n: h.name }); this.onFx2('mirror', h.name); } }
+      if (o.k === 'clock') { const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && this.nearO(q, o, 'clock')); if (p) { o.readyAt = T + 90; const d = p.role === 'hider' ? -20 : 20; this.cfg.huntSec = Math.max(this.t - this.cfg.hideSec + 30, this.cfg.huntSec + d); this.netSend('ext', { huntSec: this.cfg.huntSec }); this.netSend('fx2', { k: 'clock', n: p.name, d }); this.onFx2('clock', p.name, d); } }
+      if (o.k === 'clover') { const h = this.hiders().find((q) => this.nearO(q, o, 'clover')); if (h) { o.readyAt = T + 120; h.shield = (h.shield || 0) + 1; this.netSend('fx2', { k: 'clover', n: h.name, id: h.id }); this.onFx2('clover', h.name, h.id); } }
+      if (o.k === 'freezer') { const u = this.hunters().find((q) => this.nearO(q, o, 'freezer')); if (u) { o.readyAt = T + 90; const hs = this.hiders().filter((h) => dist(h, u) <= 50 && !this.jammed(h)); hs.forEach((h) => { h.warnUntil = T; h.frozenUntil = T + 5; h.target = null; }); if (this.isHost && hs.length) this.netSend('freeze', { ids: hs.map((h) => h.id), wu: T, fu: T + 5, warded: [], fr: this.freezeReadyAt }); this.netSend('fx2', { k: 'freezer', n: u.name, d: hs.length }); this.onFx2('freezer', u.name, hs.length); } }
+      if (o.k === 'target') { const u = this.hunters().find((q) => this.nearO(q, o, 'target')); if (u) { o.readyAt = T + 60; const h = this.hiders().sort((a, b) => dist(a, u) - dist(b, u))[0]; if (h) { if (h.sim) h.exposedUntil = Math.max(h.exposedUntil || 0, T + 10); this.netSend('fx2', { k: 'target', n: h.name, id: h.id }); this.onFx2('target', h.name, h.id); } } }
+      if (o.k === 'flarebox') { const u = this.hunters().find((q) => this.nearO(q, o, 'flarebox')); if (u) { o.readyAt = T + 90; this.applyPower(u, 'flare'); } }
+      if (o.k === 'smoke') { const h = this.hiders().find((q) => this.nearO(q, o, 'smoke')); if (h) { o.readyAt = T + 90; this.smokes.push({ x: o.x, y: o.y, until: T + 30 }); this.netSend('smokeup', { n: h.name }); this.onSmoke(h.name); } }
     }
     // тревога для ботов
     if (hunt) for (const h of this.hiders()) if (h.sim && h !== this.me) { const a = this.inZ('alarm', h); if (a && !h.inAlarm && T >= (h.alarmCd || 0)) { h.alarmCd = T + 30; h.exposedUntil = Math.max(h.exposedUntil || 0, T + 6); this.netSend('alarm', { n: h.name }); this.onAlarm(h.name, false); } h.inAlarm = a; }
@@ -174,7 +177,7 @@ export const worldMixin = {
     // сундуки
     for (const o of this.objs) {
       if (o.k !== 'chest' || T < o.readyAt) continue;
-      const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && dist(q, o) <= this.objR('chest'));
+      const p = this.players.find((q) => (q.role === 'hider' || q.role === 'hunter') && this.nearO(q, o, 'chest'));
       if (!p) continue;
       const pool = this.enabledPw.filter((id) => { const pw = pwById(id); return pw && (pw.side === 'both' || pw.side === p.role); });
       if (!pool.length) continue;
@@ -232,25 +235,25 @@ export const worldMixin = {
     if (ph === 'hunt') {
       if (me.role === 'hider') { const a = this.inZ('alarm', me); if (a && !me.inAlarm && T >= (me.alarmCd || 0)) { me.alarmCd = T + 30; me.exposedUntil = Math.max(me.exposedUntil || 0, T + 6); this.netSend('alarm', { n: me.name }); this.onAlarm(me.name, true); } me.inAlarm = a; }
       if (me.role === 'hunter') {
-        const lh = this.objs.find((o) => o.k === 'lighthouse' && dist(o, me) <= this.objR('lighthouse') && T >= (this.radarCd[o.id] || 0));
+        const lh = this.objs.find((o) => o.k === 'lighthouse' && this.nearO(o, me, 'lighthouse') && T >= (this.radarCd[o.id] || 0));
         if (lh) { this.lhT = (this.lhT || 0) + dt; if (this.lhT >= 3) { this.lhT = 0; this.radarCd[lh.id] = T + 90; const hs = this.hiders().filter((h) => dist(h, lh) <= 100 && !this.jammed(h)); hs.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 4); }); this.alert('blue', t('lhOn', { k: hs.length }), 'eye'); } } else this.lhT = 0;
       }
       // лечебная зона и эхо — у себя
       if (this.inZ('heal', me)) { me.stamina = Math.min(100, me.stamina + 20 * dt); if (T < me.frozenUntil) me.frozenUntil -= dt; if (T < (me.stunUntil || 0)) me.stunUntil -= dt; }
       if (this.inZ('echo', me) && (me.running || me.speed > 2.5) && T - (this.echoAt || -99) > 12) { this.echoAt = T; this.netSend('echo', { x: Math.round(me.x), y: Math.round(me.y), r: me.role }); this.alert('yellow', t('echoYou'), 'signal'); }
-      const cp = this.objs.find((o) => o.k === 'compass' && dist(o, me) <= this.objR('compass') && T >= (this.radarCd[o.id] || 0));
+      const cp = this.objs.find((o) => o.k === 'compass' && this.nearO(o, me, 'compass') && T >= (this.radarCd[o.id] || 0));
       if (cp) {
         this.radarCd[cp.id] = T + 60;
         const foes = (me.role === 'hider' ? this.hunters() : this.hiders()).filter((q) => q !== me);
         const f = foes.sort((a, b) => dist(a, me) - dist(b, me))[0];
         if (f) { const ang = (Math.atan2(f.x - me.x, f.y - me.y) * 180 / Math.PI + 360) % 360; this.alert('blue', t('compassRes', { d: t('dir' + Math.round(ang / 45) % 8), m: Math.round(dist(f, me) / 10) * 10, who: t(me.role === 'hider' ? 'hunter' : 'hider') }), 'north'); this.vibrate([60]); }
       }
-      const mk = this.objs.find((o) => o.k === 'medkit' && dist(o, me) <= this.objR('medkit') && T >= (this.boostCd['m' + o.id] || 0));
+      const mk = this.objs.find((o) => o.k === 'medkit' && this.nearO(o, me, 'medkit') && T >= (this.boostCd['m' + o.id] || 0));
       if (mk && (this.isFrozen(me) || this.isStunned(me) || me.stamina < 60 || T < me.warnUntil)) { this.boostCd['m' + mk.id] = T + 45; me.frozenUntil = 0; me.warnUntil = 0; me.stunUntil = 0; me.stamina = 100; this.alert('green', t('medOn'), 'shield'); this.renderHud(true); }
     }
     // радар
     if (me.role === 'hider' && ph === 'hunt') {
-      const r = this.objs.find((o) => o.k === 'radar' && dist(o, me) <= this.objR('radar') && T >= (this.radarCd[o.id] || 0));
+      const r = this.objs.find((o) => o.k === 'radar' && this.nearO(o, me, 'radar') && T >= (this.radarCd[o.id] || 0));
       if (r) { this.radarT = (this.radarT || 0) + dt; if (this.radarT >= 4) { this.radarT = 0; this.radarCd[r.id] = T + 60; this.showHuntersUntil = Math.max(this.showHuntersUntil, T + 15); this.alert('blue', t('radarOn'), 'eye'); this.vibrate([60, 40, 60]); } }
       else this.radarT = 0;
     }
@@ -258,10 +261,10 @@ export const worldMixin = {
     if (ph === 'hunt') for (const o of this.objs) {
       if (o.k !== 'camera') continue;
       if (me.role === 'hunter') {
-        const hits = this.hiders().filter((h) => dist(h, o) <= this.objR('camera') && !this.inBush(h) && !this.jammed(h));
+        const hits = this.hiders().filter((h) => this.nearO(h, o, 'camera') && !this.inBush(h) && !this.jammed(h));
         hits.forEach((h) => { h.exposedUntil = Math.max(h.exposedUntil || 0, T + 2); });
         if (hits.length && T - this.camSeen > 15) { this.camSeen = T; this.alert('blue', t('camSaw', { n: hits.map((h) => h.name).join(', ') }), 'eye'); }
-      } else if (me.role === 'hider' && dist(me, o) <= this.objR('camera') && T - this.camSeen > 10) { this.camSeen = T; this.alert('red', t('camYou'), 'eye'); this.vibrate([120]); }
+      } else if (me.role === 'hider' && this.nearO(me, o, 'camera') && T - this.camSeen > 10) { this.camSeen = T; this.alert('red', t('camYou'), 'eye'); this.vibrate([120]); }
     }
     // сердцебиение: охотник ближе 35 м — телефон «стучит», чем ближе, тем чаще
     if (ph === 'hunt' && me.role === 'hider') {
@@ -336,7 +339,7 @@ export const worldMixin = {
   /** Колокол: охотник рядом звонит — прячущиеся в 60 м слышат и видны 5 с. */
   ringBell(by) {
     const T = this.t;
-    const b = this.objs.find((o) => o.k === 'bell' && dist(o, by) <= this.objR('bell') + 4 && T >= o.readyAt);
+    const b = this.objs.find((o) => o.k === 'bell' && this.nearO(o, by, 'bell') + 4 && T >= o.readyAt);
     if (!b) return false;
     b.readyAt = T + 60;
     const hits = this.hiders().filter((h) => dist(h, b) <= 60);
@@ -362,13 +365,13 @@ export const worldMixin = {
 
   // ---------- сеть ----------
   worldState() {
-    return { ob: this.objs.map((o) => [o.id, o.k, o.x, o.y, Math.round(o.readyAt), o.pair || 0]), sm: (this.smokes || []).map((s) => [Math.round(s.x), Math.round(s.y), Math.round(s.until)]), fk: (this.fakes || []).map((f) => [f.x, f.y, Math.round(f.until), f.name, f.c]), dd: this.players.map((p, i) => (p.role === 'dead' ? i : -1)).filter((i) => i >= 0), sf: this.players.map((p, i) => (p.safeOn ? i : -1)).filter((i) => i >= 0) };
+    return { ob: this.objs.map((o) => [o.id, o.k, o.x, o.y, Math.round(o.readyAt), o.pair || 0, o.f == null ? -1 : o.f]), sm: (this.smokes || []).map((s) => [Math.round(s.x), Math.round(s.y), Math.round(s.until)]), fk: (this.fakes || []).map((f) => [f.x, f.y, Math.round(f.until), f.name, f.c]), dd: this.players.map((p, i) => (p.role === 'dead' ? i : -1)).filter((i) => i >= 0), sf: this.players.map((p, i) => (p.safeOn ? i : -1)).filter((i) => i >= 0) };
   },
   worldApply(d) {
     if (!d) return;
     if (d.sm) this.smokes = d.sm.map(([x, y, until]) => ({ x, y, until }));
     if (d.fk) this.fakes = d.fk.map(([x, y, until, name, c]) => ({ x, y, until, name, c }));
-    if (d.ob) this.objs = d.ob.map(([id, k, x, y, readyAt, pair]) => ({ id, k, x, y, readyAt, pair: pair || null }));
+    if (d.ob) this.objs = d.ob.map(([id, k, x, y, readyAt, pair, f]) => ({ id, k, x, y, readyAt, pair: pair || null, f: f == null || f < 0 ? null : f }));
     (d.dd || []).forEach((i) => { const p = this.players[i]; if (p && p.role !== 'dead' && !this.social()) this.eliminate(p, p.elim || 'out', true); });
     if (d.sf) this.players.forEach((p, i) => { if (p !== this.me) p.safeOn = d.sf.includes(i); });
   },
@@ -439,7 +442,7 @@ export const worldMixin = {
     if (this.isClient) { this.netSend('spawn', { k, ...at }); return; }
     if (k === 'supply') { const s = this.newSupply(); Object.assign(s, at); this.supplies.push(s); return; }
     if (!OBJ[k]) return;
-    const o = { id: 'o' + Math.random().toString(36).slice(2, 7), k, ...at, readyAt: 0 };
+    const o = { id: 'o' + Math.random().toString(36).slice(2, 7), k, ...at, readyAt: 0, f: pos.f != null ? pos.f : this.flOf(pos) };
     if (k === 'portal') { const q = { id: 'o' + Math.random().toString(36).slice(2, 7), k, x: at.x + 60, y: at.y, readyAt: 0, pair: o.id }; o.pair = q.id; this.objs.push(q); }
     this.objs.push(o);
     this.objsMade = true;

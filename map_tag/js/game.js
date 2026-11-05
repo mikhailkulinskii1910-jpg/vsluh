@@ -14,6 +14,7 @@ import { worldMixin } from './world.js';
 import { arenaMixin } from './arena.js';
 import { indoorMixin } from './indoor.js';
 import { radarMixin } from './radar.js';
+import { floorsMixin } from './floors.js';
 
 export const BOT_NAMES = {
   ru: ['Лиса', 'Ёж', 'Сова', 'Барсук', 'Рысь', 'Белка', 'Енот', 'Филин', 'Куница', 'Заяц'],
@@ -76,7 +77,7 @@ export class Game {
     this.wallsInit(); this.worldInit();
     this.makePlayers();
     if (this.ch.skiphide) for (const p of this.players) if (p.role === 'hider' && (p.bot || cfg.mode === 'demo')) Object.assign(p, this.randZone(0.85, 0.35));
-    this.modesInit(); this.extrasInit(); this.socialInit(); this.arenaInit(); this.roomsInit(); this.radarInit();
+    this.modesInit(); this.extrasInit(); this.socialInit(); this.arenaInit(); this.roomsInit(); this.radarInit(); this.floorsInit();
     if (this.hasPowerups && !this.isClient) for (let i = 0, n = this.ptSupply.length || 6 + Math.round(this.R / 150); i < n; i++) this.supplies.push(this.newSupply());
     if (this.isClient) this.nextMissionAt = Infinity;
     if (this.net) this.netInit();
@@ -391,6 +392,7 @@ export class Game {
     this.extrasLocal(dt);
     this.arenaLocal();
     this.radarLocal();
+    this.floorsLocal();
     this.announceTick();
     if (ph !== 'end' && !this.indoor()) this.checkZone(dt);   // стрелка к зоне — и во время пряток
     if (!this.isClient) { this.worldStep(dt); if (this.ended) return; }
@@ -1002,6 +1004,7 @@ export class Game {
           <div class="line-row"><span>${t('role')}</span><b style="color:${hunter ? 'var(--hunter)' : me.role === 'hider' ? 'var(--hider)' : 'var(--muted)'}">${t(me.role)}</b></div>
           <div class="line-row"><span>${t('alive')}</span><b>${t('hider')}: ${alive} · ${t('hunters')}: ${hcount}</b></div>
           <div class="line-row"><span>${t('zoneR')}</span><b id="zR"></b></div>
+          ${this.floorsOn() ? `<div class="line-row"><span>🏢 ${t('floorsT')}</span><b>${this.floorName(this.myFl)}</b></div>` : ''}
           <div class="line-row"><span>${t('moveMode')}</span><div class="seg"><button data-a="gps" class="${this.cfg.mode === 'gps' ? 'on' : ''}">${t('gps')}</button><button data-a="demo" class="${this.cfg.mode === 'demo' ? 'on' : ''}">${t('demo')}</button></div></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn" data-a="tiles" style="flex:1">${TILES[tileStyle()].ic} ${t('tile_' + tileStyle())}</button><button class="btn" data-a="legend" style="flex:1">📖 ${t('legend')}</button><button class="btn" data-a="cheats" style="flex:1;color:var(--hunter)">${I.lock}${t('cheats')}</button><button class="btn" data-a="sos" style="flex:1;color:#fff;background:#c0392b;border-color:#c0392b">🆘 SOS</button></div>
           ${this.isClient ? '' : `<button class="btn block" data-a="pause">${this.paused ? '▶ ' + t('resume') : '⏸ ' + t('pause')}</button>`}
@@ -1149,6 +1152,6 @@ export class Game {
   }
 }
 
-Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin, arenaMixin, indoorMixin, radarMixin);
+Object.assign(Game.prototype, netMixin, seekMixin, modesMixin, catchCodeMixin, extrasMixin, socialMixin, worldMixin, arenaMixin, indoorMixin, radarMixin, floorsMixin);
 
 export { fmt };

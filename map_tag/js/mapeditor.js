@@ -46,7 +46,8 @@ export function lineBand(pts, w) {
     const k = Math.min(3, 1 / Math.max(0.3, nx * n1.x + ny * n1.y));   // угол: удлиняем, но не больше ×3
     L.push({ x: P[i].x + nx * w * k, y: P[i].y + ny * w * k }); R.push({ x: P[i].x - nx * w * k, y: P[i].y - ny * w * k });
   }
-  return [...L, ...R.reverse()].map((q) => ({ lat: Math.round((lat0 + q.y / ky) * 1e6) / 1e6, lng: Math.round((pts[0].lng + q.x / kx) * 1e6) / 1e6 }));
+  const f0 = pts[0].f;
+  return [...L, ...R.reverse()].map((q) => ({ ...(f0 != null ? { f: f0 } : {}), lat: Math.round((lat0 + q.y / ky) * 1e6) / 1e6, lng: Math.round((pts[0].lng + q.x / kx) * 1e6) / 1e6 }));
 }
 
 export function mapPoints(lb) {
@@ -55,8 +56,11 @@ export function mapPoints(lb) {
 }
 
 /** Элементы своей карты на карте лобби (только просмотр). */
-export function drawMapExtras(map, lb) {
-  const m = lb.map; if (!m) return;
+export function drawMapExtras(map, lb, floor) {
+  const m0 = lb.map; if (!m0) return;
+  // этаж: показываем зоны и объекты этого этажа и «на всех этажах»
+  const okz = (z) => floor == null || !z || !z[0] || z[0].f == null || z[0].f === floor;
+  const m = floor == null ? m0 : Object.fromEntries(Object.entries(m0).map(([k, v]) => [k, Array.isArray(v) ? (k === 'objs' ? v.filter((o) => o.f == null || o.f === floor) : v.filter((z) => !Array.isArray(z) || okz(z))) : v]));
   const g = L.layerGroup().addTo(map);
   for (const z of [...(m.barriers || []), ...(m.walls || []).slice(0, 2500)]) L.polygon(z.map((q) => [q.lat, q.lng]), { color: '#7a5a3a', weight: 1, fillColor: '#8b6b4a', fillOpacity: 0.4, interactive: false }).addTo(g);
   for (const k of Object.keys(ZST)) for (const z of m[k] || []) {
@@ -83,6 +87,8 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   if (!lb) return go('home');
   lb.map = { ...emptyMap(), ...(lb.map || {}) };
   lb.poly = lb.poly || [];
+  const nFl = (lb.floorsAbs || []).length;
+  const edFloor = () => (nFl >= 2 && S._edFloor != null && S._edFloor < nFl ? S._edFloor : null);
   let tool = 'zone', draft = [], draftTool = null, objKind = S._edObj || 'bush';
   const DCOL = { nogo: '#d63a4a', barrier: '#8b6b4a', safe: '#3fb6ff', kill: '#b0001a', grave: '#8a8f99', ...Object.fromEntries(ZX_KINDS.map((k) => [k, ZX[k].col])) };
   /** Сохранить черновик: closed — замкнутая зона (от 3 точек), иначе линия (от 2 точек) — полоса шириной W м. */
@@ -121,7 +127,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
       const r = (S._calcRadius && S._calcRadius()) || 500;
       L.circle([lb.center.lat, lb.center.lng], { radius: r, ...zst }).addTo(layer);
     }
-    drawMapExtras(layer, { map: lb.map });
+    drawMapExtras(layer, { map: lb.map }, edFloor());
     if (draft.length) {
       const col = DCOL[draftTool] || '#d63a4a';
       L.polyline(draft.map((q) => [q.lat, q.lng]), { color: col, weight: 3, dashArray: '4 6', interactive: false }).addTo(layer);
@@ -137,6 +143,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     p.classList.toggle('mini', !!S._edMini);
     const dr = POLY[tool] && draft.length;
     p.innerHTML = `<div class="row ed-head"><div class="ed-hint">${dr ? t('edPtsN', { n: draft.length }) : t('edHint_' + tool)}</div><button class="icon-btn" data-ed="mini" style="width:38px;height:38px;flex:none">${S._edMini ? I.chevU : I.chevD}</button></div>
+      ${nFl >= 2 ? `<div class="fl-pick keep"><span>🏢</span><button class="chip ${edFloor() == null ? 'on' : ''}" data-ed="fl:-1">${t('floorAll')}</button>${Array.from({ length: nFl }, (_, i) => `<button class="chip ${edFloor() === i ? 'on' : ''}" data-ed="fl:${i}">${i + 1}</button>`).join('')}</div>` : ''}
       ${dr ? `<div class="row ed-draft keep"><button class="btn" data-ed="undoDraft" style="flex:none;min-height:42px;padding:0 12px">↶</button>${draft.length >= 2 ? `<button class="btn" data-ed="lineDraft" style="flex:1;min-height:42px">〰 ${t('edLine')}</button>` : ''}${draft.length >= 3 ? `<button class="btn primary" data-ed="closeNogo" style="flex:1;min-height:42px">✓ ${t('edClose')}</button>` : ''}</div>` : ''}
       ${POLY[tool] ? `<div class="ed-tip">${t('edCloseTip')}</div>` : ''}
       <div style="color:var(--muted);font-size:13px;margin-top:6px">${counts()}</div>
@@ -178,7 +185,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
   }
 
   map.on('click', (e) => {
-    const q = { lat: e.latlng.lat, lng: e.latlng.lng };
+    const q = { lat: e.latlng.lat, lng: e.latlng.lng, ...(edFloor() != null ? { f: edFloor() } : {}) };
     if (tool === 'zone') { lb.shape = 'custom'; lb.poly.push(q); }
     else if (POLY[tool]) {
       if (draftTool && draftTool !== tool) closeDraft();
@@ -205,6 +212,7 @@ export function renderMapEditor(el, { S, save, go, toast, modal }) {
     }
     if (a === 'closeNogo' && draft.length >= 3) closeDraft(false, true);
     if (a === 'lineDraft' && draft.length >= 2) closeDraft(false, false);
+    if (a.startsWith('fl:')) { const v = +a.slice(3); S._edFloor = v < 0 ? null : v; draft = []; draftTool = null; save(); draw(); return; }
     if (a.startsWith('ok:')) { objKind = S._edObj = a.slice(3); panel(); return; }
     if (a === 'clearObjs') { lb.map.objs = []; }
     if (a === 'buildings') { loadBuildings(); return; }

@@ -658,3 +658,10 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .tp { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 14px; border: 1px solid var(--line); background: var(--card2); color: var(--text); font-size: 11px; cursor: pointer; }
 .tp span { font-size: 22px; } .tp.on { border: 2px solid var(--accent); background: var(--accent-soft); }
 .mk-obj.k-mirror { border-color: #b3e5fc; } .mk-obj.k-clock { border-color: #ffcc80; } .mk-obj.k-clover { border-color: #66bb6a; } .mk-obj.k-freezer { border-color: #81d4fa; } .mk-obj.k-target { border-color: #ff5252; }
+.floors-card { padding: 14px 16px; }
+.fl-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.fl-item { padding: 6px 10px; border-radius: 12px; background: var(--card2); border: 1px solid var(--line); font-size: 13px; }
+.fl-item b { color: var(--accent); margin-right: 4px; }
+.fl-pick { display: flex; gap: 6px; align-items: center; margin-top: 8px; overflow-x: auto; }
+.fl-pick .chip { min-height: 34px; padding: 0 12px; flex: none; } .fl-pick .chip.on { border-color: var(--accent); background: var(--accent-soft); }
+.fl-pick { min-height: 42px; flex-shrink: 0; } #edPanel > * { flex-shrink: 0; min-height: min-content; }

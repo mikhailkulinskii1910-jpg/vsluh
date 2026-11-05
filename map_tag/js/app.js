@@ -12,10 +12,11 @@ import { Room, newId } from './net.js';
 import { renderMapEditor, drawMapExtras, mapPoints, buildingAt, lineBand } from './mapeditor.js';
 import { OBJ, OBJ_KINDS, OUT_LIMIT, ZX, ZX_KINDS } from './world.js';
 import { DEFAULT_ROOMS } from './indoor.js';
+import { readHeightNow } from './floors.js';
 import { CHAT, chatInit, chatHandle, chatReset, openChat, sendPing, sendSos } from './chat.js';
 import { VOICE, voiceInit, voiceHandle, voiceLeave, voiceMute } from './voice.js';
 
-const VERSION = '3.3';
+const VERSION = '3.4';
 const $app = document.getElementById('app');
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -514,6 +515,13 @@ const SCREENS = {
           ? `<div class="map-cap"><div>${t('customHint')}</div><div class="row" style="margin-top:8px"><span id="polyInfo" style="flex:1"></span><button class="btn" id="pUndo">${t('undoPt')}</button><button class="btn danger" id="pClear">${t('clearPts')}</button></div></div>`
           : `<div class="map-cap">${t('playground')}</div>`}
       </div>
+      <div class="card floors-card">
+        <div class="row" style="justify-content:space-between;flex-wrap:nowrap"><b>🏢 ${t('floorsTitle')}</b>${(lb.floorsAbs || []).length ? `<button class="chip" id="flReset" style="min-height:34px;padding:0 12px">${t('floorReset')}</button>` : ''}</div>
+        <p style="color:var(--muted);font-size:13px;margin:6px 0 10px">${t('floorsHint')}</p>
+        ${(lb.floorsAbs || []).length ? `<div class="fl-list">${lb.floorsAbs.map((h, i) => `<span class="fl-item"><b>${i + 1}</b> ${i ? (h - lb.floorsAbs[0] >= 0 ? '+' : '') + (h - lb.floorsAbs[0]).toFixed(1) + ' ' + t('m') : '0 ' + t('m')}</span>`).join('')}</div>` : ''}
+        <button class="btn primary block" id="flRec" style="margin-top:10px">📍 ${t('floorRec', { n: (lb.floorsAbs || []).length + 1 })}</button>
+        ${(lb.floorsAbs || []).length >= 2 ? `<div class="row" style="margin-top:10px;gap:6px;align-items:center"><span style="color:var(--muted);font-size:13px">${t('floorStart')}:</span>${lb.floorsAbs.map((_, i) => `<button class="chip ${(lb.startFloor || 0) === i ? 'on' : ''}" data-sf="${i}" style="min-height:34px;padding:0 12px">${i + 1}</button>`).join('')}</div>` : ''}
+      </div>
       <div class="card crew">
         <div class="kicker2">${t('yourCrew')}</div>
         <h2 class="row" style="font-size:28px">${I.users.replace('<svg', '<svg width="26" height="26"')} ${t('playersN', { n: lb.players.length })}</h2>
@@ -662,6 +670,17 @@ const SCREENS = {
         toast(t('bldPicked', { n: b.name || t('bldNoName') }));
       } catch { if (!quiet && current === 'lobby') toast(t('edBuildingsFail')); }
     };
+    const fr = el.querySelector('#flRec');
+    if (fr) fr.onclick = async () => {
+      fr.disabled = true; const r = await readHeightNow(); fr.disabled = false;
+      if (!r) return toast(t('floorNoH'));
+      if (current !== 'lobby' || S.lobby !== lb) return;
+      lb.floorsAbs = [...(lb.floorsAbs || []), Math.round(r.h * 10) / 10];
+      toast(t('floorSaved', { n: lb.floorsAbs.length, h: t(r.src === 'baro' ? 'floorSrcBaro' : 'floorSrcGps') }));
+      rerender();
+    };
+    const fz = el.querySelector('#flReset'); if (fz) fz.onclick = () => { lb.floorsAbs = []; lb.startFloor = 0; rerender(); };
+    el.querySelectorAll('[data-sf]').forEach((b) => b.onclick = () => { lb.startFloor = +b.dataset.sf; rerender(); });
     const ri = el.querySelector('#roomsIn'); if (ri) ri.onchange = () => { lb.rooms = ri.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 12); if (lb.rooms.length < 2) lb.rooms = null; save(); hostPublish(); };
     const ba = el.querySelector('#bldAuto');
     if (ba) {
@@ -700,7 +719,8 @@ const SCREENS = {
         compass: lb.compass || 'off', detector: lb.detector || 'off', fog: lb.fog || 'off', botLevel: lb.botLevel || 'normal', outLimit: lb.outLimit != null ? lb.outLimit : 30, chaos: !!lb.chaos, catchCode: lb.catchCode !== false, drone: !!lb.drone, drift: !!lb.drift, objects: lb.objects !== false, buildingName: lb.gmode === 'indoor' && lb.building ? lb.building.name || '' : '', rooms: lb.rooms || null,
         zonesX: Object.fromEntries(ZX_KINDS.map((k) => [k, zoneArr(zl(lb, k))])),
         safeZones: zoneArr(zl(lb, 'safe')), killZones: zoneArr(zl(lb, 'kill')), graveZones: zoneArr(zl(lb, 'grave')),
-        objs: ((lb.map || {}).objs || []).map((o) => ({ k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || []), ...lineZones(lb, 'barriers', 1.5)].map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])),
+        floors: (lb.floorsAbs || []).length >= 2 ? lb.floorsAbs.map((h) => Math.round((h - lb.floorsAbs[0]) * 10) / 10) : null, startFloor: lb.startFloor || 0,
+        objs: ((lb.map || {}).objs || []).map((o) => ({ f: o.f != null ? o.f : null, k: o.k, lat: Math.round(o.lat * 1e6) / 1e6, lng: Math.round(o.lng * 1e6) / 1e6 })), walls: [...((lb.map || {}).walls || []), ...((lb.map || {}).barriers || []), ...lineZones(lb, 'barriers', 1.5)].filter((w) => w && w.length >= 3).map((w) => zoneArr([w])[0]),
         gmode: lb.gmode === 'blitz' ? 'classic' : (lb.gmode || 'classic'), blitz: lb.gmode === 'blitz', nogo: zl(lb, 'nogo'), points: mapPoints(lb),
       };
       base.avatar = S.avatar || null;
@@ -1042,7 +1062,7 @@ function lineZones(lb, key, w) { return (((lb.map || {})[key + 'L']) || []).filt
 function zl(lb, key) { return [...(((lb.map || {})[key]) || []), ...lineZones(lb, key, 4)]; }
 
 /** Многоугольники зон из редактора → [[lat, lng], …]. */
-function zoneArr(a) { return (a || []).filter((w) => w && w.length >= 3).map((w) => w.map((q) => [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])); }
+function zoneArr(a) { return (a || []).filter((w) => w && w.length >= 3).map((w) => w.map((q) => q.f != null ? [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6, q.f] : [Math.round(q.lat * 1e6) / 1e6, Math.round(q.lng * 1e6) / 1e6])); }
 
 /** Легенда: объекты и зоны на карте. */
 function openLegend() {

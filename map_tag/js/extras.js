@@ -16,7 +16,8 @@ export const extrasMixin = {
     // стены: здания из OpenStreetMap + барьеры из редактора; сетка для быстрых проверок
     this.walls = (cfg.walls || []).filter((w) => w.length >= 3).map((w) => {
       const P = w.map((q) => this.xy(q[0] != null ? q[0] : q.lat, q[1] != null ? q[1] : q.lng));
-      return { P, x0: Math.min(...P.map((q) => q.x)), x1: Math.max(...P.map((q) => q.x)), y0: Math.min(...P.map((q) => q.y)), y1: Math.max(...P.map((q) => q.y)) };
+      const q0 = w[0] || {}; const f = q0[2] != null ? q0[2] : q0.f;
+      return { P, f: f == null ? null : f, x0: Math.min(...P.map((q) => q.x)), x1: Math.max(...P.map((q) => q.x)), y0: Math.min(...P.map((q) => q.y)), y1: Math.max(...P.map((q) => q.y)) };
     });
     this.wallGrid = new Map();
     this.walls.forEach((w, i) => {
@@ -35,11 +36,11 @@ export const extrasMixin = {
   },
 
   // ---------- стены ----------
-  inWall(p) {
+  inWall(p, fl) {
     if (!this.walls.length) return false;
     const ids = this.wallGrid.get(Math.floor(p.x / CELL) + ',' + Math.floor(p.y / CELL));
     if (!ids) return false;
-    for (const i of ids) { const w = this.walls[i]; if (p.x >= w.x0 && p.x <= w.x1 && p.y >= w.y0 && p.y <= w.y1 && inPoly(p.x, p.y, w.P)) return true; }
+    for (const i of ids) { const w = this.walls[i]; if (fl != null && w.f != null && w.f !== fl) continue; if (p.x >= w.x0 && p.x <= w.x1 && p.y >= w.y0 && p.y <= w.y1 && inPoly(p.x, p.y, w.P)) return true; }
     return false;
   },
   /** Шаг с учётом стен: если впереди стена — скользим вдоль неё, иначе стоим. */
