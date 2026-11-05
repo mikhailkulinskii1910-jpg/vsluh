@@ -160,6 +160,7 @@
 
   function renderFollow() {
     $('#btn-follow').classList.toggle('on', state.follow);
+    $('#btn-follow').setAttribute('aria-pressed', String(state.follow));
   }
 
   /* ---------- HUD и GPS ---------- */

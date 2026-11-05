@@ -74,6 +74,20 @@ body.base-osm .base-tiles { filter: invert(1) grayscale(1) contrast(1.5) brightn
   background: var(--card); color: var(--text); border: 0; box-shadow: var(--shadow);
 }
 .tool.on { background: var(--card); color: var(--blue); outline: 2px solid var(--blue); outline-offset: -2px; }
+/* кнопка «моё местоположение» — круглая, справа внизу над панелью */
+.locate {
+  position: absolute; right: 12px; bottom: 28px; z-index: 520;
+  width: 60px; height: 60px; padding: 0; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: #1c1c1e; color: #fff; box-shadow: 0 3px 14px rgba(0, 0, 0, .6);
+  -webkit-tap-highlight-color: transparent; transition: transform .12s ease;
+}
+.locate:active { transform: scale(.94); }
+.locate:focus-visible { outline: 2px solid #3d8bff; outline-offset: 2px; }
+.locate .loc-on { display: none; color: #3d8bff; }
+button.locate.on { background: #1c1c1e; border: 0; color: #fff; }
+.locate.on .loc-on { display: block; }
+.locate.on .loc-off { display: none; }
 .pop {
   position: absolute; right: 52px; top: 0; background: var(--card); border-radius: 12px; box-shadow: var(--shadow);
   padding: 4px; display: flex; flex-direction: column; min-width: 130px;
@@ -93,7 +107,7 @@ body.base-osm .base-tiles { filter: invert(1) grayscale(1) contrast(1.5) brightn
 .nav-txt small { opacity: .9; font-size: 13px; }
 
 .toast {
-  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 1000;
+  position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%); z-index: 1000;
   background: #111827; color: #fff; padding: 10px 14px; border-radius: 12px; max-width: 90%;
   box-shadow: 0 4px 14px rgba(0,0,0,.35); text-align: center;
 }
