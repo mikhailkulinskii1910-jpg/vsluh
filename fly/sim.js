@@ -28,6 +28,7 @@ export const CONFIG = {
   arenaTop: 1.4,
   predatorSpeed: 0.35,
   predatorKill: 0.22,
+  obstacleCount: 7,     // каменные столбы, которые муха обходит и ощупывает антеннами
   // моторы
   motorSpeed: 3.0,      // скорость полёта на единицу активности моторных нейронов
   motorTurn: 3.0,       // скорость поворота (рад/с) на единицу разницы L и R
@@ -60,6 +61,7 @@ export class FlySim {
     this.buildNetwork();
     this.updateWeights();
     this.buildGroups();
+    this.obstacles = this.makeObstacles();
 
     this.time = 0;
     this.lives = 0;
@@ -126,6 +128,49 @@ export class FlySim {
 
   // ---- мир ---------------------------------------------------------------
 
+  makeObstacles() {
+    const out = [];
+    let tries = 0;
+    while (out.length < this.cfg.obstacleCount && tries < 500) {
+      tries++;
+      const r = 0.12 + this.rng() * 0.12;
+      const h = this.cfg.arenaHalf - r - 0.2;
+      const x = (this.rng() * 2 - 1) * h;
+      const z = (this.rng() * 2 - 1) * h;
+      if (Math.hypot(x, z) < 0.7) continue;                       // не в центре, где стартует муха
+      if (out.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 0.3)) continue;
+      out.push({ x, z, r, height: 0.5 + this.rng() * 0.6 });
+    }
+    return out;
+  }
+
+  // Выталкивает точку из столбов; возвращает true, если было столкновение
+  pushOut(p, pad) {
+    let hit = false;
+    for (const o of this.obstacles) {
+      const dx = p.x - o.x, dz = p.z - o.z;
+      const d = Math.hypot(dx, dz);
+      const min = o.r + pad;
+      if (d < min) {
+        hit = true;
+        if (d > 1e-6) { p.x = o.x + (dx / d) * min; p.z = o.z + (dz / d) * min; }
+        else { p.x = o.x + min; }
+      }
+    }
+    return hit;
+  }
+
+  // Близость столба к точке (для антенн): 1 — вплотную, 0 — далеко
+  obstacleProx(x, z) {
+    let best = 0;
+    for (const o of this.obstacles) {
+      const v = Math.max(0, 1 - (Math.hypot(x - o.x, z - o.z) - o.r) / 0.3);
+      if (v > best) best = v;
+    }
+    return best;
+  }
+
+
   randomFood() {
     const h = this.cfg.arenaHalf - 0.3;
     return {
@@ -156,10 +201,16 @@ export class FlySim {
       this.logEvent(cause === 'predator' ? 'Хищник поймал муху' : 'Муха умерла от голода');
     }
     const h = this.cfg.arenaHalf - 0.5;
+    const spawn = { x: 0, z: 0 };
+    for (let k = 0; k < 60; k++) {
+      spawn.x = (this.rng() * 2 - 1) * h;
+      spawn.z = (this.rng() * 2 - 1) * h;
+      if (!this.obstacles.some((o) => Math.hypot(o.x - spawn.x, o.z - spawn.z) < o.r + 0.2)) break;
+    }
     this.fly = {
-      x: (this.rng() * 2 - 1) * h,
+      x: spawn.x,
       y: 0.6,
-      z: (this.rng() * 2 - 1) * h,
+      z: spawn.z,
       heading: this.rng() * Math.PI * 2,
       speed: 0,
       energy: this.cfg.energyMax,
@@ -203,8 +254,8 @@ export class FlySim {
     const threat = (q) => Math.max(0, 1 - Math.hypot(q[0] - p.x, q[1] - p.y, q[2] - p.z) / sense);
     f.odorL = this.odorAt(...pts[0]);
     f.odorR = this.odorAt(...pts[1]);
-    f.contactL = this.wallProximity(pts[0][0], pts[0][2]);
-    f.contactR = this.wallProximity(pts[1][0], pts[1][2]);
+    f.contactL = Math.max(this.wallProximity(pts[0][0], pts[0][2]), this.obstacleProx(pts[0][0], pts[0][2]));
+    f.contactR = Math.max(this.wallProximity(pts[1][0], pts[1][2]), this.obstacleProx(pts[1][0], pts[1][2]));
     f.threatL = threat(pts[0]);
     f.threatR = threat(pts[1]);
   }
@@ -268,6 +319,7 @@ export class FlySim {
       p.x = clamp(p.x, -h, h);
       p.z = clamp(p.z, -h, h);
     }
+    this.pushOut(p, 0.1);
     p.y = 0.55 + 0.25 * Math.sin(this.time * 1.3);
   }
 
@@ -290,6 +342,7 @@ export class FlySim {
     const h = cfg.arenaHalf - 0.05;
     f.x = clamp(f.x, -h, h);
     f.z = clamp(f.z, -h, h);
+    this.pushOut(f, 0.07);
 
     // Высота: коннектом не управляет ею. Муха снижается к ближайшей еде.
     let targetY = 0.6 + 0.3 * Math.sin(this.time * 0.25);
