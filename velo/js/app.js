@@ -49,7 +49,10 @@
   let baseLayer = null, elevLayer = null;
   const planLayer = L.layerGroup().addTo(map);
   let planLine = null;
-  const meMarker = L.marker([55.75, 37.62], { icon: L.divIcon({ className: 'vmk', iconSize: [0, 0], html: '' }), zIndexOffset: 1000, interactive: false }).addTo(map);
+  const meMarker = L.marker([55.75, 37.62], {
+    icon: L.divIcon({ className: 'vmk', iconSize: [0, 0], html: `<div class="me-arrow">${icon('arrow', 28)}</div>` }),
+    zIndexOffset: 1000, interactive: false,
+  }).addTo(map);
   meMarker.setOpacity(0);
 
   function baseTemplate(base = state.base) {
@@ -149,13 +152,58 @@
   }
 
   /** Своя позиция — простая стрелка, повёрнутая по направлению движения. */
-  function arrowIcon(heading) {
-    const rot = Math.round(heading || 0);
-    return L.divIcon({
-      className: 'vmk',
-      iconSize: [0, 0],
-      html: `<div class="me-arrow" style="transform:rotate(${rot}deg)">${icon('arrow', 28)}</div>`,
-    });
+  /*
+   * Куда смотрит стрелка (как в Яндекс Картах): в движении — по курсу GPS (в навигации — по линии маршрута),
+   * стоя на месте или медленно — по компасу телефона, поэтому стрелка поворачивается вместе с телефоном.
+   */
+  const compass = { hdg: null, raf: 0 };
+  let arrowDeg = null; // накопленный угол без скачков 359° → 0°
+
+  function arrowHeading() {
+    const f = shownPos();
+    const moving = f && f.spd != null && f.spd > 1.5 && f.hdg != null;
+    if (moving) return f.hdg;
+    if (compass.hdg != null) return compass.hdg;
+    return f ? f.hdg : null;
+  }
+
+  function applyArrow() {
+    const el = meMarker.getElement() && meMarker.getElement().querySelector('.me-arrow');
+    const h = arrowHeading();
+    if (!el || h == null) return;
+    if (arrowDeg == null) arrowDeg = h;
+    else arrowDeg += ((h - arrowDeg) % 360 + 540) % 360 - 180; // кратчайший поворот
+    el.style.transform = `rotate(${arrowDeg.toFixed(1)}deg)`;
+  }
+
+  function onOrientation(e) {
+    let h = null;
+    if (typeof e.webkitCompassHeading === 'number') h = e.webkitCompassHeading; // iOS
+    else if (e.alpha != null && (e.absolute || e.type === 'deviceorientationabsolute')) h = 360 - e.alpha;
+    if (h == null || isNaN(h)) return;
+    const scr = (screen.orientation && screen.orientation.angle) || root.orientation || 0;
+    h = (h + scr + 360) % 360;
+    // сглаживание: дрожание датчика не должно трясти стрелку
+    if (compass.hdg == null) compass.hdg = h;
+    else compass.hdg = (compass.hdg + ((((h - compass.hdg) % 360) + 540) % 360 - 180) * 0.25 + 360) % 360;
+    if (!compass.raf) compass.raf = requestAnimationFrame(() => { compass.raf = 0; applyArrow(); });
+  }
+
+  let compassOn = false, compassListening = false;
+  function startCompass() {
+    if (compassOn) return;
+    const D = root.DeviceOrientationEvent;
+    if (!D) return;
+    if (!compassListening) {
+      compassListening = true;
+      if ('ondeviceorientationabsolute' in root) root.addEventListener('deviceorientationabsolute', onOrientation);
+      else root.addEventListener('deviceorientation', onOrientation);
+    }
+    // iOS присылает данные компаса только после разрешения, а спросить его можно только по нажатию —
+    // поэтому повторяем запрос при нажатии на кнопку местоположения, пока не разрешат
+    if (typeof D.requestPermission === 'function') {
+      D.requestPermission().then(r => { if (r === 'granted') compassOn = true; }).catch(() => {});
+    } else compassOn = true;
   }
 
   function renderFollow() {
@@ -183,7 +231,7 @@
     const f = shownPos();
     if (!f) return;
     meMarker.setLatLng([f.lat, f.lon]).setOpacity(1);
-    meMarker.setIcon(arrowIcon(f.hdg));
+    applyArrow();
   }
 
   function onPos(p) {
@@ -268,6 +316,7 @@
   function startGps() {
     if (!navigator.geolocation && !NATIVE_BG) return setGps('GPS недоступен в этом браузере');
     gpsAllowed = true;
+    startCompass();
     startWebGps();
     syncBackgroundGps();
   }
@@ -936,6 +985,7 @@
     $$('.tabbar button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
     $('#btn-follow').addEventListener('click', () => {
+      startCompass(); // на iOS разрешение на компас даётся только по нажатию
       state.follow = !state.follow;
       renderFollow();
       if (state.follow && state.fix) { const at = shownPos(); map.panTo([at.lat, at.lon]); }

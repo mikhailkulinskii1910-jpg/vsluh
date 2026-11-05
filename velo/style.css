@@ -309,7 +309,7 @@ details summary { color: var(--muted); margin: 14px 0 6px; cursor: pointer; }
 .legal-body ul { padding-left: 20px; }
 
 /* собственная позиция: простая стрелка */
-.me-arrow { color: #fff; width: 28px; height: 28px; margin: -14px 0 0 -14px; filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000); }
+.me-arrow { color: #fff; width: 28px; height: 28px; margin: -14px 0 0 -14px; transition: transform .2s linear; will-change: transform; filter: drop-shadow(0 0 2px #000) drop-shadow(0 0 1px #000); }
 .me-arrow svg { width: 28px; height: 28px; fill: #fff; }
 
 /* ---------- минималистичная панель ---------- */
