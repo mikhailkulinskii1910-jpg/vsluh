@@ -34,8 +34,19 @@
     return (root.VELO_CONFIG || {}).serverUrl || '';
   }
 
+  /**
+   * Адрес «localhost» внутри APK — это сам телефон, сервера лобби там нет. Его сохраняли старые версии
+   * (пытались угадать сервер по адресу страницы) — из-за этого лобби не создавалось. Такой адрес не считаем сервером.
+   */
+  function isBogusServer(url) {
+    if (!url) return false;
+    const native = root.Capacitor && root.Capacitor.isNativePlatform && root.Capacitor.isNativePlatform();
+    return /^wss?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url) && (native || location.hostname !== 'localhost');
+  }
+
   function serverUrl() {
-    return $('#lb-server').value.trim() || S.settings.get().serverUrl || defaultServerUrl();
+    const url = $('#lb-server').value.trim() || S.settings.get().serverUrl || defaultServerUrl();
+    return isBogusServer(url) ? '' : url;
   }
 
   function mySkin() { return S.settings.get().skin || SK.DEFAULT; }
@@ -58,7 +69,12 @@
       if (net.mode === 'p2p') setStatus('Создаю лобби без сервера…');
       await net.send({ type: 'create', name: $('#lb-name').value.trim() });
       if (net.mode !== 'p2p') setStatus('');
-    } catch (e) { setStatus(e.message, true); }
+    } catch (e) { setStatus(serverHint(e), true); }
+  }
+
+  /** Сервер из поля «Сервер» недоступен — подсказываем, как создать лобби без него. */
+  function serverHint(e) {
+    return net.mode === 'ws' ? `${e.message}. Очистите поле «Сервер» — лобби до 10 человек работает без сервера.` : e.message;
   }
 
   async function join() {
@@ -70,7 +86,7 @@
       if (net.mode === 'p2p') setStatus('Ищу лобби по коду… это может занять до 30 секунд');
       await net.send({ type: 'join', code, name: $('#lb-name').value.trim() });
       if (net.mode !== 'p2p') setStatus('');
-    } catch (e) { setStatus(e.message, true); }
+    } catch (e) { setStatus(serverHint(e), true); }
   }
 
   function leave() {
@@ -183,7 +199,6 @@
       </li>`;
     });
     $('#lb-members').innerHTML = rows.join('') || '<li class="muted">Пока никого</li>';
-    $('#lb-skin-name').textContent = (SK.get(mySkin()).name);
   }
 
   /* ---------- управление хоста ---------- */
@@ -464,34 +479,6 @@
     $('#replay-card').hidden = false;
   });
 
-  /* ---------- курсор: выбор ---------- */
-  function renderSkinGrid(filter = '') {
-    const q = filter.trim().toLowerCase();
-    const cur = mySkin();
-    $('#skin-grid').innerHTML = SK.list
-      .filter(s => !q || s.name.toLowerCase().includes(q) || s.id.includes(q))
-      .map(s => `<button class="skin-opt ${s.id === cur ? 'on' : ''}" data-skin="${s.id}">${s.svg}<span>${esc(s.name)}</span></button>`)
-      .join('') || '<p class="muted">Ничего не найдено</p>';
-  }
-
-  function openSkins() {
-    $('#modal-title').textContent = `Мой курсор (${SK.count})`;
-    $('#skin-search').value = '';
-    renderSkinGrid();
-    $('#modal').hidden = false;
-  }
-
-  function closeSkins() { $('#modal').hidden = true; }
-
-  function chooseSkin(id) {
-    S.settings.set({ skin: id });
-    $('#lb-skin-name').textContent = SK.get(id).name;
-    closeSkins();
-    App.toast(`Курсор: ${SK.get(id).name}`);
-    if (ui.you) sendFix(App.getFix(), true);
-    if (ui.R) renderPlayers();
-  }
-
   /* ---------- отправка позиции ---------- */
   function sendFix(fix, force) {
     if (!fix || !ui.you || !net.connected) return;
@@ -516,8 +503,8 @@
   function bind() {
     const s = S.settings.get();
     $('#lb-name').value = s.name || '';
-    $('#lb-server').value = s.serverUrl || defaultServerUrl();
-    $('#lb-skin-name').textContent = SK.get(mySkin()).name;
+    if (isBogusServer(s.serverUrl)) S.settings.set({ serverUrl: '' }); // чистим старый неверный адрес
+    $('#lb-server').value = isBogusServer(s.serverUrl) ? '' : (s.serverUrl || defaultServerUrl());
     $('#lb-code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
     $('#lb-create').addEventListener('click', create);
     $('#lb-join').addEventListener('click', join);
@@ -529,14 +516,6 @@
         if (navigator.share) await navigator.share({ title: 'Велокарта', text });
         else { await navigator.clipboard.writeText(text); App.toast('Код скопирован'); }
       } catch { /* отмена шаринга */ }
-    });
-    $('#lb-skin').addEventListener('click', openSkins);
-    $('#modal-close').addEventListener('click', closeSkins);
-    $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeSkins(); });
-    $('#skin-search').addEventListener('input', e => renderSkinGrid(e.target.value));
-    $('#skin-grid').addEventListener('click', e => {
-      const b = e.target.closest('[data-skin]');
-      if (b) chooseSkin(b.dataset.skin);
     });
 
     $('#lb-host').addEventListener('click', e => {
