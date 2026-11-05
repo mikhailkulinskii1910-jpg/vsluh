@@ -82,5 +82,24 @@
     }
   }
 
-  root.VeloLobby = { Lobby };
+  /**
+   * Переключатель режимов лобби: без сервера (прямая связь, до 10 игроков) — по умолчанию;
+   * через сервер — если указан его адрес. Экран лобби работает с ним как с одним клиентом.
+   */
+  class AutoLobby {
+    constructor() {
+      this.ws = new Lobby();
+      this.p2p = root.VeloP2P ? new root.VeloP2P.P2PLobby() : null;
+      this.cur = this.p2p && (this.p2p.session || !this.ws.session) ? this.p2p : this.ws;
+    }
+    on(type, fn) { this.ws.on(type, fn); if (this.p2p) this.p2p.on(type, fn); }
+    use(mode) { this.cur = mode === 'p2p' && this.p2p ? this.p2p : this.ws; return this.cur; }
+    get mode() { return this.cur === this.p2p ? 'p2p' : 'ws'; }
+    get connected() { return this.cur.connected; }
+    get session() { return this.cur.session; }
+    send(obj) { return this.cur.send(obj); }
+    clearSession() { this.ws.clearSession(); if (this.p2p) this.p2p.clearSession(); }
+  }
+
+  root.VeloLobby = { Lobby, AutoLobby };
 })(window);

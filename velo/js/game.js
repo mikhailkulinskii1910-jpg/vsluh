@@ -1,9 +1,14 @@
+/* Правила лобби, гонки и погони. Чистая логика без сети — одна и та же для сервера (server/server.js)
+   и для телефона хоста в лобби без сервера (js/roomhost.js). В браузере — window.VeloGame, в Node — require. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory(require('./geo.js'), require('crypto').randomInt);
+  } else {
+    const rnd = n => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; };
+    root.VeloGame = factory(root.VeloGeo, rnd);
+  }
+})(typeof self !== 'undefined' ? self : this, function (G, randomInt) {
 'use strict';
-/* Правила лобби, гонки и погони. Чистая логика без сети: сервер (server.js) передаёт сюда
-   события и получает обратно изменения состояния, поэтому правила легко тестируются. */
-
-const { randomInt } = require('crypto');
-const G = require('../js/geo.js');
 
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // без похожих символов (0/O, 1/I)
 const COLORS = ['#e53935', '#1e88e5', '#43a047', '#fb8c00', '#8e24aa', '#00acc1', '#d81b60', '#6d4c41', '#3949ab', '#7cb342'];
@@ -320,8 +325,9 @@ function snapshot(room, now) {
   };
 }
 
-module.exports = {
+return {
   COLORS, START_DELAY_MS, FINISH_RADIUS_M, ON_ROUTE_M, STALE_MS, MAX_MEMBERS,
   newCode, createRoom, createMember, sanitizeFix, updateState, setRoute, setConfig,
   startGame, stopGame, tick, snapshot, publicMember, pickHost, HOST_OFFLINE_MS,
 };
+});

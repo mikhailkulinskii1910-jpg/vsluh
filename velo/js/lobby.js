@@ -5,7 +5,7 @@
   const $$ = (sel) => [...document.querySelectorAll(sel)];
   const esc = App.esc;
   const icon = (n, s = 16, cls = '') => IC.icon(n, s, cls);
-  const net = new root.VeloLobby.Lobby();
+  const net = new root.VeloLobby.AutoLobby();
 
   const ui = {
     R: null, you: null, sig: '', lastSend: 0, deadline: 0, deadlineKind: '', routeKey: '',
@@ -29,11 +29,9 @@
   }
 
   function defaultServerUrl() {
-    const configured = (root.VELO_CONFIG || {}).serverUrl;
-    if (configured) return configured; // адрес из js/config.js — для APK и сборок с отдельным сервером
-    const { protocol, host, hostname } = location;
-    if (!protocol.startsWith('http') || hostname.endsWith('github.io')) return '';
-    return (protocol === 'https:' ? 'wss://' : 'ws://') + host + '/ws';
+    // по умолчанию сервер не нужен: лобби до 10 игроков работает напрямую между телефонами.
+    // Сервер используется, только если адрес задан в js/config.js или введён в поле «Сервер».
+    return (root.VELO_CONFIG || {}).serverUrl || '';
   }
 
   function serverUrl() {
@@ -42,21 +40,24 @@
 
   function mySkin() { return S.settings.get().skin || SK.DEFAULT; }
 
+  /** Режим: адрес сервера указан — через сервер; иначе — без сервера (прямая связь, до 10 игроков). */
   async function connect() {
     const url = serverUrl();
-    if (!url) throw new Error('Укажите адрес сервера лобби (например wss://example.com/ws)');
     S.settings.set({ serverUrl: url, name: $('#lb-name').value.trim() });
-    if (net.connected && net.url === url) return;
-    if (net.ws) { net.wanted = false; net.ws.close(); net.wanted = true; }
-    await net.connect(url);
+    if (!url) { net.use('p2p'); return; }
+    const ws = net.use('ws');
+    if (ws.connected && ws.url === url) return;
+    if (ws.ws) { ws.wanted = false; ws.ws.close(); ws.wanted = true; }
+    await ws.connect(url);
   }
 
   async function create() {
     setStatus('Подключаюсь…');
     try {
       await connect();
-      net.send({ type: 'create', name: $('#lb-name').value.trim() });
-      setStatus('');
+      if (net.mode === 'p2p') setStatus('Создаю лобби без сервера…');
+      await net.send({ type: 'create', name: $('#lb-name').value.trim() });
+      if (net.mode !== 'p2p') setStatus('');
     } catch (e) { setStatus(e.message, true); }
   }
 
@@ -66,8 +67,9 @@
     setStatus('Подключаюсь…');
     try {
       await connect();
-      net.send({ type: 'join', code, name: $('#lb-name').value.trim() });
-      setStatus('');
+      if (net.mode === 'p2p') setStatus('Ищу лобби по коду… это может занять до 30 секунд');
+      await net.send({ type: 'join', code, name: $('#lb-name').value.trim() });
+      if (net.mode !== 'p2p') setStatus('');
     } catch (e) { setStatus(e.message, true); }
   }
 
@@ -120,6 +122,7 @@
   function buzz(p) { if (navigator.vibrate) navigator.vibrate(p); }
 
   net.on('joined', m => {
+    setStatus('');
     ui.you = m.you;
     applyRoom(m.room);
     showRoom(true);
@@ -132,6 +135,7 @@
     if (m.replay) playReplay(m.replay);
   });
   net.on('replay', m => playReplay(m.replay));
+  net.on('host-moved', () => App.toast('Хост вышел — теперь вы хост лобби', 5000));
   net.on('route', m => drawRoute(m.route));
   net.on('error', m => {
     if (/Не удалось вернуться/.test(m.message) && ui.R) {
@@ -165,7 +169,7 @@
     const R = ui.R, fix = App.getFix();
     const rows = R.members.map(m => {
       const dist = fix && m.lat != null ? G.distance(fix.lat, fix.lon, m.lat, m.lon) : null;
-      const stale = !m.online || m.seenAgoMs > 5000;
+      const stale = m.id === ui.you ? !net.connected : (!m.online || m.seenAgoMs > 5000); // своя строка — по состоянию связи
       const bat = m.bat == null ? '—' : `${Math.round(m.bat * 100)}%${m.charging ? ' ' + icon('bolt', 12, 'charging') : ''}`;
       const role = m.role === 'chaser' ? `<span class="badge red">догоняет</span>`
         : m.role === 'runner' ? `<span class="badge">беглец</span>` : '';
@@ -513,7 +517,6 @@
     const s = S.settings.get();
     $('#lb-name').value = s.name || '';
     $('#lb-server').value = s.serverUrl || defaultServerUrl();
-    if (!$('#lb-server').value) $('#lb-server-box').open = true; // адрес не задан (например, в APK) — поле сразу видно
     $('#lb-skin-name').textContent = SK.get(mySkin()).name;
     $('#lb-code').addEventListener('input', e => { e.target.value = e.target.value.toUpperCase(); });
     $('#lb-create').addEventListener('click', create);
@@ -582,7 +585,10 @@
       setStatus('Код из приглашения подставлен — введите имя и нажмите «Войти»');
       history.replaceState(null, '', location.pathname);
     }
-    if (net.session && serverUrl()) {
+    if (net.session && net.mode === 'p2p') {
+      setStatus('Возвращаюсь в лобби…');
+      net.send({ type: 'join', code: net.session.code, name: S.settings.get().name || '' });
+    } else if (net.session && serverUrl()) {
       setStatus('Возвращаюсь в лобби…');
       connect().catch(e => setStatus(e.message, true));
     }

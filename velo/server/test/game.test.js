@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const G = require('../../js/geo.js');
-const game = require('../game.js');
+const game = require('../../js/game.js');
 
 // 1 градус широты ≈ 111.2 км; смещение 0.0001° ≈ 11.1 м
 const DEG_PER_M = 1 / 111195;

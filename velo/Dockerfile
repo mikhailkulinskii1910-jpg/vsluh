@@ -9,7 +9,7 @@ RUN cd server && npm ci --omit=dev
 COPY index.html style.css manifest.webmanifest icon-192.png icon-512.png ./
 COPY vendor vendor
 COPY js js
-COPY server/server.js server/game.js server/
+COPY server/server.js server/
 ENV PORT=8080 NODE_ENV=production
 EXPOSE 8080
 USER node
