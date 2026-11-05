@@ -4,10 +4,10 @@
 import { FlySim, mulberry32 } from './sim.js';
 import { decode, randomGenome, mutate, crossover } from './genome.js';
 
-export function evaluateGenome(data, genome, { mode, seeds, seconds }) {
+export function evaluateGenome(data, genome, { mode, seeds, seconds, extra = {} }) {
   let total = 0, eaten = 0, predator = 0, starve = 0;
   for (const seed of seeds) {
-    const sim = new FlySim(data, { mode, seed, config: decode(genome) });
+    const sim = new FlySim(data, { mode, seed, config: { ...extra, ...decode(genome) } });
     const steps = Math.round(seconds * 60);
     for (let s = 0; s < steps; s++) sim.step(1 / 60);
     eaten += sim.eaten;
@@ -20,7 +20,9 @@ export function evaluateGenome(data, genome, { mode, seeds, seconds }) {
 }
 
 export class Evolution {
-  constructor(data, { mode = 'connectome', pop = 20, seconds = 25, seed = Date.now() % 100000 } = {}) {
+  // extra — общие настройки мира для всех геномов (например, рефлексы вкл/выкл)
+  constructor(data, { mode = 'connectome', pop = 20, seconds = 25, seed = Date.now() % 100000, extra = {} } = {}) {
+    this.extra = extra;
     this.data = data;
     this.mode = mode;
     this.popSize = pop;
@@ -47,7 +49,7 @@ export class Evolution {
     // одни и те же случайные миры для всей популяции в этом поколении
     const seeds = [1000 + this.gen * 2, 1001 + this.gen * 2];
     const results = this.pop.map((g) =>
-      evaluateGenome(this.data, g, { mode: this.mode, seeds, seconds: this.seconds }));
+      evaluateGenome(this.data, g, { mode: this.mode, seeds, seconds: this.seconds, extra: this.extra }));
     const order = results.map((_, i) => i).sort((a, b) => results[b].fitness - results[a].fitness);
     const top = results[order[0]];
     const mean = results.reduce((s, r) => s + r.fitness, 0) / results.length;
@@ -63,7 +65,7 @@ export class Evolution {
     }
     this.pop = next;
     // проверка лучшего генома на фиксированных мирах, одинаковых для всех поколений
-    const bench = evaluateGenome(this.data, this.best, { mode: this.mode, seeds: [7, 8], seconds: this.seconds });
+    const bench = evaluateGenome(this.data, this.best, { mode: this.mode, seeds: [7, 8], seconds: this.seconds, extra: this.extra });
     this.history[this.history.length - 1].bench = bench.fitness;
     const out = { gen: this.gen, best: this.best, bestFit: this.bestFit, mean, bestEaten: top.eaten,
                   bestPredator: top.predator, bestStarve: top.starve, bench: bench.fitness };
