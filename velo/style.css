@@ -25,7 +25,7 @@ button .ico { margin-right: 2px; }
 /* тёмная схема: инвертируется только подложка; контраст выше — дорожки и тропы читаются лучше */
 body.base-osm .base-tiles { filter: invert(1) grayscale(1) contrast(1.5) brightness(1.05); }
 /* велодорожки CyclOSM (синие) → ярко-зелёные на чёрной карте */
-.bike-tiles { opacity: .7; filter: hue-rotate(-120deg) saturate(1.6) brightness(1.6); }
+.bike-tiles { opacity: .75; filter: hue-rotate(-120deg) saturate(1.6) brightness(1.7); }
 .leaflet-control-attribution { background: rgba(0,0,0,.7) !important; color: #888 !important; }
 .leaflet-container { font-family: inherit; }
 .leaflet-control-attribution { font-size: 10px; width: 20px; height: 20px; border-radius: 50%; overflow: hidden; white-space: nowrap; color: transparent !important; text-align: center; line-height: 20px; cursor: pointer; background: rgba(0,0,0,.6) !important; padding: 0 !important; }
@@ -345,3 +345,10 @@ body.navigating .search { display: none; }
   border: 1px solid var(--line); border-radius: 16px; padding: 8px 12px 4px; box-shadow: var(--shadow);
 }
 .point-menu b { font-size: 14px; }
+
+/* легенда режима «Велодорожки» */
+.bike-legend { display: flex; flex-direction: column; gap: 6px; padding: 6px 12px 8px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 2px; }
+.bike-legend span { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.bike-legend i { display: inline-block; width: 22px; height: 0; border-top: 4px solid #4ade80; border-radius: 2px; }
+.bike-legend i.lg-dash { border-top: 3px dashed #a7f3c0; }
+.bike-legend i.lg-thin { border-top: 2px solid #4ade80; opacity: .75; }

@@ -11,7 +11,11 @@
   // ширина линии по зуму
   const w = (...stops) => ['interpolate', ['exponential', 1.5], ['zoom'], ...stops];
   const cls = (...c) => ['in', ['get', 'class'], ['literal', c]];
+  // велодорожки: отдельные (subclass=cycleway) и совмещённые вело-пешеходные (bicycle=designated) — на любом типе пути
   const isCycleway = ['any', ['==', ['get', 'subclass'], 'cycleway'], ['==', ['get', 'bicycle'], 'designated']];
+  // можно ехать на велосипеде: тропы, дворовые и служебные проезды с bicycle=yes (кроме «нельзя» и «спешиться»)
+  const bikeAllowed = ['all', ['==', ['get', 'bicycle'], 'yes'], ['!', isCycleway]];
+  const BIKE_ALLOWED = '#a7f3c0';
 
   function line(id, filter, color, width, extra = {}) {
     return {
@@ -57,8 +61,15 @@
         line('motorway', cls('motorway', 'trunk'), '#ffffff', w(6, 0.6, 14, 4, 18, 16)),
 
         // велодорожки — зелёные, поверх остальных линий
-        line('cycleway', ['all', cls('path', 'track', 'minor', 'service'), isCycleway], BIKE, w(12, 1, 14, 2, 18, 5), {
-          minzoom: 11, layout: { visibility: bike ? 'visible' : 'none' },
+        // режим «Велодорожки»: подложка-свечение, разрешённые пути пунктиром, велодорожки сплошной зелёной
+        line('cycleway-glow', isCycleway, BIKE, w(11, 3, 14, 6, 18, 14), {
+          minzoom: 10, layout: { visibility: bike ? 'visible' : 'none' }, paint: { 'line-opacity': 0.18, 'line-blur': 2 },
+        }),
+        line('cycleway-allowed', bikeAllowed, BIKE_ALLOWED, w(13, 0.9, 18, 3.2), {
+          minzoom: 13, layout: { visibility: bike ? 'visible' : 'none' }, paint: { 'line-dasharray': [2, 1.2], 'line-opacity': 0.9 },
+        }),
+        line('cycleway', isCycleway, BIKE, w(10, 1, 14, 2.6, 18, 6), {
+          minzoom: 10, layout: { visibility: bike ? 'visible' : 'none' },
         }),
 
         // подписи
@@ -83,5 +94,6 @@
     } catch { return false; }
   }
 
-  root.VeloVectorStyle = { build, supported, BIKE };
+  const BIKE_LAYERS = ['cycleway-glow', 'cycleway-allowed', 'cycleway'];
+  root.VeloVectorStyle = { build, supported, BIKE, BIKE_ALLOWED, BIKE_LAYERS };
 })(window);

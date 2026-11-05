@@ -60,7 +60,7 @@
   function renderAttribution() {
     const parts = [state.base === 'sat' ? 'Снимки © Esri, Maxar, Earthstar Geographics'
       : vectorOn ? 'Карта © OpenFreeMap, OpenMapTiles, участники OpenStreetMap' : 'Карта © участники OpenStreetMap'];
-    if (state.bike && !vectorOn) parts.push('велодорожки: CyclOSM');
+    if (state.bike) parts.push('велополосы и веломаршруты: CyclOSM');
     if (state.elev) parts.push('высоты: Terrain Tiles (Mapzen, AWS)');
     parts.push('маршруты: BRouter', 'поиск: Photon (komoot)');
     const el = document.getElementById('attr-text');
@@ -69,18 +69,25 @@
 
   /** Слой велодорожек CyclOSM поверх любой подложки (выделяет велодорожки и велополосы). */
   let bikeLayer = null;
+  /**
+   * Режим «Велодорожки» выделяет всю велоинфраструктуру:
+   * векторная схема — велодорожки, совмещённые вело-пешеходные и пути, где можно ехать (bicycle=yes);
+   * слой CyclOSM — то, чего нет в векторных тайлах: велополосы на дорогах и веломаршруты.
+   */
   function applyBikeLayer() {
     if (bikeLayer) { map.removeLayer(bikeLayer); bikeLayer = null; }
     if (vectorOn) {
-      // векторная схема рисует велодорожки сама — переключаем видимость слоя стиля
       const m = baseLayer.getMaplibreMap && baseLayer.getMaplibreMap();
-      const setVis = () => { if (m && m.getLayer('cycleway')) m.setLayoutProperty('cycleway', 'visibility', state.bike ? 'visible' : 'none'); };
+      const setVis = () => VS.BIKE_LAYERS.forEach(id => { if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', state.bike ? 'visible' : 'none'); });
       if (m) { if (m.isStyleLoaded()) setVis(); else m.once('styledata', setVis); }
-    } else if (state.bike) {
+    }
+    if (state.bike) {
       bikeLayer = L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm-lite/{z}/{x}/{y}.png', { subdomains: 'abc', maxZoom: 19, className: 'bike-tiles', zIndex: 5 }).addTo(map);
     }
     const b = document.querySelector('#layer-pop [data-bike]');
     if (b) b.classList.toggle('on', state.bike);
+    const lg = document.getElementById('bike-legend');
+    if (lg) lg.hidden = !state.bike;
     S.settings.set({ bike: state.bike });
     renderAttribution();
   }
