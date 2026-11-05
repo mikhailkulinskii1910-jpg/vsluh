@@ -1,16 +1,21 @@
 // Ядро симуляции мухи: нейросеть на основе подсети FlyWire + простой мир.
-// Не зависит от DOM, поэтому его можно запускать и в браузере, и в Node.
+// Не зависит от DOM, поэтому работает и в браузере, и в Node, и в Web Worker.
 
 export const CONFIG = {
+  // нейроны
   decay: 0.85,          // утечка мембраны за шаг
   threshold: 0.6,       // порог возбуждения
   refractory: 2,        // шагов без спайков после разряда
   weightScale: 0.3,     // вес синапса = min(число синапсов, maxSyn) * weightScale
   maxSyn: 20,
   noise: 0.01,          // фоновый шум на каждый нейрон
+  // входы
   odorGain: 0.6,        // сила обонятельного входа
-  contactGain: 0.8,     // сила механосенсорного входа (касание стены)
-  hungerGain: 0.15,     // голод усиливает обонятельные входы (поиск еды)
+  contactGain: 0.8,     // сила механосенсорного входа от стен
+  hungerGain: 0.15,     // голод усиливает обонятельные входы
+  predatorGain: 0.9,    // сила механосенсорного входа от воздушного возмущения хищника
+  predatorSense: 0.8,   // радиус, на котором муха чувствует хищника
+  // мир
   energyMax: 100,
   energyDrain: 0.5,     // расход энергии в покое, ед./с
   moveCost: 0.8,        // дополнительный расход на движение, ед./с при скорости 1
@@ -19,10 +24,13 @@ export const CONFIG = {
   foodCount: 12,
   odorSigma: 1.2,
   antennaOffset: 0.1,
-  arenaHalf: 2.0,       // полуразмер арены по X и Z
+  arenaHalf: 2.0,
   arenaTop: 1.4,
+  predatorSpeed: 0.35,
+  predatorKill: 0.22,
+  // моторы
   motorSpeed: 3.0,      // скорость полёта на единицу активности моторных нейронов
-  motorTurn: 3.0,       // скорость поворота (рад/с) на единицу разницы активности L и R
+  motorTurn: 3.0,       // скорость поворота (рад/с) на единицу разницы L и R
 };
 
 // Детерминированный генератор случайных чисел (mulberry32).
@@ -50,40 +58,55 @@ export class FlySim {
     this.rng = mulberry32(seed);
     this.N = data.ids.length;
     this.buildNetwork();
+    this.updateWeights();
     this.buildGroups();
 
     this.time = 0;
     this.lives = 0;
     this.eaten = 0;
+    this.deaths = { starve: 0, predator: 0 };
+    this.events = [];
     this.history = [];
     this.historyTimer = 0;
     this.food = [];
     for (let k = 0; k < this.cfg.foodCount; k++) this.food.push(this.randomFood());
-    this.resetFly();
+    this.predator = this.randomPredator();
+    this.resetFly(null);
+  }
+
+  // Меняет параметры на лету, без сброса мира (нужно для эволюции в браузере)
+  setConfig(config) {
+    this.cfg = { ...CONFIG, ...config };
+    this.updateWeights();
   }
 
   buildNetwork() {
-    const { data, N } = this;
+    const { data } = this;
     const src = Int32Array.from(data.src);
     const dst = Int32Array.from(data.dst);
     if (this.mode === 'random') {
-      // Перемешиваем цели, сохраняя источники и веса
+      // Перемешиваем цели, сохраняя источники и знаки
       for (let i = dst.length - 1; i > 0; i--) {
         const j = Math.floor(this.rng() * (i + 1));
         const t = dst[i]; dst[i] = dst[j]; dst[j] = t;
       }
     }
-    const w = new Float32Array(src.length);
-    for (let e = 0; e < src.length; e++) {
+    this.src = src;
+    this.dst = dst;
+    this.w = new Float32Array(src.length);
+    this.I = new Float32Array(this.N);
+    this.v = new Float32Array(this.N);
+    this.spike = new Uint8Array(this.N);
+    this.refr = new Uint8Array(this.N);
+    this.rate = new Float32Array(this.N);
+  }
+
+  updateWeights() {
+    const { data, w, cfg } = this;
+    for (let e = 0; e < w.length; e++) {
       const sign = data.inhibitory[e] ? -1 : 1;
-      w[e] = sign * Math.min(data.syn[e], this.cfg.maxSyn) * this.cfg.weightScale;
+      w[e] = sign * Math.min(data.syn[e], cfg.maxSyn) * cfg.weightScale;
     }
-    this.src = src; this.dst = dst; this.w = w;
-    this.I = new Float32Array(N);
-    this.v = new Float32Array(N);
-    this.spike = new Uint8Array(N);
-    this.refr = new Uint8Array(N);
-    this.rate = new Float32Array(N);
   }
 
   buildGroups() {
@@ -112,7 +135,26 @@ export class FlySim {
     };
   }
 
-  resetFly() {
+  randomPredator() {
+    const h = this.cfg.arenaHalf - 0.4;
+    return {
+      x: (this.rng() * 2 - 1) * h,
+      y: 0.5,
+      z: (this.rng() * 2 - 1) * h,
+      heading: this.rng() * Math.PI * 2,
+    };
+  }
+
+  logEvent(text) {
+    this.events.push({ t: this.time, text });
+    if (this.events.length > 8) this.events.shift();
+  }
+
+  resetFly(cause) {
+    if (cause) {
+      this.deaths[cause] += 1;
+      this.logEvent(cause === 'predator' ? 'Хищник поймал муху' : 'Муха умерла от голода');
+    }
     const h = this.cfg.arenaHalf - 0.5;
     this.fly = {
       x: (this.rng() * 2 - 1) * h,
@@ -120,10 +162,10 @@ export class FlySim {
       z: (this.rng() * 2 - 1) * h,
       heading: this.rng() * Math.PI * 2,
       speed: 0,
-      turn: 0,
       energy: this.cfg.energyMax,
       odorL: 0, odorR: 0,
       contactL: 0, contactR: 0,
+      threatL: 0, threatR: 0,
       trail: [],
     };
     // нейронная сеть сбрасывается в покой
@@ -152,12 +194,19 @@ export class FlySim {
     const f = this.fly;
     const a = this.cfg.antennaOffset;
     const rx = Math.cos(f.heading), rz = -Math.sin(f.heading); // вектор «вправо»
-    const lx = f.x + rx * a, lz = f.z + rz * a;
-    const rxA = f.x - rx * a, rzA = f.z - rz * a;
-    f.odorL = this.odorAt(lx, f.y, lz);
-    f.odorR = this.odorAt(rxA, f.y, rzA);
-    f.contactL = this.wallProximity(lx, lz);
-    f.contactR = this.wallProximity(rxA, rzA);
+    const pts = [
+      [f.x + rx * a, f.y, f.z + rz * a],
+      [f.x - rx * a, f.y, f.z - rz * a],
+    ];
+    const p = this.predator;
+    const sense = this.cfg.predatorSense;
+    const threat = (q) => Math.max(0, 1 - Math.hypot(q[0] - p.x, q[1] - p.y, q[2] - p.z) / sense);
+    f.odorL = this.odorAt(...pts[0]);
+    f.odorR = this.odorAt(...pts[1]);
+    f.contactL = this.wallProximity(pts[0][0], pts[0][2]);
+    f.contactR = this.wallProximity(pts[1][0], pts[1][2]);
+    f.threatL = threat(pts[0]);
+    f.threatR = threat(pts[1]);
   }
 
   // ---- нейросеть -----------------------------------------------------------
@@ -176,8 +225,10 @@ export class FlySim {
     const odorDriveR = f.odorR * cfg.odorGain + hunger * cfg.hungerGain;
     for (const i of this.olfL) I[i] += odorDriveL;
     for (const i of this.olfR) I[i] += odorDriveR;
-    for (const i of this.mechL) I[i] += f.contactL * cfg.contactGain;
-    for (const i of this.mechR) I[i] += f.contactR * cfg.contactGain;
+    const mechL = f.contactL * cfg.contactGain + f.threatL * cfg.predatorGain;
+    const mechR = f.contactR * cfg.contactGain + f.threatR * cfg.predatorGain;
+    for (const i of this.mechL) I[i] += mechL;
+    for (const i of this.mechR) I[i] += mechR;
 
     // фоновый шум и обновление мембран
     for (let i = 0; i < N; i++) {
@@ -206,9 +257,24 @@ export class FlySim {
 
   // ---- шаг мира ------------------------------------------------------------
 
-  step(dt = this.cfg.dt ?? 1 / 60) {
+  stepPredator(dt) {
+    const p = this.predator;
+    const h = this.cfg.arenaHalf - 0.1;
+    p.heading += (this.rng() - 0.5) * 2.5 * dt;
+    p.x += Math.sin(p.heading) * this.cfg.predatorSpeed * dt;
+    p.z += Math.cos(p.heading) * this.cfg.predatorSpeed * dt;
+    if (Math.abs(p.x) > h || Math.abs(p.z) > h) {
+      p.heading += Math.PI;
+      p.x = clamp(p.x, -h, h);
+      p.z = clamp(p.z, -h, h);
+    }
+    p.y = 0.55 + 0.25 * Math.sin(this.time * 1.3);
+  }
+
+  step(dt = 1 / 60) {
     const cfg = this.cfg;
     this.time += dt;
+    this.stepPredator(dt);
     this.sense();
     this.neuralStep();
 
@@ -216,19 +282,16 @@ export class FlySim {
     const rL = this.meanRate(this.motL);
     const rR = this.meanRate(this.motR);
     f.speed = clamp(cfg.motorSpeed * (rL + rR) / 2, 0, 1.5);
-    f.turn = cfg.motorTurn * (rL - rR);
-    f.heading += f.turn * dt;
+    f.heading += cfg.motorTurn * (rL - rR) * dt;
 
     // Перемещение в горизонтальной плоскости
-    const fx = Math.sin(f.heading), fz = Math.cos(f.heading);
-    f.x += fx * f.speed * dt;
-    f.z += fz * f.speed * dt;
+    f.x += Math.sin(f.heading) * f.speed * dt;
+    f.z += Math.cos(f.heading) * f.speed * dt;
     const h = cfg.arenaHalf - 0.05;
     f.x = clamp(f.x, -h, h);
     f.z = clamp(f.z, -h, h);
 
-    // Высота: в этом прототипе коннектом не управляет высотой.
-    // Муха снижается к ближайшей еде, а иначе медленно меняет высоту.
+    // Высота: коннектом не управляет ею. Муха снижается к ближайшей еде.
     let targetY = 0.6 + 0.3 * Math.sin(this.time * 0.25);
     if (f.odorL + f.odorR > 0.3) {
       let best = null, bd = Infinity;
@@ -240,26 +303,35 @@ export class FlySim {
     }
     f.y = clamp(f.y + clamp(1.5 * (targetY - f.y), -0.8, 0.8) * dt, 0.08, cfg.arenaTop);
 
+    // Хищник
+    const p = this.predator;
+    if (Math.hypot(p.x - f.x, p.y - f.y, p.z - f.z) < cfg.predatorKill) {
+      this.resetFly('predator');
+      this.predator = this.randomPredator();
+      return this.afterStep(dt, rL, rR);
+    }
+
     // Энергия и еда
     f.energy -= (cfg.energyDrain + cfg.moveCost * f.speed) * dt;
     for (let k = 0; k < this.food.length; k++) {
       const food = this.food[k];
-      const d = Math.hypot(food.x - f.x, food.y - f.y, food.z - f.z);
-      if (d < cfg.eatRadius) {
+      if (Math.hypot(food.x - f.x, food.y - f.y, food.z - f.z) < cfg.eatRadius) {
         f.energy = Math.min(cfg.energyMax, f.energy + cfg.foodGain);
         this.eaten += 1;
+        this.logEvent('Муха съела еду');
         this.food[k] = this.randomFood();
       }
     }
+    if (f.energy <= 0) this.resetFly('starve');
 
-    if (f.energy <= 0) {
-      this.resetFly();
-    }
+    return this.afterStep(dt, rL, rR);
+  }
 
-    // След полёта и история для графика
+  afterStep(dt, rL, rR) {
+    const f = this.fly;
+    f.lifeTime = (f.lifeTime || 0) + dt;
     f.trail.push([f.x, f.y, f.z]);
     if (f.trail.length > 240) f.trail.shift();
-
     this.historyTimer += dt;
     if (this.historyTimer >= 0.1) {
       this.historyTimer = 0;

@@ -3,55 +3,83 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Муха на коннектоме</title>
+<title>Муха на коннектоме · эволюция</title>
 <style>
-  :root { --bg:#0b0d12; --panel:rgba(18,22,30,.82); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; }
+  :root { --bg:#0b0d12; --panel:rgba(18,22,30,.84); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; --warn:#ff7043; }
   @media (prefers-color-scheme: light) {
-    :root { --bg:#eef1f5; --panel:rgba(255,255,255,.9); --line:#d0d6e0; --text:#1b2330; --muted:#5d6878; --accent:#0f8a6b; }
+    :root { --bg:#eef1f5; --panel:rgba(255,255,255,.92); --line:#d0d6e0; --text:#1b2330; --muted:#5d6878; --accent:#0f8a6b; }
   }
-  :root[data-theme="dark"] { --bg:#0b0d12; --panel:rgba(18,22,30,.82); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
   #scene { position:fixed; inset:0; }
-  .panel { position:fixed; background:var(--panel); border:1px solid var(--line); border-radius:12px; backdrop-filter: blur(6px); padding:12px 14px; font-size:14px; }
-  #stats { top:12px; left:12px; width:240px; }
-  #stats h1 { font-size:16px; margin:0 0 8px; font-weight:600; }
-  .row { display:flex; justify-content:space-between; margin:3px 0; color:var(--muted); }
-  .row b { color:var(--text); font-weight:600; }
+  .panel { position:fixed; background:var(--panel); border:1px solid var(--line); border-radius:12px; backdrop-filter: blur(6px); padding:12px 14px; font-size:14px; box-sizing:border-box; }
+  #left { position:fixed; top:12px; left:12px; width:270px; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 24px); overflow:auto; }
+  #left .panel { position:static; }
+  h1 { font-size:16px; margin:0 0 8px; font-weight:600; }
+  h2 { font-size:14px; margin:0 0 6px; font-weight:600; }
+  .row { display:flex; justify-content:space-between; gap:8px; margin:3px 0; color:var(--muted); }
+  .row b { color:var(--text); font-weight:600; text-align:right; }
   .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:6px; }
   .bar > i { display:block; height:100%; width:0%; background:var(--accent); transition: width .15s linear; }
+  #log { margin:8px 0 0; padding:0; list-style:none; font-size:12px; color:var(--muted); min-height:60px; }
+  #log li { margin:2px 0; }
+  #log li.predator { color:var(--warn); }
   #controls { top:12px; right:12px; width:260px; }
   #controls label { display:block; color:var(--muted); font-size:12px; margin-top:8px; }
   select, button { font: inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; margin-top:4px; }
   button { cursor:pointer; }
   button:hover { border-color:var(--accent); }
   .btns { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
-  #chartPanel { bottom:12px; left:12px; width:340px; }
-  #chartPanel canvas { width:100%; height:110px; display:block; }
+  .check { display:flex; gap:6px; align-items:center; color:var(--muted); font-size:13px; margin-top:8px; }
+  #chartPanel { bottom:12px; left:50%; transform:translateX(-50%); width:min(440px, calc(100vw - 24px)); }
+  #chartPanel canvas, #evoChart { width:100%; height:110px; display:block; }
   .legend { display:flex; gap:10px; font-size:12px; color:var(--muted); margin-top:4px; flex-wrap:wrap; }
   .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; background:var(--c); }
   #brainPanel { bottom:12px; right:12px; width:260px; }
-  #brainPanel canvas { width:100%; height:240px; display:block; border-radius:8px; }
-  #info { position:fixed; top:12px; left:50%; transform:translateX(-50%); font-size:12px; color:var(--muted); max-width:460px; text-align:center; pointer-events:none; }
+  #brainPanel canvas { width:100%; height:220px; display:block; border-radius:8px; }
+  #status { font-size:12px; color:var(--muted); margin-top:6px; min-height:16px; }
   @media (max-width: 760px) {
-    #stats { width:auto; right:12px; }
-    #controls { top:auto; bottom:auto; top:150px; width:auto; left:12px; right:12px; }
-    #chartPanel { width:auto; left:12px; right:12px; }
+    #left { width:auto; right:12px; max-height:45vh; }
+    #controls { top:auto; bottom:auto; width:auto; left:12px; right:12px; top:calc(55vh); }
     #brainPanel { display:none; }
-    #info { display:none; }
+    #chartPanel { bottom:8px; width:calc(100vw - 24px); }
   }
 </style>
 </head>
 <body>
 <div id="scene"></div>
 
-<div id="stats" class="panel">
-  <h1>Муха на коннектоме</h1>
-  <div class="row"><span>Жизнь</span><b id="lives">–</b></div>
-  <div class="row"><span>Время жизни</span><b id="age">–</b></div>
-  <div class="row"><span>Съедено еды</span><b id="eaten">–</b></div>
-  <div class="row"><span>Энергия</span><b id="energyText">–</b></div>
-  <div class="bar"><i id="energyBar"></i></div>
-  <div class="row" style="margin-top:8px"><span>Нейронов / связей</span><b id="netSize">–</b></div>
+<div id="left">
+  <div id="stats" class="panel">
+    <h1>Муха на коннектоме</h1>
+    <div class="row"><span>Жизнь</span><b id="lives">–</b></div>
+    <div class="row"><span>Время жизни</span><b id="age">–</b></div>
+    <div class="row"><span>Съедено еды</span><b id="eaten">–</b></div>
+    <div class="row"><span>Смерти: хищник / голод</span><b id="deaths">–</b></div>
+    <div class="row"><span>Энергия</span><b id="energyText">–</b></div>
+    <div class="bar"><i id="energyBar"></i></div>
+    <ul id="log"></ul>
+  </div>
+
+  <div id="evo" class="panel">
+    <h2>Эволюция</h2>
+    <div class="row"><span>Поколение</span><b id="gen">–</b></div>
+    <div class="row"><span>Лучший фитнес (поколение)</span><b id="bestFit">–</b></div>
+    <div class="row"><span>Проверка на фикс. мирах</span><b id="bench">–</b></div>
+    <div class="row"><span>Средний фитнес</span><b id="meanFit">–</b></div>
+    <div class="row"><span>Съедено у лучшего</span><b id="bestEaten">–</b></div>
+    <canvas id="evoChart" width="540" height="220"></canvas>
+    <div class="legend">
+      <span style="--c:#7ee0c3">проверка</span>
+      <span style="--c:#ff7043">лучший</span>
+      <span style="--c:#8b95a7">среднее</span>
+    </div>
+    <label class="check"><input type="checkbox" id="useEvolved" checked> Использовать лучшего в сцене</label>
+    <div class="btns">
+      <button id="evoBtn">Остановить</button>
+      <button id="saveBtn">Скачать геном</button>
+    </div>
+    <div id="status"></div>
+  </div>
 </div>
 
 <div id="controls" class="panel">
@@ -76,7 +104,7 @@
 </div>
 
 <div id="chartPanel" class="panel">
-  <canvas id="chart" width="680" height="220"></canvas>
+  <canvas id="chart" width="880" height="220"></canvas>
   <div class="legend">
     <span style="--c:#ff7043">моторы</span>
     <span style="--c:#4fc3f7">сенсоры</span>
@@ -85,11 +113,10 @@
 </div>
 
 <div id="brainPanel" class="panel">
-  <div class="row" style="margin-bottom:6px"><span>Нейроны в их позициях</span><b>2000</b></div>
+  <div class="row" style="margin-bottom:6px"><span>2000 нейронов в их позициях</span></div>
   <canvas id="brain"></canvas>
+  <div class="row" style="margin-top:6px"><span>Цвет: сенсорные · моторные · промежуточные</span></div>
 </div>
-
-<div id="info">Цвет нейрона — тип: сенсорный (голубой и зелёный), моторный (оранжевый), промежуточный (фиолетовый). Яркость — текущая активность.</div>
 
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
@@ -99,6 +126,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { FlySim, CONFIG } from './sim.js';
+import { GENES, decode } from './genome.js';
 
 const DT = 1 / 60;
 const $ = (id) => document.getElementById(id);
@@ -135,7 +163,6 @@ const boxEdges = new THREE.LineSegments(
 boxEdges.position.y = CONFIG.arenaTop / 2;
 scene.add(boxEdges);
 
-// Муха из простых фигур
 const flyMat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, ...extra });
 const fly = new THREE.Group();
 const thorax = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), flyMat(0x6b4a2b));
@@ -151,7 +178,6 @@ const eyeR = eyeL.clone();
 eyeL.position.set(0.045, 0.035, 0.17);
 eyeR.position.set(-0.045, 0.035, 0.17);
 fly.add(thorax, head, abdomen, eyeL, eyeR);
-
 const wingGeo = new THREE.CircleGeometry(0.2, 16);
 wingGeo.scale(0.5, 1, 1);
 const wingMat = new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
@@ -160,7 +186,6 @@ const wingR = new THREE.Mesh(wingGeo, wingMat);
 wingL.position.set(0.05, 0.07, -0.02);
 wingR.position.set(-0.05, 0.07, -0.02);
 fly.add(wingL, wingR);
-
 const legs = [];
 const legGeo = new THREE.CylinderGeometry(0.008, 0.006, 0.18, 5);
 legGeo.translate(0, -0.09, 0);
@@ -173,7 +198,22 @@ for (let k = 0; k < 6; k++) {
 }
 scene.add(fly);
 
-// След полёта
+// Хищник: тёмно-красное тело, крылья и радиус, на котором муха его чувствует
+const predator = new THREE.Group();
+const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), flyMat(0x7a1f1f, { emissive: 0x2a0606 }));
+pBody.scale.set(1, 0.8, 1.6);
+const pWingMat = new THREE.MeshStandardMaterial({ color: 0xffb3a0, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false });
+const pWingL = new THREE.Mesh(new THREE.CircleGeometry(0.22, 12), pWingMat);
+const pWingR = pWingL.clone();
+pWingL.position.set(0.1, 0.05, 0); pWingL.rotation.set(-Math.PI / 2, 0, 0.3);
+pWingR.position.set(-0.1, 0.05, 0); pWingR.rotation.set(-Math.PI / 2, 0, -0.3);
+predator.add(pBody, pWingL, pWingR);
+scene.add(predator);
+const senseRing = new THREE.Mesh(
+  new THREE.SphereGeometry(CONFIG.predatorSense, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff7043, transparent: true, opacity: 0.04, wireframe: true, depthWrite: false }));
+scene.add(senseRing);
+
 const TRAIL = 240;
 const trailGeo = new THREE.BufferGeometry();
 trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL * 3), 3));
@@ -181,7 +221,6 @@ trailGeo.setDrawRange(0, 0);
 const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0x7ee0c3, transparent: true, opacity: 0.6 }));
 scene.add(trail);
 
-// Еда
 const foodGeo = new THREE.SphereGeometry(0.09, 14, 10);
 const foodMat = new THREE.MeshStandardMaterial({ color: 0x59d27a, emissive: 0x1d6b33, roughness: 0.4 });
 const foodMeshes = [];
@@ -208,11 +247,14 @@ let acc = 0;
 let lastT = performance.now();
 let brainPoints = null;
 let brainColors = null;
+let evoWorker = null;
+let evoRunning = false;
+let evoState = null;     // последнее сообщение от воркера
+let lastLogKey = '';
 
 function buildBrainPoints() {
   const N = data.ids.length;
-  const pos = new Float32Array(N * 3);
-  for (let i = 0; i < N * 3; i++) pos[i] = data.pos[i] * 1.0;
+  const pos = Float32Array.from(data.pos);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   brainColors = new Float32Array(N * 3);
@@ -227,8 +269,7 @@ function updateBrainColors() {
   const N = data.ids.length;
   const base = GROUP_COLORS.map((c) => new THREE.Color(c));
   for (let i = 0; i < N; i++) {
-    const g = data.group[i];
-    const c = base[g];
+    const c = base[data.group[i]];
     const a = 0.12 + 0.88 * Math.min(1, sim.rate[i] * 6);
     brainColors[i * 3] = c.r * a;
     brainColors[i * 3 + 1] = c.g * a;
@@ -240,22 +281,105 @@ function updateBrainColors() {
 function rebuildFood() {
   for (const m of foodMeshes) scene.remove(m);
   foodMeshes.length = 0;
-  for (const _ of sim.food) {
+  for (let k = 0; k < sim.food.length; k++) {
     const m = new THREE.Mesh(foodGeo, foodMat);
     scene.add(m);
     foodMeshes.push(m);
   }
 }
 
-function newSim() {
-  const mode = $('mode').value;
-  sim = new FlySim(data, { mode, seed: 1 + Math.floor(Math.random() * 1e6) });
-  rebuildFood();
-  updateNetInfo();
+// Текущие параметры: лучший геном эволюции или значения по умолчанию
+function currentConfig() {
+  if ($('useEvolved').checked && evoState && evoState.best) return decode(evoState.best);
+  return {};
 }
 
-function updateNetInfo() {
-  $('netSize').textContent = `${data.ids.length} / ${data.src.length}`;
+function newSim() {
+  sim = new FlySim(data, { mode: $('mode').value, seed: 1 + Math.floor(Math.random() * 1e6), config: currentConfig() });
+  rebuildFood();
+  lastLogKey = '';
+}
+
+// ---- эволюция (Web Worker) ------------------------------------------------
+function startEvolution() {
+  if (!evoWorker) {
+    evoWorker = new Worker('evolve-worker.js', { type: 'module' });
+    evoWorker.onmessage = (e) => onEvoMessage(e.data);
+    evoWorker.onerror = (e) => { $('status').textContent = 'Ошибка эволюции: ' + e.message; };
+  }
+  evoRunning = true;
+  $('evoBtn').textContent = 'Остановить';
+  evoWorker.postMessage({ type: 'start', mode: $('mode').value, pop: 20, seconds: 25 });
+  $('status').textContent = 'Эволюция идёт в фоне: 20 мух, 2 мира по 25 с на каждую.';
+}
+
+function stopEvolution() {
+  evoRunning = false;
+  $('evoBtn').textContent = 'Запустить';
+  if (evoWorker) evoWorker.postMessage({ type: 'stop' });
+  $('status').textContent = 'Эволюция остановлена.';
+}
+
+function onEvoMessage(m) {
+  if (m.type === 'gen') {
+    evoState = m;
+    const f = (x) => (x === undefined || x === null ? '–' : x.toFixed(2));
+    $('gen').textContent = m.gen + 1;
+    $('bestFit').textContent = f(m.bestFit);
+    $('bench').textContent = f(m.bench);
+    $('meanFit').textContent = f(m.mean);
+    $('bestEaten').textContent = f(m.bestEaten);
+    drawEvoChart(m.history);
+    if ($('useEvolved').checked && sim) sim.setConfig(decode(m.best));
+  }
+}
+
+function drawEvoChart(history) {
+  const c = $('evoChart');
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#2a3240';
+  ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(0, (H * k) / 4); ctx.lineTo(W, (H * k) / 4); ctx.stroke(); }
+  if (history.length < 2) return;
+  const all = history.flatMap((h) => [h.best, h.mean, h.bench ?? h.best]);
+  const maxV = Math.max(1, ...all);
+  const minV = Math.min(0, ...all);
+  const span = Math.max(1, maxV - minV);
+  const line = (key, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    history.forEach((h, i) => {
+      const x = (i / Math.max(1, history.length - 1)) * (W - 4) + 2;
+      const v = key === 'bench' ? (h.bench ?? h.best) : h[key];
+      const y = H - 6 - ((v - minV) / span) * (H - 12);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  };
+  line('mean', '#8b95a7');
+  line('best', '#ff7043');
+  line('bench', '#7ee0c3');
+}
+
+function saveGenome() {
+  if (!evoState) return;
+  const payload = {
+    description: 'Геном мухи, подобранный эволюцией на подсети коннектома FlyWire',
+    generation: evoState.gen + 1,
+    benchmarkFitness: evoState.bench,
+    genome: evoState.best,
+    parameters: decode(evoState.best),
+    genes: GENES.map((g) => g.key),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `fly-genome-gen${evoState.gen + 1}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 // ---- отрисовка ------------------------------------------------------------
@@ -267,29 +391,24 @@ function drawChart() {
   cctx.clearRect(0, 0, W, H);
   cctx.strokeStyle = '#2a3240';
   cctx.lineWidth = 1;
-  for (let k = 1; k < 4; k++) {
-    cctx.beginPath();
-    cctx.moveTo(0, (H * k) / 4); cctx.lineTo(W, (H * k) / 4);
-    cctx.stroke();
-  }
+  for (let k = 1; k < 4; k++) { cctx.beginPath(); cctx.moveTo(0, (H * k) / 4); cctx.lineTo(W, (H * k) / 4); cctx.stroke(); }
   const h = sim.history;
   if (h.length < 2) return;
   const maxMotor = Math.max(0.1, ...h.map((p) => p.motor));
   const maxSens = Math.max(0.1, ...h.map((p) => p.sensory));
   const series = [
-    { key: 'motor', scale: maxMotor, color: '#ff7043' },
-    { key: 'sensory', scale: maxSens, color: '#4fc3f7' },
-    { key: 'energy', scale: 100, color: '#7ee0c3' },
+    { key: 'motor', color: '#ff7043', v: (p) => p.motor / maxMotor },
+    { key: 'sensory', color: '#4fc3f7', v: (p) => p.sensory / maxSens },
+    { key: 'energy', color: '#7ee0c3', v: (p) => p.energy / 100 },
   ];
   for (const s of series) {
     cctx.strokeStyle = s.color;
     cctx.lineWidth = 2;
     cctx.beginPath();
     h.forEach((p, i) => {
-      const x = (i / (400 - 1)) * W;
-      const v = s.key === 'energy' ? p.energy / 100 : p[s.key] / s.scale;
-      const yy = H - v * (H - 8) - 4;
-      if (i === 0) cctx.moveTo(x, yy); else cctx.lineTo(x, yy);
+      const x = (i / 399) * W;
+      const y = H - s.v(p) * (H - 8) - 4;
+      if (i === 0) cctx.moveTo(x, y); else cctx.lineTo(x, y);
     });
     cctx.stroke();
   }
@@ -303,11 +422,24 @@ function formatTime(t) {
 
 function updateStats() {
   $('lives').textContent = sim.lives;
-  $('age').textContent = formatTime(sim.time);
+  $('age').textContent = formatTime(sim.fly.lifeTime ?? sim.time);
   $('eaten').textContent = sim.eaten;
+  $('deaths').textContent = `${sim.deaths.predator} / ${sim.deaths.starve}`;
   const e = Math.max(0, sim.fly.energy);
   $('energyText').textContent = `${Math.round(e)} / ${CONFIG.energyMax}`;
   $('energyBar').style.width = `${(e / CONFIG.energyMax) * 100}%`;
+  const key = sim.events.length ? sim.events[sim.events.length - 1].t.toFixed(3) + sim.events.length : '';
+  if (key !== lastLogKey) {
+    lastLogKey = key;
+    const list = $('log');
+    list.innerHTML = '';
+    for (const ev of sim.events.slice().reverse().slice(0, 5)) {
+      const li = document.createElement('li');
+      li.textContent = `${formatTime(ev.t)}  ${ev.text}`;
+      if (ev.text.startsWith('Хищник')) li.className = 'predator';
+      list.appendChild(li);
+    }
+  }
 }
 
 function syncFly() {
@@ -320,11 +452,8 @@ function syncFly() {
   wingL.rotation.x = flap;
   wingR.rotation.x = -flap;
   const phase = moving ? t * 22 : 0;
-  legs.forEach((leg, k) => {
-    leg.rotation.x = Math.sin(phase + (k % 2) * Math.PI) * 0.5 * (moving ? 1 : 0);
-  });
+  legs.forEach((leg, k) => { leg.rotation.x = Math.sin(phase + (k % 2) * Math.PI) * 0.5 * (moving ? 1 : 0); });
 
-  // след
   const arr = trailGeo.attributes.position.array;
   const n = f.trail.length;
   for (let i = 0; i < n; i++) {
@@ -334,14 +463,20 @@ function syncFly() {
   trailGeo.setDrawRange(0, n);
   trailGeo.attributes.position.needsUpdate = true;
 
-  // еда
+  const p = sim.predator;
+  predator.position.set(p.x, p.y, p.z);
+  predator.rotation.y = p.heading;
+  const flapP = Math.sin(t * 30) * 0.6;
+  pWingL.rotation.z = 0.3 + flapP;
+  pWingR.rotation.z = -0.3 - flapP;
+  senseRing.position.set(p.x, p.y, p.z);
+
   const now = performance.now() / 1000;
   sim.food.forEach((food, k) => {
     const m = foodMeshes[k];
     if (!m) return;
     m.position.set(food.x, food.y, food.z);
-    const s = 1 + 0.1 * Math.sin(now * 3 + k);
-    m.scale.setScalar(s);
+    m.scale.setScalar(1 + 0.1 * Math.sin(now * 3 + k));
   });
 }
 
@@ -359,11 +494,7 @@ function frame(now) {
   if (!paused) {
     acc += real * speed;
     let steps = 0;
-    while (acc >= DT && steps < 400) {
-      sim.step(DT);
-      acc -= DT;
-      steps++;
-    }
+    while (acc >= DT && steps < 400) { sim.step(DT); acc -= DT; steps++; }
     if (acc > DT) acc = 0;
   }
   syncFly();
@@ -385,21 +516,30 @@ function frame(now) {
 }
 
 // ---- управление -------------------------------------------------------------
-$('mode').addEventListener('change', newSim);
+$('mode').addEventListener('change', () => {
+  newSim();
+  if (evoRunning) startEvolution(); // перезапуск эволюции с новой проводкой
+});
 $('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
 $('pauseBtn').addEventListener('click', (e) => {
   paused = !paused;
   e.target.textContent = paused ? 'Продолжить' : 'Пауза';
 });
-$('newBtn').addEventListener('click', () => sim.resetFly());
+$('newBtn').addEventListener('click', () => sim.resetFly(null));
 $('brainBtn').addEventListener('click', () => { showBrain = !showBrain; $('brainPanel').style.display = showBrain ? '' : 'none'; });
 let topView = false;
 $('camBtn').addEventListener('click', (e) => {
   topView = !topView;
   e.target.textContent = topView ? 'Камера: сбоку' : 'Камера: сверху';
-  if (topView) { camera.position.set(0.001, 4.2, 0.001); } else { camera.position.set(3.2, 2.4, 3.6); }
+  if (topView) camera.position.set(0.001, 4.2, 0.001); else camera.position.set(3.2, 2.4, 3.6);
   controls.target.set(0, 0.5, 0);
   controls.update();
+});
+$('evoBtn').addEventListener('click', () => (evoRunning ? stopEvolution() : startEvolution()));
+$('saveBtn').addEventListener('click', saveGenome);
+$('useEvolved').addEventListener('change', () => {
+  if ($('useEvolved').checked && evoState) sim.setConfig(decode(evoState.best));
+  else sim.setConfig({});
 });
 
 // ---- запуск ---------------------------------------------------------------
@@ -408,10 +548,11 @@ async function main() {
   data = await res.json();
   newSim();
   buildBrainPoints();
+  startEvolution();
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 main().catch((err) => {
-  $('info').textContent = 'Не удалось загрузить данные. Откройте страницу через веб-сервер (например, python3 -m http.server).';
+  $('status').textContent = 'Не удалось загрузить данные. Откройте страницу через веб-сервер.';
   console.error(err);
 });
 </script>
