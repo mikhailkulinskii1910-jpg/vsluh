@@ -4,7 +4,7 @@
 window.VELO_CONFIG = {
   serverUrl: '',
   // webUrl — адрес веб-версии (https://ваш-домен/). Нужен для ссылок-приглашений из APK.
-  webUrl: '',
+  webUrl: 'https://mikhailkulinskii1910-jpg.github.io/vsluh/velo/',
   // iceServers — свои TURN-серверы для лобби без сервера, если телефоны в мобильном интернете не соединяются
   // напрямую. Пример: [{ urls: 'turn:turn.ваш-домен:3478', username: 'velo', credential: 'пароль' }]
   iceServers: [],
