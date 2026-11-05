@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Муха на коннектоме</title>
+<style>
+  :root { --bg:#0b0d12; --panel:rgba(18,22,30,.82); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#eef1f5; --panel:rgba(255,255,255,.9); --line:#d0d6e0; --text:#1b2330; --muted:#5d6878; --accent:#0f8a6b; }
+  }
+  :root[data-theme="dark"] { --bg:#0b0d12; --panel:rgba(18,22,30,.82); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
+  #scene { position:fixed; inset:0; }
+  .panel { position:fixed; background:var(--panel); border:1px solid var(--line); border-radius:12px; backdrop-filter: blur(6px); padding:12px 14px; font-size:14px; }
+  #stats { top:12px; left:12px; width:240px; }
+  #stats h1 { font-size:16px; margin:0 0 8px; font-weight:600; }
+  .row { display:flex; justify-content:space-between; margin:3px 0; color:var(--muted); }
+  .row b { color:var(--text); font-weight:600; }
+  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:6px; }
+  .bar > i { display:block; height:100%; width:0%; background:var(--accent); transition: width .15s linear; }
+  #controls { top:12px; right:12px; width:260px; }
+  #controls label { display:block; color:var(--muted); font-size:12px; margin-top:8px; }
+  select, button { font: inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; margin-top:4px; }
+  button { cursor:pointer; }
+  button:hover { border-color:var(--accent); }
+  .btns { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:10px; }
+  #chartPanel { bottom:12px; left:12px; width:340px; }
+  #chartPanel canvas { width:100%; height:110px; display:block; }
+  .legend { display:flex; gap:10px; font-size:12px; color:var(--muted); margin-top:4px; flex-wrap:wrap; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; background:var(--c); }
+  #brainPanel { bottom:12px; right:12px; width:260px; }
+  #brainPanel canvas { width:100%; height:240px; display:block; border-radius:8px; }
+  #info { position:fixed; top:12px; left:50%; transform:translateX(-50%); font-size:12px; color:var(--muted); max-width:460px; text-align:center; pointer-events:none; }
+  @media (max-width: 760px) {
+    #stats { width:auto; right:12px; }
+    #controls { top:auto; bottom:auto; top:150px; width:auto; left:12px; right:12px; }
+    #chartPanel { width:auto; left:12px; right:12px; }
+    #brainPanel { display:none; }
+    #info { display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+
+<div id="stats" class="panel">
+  <h1>Муха на коннектоме</h1>
+  <div class="row"><span>Жизнь</span><b id="lives">–</b></div>
+  <div class="row"><span>Время жизни</span><b id="age">–</b></div>
+  <div class="row"><span>Съедено еды</span><b id="eaten">–</b></div>
+  <div class="row"><span>Энергия</span><b id="energyText">–</b></div>
+  <div class="bar"><i id="energyBar"></i></div>
+  <div class="row" style="margin-top:8px"><span>Нейронов / связей</span><b id="netSize">–</b></div>
+</div>
+
+<div id="controls" class="panel">
+  <label for="mode">Проводка нейронов</label>
+  <select id="mode">
+    <option value="connectome">Настоящий коннектом FlyWire</option>
+    <option value="random">Контроль: цели связей перемешаны</option>
+  </select>
+  <label for="speed">Скорость времени</label>
+  <select id="speed">
+    <option value="0.5">0.5×</option>
+    <option value="1" selected>1×</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+  </select>
+  <div class="btns">
+    <button id="pauseBtn">Пауза</button>
+    <button id="newBtn">Новая муха</button>
+    <button id="brainBtn">Мозг: вкл/выкл</button>
+    <button id="camBtn">Камера: сверху</button>
+  </div>
+</div>
+
+<div id="chartPanel" class="panel">
+  <canvas id="chart" width="680" height="220"></canvas>
+  <div class="legend">
+    <span style="--c:#ff7043">моторы</span>
+    <span style="--c:#4fc3f7">сенсоры</span>
+    <span style="--c:#7ee0c3">энергия</span>
+  </div>
+</div>
+
+<div id="brainPanel" class="panel">
+  <div class="row" style="margin-bottom:6px"><span>Нейроны в их позициях</span><b>2000</b></div>
+  <canvas id="brain"></canvas>
+</div>
+
+<div id="info">Цвет нейрона — тип: сенсорный (голубой и зелёный), моторный (оранжевый), промежуточный (фиолетовый). Яркость — текущая активность.</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { FlySim, CONFIG } from './sim.js';
+
+const DT = 1 / 60;
+const $ = (id) => document.getElementById(id);
+
+// ---- сцена --------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.setSize(window.innerWidth, window.innerHeight);
+$('scene').appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0d12);
+scene.fog = new THREE.Fog(0x0b0d12, 6, 12);
+
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.05, 50);
+camera.position.set(3.2, 2.4, 3.6);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.5, 0);
+controls.enableDamping = true;
+controls.update();
+
+scene.add(new THREE.HemisphereLight(0xdfe9ff, 0x202430, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+sun.position.set(2, 4, 2);
+scene.add(sun);
+
+const half = CONFIG.arenaHalf;
+const grid = new THREE.GridHelper(half * 2, 16, 0x2a3a4a, 0x1a2430);
+grid.position.y = 0.001;
+scene.add(grid);
+const boxEdges = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(half * 2, CONFIG.arenaTop, half * 2)),
+  new THREE.LineBasicMaterial({ color: 0x3b4b5e }));
+boxEdges.position.y = CONFIG.arenaTop / 2;
+scene.add(boxEdges);
+
+// Муха из простых фигур
+const flyMat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.05, ...extra });
+const fly = new THREE.Group();
+const thorax = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), flyMat(0x6b4a2b));
+thorax.scale.set(0.085, 0.075, 0.12);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 10), flyMat(0x8a5a2b));
+head.position.set(0, 0.02, 0.15);
+const abdomen = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), flyMat(0xd7a545));
+abdomen.scale.set(0.07, 0.06, 0.16);
+abdomen.position.set(0, -0.01, -0.19);
+const eyeMat = flyMat(0xb3262b, { emissive: 0x330000 });
+const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 8), eyeMat);
+const eyeR = eyeL.clone();
+eyeL.position.set(0.045, 0.035, 0.17);
+eyeR.position.set(-0.045, 0.035, 0.17);
+fly.add(thorax, head, abdomen, eyeL, eyeR);
+
+const wingGeo = new THREE.CircleGeometry(0.2, 16);
+wingGeo.scale(0.5, 1, 1);
+const wingMat = new THREE.MeshStandardMaterial({ color: 0xcfe9ff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false });
+const wingL = new THREE.Mesh(wingGeo, wingMat);
+const wingR = new THREE.Mesh(wingGeo, wingMat);
+wingL.position.set(0.05, 0.07, -0.02);
+wingR.position.set(-0.05, 0.07, -0.02);
+fly.add(wingL, wingR);
+
+const legs = [];
+const legGeo = new THREE.CylinderGeometry(0.008, 0.006, 0.18, 5);
+legGeo.translate(0, -0.09, 0);
+for (let k = 0; k < 6; k++) {
+  const leg = new THREE.Mesh(legGeo, flyMat(0x2a1f16));
+  leg.position.set(k < 3 ? 0.06 : -0.06, -0.05, 0.07 - (k % 3) * 0.07);
+  leg.rotation.z = k < 3 ? -0.5 : 0.5;
+  fly.add(leg);
+  legs.push(leg);
+}
+scene.add(fly);
+
+// След полёта
+const TRAIL = 240;
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL * 3), 3));
+trailGeo.setDrawRange(0, 0);
+const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0x7ee0c3, transparent: true, opacity: 0.6 }));
+scene.add(trail);
+
+// Еда
+const foodGeo = new THREE.SphereGeometry(0.09, 14, 10);
+const foodMat = new THREE.MeshStandardMaterial({ color: 0x59d27a, emissive: 0x1d6b33, roughness: 0.4 });
+const foodMeshes = [];
+
+// ---- вид мозга ------------------------------------------------------------
+const brainCanvas = $('brain');
+const brainRenderer = new THREE.WebGLRenderer({ canvas: brainCanvas, antialias: true, alpha: true });
+brainRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+const brainScene = new THREE.Scene();
+const brainCam = new THREE.PerspectiveCamera(40, 1, 0.1, 20);
+brainCam.position.set(0, 0.3, 3.3);
+brainCam.lookAt(0, 0, 0);
+const brainCloud = new THREE.Group();
+brainScene.add(brainCloud);
+
+// ---- состояние -----------------------------------------------------------
+const GROUP_COLORS = [0x4fc3f7, 0x81c784, 0xff7043, 0x7e57c2];
+let data = null;
+let sim = null;
+let paused = false;
+let speed = 1;
+let showBrain = true;
+let acc = 0;
+let lastT = performance.now();
+let brainPoints = null;
+let brainColors = null;
+
+function buildBrainPoints() {
+  const N = data.ids.length;
+  const pos = new Float32Array(N * 3);
+  for (let i = 0; i < N * 3; i++) pos[i] = data.pos[i] * 1.0;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  brainColors = new Float32Array(N * 3);
+  geo.setAttribute('color', new THREE.BufferAttribute(brainColors, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.035, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.95 });
+  brainCloud.clear();
+  brainPoints = new THREE.Points(geo, mat);
+  brainCloud.add(brainPoints);
+}
+
+function updateBrainColors() {
+  const N = data.ids.length;
+  const base = GROUP_COLORS.map((c) => new THREE.Color(c));
+  for (let i = 0; i < N; i++) {
+    const g = data.group[i];
+    const c = base[g];
+    const a = 0.12 + 0.88 * Math.min(1, sim.rate[i] * 6);
+    brainColors[i * 3] = c.r * a;
+    brainColors[i * 3 + 1] = c.g * a;
+    brainColors[i * 3 + 2] = c.b * a;
+  }
+  brainPoints.geometry.attributes.color.needsUpdate = true;
+}
+
+function rebuildFood() {
+  for (const m of foodMeshes) scene.remove(m);
+  foodMeshes.length = 0;
+  for (const _ of sim.food) {
+    const m = new THREE.Mesh(foodGeo, foodMat);
+    scene.add(m);
+    foodMeshes.push(m);
+  }
+}
+
+function newSim() {
+  const mode = $('mode').value;
+  sim = new FlySim(data, { mode, seed: 1 + Math.floor(Math.random() * 1e6) });
+  rebuildFood();
+  updateNetInfo();
+}
+
+function updateNetInfo() {
+  $('netSize').textContent = `${data.ids.length} / ${data.src.length}`;
+}
+
+// ---- отрисовка ------------------------------------------------------------
+const chart = $('chart');
+const cctx = chart.getContext('2d');
+
+function drawChart() {
+  const W = chart.width, H = chart.height;
+  cctx.clearRect(0, 0, W, H);
+  cctx.strokeStyle = '#2a3240';
+  cctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) {
+    cctx.beginPath();
+    cctx.moveTo(0, (H * k) / 4); cctx.lineTo(W, (H * k) / 4);
+    cctx.stroke();
+  }
+  const h = sim.history;
+  if (h.length < 2) return;
+  const maxMotor = Math.max(0.1, ...h.map((p) => p.motor));
+  const maxSens = Math.max(0.1, ...h.map((p) => p.sensory));
+  const series = [
+    { key: 'motor', scale: maxMotor, color: '#ff7043' },
+    { key: 'sensory', scale: maxSens, color: '#4fc3f7' },
+    { key: 'energy', scale: 100, color: '#7ee0c3' },
+  ];
+  for (const s of series) {
+    cctx.strokeStyle = s.color;
+    cctx.lineWidth = 2;
+    cctx.beginPath();
+    h.forEach((p, i) => {
+      const x = (i / (400 - 1)) * W;
+      const v = s.key === 'energy' ? p.energy / 100 : p[s.key] / s.scale;
+      const yy = H - v * (H - 8) - 4;
+      if (i === 0) cctx.moveTo(x, yy); else cctx.lineTo(x, yy);
+    });
+    cctx.stroke();
+  }
+}
+
+function formatTime(t) {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function updateStats() {
+  $('lives').textContent = sim.lives;
+  $('age').textContent = formatTime(sim.time);
+  $('eaten').textContent = sim.eaten;
+  const e = Math.max(0, sim.fly.energy);
+  $('energyText').textContent = `${Math.round(e)} / ${CONFIG.energyMax}`;
+  $('energyBar').style.width = `${(e / CONFIG.energyMax) * 100}%`;
+}
+
+function syncFly() {
+  const f = sim.fly;
+  fly.position.set(f.x, f.y, f.z);
+  fly.rotation.y = f.heading;
+  const moving = f.speed > 0.05;
+  const t = sim.time;
+  const flap = moving ? Math.sin(t * 45) * 0.9 : Math.sin(t * 6) * 0.15;
+  wingL.rotation.x = flap;
+  wingR.rotation.x = -flap;
+  const phase = moving ? t * 22 : 0;
+  legs.forEach((leg, k) => {
+    leg.rotation.x = Math.sin(phase + (k % 2) * Math.PI) * 0.5 * (moving ? 1 : 0);
+  });
+
+  // след
+  const arr = trailGeo.attributes.position.array;
+  const n = f.trail.length;
+  for (let i = 0; i < n; i++) {
+    const p = f.trail[i];
+    arr[i * 3] = p[0]; arr[i * 3 + 1] = p[1]; arr[i * 3 + 2] = p[2];
+  }
+  trailGeo.setDrawRange(0, n);
+  trailGeo.attributes.position.needsUpdate = true;
+
+  // еда
+  const now = performance.now() / 1000;
+  sim.food.forEach((food, k) => {
+    const m = foodMeshes[k];
+    if (!m) return;
+    m.position.set(food.x, food.y, food.z);
+    const s = 1 + 0.1 * Math.sin(now * 3 + k);
+    m.scale.setScalar(s);
+  });
+}
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+
+function frame(now) {
+  const real = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  if (!paused) {
+    acc += real * speed;
+    let steps = 0;
+    while (acc >= DT && steps < 400) {
+      sim.step(DT);
+      acc -= DT;
+      steps++;
+    }
+    if (acc > DT) acc = 0;
+  }
+  syncFly();
+  updateStats();
+  drawChart();
+  controls.update();
+  renderer.render(scene, camera);
+
+  if (showBrain) {
+    if (!brainPoints) buildBrainPoints();
+    updateBrainColors();
+    brainCloud.rotation.y += 0.003;
+    brainRenderer.setSize(brainCanvas.clientWidth, brainCanvas.clientHeight, false);
+    brainCam.aspect = brainCanvas.clientWidth / brainCanvas.clientHeight;
+    brainCam.updateProjectionMatrix();
+    brainRenderer.render(brainScene, brainCam);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---- управление -------------------------------------------------------------
+$('mode').addEventListener('change', newSim);
+$('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
+$('pauseBtn').addEventListener('click', (e) => {
+  paused = !paused;
+  e.target.textContent = paused ? 'Продолжить' : 'Пауза';
+});
+$('newBtn').addEventListener('click', () => sim.resetFly());
+$('brainBtn').addEventListener('click', () => { showBrain = !showBrain; $('brainPanel').style.display = showBrain ? '' : 'none'; });
+let topView = false;
+$('camBtn').addEventListener('click', (e) => {
+  topView = !topView;
+  e.target.textContent = topView ? 'Камера: сбоку' : 'Камера: сверху';
+  if (topView) { camera.position.set(0.001, 4.2, 0.001); } else { camera.position.set(3.2, 2.4, 3.6); }
+  controls.target.set(0, 0.5, 0);
+  controls.update();
+});
+
+// ---- запуск ---------------------------------------------------------------
+async function main() {
+  const res = await fetch('data/fly_network.json');
+  data = await res.json();
+  newSim();
+  buildBrainPoints();
+  requestAnimationFrame((t) => { lastT = t; frame(t); });
+}
+main().catch((err) => {
+  $('info').textContent = 'Не удалось загрузить данные. Откройте страницу через веб-сервер (например, python3 -m http.server).';
+  console.error(err);
+});
+</script>
+</body>
+</html>
