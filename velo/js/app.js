@@ -62,7 +62,7 @@
       : vectorOn ? 'Карта © OpenFreeMap, OpenMapTiles, участники OpenStreetMap' : 'Карта © участники OpenStreetMap'];
     if (state.bike && !vectorOn) parts.push('велодорожки: CyclOSM');
     if (state.elev) parts.push('высоты: Terrain Tiles (Mapzen, AWS)');
-    parts.push('маршруты: BRouter', 'поиск: Nominatim');
+    parts.push('маршруты: BRouter', 'поиск: Photon (komoot)');
     const el = document.getElementById('attr-text');
     if (el) el.textContent = parts.join(' · ');
   }
@@ -116,7 +116,11 @@
   }
 
   map.on('dragstart', () => { state.follow = false; renderFollow(); });
-  map.on('click', e => { if (state.tab === 'route') addWaypoint(e.latlng); });
+  map.on('click', e => {
+    $('#search-results').hidden = true;
+    if (Date.now() - longPressAt < 800) return; // это было долгое нажатие — открыто меню точки
+    if (state.tab === 'route') addWaypoint(e.latlng);
+  });
   window.addEventListener('resize', () => map.invalidateSize());
 
   /** Курсор игрока: скин, повёрнутый по направлению движения, и подпись. */
@@ -584,45 +588,166 @@
     showTab('route');
   }
 
-  /* ---------- поиск адреса (Nominatim) ---------- */
-  /** Короткий адрес результата: улица и дом, район или город. */
-  function shortAddress(it) {
-    const ad = it.address || {};
-    const street = [ad.road || ad.pedestrian || ad.footway, ad.house_number].filter(Boolean).join(', ');
-    const area = ad.suburb || ad.city_district || ad.city || ad.town || ad.village || ad.state || '';
-    return [street, area].filter(Boolean).join(' · ');
+  /* ---------- поиск: подсказки (Photon) и мои места ---------- */
+  /* Публичный Nominatim запрещает поиск «по мере ввода», поэтому подсказки идут через Photon (komoot) —
+     сервис именно для этого, на тех же данных OpenStreetMap. */
+  let places = [];
+  const placesLayer = L.layerGroup().addTo(map);
+  let suggestAbort = null, longPressAt = 0;
+  const RECENT_KEY = 'velo-recent';
+
+  function loadRecent() { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; } }
+  function pushRecent(it) {
+    const list = loadRecent().filter(r => !(Math.abs(r.lat - it.lat) < 1e-5 && Math.abs(r.lon - it.lon) < 1e-5));
+    list.unshift({ name: it.name, sub: it.sub || '', lat: +it.lat, lon: +it.lon });
+    try { localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 6))); } catch { /* приватный режим */ }
   }
 
-  async function searchPlaces(q) {
+  function localMatches(q) {
+    const s2 = q.toLowerCase();
+    const pl = places.filter(p => !s2 || p.name.toLowerCase().includes(s2)).slice(0, 5)
+      .map(p => ({ kind: 'place', name: p.name, sub: 'моё место', lat: p.lat, lon: p.lon }));
+    const rc = loadRecent().filter(r => !s2 || r.name.toLowerCase().includes(s2)).slice(0, s2 ? 3 : 6)
+      .map(r => ({ kind: 'recent', name: r.name, sub: r.sub, lat: r.lat, lon: r.lon }));
+    return pl.concat(rc);
+  }
+
+  function renderSuggestions(items, note) {
     const list = $('#search-results');
-    if (!q || q.length < 3) { list.hidden = true; return; }
     const f = state.fix;
-    // поиск ближе к вам: окно вокруг текущей позиции (результаты вне его не отбрасываются)
-    const bias = f ? `&viewbox=${(f.lon - 0.6).toFixed(3)},${(f.lat + 0.4).toFixed(3)},${(f.lon + 0.6).toFixed(3)},${(f.lat - 0.4).toFixed(3)}&bounded=0` : '';
+    const head = { place: 'Мои места', recent: 'Недавние', geo: 'Адреса и места' };
+    let html = '', last = '';
+    items.forEach((it, i) => {
+      if (it.kind !== last) { html += `<li class="sr-head">${head[it.kind]}</li>`; last = it.kind; }
+      const d = f ? G.formatDistance(G.distance(f.lat, f.lon, it.lat, it.lon)) : '';
+      html += `<li data-i="${i}">${esc(it.name)}<small>${esc([it.sub, d].filter(Boolean).join(' · '))}</small></li>`;
+    });
+    if (note) html += `<li class="sr-head">${esc(note)}</li>`;
+    list._items = items;
+    list.innerHTML = html;
+    list.hidden = !html;
+  }
+
+  function photonItem(f) {
+    const p = f.properties || {}, [lon, lat] = f.geometry.coordinates;
+    const street = [p.street, p.housenumber].filter(Boolean).join(', ');
+    const name = p.name || street || p.city || 'Точка';
+    const sub = [p.name && street ? street : '', p.district || p.locality || '', p.city || p.county || '']
+      .filter(Boolean).filter((v, i, arr) => arr.indexOf(v) === i).join(' · ');
+    return { kind: 'geo', name, sub, lat, lon };
+  }
+
+  /** Подсказки: сначала мои места и недавние (сразу), потом адреса из Photon с учётом позиции. */
+  async function suggest(q) {
+    if (suggestAbort) { suggestAbort.abort(); suggestAbort = null; } // ответ на прежний текст уже не нужен
+    const local = localMatches(q);
+    if (q.length < 2) return renderSuggestions(local);
+    renderSuggestions(local, 'Ищу…');
+    suggestAbort = new AbortController();
+    const f = state.fix, c = map.getCenter();
+    const bias = `&lat=${(f ? f.lat : c.lat).toFixed(4)}&lon=${(f ? f.lon : c.lng).toFixed(4)}`;
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=8&accept-language=ru${bias}&q=${encodeURIComponent(q)}`);
-      const items = await res.json();
-      if (f) {
-        items.forEach(it => { it._d = G.distance(f.lat, f.lon, +it.lat, +it.lon); });
-        items.sort((x, y) => x._d - y._d);
-      }
-      list.innerHTML = items.length ? items.map((it, i) => {
-        const ad = it.address || {};
-        const title = it.name || [ad.road || ad.pedestrian, ad.house_number].filter(Boolean).join(', ') || it.display_name.split(',')[0];
-        const sub = [shortAddress(it), it._d != null ? G.formatDistance(it._d) : ''].filter(Boolean).join(' · ');
-        return `<li data-i="${i}">${esc(title)}<small>${esc(sub)}</small></li>`;
-      }).join('') : '<li>Ничего не найдено</li>';
-      list._items = items;
-    } catch {
-      list.innerHTML = '<li>Поиск недоступен (нет сети)</li>';
+      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=10&lang=default${bias}`, { signal: suggestAbort.signal });
+      const data = await res.json();
+      if (q !== $('#search-input').value.trim()) return; // пока ждали, текст изменился
+      const seen = new Set();
+      const geo = (data.features || []).map(photonItem).filter(it => {
+        const k = it.name + '|' + it.sub; // одна улица приходит несколькими отрезками — оставляем один
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      }).slice(0, 6);
+      renderSuggestions(local.concat(geo), geo.length || local.length ? '' : 'Ничего не найдено');
+    } catch (e) {
+      if (e.name !== 'AbortError') renderSuggestions(local, 'Поиск недоступен — нет сети');
     }
-    list.hidden = false;
+  }
+
+  /* ---------- мои места: сохранённые точки на карте ---------- */
+  async function loadPlaces() {
+    places = (await S.all('places').catch(() => [])).sort((x, y) => y.createdAt - x.createdAt);
+    renderPlacesOnMap();
+    renderPlacesList();
+  }
+
+  function renderPlacesOnMap() {
+    placesLayer.clearLayers();
+    for (const p of places) {
+      L.marker([p.lat, p.lon], { icon: L.divIcon({ className: 'vmk', iconSize: [0, 0], html: `<div class="place-pin"></div><span class="place-tag">${esc(p.name)}</span>` }), zIndexOffset: 300 })
+        .on('click', () => openPointMenu(L.latLng(p.lat, p.lon), p))
+        .addTo(placesLayer);
+    }
+  }
+
+  function renderPlacesList() {
+    const box = $('#place-list');
+    if (!box) return;
+    const f = state.fix;
+    box.innerHTML = places.length ? places.map(p => `<article class="item">
+        <div class="item-h"><b>${esc(p.name)}</b></div>
+        <div class="stats">${f ? `<span>${G.formatDistance(G.distance(f.lat, f.lon, p.lat, p.lon))}</span>` : ''}<span>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}</span></div>
+        <div class="row">
+          <button class="ghost" data-act="go-place" data-id="${esc(p.id)}">Маршрут</button>
+          <button class="ghost" data-act="show-place" data-id="${esc(p.id)}">На карте</button>
+          <button class="ghost danger" data-act="del-place" data-id="${esc(p.id)}">Удалить</button>
+        </div></article>`).join('')
+      : '<p class="muted small">Долгое нажатие на карту — сохранить точку.</p>';
+  }
+
+  async function savePlace(latlng, suggested) {
+    const name = prompt('Название места', suggested || `Место ${places.length + 1}`);
+    if (!name || !name.trim()) return;
+    await S.put('places', { id: 'pl-' + Date.now(), name: name.trim().slice(0, 40), lat: latlng.lat, lon: latlng.lng, createdAt: Date.now() });
+    await loadPlaces();
+    toast('Место сохранено');
+  }
+
+  async function deletePlace(id) {
+    if (!confirm('Удалить место?')) return;
+    await S.del('places', id);
+    await loadPlaces();
+  }
+
+  /** Меню точки: долгое нажатие на карту или нажатие на сохранённое место. */
+  let menuPoint = null;
+  function openPointMenu(latlng, place) {
+    menuPoint = { latlng, place };
+    $('#pm-title').textContent = place ? place.name : `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+    $('#pm-save').hidden = !!place;
+    $('#pm-del').hidden = !place;
+    $('#point-menu').hidden = false;
+  }
+  function closePointMenu() { $('#point-menu').hidden = true; menuPoint = null; }
+
+  /** Долгое нажатие на карту. На iPhone событие contextmenu не приходит, поэтому считаем касание сами. */
+  function bindLongPress() {
+    const el = map.getContainer();
+    let timer = 0, start = null;
+    el.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1) { clearTimeout(timer); return; }
+      const t = e.touches[0];
+      start = { x: t.clientX, y: t.clientY };
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const r = el.getBoundingClientRect();
+        longPressAt = Date.now();
+        openPointMenu(map.containerPointToLatLng([start.x - r.left, start.y - r.top]));
+        if (navigator.vibrate) navigator.vibrate(20);
+      }, 600);
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      if (start && Math.hypot(t.clientX - start.x, t.clientY - start.y) > 10) clearTimeout(timer);
+    }, { passive: true });
+    el.addEventListener('touchend', () => clearTimeout(timer), { passive: true });
+    map.on('contextmenu', e => { if (Date.now() - longPressAt > 800) { longPressAt = Date.now(); openPointMenu(e.latlng); } });
   }
 
   function chooseDestination(it) {
     const dest = L.latLng(+it.lat, +it.lon);
     plan.name = it.name || it.display_name.split(',')[0];
     plan.wps = state.fix ? [L.latLng(state.fix.lat, state.fix.lon), dest] : [dest];
+    pushRecent({ name: plan.name, sub: it.sub || '', lat: +it.lat, lon: +it.lon });
     if (!state.fix) toast('Нет GPS: старт не задан — отметьте его нажатием на карту', 4500);
     $('#search-results').hidden = true;
     $('#search-input').value = plan.name;
@@ -741,7 +866,7 @@
     $$('.tab').forEach(t => { t.hidden = t.dataset.tab !== name; });
     $$('.tabbar button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
     if (name === 'tracks') renderTracks();
-    if (name === 'route') { renderPlan(); renderRoutes(); }
+    if (name === 'route') { renderPlan(); renderRoutes(); renderPlacesList(); }
     emit('tab', name);
   }
 
@@ -764,8 +889,35 @@
     $('#btn-elev').addEventListener('click', () => { state.elev = !state.elev; applyElev(); if (state.elev) toast('Перепады высот: светлее — выше'); });
 
     const si = $('#search-input');
-    si.addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => searchPlaces(si.value.trim()), 700); });
-    si.addEventListener('keydown', e => { if (e.key === 'Enter') { clearTimeout(searchTimer); searchPlaces(si.value.trim()); } });
+    si.addEventListener('focus', () => suggest(si.value.trim()));
+    si.addEventListener('blur', () => setTimeout(() => { $('#search-results').hidden = true; }, 250)); // задержка — чтобы нажатие на подсказку успело сработать
+    si.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const q = si.value.trim();
+      renderSuggestions(localMatches(q), q.length >= 2 ? 'Ищу…' : '');
+      searchTimer = setTimeout(() => suggest(q), 300);
+    });
+    si.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { clearTimeout(searchTimer); suggest(si.value.trim()); }
+      if (e.key === 'Escape') { $('#search-results').hidden = true; si.blur(); }
+    });
+    $('#pm-route').addEventListener('click', () => { if (menuPoint) chooseDestination({ lat: menuPoint.latlng.lat, lon: menuPoint.latlng.lng, name: menuPoint.place ? menuPoint.place.name : 'Точка на карте' }); closePointMenu(); });
+    $('#pm-save').addEventListener('click', () => { const p = menuPoint; closePointMenu(); if (p) savePlace(p.latlng); });
+    $('#pm-del').addEventListener('click', () => { const p = menuPoint; closePointMenu(); if (p && p.place) deletePlace(p.place.id); });
+    $('#pm-close').addEventListener('click', closePointMenu);
+    $('#btn-save-dest').addEventListener('click', () => {
+      const last = plan.wps[plan.wps.length - 1];
+      if (!last) return toast('Сначала поставьте точку или найдите адрес');
+      savePlace(last, plan.name || '');
+    });
+    $('#place-list').addEventListener('click', e => {
+      const b2 = e.target.closest('button'); if (!b2) return;
+      const p = places.find(x => x.id === b2.dataset.id); if (!p) return;
+      if (b2.dataset.act === 'go-place') chooseDestination({ lat: p.lat, lon: p.lon, name: p.name });
+      else if (b2.dataset.act === 'show-place') { map.setView([p.lat, p.lon], 16); showTab('map'); }
+      else if (b2.dataset.act === 'del-place') deletePlace(p.id);
+    });
+    bindLongPress();
     $('#search-results').addEventListener('click', e => {
       const li = e.target.closest('li[data-i]');
       if (li) chooseDestination($('#search-results')._items[+li.dataset.i]);
@@ -833,6 +985,7 @@
     IC.hydrate(document);
     bindUi();
     bindPanelHandle();
+    loadPlaces();
     $('#attr-btn').addEventListener('click', () => { renderAttribution(); const t = $('#attr-text'); t.hidden = !t.hidden; });
     if (cfg.panelCollapsed) document.body.classList.add('panel-collapsed');
     applyBase();

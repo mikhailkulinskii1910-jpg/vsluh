@@ -50,6 +50,15 @@
   </aside>
 
   <div id="toast" class="toast" hidden></div>
+
+  <div id="point-menu" class="point-menu" hidden>
+    <div class="row between"><b id="pm-title"></b><button id="pm-close" class="icon-btn" aria-label="Закрыть"><span data-icon="close" data-size="18"></span></button></div>
+    <div class="row">
+      <button id="pm-route" class="primary grow">Маршрут сюда</button>
+      <button id="pm-save" class="ghost">Сохранить</button>
+      <button id="pm-del" class="ghost danger" hidden>Удалить</button>
+    </div>
+  </div>
 </main>
 
 <section class="panel">
@@ -88,8 +97,11 @@
       <button id="btn-clear" class="ghost">Очистить</button>
       <button id="btn-save-route" class="ghost">Сохранить</button>
       <button id="btn-gpx-plan" class="ghost">GPX</button>
+      <button id="btn-save-dest" class="ghost">В мои места</button>
     </div>
-    <div class="label">Сохранённые</div>
+    <div class="label">Мои места</div>
+    <div id="place-list"></div>
+    <div class="label">Сохранённые маршруты</div>
     <div id="route-list"></div>
   </div>
 

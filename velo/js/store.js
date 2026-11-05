@@ -1,7 +1,7 @@
 /* Хранилище «Велокарты»: IndexedDB для поездок, маршрутов и пакетов карт; localStorage для настроек. */
 (function (root) {
-  const DB_NAME = 'velo', DB_VERSION = 1;
-  const STORES = ['tracks', 'routes'];
+  const DB_NAME = 'velo', DB_VERSION = 2; // 2 — добавлены «мои места»
+  const STORES = ['tracks', 'routes', 'places'];
   let dbPromise = null;
 
   function db() {
