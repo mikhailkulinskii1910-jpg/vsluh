@@ -108,6 +108,7 @@
   </div>
 </header>
 
+<div id="errorBanner" class="card" hidden style="margin-top:12px;border-color:var(--warn);color:var(--warn)"></div>
 <main>
   <!-- Сцена -->
   <section id="tab-scene" class="pane">
@@ -225,15 +226,537 @@
   </section>
 </main>
 
-<script type="importmap">
-{ "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-               "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
+<script>
+// Показывает любую ошибку прямо на странице, чтобы её было видно на телефоне
+window.showError = function (msg) {
+  var el = document.getElementById('errorBanner');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = 'Ошибка: ' + msg;
+};
+window.addEventListener('error', function (e) { showError(e.message || String(e)); });
+window.addEventListener('unhandledrejection', function (e) { showError(e.reason && e.reason.message ? e.reason.message : String(e.reason)); });
 </script>
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { FlySim, CONFIG } from './sim.js';
-import { GENES, decode } from './genome.js';
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script id="core">
+// ---- genome.js ----
+// Геном: вектор из чисел в [0,1], который переводится в параметры симуляции.
+// Топология коннектома фиксирована; эволюция подбирает силу связей, пороги,
+// чувствительность сенсоров и параметры моторов.
+
+const GENES = [
+  { key: 'weightScale', min: 0.05, max: 0.6 },
+  { key: 'threshold', min: 0.3, max: 1.2 },
+  { key: 'decay', min: 0.6, max: 0.95 },
+  { key: 'odorGain', min: 0.1, max: 2 },
+  { key: 'contactGain', min: 0, max: 2 },
+  { key: 'hungerGain', min: 0, max: 0.5 },
+  { key: 'motorSpeed', min: 1, max: 6 },
+  { key: 'motorTurn', min: 0.5, max: 6 },
+  { key: 'noise', min: 0, max: 0.03 },
+  { key: 'predatorGain', min: 0, max: 2 },
+];
+
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+
+function gauss(rng) {
+  return Math.sqrt(-2 * Math.log(rng() + 1e-12)) * Math.cos(2 * Math.PI * rng());
+}
+
+function randomGenome(rng) {
+  return GENES.map(() => rng());
+}
+
+function decode(genome) {
+  const cfg = {};
+  GENES.forEach((g, i) => { cfg[g.key] = g.min + clamp01(genome[i]) * (g.max - g.min); });
+  return cfg;
+}
+
+function mutate(genome, rng, sigma = 0.08, rate = 0.3) {
+  return genome.map((x) => (rng() < rate ? clamp01(x + gauss(rng) * sigma) : x));
+}
+
+function crossover(a, b, rng) {
+  return a.map((x, i) => (rng() < 0.5 ? x : b[i]));
+}
+
+// ---- sim.js ----
+// Ядро симуляции мухи: нейросеть на основе подсети FlyWire + простой мир.
+// Не зависит от DOM, поэтому работает и в браузере, и в Node, и в Web Worker.
+
+const CONFIG = {
+  // нейроны
+  decay: 0.85,          // утечка мембраны за шаг
+  threshold: 0.6,       // порог возбуждения
+  refractory: 2,        // шагов без спайков после разряда
+  weightScale: 0.3,     // вес синапса = min(число синапсов, maxSyn) * weightScale
+  maxSyn: 20,
+  noise: 0.01,          // фоновый шум на каждый нейрон
+  // входы
+  odorGain: 0.6,        // сила обонятельного входа
+  contactGain: 0.8,     // сила механосенсорного входа от стен
+  hungerGain: 0.15,     // голод усиливает обонятельные входы
+  predatorGain: 0.9,    // сила механосенсорного входа от воздушного возмущения хищника
+  predatorSense: 0.8,   // радиус, на котором муха чувствует хищника
+  // мир
+  energyMax: 100,
+  energyDrain: 0.5,     // расход энергии в покое, ед./с
+  moveCost: 0.8,        // дополнительный расход на движение, ед./с при скорости 1
+  foodGain: 45,
+  eatRadius: 0.22,
+  foodCount: 12,
+  odorSigma: 1.2,
+  antennaOffset: 0.1,
+  arenaHalf: 2.0,
+  arenaTop: 1.4,
+  predatorSpeed: 0.35,
+  predatorKill: 0.22,
+  obstacleCount: 7,     // каменные столбы, которые муха обходит и ощупывает антеннами
+  // моторы
+  motorSpeed: 3.0,      // скорость полёта на единицу активности моторных нейронов
+  motorTurn: 3.0,       // скорость поворота (рад/с) на единицу разницы L и R
+};
+
+// Детерминированный генератор случайных чисел (mulberry32).
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+class FlySim {
+  // data — объект из fly_network.json
+  // mode: 'connectome' — настоящие связи; 'random' — те же нейроны и веса,
+  //       но цели синапсов перемешаны (контрольный эксперимент)
+  constructor(data, { mode = 'connectome', seed = 1, config = {} } = {}) {
+    this.cfg = { ...CONFIG, ...config };
+    this.data = data;
+    this.mode = mode;
+    this.rng = mulberry32(seed);
+    this.N = data.ids.length;
+    this.buildNetwork();
+    this.updateWeights();
+    this.buildGroups();
+    this.obstacles = this.makeObstacles();
+
+    this.time = 0;
+    this.lives = 0;
+    this.eaten = 0;
+    this.deaths = { starve: 0, predator: 0 };
+    this.events = [];
+    this.history = [];
+    this.historyTimer = 0;
+    this.food = [];
+    for (let k = 0; k < this.cfg.foodCount; k++) this.food.push(this.randomFood());
+    this.predator = this.randomPredator();
+    this.resetFly(null);
+  }
+
+  // Меняет параметры на лету, без сброса мира (нужно для эволюции в браузере)
+  setConfig(config) {
+    this.cfg = { ...CONFIG, ...config };
+    this.updateWeights();
+  }
+
+  buildNetwork() {
+    const { data } = this;
+    const src = Int32Array.from(data.src);
+    const dst = Int32Array.from(data.dst);
+    if (this.mode === 'random') {
+      // Перемешиваем цели, сохраняя источники и знаки
+      for (let i = dst.length - 1; i > 0; i--) {
+        const j = Math.floor(this.rng() * (i + 1));
+        const t = dst[i]; dst[i] = dst[j]; dst[j] = t;
+      }
+    }
+    this.src = src;
+    this.dst = dst;
+    this.w = new Float32Array(src.length);
+    this.I = new Float32Array(this.N);
+    this.v = new Float32Array(this.N);
+    this.spike = new Uint8Array(this.N);
+    this.refr = new Uint8Array(this.N);
+    this.rate = new Float32Array(this.N);
+  }
+
+  updateWeights() {
+    const { data, w, cfg } = this;
+    for (let e = 0; e < w.length; e++) {
+      const sign = data.inhibitory[e] ? -1 : 1;
+      w[e] = sign * Math.min(data.syn[e], cfg.maxSyn) * cfg.weightScale;
+    }
+  }
+
+  buildGroups() {
+    const { data } = this;
+    const pick = (group, side) => {
+      const out = [];
+      for (let i = 0; i < this.N; i++) {
+        if (data.group[i] === group && data.side[i] === side) out.push(i);
+      }
+      return Int32Array.from(out);
+    };
+    // group: 0 olfactory, 1 mechanosensory, 2 motor, 3 hidden; side: 0 left, 1 right
+    this.olfL = pick(0, 0); this.olfR = pick(0, 1);
+    this.mechL = pick(1, 0); this.mechR = pick(1, 1);
+    this.motL = pick(2, 0); this.motR = pick(2, 1);
+  }
+
+  // ---- мир ---------------------------------------------------------------
+
+  makeObstacles() {
+    const out = [];
+    let tries = 0;
+    while (out.length < this.cfg.obstacleCount && tries < 500) {
+      tries++;
+      const r = 0.12 + this.rng() * 0.12;
+      const h = this.cfg.arenaHalf - r - 0.2;
+      const x = (this.rng() * 2 - 1) * h;
+      const z = (this.rng() * 2 - 1) * h;
+      if (Math.hypot(x, z) < 0.7) continue;                       // не в центре, где стартует муха
+      if (out.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 0.3)) continue;
+      out.push({ x, z, r, height: 0.5 + this.rng() * 0.6 });
+    }
+    return out;
+  }
+
+  // Выталкивает точку из столбов; возвращает true, если было столкновение
+  pushOut(p, pad) {
+    let hit = false;
+    for (const o of this.obstacles) {
+      const dx = p.x - o.x, dz = p.z - o.z;
+      const d = Math.hypot(dx, dz);
+      const min = o.r + pad;
+      if (d < min) {
+        hit = true;
+        if (d > 1e-6) { p.x = o.x + (dx / d) * min; p.z = o.z + (dz / d) * min; }
+        else { p.x = o.x + min; }
+      }
+    }
+    return hit;
+  }
+
+  // Близость столба к точке (для антенн): 1 — вплотную, 0 — далеко
+  obstacleProx(x, z) {
+    let best = 0;
+    for (const o of this.obstacles) {
+      const v = Math.max(0, 1 - (Math.hypot(x - o.x, z - o.z) - o.r) / 0.3);
+      if (v > best) best = v;
+    }
+    return best;
+  }
+
+
+  randomFood() {
+    const h = this.cfg.arenaHalf - 0.3;
+    return {
+      x: (this.rng() * 2 - 1) * h,
+      y: 0.15 + this.rng() * 0.6,
+      z: (this.rng() * 2 - 1) * h,
+    };
+  }
+
+  randomPredator() {
+    const h = this.cfg.arenaHalf - 0.4;
+    return {
+      x: (this.rng() * 2 - 1) * h,
+      y: 0.5,
+      z: (this.rng() * 2 - 1) * h,
+      heading: this.rng() * Math.PI * 2,
+    };
+  }
+
+  logEvent(text) {
+    this.events.push({ t: this.time, text });
+    if (this.events.length > 8) this.events.shift();
+  }
+
+  resetFly(cause) {
+    if (cause) {
+      this.deaths[cause] += 1;
+      this.logEvent(cause === 'predator' ? 'Хищник поймал муху' : 'Муха умерла от голода');
+    }
+    const h = this.cfg.arenaHalf - 0.5;
+    const spawn = { x: 0, z: 0 };
+    for (let k = 0; k < 60; k++) {
+      spawn.x = (this.rng() * 2 - 1) * h;
+      spawn.z = (this.rng() * 2 - 1) * h;
+      if (!this.obstacles.some((o) => Math.hypot(o.x - spawn.x, o.z - spawn.z) < o.r + 0.2)) break;
+    }
+    this.fly = {
+      x: spawn.x,
+      y: 0.6,
+      z: spawn.z,
+      heading: this.rng() * Math.PI * 2,
+      speed: 0,
+      energy: this.cfg.energyMax,
+      odorL: 0, odorR: 0,
+      contactL: 0, contactR: 0,
+      threatL: 0, threatR: 0,
+      trail: [],
+    };
+    // нейронная сеть сбрасывается в покой
+    this.v.fill(0); this.spike.fill(0); this.refr.fill(0); this.rate.fill(0);
+    this.lives += 1;
+  }
+
+  odorAt(x, y, z) {
+    const s2 = 2 * this.cfg.odorSigma * this.cfg.odorSigma;
+    let s = 0;
+    for (const f of this.food) {
+      const d2 = (x - f.x) ** 2 + (y - f.y) ** 2 + (z - f.z) ** 2;
+      s += Math.exp(-d2 / s2);
+    }
+    return s;
+  }
+
+  wallProximity(x, z) {
+    const h = this.cfg.arenaHalf;
+    const d = Math.min(h - Math.abs(x), h - Math.abs(z));
+    return Math.max(0, 1 - d / 0.35);
+  }
+
+  // Входы от мира в сенсорные нейроны
+  sense() {
+    const f = this.fly;
+    const a = this.cfg.antennaOffset;
+    const rx = Math.cos(f.heading), rz = -Math.sin(f.heading); // вектор «вправо»
+    const pts = [
+      [f.x + rx * a, f.y, f.z + rz * a],
+      [f.x - rx * a, f.y, f.z - rz * a],
+    ];
+    const p = this.predator;
+    const sense = this.cfg.predatorSense;
+    const threat = (q) => Math.max(0, 1 - Math.hypot(q[0] - p.x, q[1] - p.y, q[2] - p.z) / sense);
+    f.odorL = this.odorAt(...pts[0]);
+    f.odorR = this.odorAt(...pts[1]);
+    f.contactL = Math.max(this.wallProximity(pts[0][0], pts[0][2]), this.obstacleProx(pts[0][0], pts[0][2]));
+    f.contactR = Math.max(this.wallProximity(pts[1][0], pts[1][2]), this.obstacleProx(pts[1][0], pts[1][2]));
+    f.threatL = threat(pts[0]);
+    f.threatR = threat(pts[1]);
+  }
+
+  // ---- нейросеть -----------------------------------------------------------
+
+  neuralStep() {
+    const { N, src, dst, w, spike, I, v, refr, rate, cfg } = this;
+    I.fill(0);
+    // синаптическая передача: спайки предыдущего шага
+    for (let e = 0; e < src.length; e++) {
+      if (spike[src[e]]) I[dst[e]] += w[e];
+    }
+    // внешние входы
+    const f = this.fly;
+    const hunger = 1 - f.energy / cfg.energyMax;
+    const odorDriveL = f.odorL * cfg.odorGain + hunger * cfg.hungerGain;
+    const odorDriveR = f.odorR * cfg.odorGain + hunger * cfg.hungerGain;
+    for (const i of this.olfL) I[i] += odorDriveL;
+    for (const i of this.olfR) I[i] += odorDriveR;
+    const mechL = f.contactL * cfg.contactGain + f.threatL * cfg.predatorGain;
+    const mechR = f.contactR * cfg.contactGain + f.threatR * cfg.predatorGain;
+    for (const i of this.mechL) I[i] += mechL;
+    for (const i of this.mechR) I[i] += mechR;
+
+    // фоновый шум и обновление мембран
+    for (let i = 0; i < N; i++) {
+      I[i] += cfg.noise * this.rng();
+      if (refr[i] > 0) {
+        refr[i]--;
+        spike[i] = 0;
+      } else {
+        v[i] = v[i] * cfg.decay + I[i];
+        if (v[i] >= cfg.threshold) {
+          spike[i] = 1; v[i] = 0; refr[i] = cfg.refractory;
+        } else {
+          spike[i] = 0;
+        }
+      }
+      rate[i] = rate[i] * 0.95 + 0.05 * spike[i];
+    }
+  }
+
+  meanRate(arr) {
+    if (!arr.length) return 0;
+    let s = 0;
+    for (const i of arr) s += this.rate[i];
+    return s / arr.length;
+  }
+
+  // ---- шаг мира ------------------------------------------------------------
+
+  stepPredator(dt) {
+    const p = this.predator;
+    const h = this.cfg.arenaHalf - 0.1;
+    p.heading += (this.rng() - 0.5) * 2.5 * dt;
+    p.x += Math.sin(p.heading) * this.cfg.predatorSpeed * dt;
+    p.z += Math.cos(p.heading) * this.cfg.predatorSpeed * dt;
+    if (Math.abs(p.x) > h || Math.abs(p.z) > h) {
+      p.heading += Math.PI;
+      p.x = clamp(p.x, -h, h);
+      p.z = clamp(p.z, -h, h);
+    }
+    this.pushOut(p, 0.1);
+    p.y = 0.55 + 0.25 * Math.sin(this.time * 1.3);
+  }
+
+  step(dt = 1 / 60) {
+    const cfg = this.cfg;
+    this.time += dt;
+    this.stepPredator(dt);
+    this.sense();
+    this.neuralStep();
+
+    const f = this.fly;
+    const rL = this.meanRate(this.motL);
+    const rR = this.meanRate(this.motR);
+    f.speed = clamp(cfg.motorSpeed * (rL + rR) / 2, 0, 1.5);
+    f.heading += cfg.motorTurn * (rL - rR) * dt;
+
+    // Перемещение в горизонтальной плоскости
+    f.x += Math.sin(f.heading) * f.speed * dt;
+    f.z += Math.cos(f.heading) * f.speed * dt;
+    const h = cfg.arenaHalf - 0.05;
+    f.x = clamp(f.x, -h, h);
+    f.z = clamp(f.z, -h, h);
+    this.pushOut(f, 0.07);
+
+    // Высота: коннектом не управляет ею. Муха снижается к ближайшей еде.
+    let targetY = 0.6 + 0.3 * Math.sin(this.time * 0.25);
+    if (f.odorL + f.odorR > 0.3) {
+      let best = null, bd = Infinity;
+      for (const food of this.food) {
+        const d = (food.x - f.x) ** 2 + (food.z - f.z) ** 2;
+        if (d < bd) { bd = d; best = food; }
+      }
+      if (best) targetY = best.y;
+    }
+    f.y = clamp(f.y + clamp(1.5 * (targetY - f.y), -0.8, 0.8) * dt, 0.08, cfg.arenaTop);
+
+    // Хищник
+    const p = this.predator;
+    if (Math.hypot(p.x - f.x, p.y - f.y, p.z - f.z) < cfg.predatorKill) {
+      this.resetFly('predator');
+      this.predator = this.randomPredator();
+      return this.afterStep(dt, rL, rR);
+    }
+
+    // Энергия и еда
+    f.energy -= (cfg.energyDrain + cfg.moveCost * f.speed) * dt;
+    for (let k = 0; k < this.food.length; k++) {
+      const food = this.food[k];
+      if (Math.hypot(food.x - f.x, food.y - f.y, food.z - f.z) < cfg.eatRadius) {
+        f.energy = Math.min(cfg.energyMax, f.energy + cfg.foodGain);
+        this.eaten += 1;
+        this.logEvent('Муха съела еду');
+        this.food[k] = this.randomFood();
+      }
+    }
+    if (f.energy <= 0) this.resetFly('starve');
+
+    return this.afterStep(dt, rL, rR);
+  }
+
+  afterStep(dt, rL, rR) {
+    const f = this.fly;
+    f.lifeTime = (f.lifeTime || 0) + dt;
+    f.trail.push([f.x, f.y, f.z]);
+    if (f.trail.length > 240) f.trail.shift();
+    this.historyTimer += dt;
+    if (this.historyTimer >= 0.1) {
+      this.historyTimer = 0;
+      const sensory = (this.meanRate(this.olfL) + this.meanRate(this.olfR)
+        + this.meanRate(this.mechL) + this.meanRate(this.mechR)) / 4;
+      this.history.push({ motor: (rL + rR) / 2, sensory, energy: f.energy });
+      if (this.history.length > 400) this.history.shift();
+    }
+  }
+}
+
+// ---- evolution.js ----
+// Эволюция генома мухи: популяция, турнирный отбор, скрещивание, мутации, элитизм.
+// Фитнес: очки за еду, очки за время жизни, штрафы за смерть.
+
+
+function evaluateGenome(data, genome, { mode, seeds, seconds }) {
+  let total = 0, eaten = 0, predator = 0, starve = 0;
+  for (const seed of seeds) {
+    const sim = new FlySim(data, { mode, seed, config: decode(genome) });
+    const steps = Math.round(seconds * 60);
+    for (let s = 0; s < steps; s++) sim.step(1 / 60);
+    eaten += sim.eaten;
+    predator += sim.deaths.predator;
+    starve += sim.deaths.starve;
+    total += 5 * sim.eaten + 0.05 * seconds - 4 * sim.deaths.predator - 2 * sim.deaths.starve;
+  }
+  const n = seeds.length;
+  return { fitness: total / n, eaten: eaten / n, predator: predator / n, starve: starve / n };
+}
+
+class Evolution {
+  constructor(data, { mode = 'connectome', pop = 20, seconds = 25, seed = Date.now() % 100000 } = {}) {
+    this.data = data;
+    this.mode = mode;
+    this.popSize = pop;
+    this.seconds = seconds;
+    this.rng = mulberry32(seed);
+    this.pop = Array.from({ length: pop }, () => randomGenome(this.rng));
+    this.gen = 0;
+    this.best = null;
+    this.bestFit = -Infinity;
+    this.history = [];
+  }
+
+  tournament(results) {
+    let best = -1;
+    for (let k = 0; k < 3; k++) {
+      const idx = Math.floor(this.rng() * this.pop.length);
+      if (best < 0 || results[idx].fitness > results[best].fitness) best = idx;
+    }
+    return best;
+  }
+
+  // Одно поколение: оценка всех геномов, затем следующая популяция
+  generation() {
+    // одни и те же случайные миры для всей популяции в этом поколении
+    const seeds = [1000 + this.gen * 2, 1001 + this.gen * 2];
+    const results = this.pop.map((g) =>
+      evaluateGenome(this.data, g, { mode: this.mode, seeds, seconds: this.seconds }));
+    const order = results.map((_, i) => i).sort((a, b) => results[b].fitness - results[a].fitness);
+    const top = results[order[0]];
+    const mean = results.reduce((s, r) => s + r.fitness, 0) / results.length;
+    this.best = this.pop[order[0]];
+    this.bestFit = top.fitness;
+    this.history.push({ gen: this.gen, best: top.fitness, mean, eaten: top.eaten });
+
+    const next = [this.pop[order[0]], this.pop[order[1]]]; // элитизм
+    while (next.length < this.popSize) {
+      const a = this.pop[this.tournament(results)];
+      const b = this.pop[this.tournament(results)];
+      next.push(mutate(crossover(a, b, this.rng), this.rng));
+    }
+    this.pop = next;
+    // проверка лучшего генома на фиксированных мирах, одинаковых для всех поколений
+    const bench = evaluateGenome(this.data, this.best, { mode: this.mode, seeds: [7, 8], seconds: this.seconds });
+    this.history[this.history.length - 1].bench = bench.fitness;
+    const out = { gen: this.gen, best: this.best, bestFit: this.bestFit, mean, bestEaten: top.eaten,
+                  bestPredator: top.predator, bestStarve: top.starve, bench: bench.fitness };
+    this.gen += 1;
+    return out;
+  }
+}
+</script>
+<script>
+if (!window.THREE) showError('Не загрузилась 3D-библиотека three.js. Проверьте интернет и обновите страницу.');
+
 
 const DT = 1 / 60;
 const $ = (id) => document.getElementById(id);
@@ -254,9 +777,13 @@ function showTab(name) {
 document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
 // ---- сцена --------------------------------------------------------------
+// цвета в hex считаем sRGB, как в новых версиях three.js
+if (THREE.ColorManagement) THREE.ColorManagement.legacyMode = false;
 const sceneEl = $('scene');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
 sceneEl.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -266,7 +793,7 @@ scene.background = SKY_DAY.clone();
 scene.fog = new THREE.Fog(SKY_DAY.clone(), 7, 16);
 
 const camera = new THREE.PerspectiveCamera(55, 1, 0.05, 60);
-const controls = new OrbitControls(camera, renderer.domElement);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.4, 0);
 controls.enableDamping = true;
 controls.minDistance = 0.8;
@@ -298,7 +825,7 @@ function makeGroundTexture() {
   const tex = new THREE.CanvasTexture(c);
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(3, 3);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.encoding = THREE.sRGBEncoding;
   return tex;
 }
 const ground = new THREE.Mesh(
@@ -326,7 +853,7 @@ function radialTexture(inner, outer) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
   const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
+  t.encoding = THREE.sRGBEncoding;
   return t;
 }
 const shadow = new THREE.Mesh(
@@ -447,6 +974,7 @@ function buildObstacles() {
 const brainCanvas = $('brain');
 const brainRenderer = new THREE.WebGLRenderer({ canvas: brainCanvas, antialias: true, alpha: true });
 brainRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+brainRenderer.outputEncoding = THREE.sRGBEncoding;
 const brainScene = new THREE.Scene();
 const brainCam = new THREE.PerspectiveCamera(40, 1, 0.1, 20);
 brainCam.position.set(0, 0.3, 3.3);
@@ -532,15 +1060,37 @@ function newSim() {
 }
 
 // ---- эволюция (Web Worker) ------------------------------------------------
+// Код воркера: ядро симуляции уже встроено перед ним (см. script#core)
+const WORKER_CODE = `
+let token = 0;
+self.onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === 'start') {
+    const my = ++token;
+    const evo = new Evolution(m.data, { mode: m.mode, pop: m.pop, seconds: m.seconds });
+    while (my === token) {
+      const r = evo.generation();
+      self.postMessage({ type: 'gen', gen: r.gen, best: r.best, bestFit: r.bestFit, mean: r.mean,
+        bestEaten: r.bestEaten, bestPredator: r.bestPredator, bestStarve: r.bestStarve, bench: r.bench,
+        history: evo.history.slice(-400) });
+      await new Promise((res) => setTimeout(res, 0));
+    }
+  } else if (m.type === 'stop') {
+    token++;
+  }
+};
+`;
+
 function startEvolution() {
   if (!evoWorker) {
-    evoWorker = new Worker('evolve-worker.js', { type: 'module' });
+    const src = document.getElementById('core').textContent + '\n' + WORKER_CODE;
+    evoWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
     evoWorker.onmessage = (e) => onEvoMessage(e.data);
     evoWorker.onerror = (e) => { $('status').textContent = 'Ошибка эволюции: ' + e.message; };
   }
   evoRunning = true;
   $('evoBtn').textContent = 'Остановить';
-  evoWorker.postMessage({ type: 'start', mode: $('mode').value, pop: 20, seconds: 25 });
+  evoWorker.postMessage({ type: 'start', mode: $('mode').value, pop: 20, seconds: 25, data });
   $('status').textContent = 'Эволюция идёт в фоне: 20 мух, 2 мира по 25 с на каждую.';
 }
 
@@ -712,8 +1262,8 @@ function updateLight() {
   const sky = SKY_NIGHT.clone().lerp(SKY_DAY, t);
   scene.background.copy(sky);
   scene.fog.color.copy(sky);
-  sun.intensity = 0.08 + 2.1 * t;
-  hemi.intensity = 0.25 + 1.0 * t;
+  sun.intensity = 0.4 + 1.8 * t;
+  hemi.intensity = 0.55 + 0.7 * t;
   sun.position.set(Math.sin(2 * Math.PI * p) * 4, 2 + 3 * t, 2);
 }
 
@@ -782,7 +1332,7 @@ function syncScene() {
   if (followCam) {
     controls.enabled = false;
     const fx = Math.sin(f.heading), fz = Math.cos(f.heading);
-    const desired = new THREE.Vector3(f.x - fx * 1.7, f.y + 0.8, f.z - fz * 1.7);
+    const desired = new THREE.Vector3(f.x - fx * 2.2, f.y + 1.5, f.z - fz * 2.2);
     camera.position.lerp(desired, 0.12);
     camera.lookAt(f.x + fx * 0.25, f.y + 0.05, f.z + fz * 0.25);
   } else {
@@ -861,7 +1411,8 @@ async function main() {
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 main().catch((err) => {
-  $('status').textContent = 'Не удалось загрузить данные. Откройте страницу через веб-сервер.';
+  $('status').textContent = 'Не удалось загрузить данные.';
+  showError('не удалось запустить симуляцию: ' + (err && err.message ? err.message : err));
   console.error(err);
 });
 </script>

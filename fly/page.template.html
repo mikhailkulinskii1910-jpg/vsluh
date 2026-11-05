@@ -1,0 +1,906 @@
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Муха на коннектоме</title>
+<style>
+  :root { color-scheme: dark; --bg:#090b10; --panel:#11151d; --panel2:#0d1118; --line:#243041; --text:#e8ecf3; --muted:#8c97aa; --accent:#7ee0c3; --warn:#ff7b5c; --sense:#4fc3f7; --motor:#ff7043; --hid:#7e57c2; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size:15px; line-height:1.4; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); box-sizing:border-box; }
+  h1 { font-size:18px; margin:0; font-weight:650; }
+  h2 { font-size:15px; margin:0 0 10px; font-weight:650; }
+  [hidden] { display:none !important; }
+
+  /* шапка и вкладки */
+  header { position:sticky; top:env(safe-area-inset-top, 0px); z-index:5; background:var(--bg); padding:14px 0 8px; }
+  .titlebar { display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+  .titlebar span { color:var(--muted); font-size:13px; }
+  .tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab { flex:1 0 auto; font:inherit; font-weight:600; color:var(--muted); background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:9px 12px; cursor:pointer; white-space:nowrap; }
+  .tab[aria-selected="true"] { color:var(--bg); background:var(--accent); border-color:var(--accent); }
+  .tab:focus-visible, button:focus-visible, select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* панель управления */
+  .toolbar { display:grid; grid-template-columns: 1fr 110px auto; gap:8px; align-items:end; margin-top:10px; }
+  .toolbar label { display:block; font-size:12px; color:var(--muted); margin-bottom:3px; }
+  select, button, textarea { font:inherit; color:var(--text); background:var(--panel2); border:1px solid var(--line); border-radius:9px; padding:8px 10px; box-sizing:border-box; }
+  select { width:100%; }
+  button { cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); color:var(--bg); border-color:var(--accent); font-weight:650; }
+  .pill-row { display:flex; gap:6px; flex-wrap:wrap; }
+  @media (max-width: 640px) {
+    .toolbar { grid-template-columns: 1fr 1fr; }
+    .toolbar > div:first-child, .toolbar > .pill-row { grid-column: 1 / -1; }
+    .toolbar > .pill-row { display:grid; grid-template-columns:1fr 1fr; }
+    .toolbar > .pill-row button { width:100%; }
+    .tab { font-size:14px; padding:8px 10px; }
+  }
+
+  /* вкладки-страницы */
+  .pane { margin-top:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 16px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:14px; }
+  .row { display:flex; justify-content:space-between; gap:10px; margin:5px 0; color:var(--muted); }
+  .row b { color:var(--text); font-weight:650; text-align:right; font-variant-numeric: tabular-nums; }
+  .bar { height:8px; border-radius:4px; background:var(--line); overflow:hidden; margin-top:6px; }
+  .bar > i { display:block; height:100%; width:0%; background:var(--accent); transition: width .15s linear; }
+  .legend { display:flex; gap:12px; font-size:12px; color:var(--muted); margin-top:6px; flex-wrap:wrap; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; vertical-align:middle; background:var(--c); }
+  canvas.chart { width:100%; height:150px; display:block; }
+  #log { margin:10px 0 0; padding:0; list-style:none; font-size:13px; color:var(--muted); }
+  #log li { padding:4px 0; border-top:1px solid var(--line); }
+  #log li:first-child { border-top:0; }
+  #log li.predator { color:var(--warn); }
+  .muted { color:var(--muted); font-size:13px; }
+  textarea { width:100%; font:12px ui-monospace, Menlo, monospace; margin-top:10px; }
+
+  /* сцена */
+  .scene-wrap { position:relative; height:62vh; min-height:360px; border-radius:16px; overflow:hidden; border:1px solid var(--line); background:#0a0d14; }
+  @media (min-width: 900px) { .scene-wrap { height:calc(100vh - 230px); min-height:520px; } }
+  #scene { position:absolute; inset:0; }
+  #scene canvas { display:block; width:100%; height:100%; }
+  .hud { position:absolute; left:12px; top:12px; right:12px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; pointer-events:none; z-index:2; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { background:rgba(9,11,16,.7); border:1px solid rgba(255,255,255,.08); border-radius:999px; padding:5px 10px; font-size:13px; backdrop-filter: blur(4px); font-variant-numeric: tabular-nums; }
+  .chip b { color:var(--accent); font-weight:650; }
+  .energy { position:absolute; left:12px; bottom:12px; width:min(260px, 60%); background:rgba(9,11,16,.7); border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px 10px; z-index:2; pointer-events:none; font-size:13px; }
+  .scene-btns { position:absolute; right:12px; bottom:12px; display:flex; gap:6px; z-index:2; }
+  .scene-btns button { background:rgba(9,11,16,.75); backdrop-filter: blur(4px); }
+  .shot-note { font-size:12px; color:var(--muted); margin-top:8px; }
+
+  /* мозг */
+  .brain-wrap { position:relative; height:58vh; min-height:340px; border-radius:14px; overflow:hidden; background:#06080c; border:1px solid var(--line); }
+  #brain { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .bars > div { margin:9px 0; }
+  .bars .lbl { display:flex; justify-content:space-between; font-size:13px; color:var(--muted); }
+  .bars .track { height:10px; border-radius:5px; background:var(--line); overflow:hidden; margin-top:4px; }
+  .bars .track > i { display:block; height:100%; width:0%; background:var(--c); transition: width .2s linear; }
+</style>
+
+<header>
+  <div class="titlebar"><h1>Муха на коннектоме</h1><span id="netSize">2000 нейронов · 106 022 связи</span></div>
+  <nav class="tabs" role="tablist" aria-label="Разделы">
+    <button class="tab" role="tab" data-tab="scene" aria-selected="true">Сцена</button>
+    <button class="tab" role="tab" data-tab="brain" aria-selected="false">Мозг</button>
+    <button class="tab" role="tab" data-tab="evo" aria-selected="false">Эволюция</button>
+    <button class="tab" role="tab" data-tab="stats" aria-selected="false">Статистика</button>
+  </nav>
+  <div class="toolbar">
+    <div>
+      <label for="mode">Проводка нейронов</label>
+      <select id="mode">
+        <option value="connectome">Настоящий коннектом FlyWire</option>
+        <option value="random">Контроль: цели связей перемешаны</option>
+      </select>
+    </div>
+    <div>
+      <label for="speed">Скорость</label>
+      <select id="speed">
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="4">4×</option>
+        <option value="8">8×</option>
+      </select>
+    </div>
+    <div class="pill-row">
+      <button id="pauseBtn">Пауза</button>
+      <button id="newBtn">Новая муха</button>
+    </div>
+  </div>
+</header>
+
+<div id="errorBanner" class="card" hidden style="margin-top:12px;border-color:var(--warn);color:var(--warn)"></div>
+<main>
+  <!-- Сцена -->
+  <section id="tab-scene" class="pane">
+    <div class="scene-wrap">
+      <div id="scene"></div>
+      <div class="hud">
+        <div class="chips">
+          <span class="chip">Жизнь <b id="lives">–</b></span>
+          <span class="chip">Еда <b id="eaten">–</b></span>
+          <span class="chip">Время <b id="age">–</b></span>
+        </div>
+        <div class="chips">
+          <span class="chip" id="dayChip">День</span>
+          <button id="camBtn" class="chip" style="pointer-events:auto;cursor:pointer;color:var(--text);font:inherit;font-size:13px;background:rgba(9,11,16,.75)">Камера: следить</button>
+        </div>
+      </div>
+      <div class="energy">
+        <div class="row" style="margin:0"><span>Энергия</span><b id="energyText">–</b></div>
+        <div class="bar"><i id="energyBar"></i></div>
+      </div>
+    </div>
+    <p class="shot-note">Перетащите сцену пальцем или мышью, чтобы осмотреться в режиме «Обзор». В режиме «Следить» камера летит за мухой.</p>
+    <div class="card" style="margin-top:12px">
+      <h2>Что происходит сейчас</h2>
+      <ul id="log" style="margin:0"></ul>
+    </div>
+  </section>
+
+  <!-- Мозг -->
+  <section id="tab-brain" class="pane" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>2000 нейронов в их реальных позициях</h2>
+        <div class="brain-wrap"><canvas id="brain"></canvas></div>
+        <div class="legend">
+          <span style="--c:#4fc3f7">обонятельные</span>
+          <span style="--c:#81c784">механосенсорные</span>
+          <span style="--c:#ff7043">моторные</span>
+          <span style="--c:#7e57c2">промежуточные</span>
+        </div>
+        <p class="muted">Яркость точки — текущая активность нейрона. Мозг медленно вращается.</p>
+      </div>
+      <div class="card">
+        <h2>Активность по группам</h2>
+        <div class="bars">
+          <div style="--c:#4fc3f7"><div class="lbl"><span>Обонятельные (запах еды)</span><b id="gOlf">0%</b></div><div class="track"><i id="bOlf"></i></div></div>
+          <div style="--c:#81c784"><div class="lbl"><span>Механосенсорные (стены, хищник)</span><b id="gMech">0%</b></div><div class="track"><i id="bMech"></i></div></div>
+          <div style="--c:#ff7043"><div class="lbl"><span>Моторные (полёт и поворот)</span><b id="gMot">0%</b></div><div class="track"><i id="bMot"></i></div></div>
+          <div style="--c:#7e57c2"><div class="lbl"><span>Промежуточные</span><b id="gHid">0%</b></div><div class="track"><i id="bHid"></i></div></div>
+        </div>
+        <div class="row" style="margin-top:14px"><span>Поворот сейчас</span><b id="turnNow">–</b></div>
+        <div class="row"><span>Скорость полёта</span><b id="speedNow">–</b></div>
+        <p class="muted" style="margin-top:12px">Поворот задаёт разница активности левых и правых моторных нейронов, скорость — их средняя активность.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Эволюция -->
+  <section id="tab-evo" class="pane" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Эволюция генома</h2>
+        <div class="row"><span>Поколение</span><b id="gen">–</b></div>
+        <div class="row"><span>Лучший фитнес (поколение)</span><b id="bestFit">–</b></div>
+        <div class="row"><span>Проверка на фиксированных мирах</span><b id="bench">–</b></div>
+        <div class="row"><span>Средний фитнес</span><b id="meanFit">–</b></div>
+        <div class="row"><span>Съедено у лучшего</span><b id="bestEaten">–</b></div>
+        <div class="legend" style="margin-top:12px">
+          <span style="--c:#7ee0c3">проверка на фиксированных мирах</span>
+          <span style="--c:#ff7043">лучший в поколении</span>
+          <span style="--c:#8c97aa">среднее</span>
+        </div>
+        <canvas id="evoChart" class="chart" width="540" height="220" style="margin-top:6px"></canvas>
+        <label class="row" style="justify-content:flex-start;gap:8px;margin-top:12px"><input type="checkbox" id="useEvolved" checked> Использовать лучшего в сцене</label>
+        <div class="pill-row" style="margin-top:10px">
+          <button id="evoBtn" class="primary">Остановить</button>
+          <button id="saveBtn">Показать геном</button>
+          <button id="copyBtn" hidden>Копировать</button>
+        </div>
+        <textarea id="genomeBox" readonly hidden rows="8"></textarea>
+        <p class="muted" id="status" style="margin-top:10px"></p>
+      </div>
+      <div class="card">
+        <h2>Как это устроено</h2>
+        <p class="muted">Каждый геном задаёт силу синапсов, пороги нейронов, чувствительность сенсоров и силу моторов. Топология коннектома не меняется.</p>
+        <p class="muted">Фитнес: 5 очков за съеденную еду, 0,05 за секунду жизни, −4 за смерть от хищника, −2 за голод.</p>
+        <p class="muted">Каждое поколение — 20 мух, по 2 мира по 25 секунд. Лучший геном проверяется на двух фиксированных мирах: так видно настоящий прогресс.</p>
+        <p class="muted">Эволюция идёт в фоновом потоке. Страница не тормозит.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Статистика -->
+  <section id="tab-stats" class="pane" hidden>
+    <div class="grid">
+      <div class="card">
+        <h2>Жизнь мухи</h2>
+        <div class="row"><span>Номер жизни</span><b id="lives2">–</b></div>
+        <div class="row"><span>Время жизни</span><b id="age2">–</b></div>
+        <div class="row"><span>Съедено еды</span><b id="eaten2">–</b></div>
+        <div class="row"><span>Смерти: хищник / голод</span><b id="deaths">–</b></div>
+        <div class="row"><span>Энергия</span><b id="energyText2">–</b></div>
+        <div class="bar"><i id="energyBar2"></i></div>
+      </div>
+      <div class="card">
+        <h2>Графики активности</h2>
+        <canvas id="chart" class="chart" width="880" height="220"></canvas>
+        <div class="legend">
+          <span style="--c:#ff7043">моторы</span>
+          <span style="--c:#4fc3f7">сенсоры</span>
+          <span style="--c:#7ee0c3">энергия</span>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// Показывает любую ошибку прямо на странице, чтобы её было видно на телефоне
+window.showError = function (msg) {
+  var el = document.getElementById('errorBanner');
+  if (!el) return;
+  el.hidden = false;
+  el.textContent = 'Ошибка: ' + msg;
+};
+window.addEventListener('error', function (e) { showError(e.message || String(e)); });
+window.addEventListener('unhandledrejection', function (e) { showError(e.reason && e.reason.message ? e.reason.message : String(e.reason)); });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script id="core">
+/*__CORE__*/
+</script>
+<script>
+if (!window.THREE) showError('Не загрузилась 3D-библиотека three.js. Проверьте интернет и обновите страницу.');
+
+
+const DT = 1 / 60;
+const $ = (id) => document.getElementById(id);
+const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+// ---- вкладки -----------------------------------------------------------
+let activeTab = 'scene';
+function showTab(name) {
+  activeTab = name;
+  for (const btn of document.querySelectorAll('.tab')) {
+    btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
+  }
+  for (const pane of document.querySelectorAll('main > section')) {
+    pane.hidden = pane.id !== 'tab-' + name;
+  }
+  lastW = -1;
+}
+document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+// ---- сцена --------------------------------------------------------------
+// цвета в hex считаем sRGB, как в новых версиях three.js
+if (THREE.ColorManagement) THREE.ColorManagement.legacyMode = false;
+const sceneEl = $('scene');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.physicallyCorrectLights = true;
+sceneEl.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const SKY_DAY = new THREE.Color(0x3a6b8a);
+const SKY_NIGHT = new THREE.Color(0x05070d);
+scene.background = SKY_DAY.clone();
+scene.fog = new THREE.Fog(SKY_DAY.clone(), 7, 16);
+
+const camera = new THREE.PerspectiveCamera(55, 1, 0.05, 60);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.4, 0);
+controls.enableDamping = true;
+controls.minDistance = 0.8;
+controls.maxDistance = 9;
+
+const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x3a3020, 1.2);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
+sun.position.set(2.5, 4.5, 2);
+scene.add(sun);
+
+// Земля: процедурная текстура лесной почвы
+function makeGroundTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(256, 256, 40, 256, 256, 360);
+  g.addColorStop(0, '#4f6b3a');
+  g.addColorStop(1, '#2a3a22');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 512, 512);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 2600; i++) {
+    const x = rnd() * 512, y = rnd() * 512, r = 1 + rnd() * 3;
+    ctx.fillStyle = rnd() < 0.5 ? 'rgba(120,150,80,0.35)' : 'rgba(40,30,20,0.35)';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 3);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(CONFIG.arenaHalf * 2 + 4, CONFIG.arenaHalf * 2 + 4),
+  new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness: 0.95 }));
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+// Невидимые стены арены — лёгкая рамка по краям
+const half = CONFIG.arenaHalf;
+const arenaFrame = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(half * 2, CONFIG.arenaTop, half * 2)),
+  new THREE.LineBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.25 }));
+arenaFrame.position.y = CONFIG.arenaTop / 2;
+scene.add(arenaFrame);
+
+// Тень-пятно под мухой
+function radialTexture(inner, outer) {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, inner);
+  g.addColorStop(1, outer);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c);
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+const shadow = new THREE.Mesh(
+  new THREE.PlaneGeometry(0.5, 0.5),
+  new THREE.MeshBasicMaterial({ map: radialTexture('rgba(0,0,0,0.55)', 'rgba(0,0,0,0)'), transparent: true, depthWrite: false }));
+shadow.rotation.x = -Math.PI / 2;
+shadow.position.y = 0.003;
+scene.add(shadow);
+
+// Муха (увеличена, чтобы её было видно на телефоне)
+const flyMat = (color, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05, ...extra });
+const fly = new THREE.Group();
+const thorax = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), flyMat(0x7a5432));
+thorax.scale.set(0.09, 0.08, 0.13);
+const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 16, 12), flyMat(0x9a6a36));
+head.position.set(0, 0.02, 0.15);
+const abdomen = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), flyMat(0xe0ac4c));
+abdomen.scale.set(0.075, 0.065, 0.17);
+abdomen.position.set(0, -0.01, -0.2);
+const abdomenStripe = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.012, 8, 20), flyMat(0x2a1b10));
+abdomenStripe.rotation.x = Math.PI / 2;
+abdomenStripe.position.set(0, -0.005, -0.12);
+const eyeMat = flyMat(0xd42a2e, { emissive: 0x440000 });
+const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.03, 12, 10), eyeMat);
+const eyeR = eyeL.clone();
+eyeL.position.set(0.045, 0.035, 0.17);
+eyeR.position.set(-0.045, 0.035, 0.17);
+fly.add(thorax, head, abdomen, abdomenStripe, eyeL, eyeR);
+const wingGeo = new THREE.CircleGeometry(0.2, 18);
+wingGeo.scale(0.5, 1, 1);
+const wingMat = new THREE.MeshStandardMaterial({ color: 0xdff1ff, transparent: true, opacity: 0.38, side: THREE.DoubleSide, depthWrite: false });
+const wingL = new THREE.Mesh(wingGeo, wingMat);
+const wingR = new THREE.Mesh(wingGeo, wingMat);
+wingL.position.set(0.05, 0.07, -0.02);
+wingR.position.set(-0.05, 0.07, -0.02);
+fly.add(wingL, wingR);
+const legs = [];
+const legGeo = new THREE.CylinderGeometry(0.008, 0.006, 0.18, 5);
+legGeo.translate(0, -0.09, 0);
+for (let k = 0; k < 6; k++) {
+  const leg = new THREE.Mesh(legGeo, flyMat(0x2a1f16));
+  leg.position.set(k < 3 ? 0.06 : -0.06, -0.05, 0.07 - (k % 3) * 0.07);
+  leg.rotation.z = k < 3 ? -0.5 : 0.5;
+  fly.add(leg);
+  legs.push(leg);
+}
+fly.scale.setScalar(2.2);
+scene.add(fly);
+
+// Хищник (оса): крупнее и с красным свечением
+const predator = new THREE.Group();
+const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), flyMat(0x9c2222, { emissive: 0x330808 }));
+pBody.scale.set(1, 0.8, 1.6);
+const pStripe = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.014, 8, 16), flyMat(0x1a1010));
+pStripe.rotation.x = Math.PI / 2;
+pStripe.position.set(0, 0, -0.04);
+const pWingMat = new THREE.MeshStandardMaterial({ color: 0xffd0c0, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+const pWingL = new THREE.Mesh(new THREE.CircleGeometry(0.22, 12), pWingMat);
+const pWingR = pWingL.clone();
+pWingL.position.set(0.1, 0.05, 0); pWingL.rotation.set(-Math.PI / 2, 0, 0.3);
+pWingR.position.set(-0.1, 0.05, 0); pWingR.rotation.set(-Math.PI / 2, 0, -0.3);
+predator.add(pBody, pStripe, pWingL, pWingR);
+predator.scale.setScalar(1.8);
+scene.add(predator);
+const glowTex = radialTexture('rgba(255,120,80,0.9)', 'rgba(255,120,80,0)');
+const predGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+predGlow.scale.setScalar(0.9);
+scene.add(predGlow);
+const senseRing = new THREE.Mesh(
+  new THREE.SphereGeometry(CONFIG.predatorSense, 24, 16),
+  new THREE.MeshBasicMaterial({ color: 0xff7043, transparent: true, opacity: 0.05, wireframe: true, depthWrite: false }));
+scene.add(senseRing);
+
+// След полёта
+const TRAIL = 240;
+const trailGeo = new THREE.BufferGeometry();
+trailGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL * 3), 3));
+trailGeo.setDrawRange(0, 0);
+const trail = new THREE.Line(trailGeo, new THREE.LineBasicMaterial({ color: 0x7ee0c3, transparent: true, opacity: 0.75 }));
+scene.add(trail);
+
+// Еда: светящиеся шары с ореолом
+const foodGeo = new THREE.SphereGeometry(0.1, 16, 12);
+const foodMat = new THREE.MeshStandardMaterial({ color: 0x66e88a, emissive: 0x1f7a3a, roughness: 0.35 });
+const foodGlowTex = radialTexture('rgba(110,255,150,0.8)', 'rgba(110,255,150,0)');
+const foodMeshes = [];
+
+// Пыль в воздухе
+const DUST = 320;
+const dustGeo = new THREE.BufferGeometry();
+const dustPos = new Float32Array(DUST * 3);
+for (let i = 0; i < DUST; i++) {
+  dustPos[i * 3] = (Math.random() * 2 - 1) * half;
+  dustPos[i * 3 + 1] = Math.random() * CONFIG.arenaTop;
+  dustPos[i * 3 + 2] = (Math.random() * 2 - 1) * half;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ color: 0xfff3c4, size: 0.012, transparent: true, opacity: 0.35, depthWrite: false }));
+scene.add(dust);
+
+// Столбы-препятствия
+const obstacleGroup = new THREE.Group();
+scene.add(obstacleGroup);
+const stoneMat = new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.9, metalness: 0.02 });
+function buildObstacles() {
+  obstacleGroup.clear();
+  for (const o of sim.obstacles) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(o.r, o.r * 1.1, o.height, 20), stoneMat);
+    m.position.set(o.x, o.height / 2, o.z);
+    obstacleGroup.add(m);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(o.r * 0.95, o.r * 0.95, 0.02, 20), new THREE.MeshStandardMaterial({ color: 0x8a919d, roughness: 0.8 }));
+    cap.position.set(o.x, o.height + 0.01, o.z);
+    obstacleGroup.add(cap);
+  }
+}
+
+// ---- вид мозга ------------------------------------------------------------
+const brainCanvas = $('brain');
+const brainRenderer = new THREE.WebGLRenderer({ canvas: brainCanvas, antialias: true, alpha: true });
+brainRenderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+brainRenderer.outputEncoding = THREE.sRGBEncoding;
+const brainScene = new THREE.Scene();
+const brainCam = new THREE.PerspectiveCamera(40, 1, 0.1, 20);
+brainCam.position.set(0, 0.3, 3.3);
+brainCam.lookAt(0, 0, 0);
+const brainCloud = new THREE.Group();
+brainScene.add(brainCloud);
+const GROUP_COLORS = [0x4fc3f7, 0x81c784, 0xff7043, 0x7e57c2];
+
+// ---- состояние -----------------------------------------------------------
+let data = null;
+let sim = null;
+let paused = false;
+let speed = 1;
+let followCam = true;
+let acc = 0;
+let lastT = performance.now();
+let brainPoints = null;
+let brainColors = null;
+let evoWorker = null;
+let evoRunning = false;
+let evoState = null;
+let lastLogKey = '';
+let lastW = -1;
+
+function buildBrainPoints() {
+  const N = data.ids.length;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(data.pos), 3));
+  brainColors = new Float32Array(N * 3);
+  geo.setAttribute('color', new THREE.BufferAttribute(brainColors, 3));
+  brainCloud.clear();
+  brainPoints = new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.07, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.95 }));
+  brainCloud.add(brainPoints);
+}
+
+function updateBrainColors() {
+  const N = data.ids.length;
+  const base = GROUP_COLORS.map((c) => new THREE.Color(c));
+  for (let i = 0; i < N; i++) {
+    const c = base[data.group[i]];
+    const a = 0.12 + 0.88 * Math.min(1, sim.rate[i] * 6);
+    brainColors[i * 3] = c.r * a;
+    brainColors[i * 3 + 1] = c.g * a;
+    brainColors[i * 3 + 2] = c.b * a;
+  }
+  brainPoints.geometry.attributes.color.needsUpdate = true;
+}
+
+const groupRates = [0, 0, 0, 0];
+const groupCounts = [0, 0, 0, 0];
+function computeGroupRates() {
+  groupRates.fill(0); groupCounts.fill(0);
+  for (let i = 0; i < data.ids.length; i++) {
+    groupRates[data.group[i]] += sim.rate[i];
+    groupCounts[data.group[i]] += 1;
+  }
+  for (let g = 0; g < 4; g++) groupRates[g] = groupCounts[g] ? groupRates[g] / groupCounts[g] : 0;
+}
+
+function rebuildFood() {
+  for (const m of foodMeshes) scene.remove(m);
+  foodMeshes.length = 0;
+  for (let k = 0; k < sim.food.length; k++) {
+    const m = new THREE.Mesh(foodGeo, foodMat);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: foodGlowTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.scale.setScalar(0.45);
+    m.add(glow);
+    scene.add(m);
+    foodMeshes.push(m);
+  }
+}
+
+function currentConfig() {
+  if ($('useEvolved').checked && evoState && evoState.best) return decode(evoState.best);
+  return {};
+}
+
+function newSim() {
+  sim = new FlySim(data, { mode: $('mode').value, seed: 1 + Math.floor(Math.random() * 1e6), config: currentConfig() });
+  rebuildFood();
+  buildObstacles();
+  lastLogKey = '';
+}
+
+// ---- эволюция (Web Worker) ------------------------------------------------
+// Код воркера: ядро симуляции уже встроено перед ним (см. script#core)
+const WORKER_CODE = `
+let token = 0;
+self.onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === 'start') {
+    const my = ++token;
+    const evo = new Evolution(m.data, { mode: m.mode, pop: m.pop, seconds: m.seconds });
+    while (my === token) {
+      const r = evo.generation();
+      self.postMessage({ type: 'gen', gen: r.gen, best: r.best, bestFit: r.bestFit, mean: r.mean,
+        bestEaten: r.bestEaten, bestPredator: r.bestPredator, bestStarve: r.bestStarve, bench: r.bench,
+        history: evo.history.slice(-400) });
+      await new Promise((res) => setTimeout(res, 0));
+    }
+  } else if (m.type === 'stop') {
+    token++;
+  }
+};
+`;
+
+function startEvolution() {
+  if (!evoWorker) {
+    const src = document.getElementById('core').textContent + '\n' + WORKER_CODE;
+    evoWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+    evoWorker.onmessage = (e) => onEvoMessage(e.data);
+    evoWorker.onerror = (e) => { $('status').textContent = 'Ошибка эволюции: ' + e.message; };
+  }
+  evoRunning = true;
+  $('evoBtn').textContent = 'Остановить';
+  evoWorker.postMessage({ type: 'start', mode: $('mode').value, pop: 20, seconds: 25, data });
+  $('status').textContent = 'Эволюция идёт в фоне: 20 мух, 2 мира по 25 с на каждую.';
+}
+
+function stopEvolution() {
+  evoRunning = false;
+  $('evoBtn').textContent = 'Запустить';
+  if (evoWorker) evoWorker.postMessage({ type: 'stop' });
+  $('status').textContent = 'Эволюция остановлена.';
+}
+
+function onEvoMessage(m) {
+  if (m.type !== 'gen') return;
+  evoState = m;
+  const f = (x) => (x === undefined || x === null ? '–' : x.toFixed(2));
+  $('gen').textContent = m.gen + 1;
+  $('bestFit').textContent = f(m.bestFit);
+  $('bench').textContent = f(m.bench);
+  $('meanFit').textContent = f(m.mean);
+  $('bestEaten').textContent = f(m.bestEaten);
+  drawEvoChart(m.history);
+  if ($('useEvolved').checked && sim) sim.setConfig(decode(m.best));
+}
+
+function drawEvoChart(history) {
+  const c = $('evoChart');
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#243041';
+  ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(0, (H * k) / 4); ctx.lineTo(W, (H * k) / 4); ctx.stroke(); }
+  if (history.length < 2) return;
+  const all = history.flatMap((h) => [h.best, h.mean, h.bench ?? h.best]);
+  const maxV = Math.max(1, ...all);
+  const minV = Math.min(0, ...all);
+  const span = Math.max(1, maxV - minV);
+  const line = (key, color) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    history.forEach((h, i) => {
+      const x = (i / Math.max(1, history.length - 1)) * (W - 4) + 2;
+      const v = key === 'bench' ? (h.bench ?? h.best) : h[key];
+      const y = H - 6 - ((v - minV) / span) * (H - 12);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  };
+  line('mean', '#8c97aa');
+  line('best', '#ff7043');
+  line('bench', '#7ee0c3');
+}
+
+function showGenome() {
+  if (!evoState) return;
+  const payload = {
+    description: 'Геном мухи, подобранный эволюцией на подсети коннектома FlyWire',
+    generation: evoState.gen + 1,
+    benchmarkFitness: evoState.bench,
+    genome: evoState.best,
+    parameters: decode(evoState.best),
+    genes: GENES.map((g) => g.key),
+  };
+  const box = $('genomeBox');
+  box.value = JSON.stringify(payload, null, 2);
+  box.hidden = false;
+  $('copyBtn').hidden = false;
+  box.select();
+}
+
+async function copyGenome() {
+  const box = $('genomeBox');
+  try {
+    await navigator.clipboard.writeText(box.value);
+    $('status').textContent = 'Геном скопирован.';
+  } catch (err) {
+    box.select();
+    $('status').textContent = 'Выделите текст и скопируйте вручную.';
+  }
+}
+
+// ---- графики и статистика --------------------------------------------------
+const chart = $('chart');
+const cctx = chart.getContext('2d');
+
+function drawChart() {
+  const W = chart.width, H = chart.height;
+  cctx.clearRect(0, 0, W, H);
+  cctx.strokeStyle = '#243041';
+  cctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { cctx.beginPath(); cctx.moveTo(0, (H * k) / 4); cctx.lineTo(W, (H * k) / 4); cctx.stroke(); }
+  const h = sim.history;
+  if (h.length < 2) return;
+  const maxMotor = Math.max(0.1, ...h.map((p) => p.motor));
+  const maxSens = Math.max(0.1, ...h.map((p) => p.sensory));
+  const series = [
+    { color: '#ff7043', v: (p) => p.motor / maxMotor },
+    { color: '#4fc3f7', v: (p) => p.sensory / maxSens },
+    { color: '#7ee0c3', v: (p) => p.energy / 100 },
+  ];
+  for (const s of series) {
+    cctx.strokeStyle = s.color;
+    cctx.lineWidth = 3;
+    cctx.beginPath();
+    h.forEach((p, i) => {
+      const x = (i / 399) * W;
+      const y = H - s.v(p) * (H - 8) - 4;
+      if (i === 0) cctx.moveTo(x, y); else cctx.lineTo(x, y);
+    });
+    cctx.stroke();
+  }
+}
+
+function updateStats() {
+  const f = sim.fly;
+  const e = Math.max(0, f.energy);
+  const pct = (e / CONFIG.energyMax) * 100;
+  const age = fmtTime(f.lifeTime ?? sim.time);
+  $('lives').textContent = sim.lives;
+  $('lives2').textContent = sim.lives;
+  $('eaten').textContent = sim.eaten;
+  $('eaten2').textContent = sim.eaten;
+  $('age').textContent = age;
+  $('age2').textContent = age;
+  $('deaths').textContent = `${sim.deaths.predator} / ${sim.deaths.starve}`;
+  $('energyText').textContent = `${Math.round(e)} / ${CONFIG.energyMax}`;
+  $('energyText2').textContent = `${Math.round(e)} / ${CONFIG.energyMax}`;
+  $('energyBar').style.width = `${pct}%`;
+  $('energyBar2').style.width = `${pct}%`;
+  const key = sim.events.length ? sim.events[sim.events.length - 1].t.toFixed(3) + sim.events.length : '';
+  if (key !== lastLogKey) {
+    lastLogKey = key;
+    const list = $('log');
+    list.innerHTML = '';
+    for (const ev of sim.events.slice().reverse().slice(0, 6)) {
+      const li = document.createElement('li');
+      li.textContent = `${fmtTime(ev.t)}  ${ev.text}`;
+      if (ev.text.startsWith('Хищник')) li.className = 'predator';
+      list.appendChild(li);
+    }
+  }
+  const daylight = 0.5 + 0.5 * Math.cos(2 * Math.PI * dayPhase());
+  $('dayChip').textContent = daylight > 0.5 ? 'День' : 'Ночь';
+}
+
+function updateBrainTab() {
+  computeGroupRates();
+  const names = ['Olf', 'Mech', 'Mot', 'Hid'];
+  names.forEach((n, g) => {
+    const pct = Math.round(Math.min(1, groupRates[g] * 4) * 100);
+    $('b' + n).style.width = pct + '%';
+    $('g' + n).textContent = (groupRates[g] * 100).toFixed(1) + '%';
+  });
+  const f = sim.fly;
+  $('turnNow').textContent = (CONFIG.motorTurn * (sim.meanRate(sim.motL) - sim.meanRate(sim.motR))).toFixed(2) + ' рад/с';
+  $('speedNow').textContent = f.speed.toFixed(2) + ' ед/с';
+  $('netSize').textContent = `${data.ids.length} нейронов · ${data.src.length} связей · ${$('mode').value === 'random' ? 'контроль' : 'коннектом'}`;
+}
+
+// ---- день и ночь ----------------------------------------------------------
+const DAY_LENGTH = 120; // секунд симуляции на полный цикл
+function dayPhase() {
+  return ((sim ? sim.time : 0) % DAY_LENGTH) / DAY_LENGTH;
+}
+function updateLight() {
+  const p = dayPhase();
+  const daylight = 0.5 + 0.5 * Math.cos(2 * Math.PI * p); // 1 день в начале цикла, 0 ночь в середине
+  const t = Math.min(1, Math.max(0, daylight * 1.4 - 0.2));
+  const sky = SKY_NIGHT.clone().lerp(SKY_DAY, t);
+  scene.background.copy(sky);
+  scene.fog.color.copy(sky);
+  sun.intensity = 0.4 + 1.8 * t;
+  hemi.intensity = 0.55 + 0.7 * t;
+  sun.position.set(Math.sin(2 * Math.PI * p) * 4, 2 + 3 * t, 2);
+}
+
+// ---- отрисовка сцены ------------------------------------------------------
+function resizeScene() {
+  const w = Math.max(1, sceneEl.clientWidth), h = Math.max(1, sceneEl.clientHeight);
+  if (w === lastW && h === lastH) return;
+  lastW = w; lastH = h;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+let lastH = -1;
+
+function syncScene() {
+  const f = sim.fly;
+  fly.position.set(f.x, f.y, f.z);
+  fly.rotation.y = f.heading;
+  const moving = f.speed > 0.05;
+  const t = sim.time;
+  const flap = moving ? Math.sin(t * 45) * 0.9 : Math.sin(t * 6) * 0.15;
+  wingL.rotation.x = flap;
+  wingR.rotation.x = -flap;
+  const phase = moving ? t * 22 : 0;
+  legs.forEach((leg, k) => { leg.rotation.x = Math.sin(phase + (k % 2) * Math.PI) * 0.5 * (moving ? 1 : 0); });
+  shadow.position.set(f.x, 0.003, f.z);
+  shadow.scale.setScalar(1 + 0.3 * (f.y / CONFIG.arenaTop));
+
+  const arr = trailGeo.attributes.position.array;
+  const n = f.trail.length;
+  for (let i = 0; i < n; i++) {
+    const p = f.trail[i];
+    arr[i * 3] = p[0]; arr[i * 3 + 1] = p[1]; arr[i * 3 + 2] = p[2];
+  }
+  trailGeo.setDrawRange(0, n);
+  trailGeo.attributes.position.needsUpdate = true;
+
+  const p = sim.predator;
+  predator.position.set(p.x, p.y, p.z);
+  predator.rotation.y = p.heading;
+  const flapP = Math.sin(t * 30) * 0.6;
+  pWingL.rotation.z = 0.3 + flapP;
+  pWingR.rotation.z = -0.3 - flapP;
+  predGlow.position.set(p.x, p.y, p.z);
+  predGlow.material.opacity = 0.5 + 0.2 * Math.sin(t * 6);
+  senseRing.position.set(p.x, p.y, p.z);
+
+  const now = performance.now() / 1000;
+  sim.food.forEach((food, k) => {
+    const m = foodMeshes[k];
+    if (!m) return;
+    m.position.set(food.x, food.y + 0.03 * Math.sin(now * 2 + k), food.z);
+    m.scale.setScalar(1 + 0.12 * Math.sin(now * 3 + k));
+  });
+
+  // пыль медленно плывёт
+  const dp = dustGeo.attributes.position.array;
+  for (let i = 0; i < DUST; i++) {
+    dp[i * 3 + 1] += Math.sin(now + i) * 0.0008;
+    dp[i * 3] += 0.0006;
+    if (dp[i * 3] > half) dp[i * 3] = -half;
+  }
+  dustGeo.attributes.position.needsUpdate = true;
+
+  // камера
+  if (followCam) {
+    controls.enabled = false;
+    const fx = Math.sin(f.heading), fz = Math.cos(f.heading);
+    const desired = new THREE.Vector3(f.x - fx * 2.2, f.y + 1.5, f.z - fz * 2.2);
+    camera.position.lerp(desired, 0.12);
+    camera.lookAt(f.x + fx * 0.25, f.y + 0.05, f.z + fz * 0.25);
+  } else {
+    controls.enabled = true;
+    controls.update();
+  }
+}
+
+function frame(now) {
+  const real = Math.min(0.1, (now - lastT) / 1000);
+  lastT = now;
+  if (!paused) {
+    acc += real * speed;
+    let steps = 0;
+    while (acc >= DT && steps < 800) { sim.step(DT); acc -= DT; steps++; }
+    if (acc > DT) acc = 0;
+  }
+  updateLight();
+  syncScene();
+  updateStats();
+  if (activeTab === 'scene') {
+    resizeScene();
+    renderer.render(scene, camera);
+  }
+  if (activeTab === 'stats') drawChart();
+  if (activeTab === 'brain') {
+    if (!brainPoints) buildBrainPoints();
+    updateBrainColors();
+    updateBrainTab();
+    brainCloud.rotation.y += 0.003;
+    const w = brainCanvas.clientWidth, h = brainCanvas.clientHeight;
+    brainRenderer.setSize(w, h, false);
+    brainCam.aspect = w / Math.max(1, h);
+    brainCam.updateProjectionMatrix();
+    brainRenderer.render(brainScene, brainCam);
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---- управление -------------------------------------------------------------
+$('mode').addEventListener('change', () => {
+  newSim();
+  if (evoRunning) startEvolution();
+});
+$('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
+$('pauseBtn').addEventListener('click', (e) => {
+  paused = !paused;
+  e.target.textContent = paused ? 'Продолжить' : 'Пауза';
+});
+$('newBtn').addEventListener('click', () => sim.resetFly(null));
+$('camBtn').addEventListener('click', (e) => {
+  followCam = !followCam;
+  e.target.textContent = followCam ? 'Камера: следить' : 'Камера: обзор';
+  if (!followCam) {
+    const f = sim.fly;
+    camera.position.set(f.x + 1.8, 2.2, f.z + 2.4);
+    controls.target.set(f.x, 0.4, f.z);
+    controls.update();
+  }
+});
+$('evoBtn').addEventListener('click', () => (evoRunning ? stopEvolution() : startEvolution()));
+$('saveBtn').addEventListener('click', showGenome);
+$('copyBtn').addEventListener('click', copyGenome);
+$('useEvolved').addEventListener('change', () => {
+  if ($('useEvolved').checked && evoState) sim.setConfig(decode(evoState.best));
+  else sim.setConfig({});
+});
+
+// ---- запуск ---------------------------------------------------------------
+async function main() {
+  const res = await fetch('data/fly_network.json');
+  data = await res.json();
+  newSim();
+  buildBrainPoints();
+  startEvolution();
+  requestAnimationFrame((t) => { lastT = t; frame(t); });
+}
+main().catch((err) => {
+  $('status').textContent = 'Не удалось загрузить данные.';
+  showError('не удалось запустить симуляцию: ' + (err && err.message ? err.message : err));
+  console.error(err);
+});
+</script>
