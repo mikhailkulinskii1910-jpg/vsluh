@@ -845,7 +845,7 @@ export class Game {
   meIcon() {
     const c = this.me.role === 'hunter' ? '#f26d7d' : this.me.role === 'spectator' ? '#9aa6bd' : '#5fd38d';
     const av = this.cfg.avatar;
-    return L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: `<div class="mk-dir"></div><div class="mk-me" style="background:${c}">${av ? `<span class="mk-av">${av}</span>` : ''}</div>` });
+    return L.divIcon({ className: '', iconSize: [22, 22], iconAnchor: [11, 11], html: `<div class="mk-dir"></div><div class="mk-me" style="background:${c}">${av ? `<span class="mk-av">${av}</span>` : ''}</div>${this.floorsOn() ? `<span class="fl-b me">${this.myFl + 1}</span>` : ''}` });
   }
 
   render() {
@@ -863,7 +863,8 @@ export class Game {
       if (!this.accCircle) this.accCircle = L.circle(this.ll(me), { radius: this.gpsAcc, color: '#4f9dff', weight: 1, fillColor: '#4f9dff', fillOpacity: 0.12, interactive: false }).addTo(map);
       else { this.accCircle.setLatLng(this.ll(me)); this.accCircle.setRadius(Math.min(200, this.gpsAcc)); }
     } else if (this.accCircle) { this.accCircle.remove(); this.accCircle = null; }
-    if (this.meRole !== me.role) { this.meRole = me.role; this.meMarker.setIcon(this.meIcon()); }
+    const mk = me.role + '|' + this.myFl;
+    if (this.meRole !== mk) { this.meRole = mk; this.meMarker.setIcon(this.meIcon()); }
     if (this.follow && this.cfg.mode === 'gps') map.panTo(this.ll(me), { animate: false });
 
     // кого видно
@@ -884,9 +885,9 @@ export class Game {
       if (vis.has(p.id)) {
         const lk = this.lookSocial(p) || {};
         const col = (lk.role || p.role) === 'hunter' ? '#f26d7d' : p.role === 'dead' ? '#555' : lk.color || p.color;
-        const key = (lk.role || p.role) + (T < p.frozenUntil ? 'f' : '') + (p.id === this.vipId ? me.role : '') + (lk.name || '') + (this.isStunned(p) ? 's' : '') + this.arenaBadge(p) + (p.emote && T < p.emote.until ? p.emote.e : '');
+        const key = (lk.role || p.role) + (T < p.frozenUntil ? 'f' : '') + (p.id === this.vipId ? me.role : '') + (lk.name || '') + (this.isStunned(p) ? 's' : '') + this.arenaBadge(p) + (p.emote && T < p.emote.until ? p.emote.e : '') + (this.floorsOn() ? 'f' + this.flOf(p) : '');
         if (!m) { m = L.marker(this.ll(p), { interactive: false }).addTo(map); this.layers.players.set(p.id, m); }
-        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk">${p.emote && T < p.emote.until ? `<div class="mk-emo">${p.emote.e}</div>` : ''}<div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'vip' && p.id === this.vipId && me.role === 'hider' && p.role === 'hider' ? '<span class="mk-av">👑</span>' : this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${this.arenaBadge(p)}${esc(lk.name || p.name)}${this.isStunned(p) ? ' 💫' : ''}</div></div>` })); }
+        if (m._key !== key) { m._key = key; m.setIcon(L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk">${p.emote && T < p.emote.until ? `<div class="mk-emo">${p.emote.e}</div>` : ''}<div class="mk-pl" style="background:${col}${T < p.frozenUntil && T >= p.warnUntil ? ';box-shadow:0 0 0 5px rgba(140,190,255,.6)' : ''}">${this.gmode === 'vip' && p.id === this.vipId && me.role === 'hider' && p.role === 'hider' ? '<span class="mk-av">👑</span>' : this.gmode === 'zombie' && p.role === 'hunter' ? '<span class="mk-av">🧟</span>' : p.avatar ? `<span class="mk-av">${p.avatar}</span>` : ''}</div><div class="mk-name">${this.floorsOn() ? `<span class="fl-b in">${this.flOf(p) + 1}</span>` : ''}${this.arenaBadge(p)}${esc(lk.name || p.name)}${this.isStunned(p) ? ' 💫' : ''}</div></div>` })); }
         m.setLatLng(this.ll(p));
       } else if (m) { m.remove(); this.layers.players.delete(p.id); }
     }

@@ -56,6 +56,7 @@ export function mapPoints(lb) {
 }
 
 /** Элементы своей карты на карте лобби (только просмотр). */
+export const flBadge = (f) => (f == null ? '' : `<span class="fl-b">${f + 1}</span>`);
 export function drawMapExtras(map, lb, floor) {
   const m0 = lb.map; if (!m0) return;
   // этаж: показываем зоны и объекты этого этажа и «на всех этажах»
@@ -67,9 +68,12 @@ export function drawMapExtras(map, lb, floor) {
     const [col, op, ic] = ZST[k];
     L.polygon(z.map((q) => [q.lat, q.lng]), { color: col, weight: 2, fillColor: col, fillOpacity: op, dashArray: k === 'safe' ? null : '4 6', interactive: false }).addTo(g);
     const c = z.reduce((a, q) => ({ lat: a.lat + q.lat / z.length, lng: a.lng + q.lng / z.length }), { lat: 0, lng: 0 });
-    L.marker([c.lat, c.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 12], html: `<div class="mk-zone">${ic}</div>` }) }).addTo(g);
+    L.marker([c.lat, c.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [24, 24], iconAnchor: [12, 12], html: `<div class="mk-zone">${ic}${flBadge(z[0] && z[0].f)}</div>` }) }).addTo(g);
   }
-  (m.objs || []).forEach((o) => OBJ[o.k] && L.marker([o.lat, o.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], html: `<div class="mk-obj k-${o.k}">${OBJ[o.k].ic}</div>` }) }).addTo(g));
+  // линии: значок этажа в середине
+  for (const k of [...Object.keys(ZST), 'barriers', 'nogo']) for (const ln of m[k + 'L'] || []) { if (!ln[0] || ln[0].f == null) continue; const q = ln[Math.floor(ln.length / 2)]; L.marker([q.lat, q.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: flBadge(ln[0].f) }) }).addTo(g); }
+  for (const z of [...(m.barriers || []), ...(m.nogo || [])]) { if (!z[0] || z[0].f == null) continue; const c = z.reduce((a, q) => ({ lat: a.lat + q.lat / z.length, lng: a.lng + q.lng / z.length }), { lat: 0, lng: 0 }); L.marker([c.lat, c.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: flBadge(z[0].f) }) }).addTo(g); }
+  (m.objs || []).forEach((o) => OBJ[o.k] && L.marker([o.lat, o.lng], { interactive: false, icon: L.divIcon({ className: '', iconSize: [28, 28], iconAnchor: [14, 14], html: `<div class="mk-obj k-${o.k}">${OBJ[o.k].ic}${flBadge(o.f)}</div>` }) }).addTo(g));
   // зоны-линии: одна грань, цвет зоны
   const LCOL = { nogo: '#d63a4a', barriers: '#8b6b4a', ...Object.fromEntries(Object.entries(ZST).map(([k, v]) => [k, v[0]])) };
   for (const [k, col] of Object.entries(LCOL)) for (const ln of m[k + 'L'] || []) L.polyline(ln.map((q) => [q.lat, q.lng]), { color: col, weight: 5, opacity: 0.9, interactive: false }).addTo(g);

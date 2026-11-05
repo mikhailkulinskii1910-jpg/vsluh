@@ -665,3 +665,10 @@ html.dark-map:not([data-theme]) #map { background: #1b1f27; }
 .fl-pick { display: flex; gap: 6px; align-items: center; margin-top: 8px; overflow-x: auto; }
 .fl-pick .chip { min-height: 34px; padding: 0 12px; flex: none; } .fl-pick .chip.on { border-color: var(--accent); background: var(--accent-soft); }
 .fl-pick { min-height: 42px; flex-shrink: 0; } #edPanel > * { flex-shrink: 0; min-height: min-content; }
+.fl-b { position: absolute; right: -7px; top: -7px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: #3b82f6; color: #fff; font-size: 11px; font-weight: 800; line-height: 17px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,.5); border: 1.5px solid #fff; pointer-events: none; }
+.fl-b::before { content: '🏢'; font-size: 8px; margin-right: 1px; }
+.fl-b.in { position: static; display: inline-block; margin-right: 4px; vertical-align: 1px; }
+.fl-b.me { right: -12px; top: -12px; }
+.mk-zone, .mk-obj { position: relative; }
+.leaflet-marker-icon > .fl-b:only-child { position: static; display: inline-block; }
+#edPanel { display: flex; flex-direction: column; gap: 8px; } #edPanel > * { margin-top: 0 !important; } .fl-b.in::before { content: ''; margin: 0; }

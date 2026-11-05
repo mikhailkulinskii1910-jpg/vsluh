@@ -458,9 +458,10 @@ export const worldMixin = {
       this.killZ.forEach((P) => pg(P, { color: '#7a0010', weight: 3, fillColor: '#b0001a', fillOpacity: 0.35, dashArray: '2 6' }));
       this.graveZ.forEach((P) => pg(P, { color: '#8a8f99', weight: 2, fillColor: '#8a8f99', fillOpacity: 0.25, dashArray: '6 6' }));
       for (const k of ZX_KINDS) this.zx[k].forEach((P) => pg(P, { color: ZX[k].col, weight: 2, fillColor: ZX[k].col, fillOpacity: ZX[k].op }));
-      const lab = (P, ic) => L.marker(this.ll(this.polyCenter(P)), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-zone">${ic}</div>` }) }).addTo(this.wzLayer);
+      const lab = (P, ic) => L.marker(this.ll(this.polyCenter(P)), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-zone">${ic}${this.floorsOn() && P.f != null ? `<span class="fl-b">${P.f + 1}</span>` : ''}</div>` }) }).addTo(this.wzLayer);
       this.safeZ.forEach((P) => lab(P, '🛡')); this.killZ.forEach((P) => lab(P, '☠')); this.graveZ.forEach((P) => lab(P, '🪦'));
       for (const k of ZX_KINDS) this.zx[k].forEach((P) => lab(P, ZX[k].ic));
+      if (this.floorsOn()) for (const w of this.walls) if (w.f != null) L.marker(this.ll(this.polyCenter(w.P)), { interactive: false, icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<span class="fl-b">${w.f + 1}</span>` }) }).addTo(this.wzLayer);
       this.objLayer = L.layerGroup().addTo(map); this.objSig = '';
     }
     const T = this.t, me = this.me;
@@ -471,7 +472,7 @@ export const worldMixin = {
       for (const o of vis) {
         const def = OBJ[o.k], wait = T < o.readyAt;
         if (o.k === 'bush' || o.k === 'camera') L.circle(this.ll(o), { radius: this.objR(o.k), color: def.col, weight: o.k === 'camera' ? 1 : 0, dashArray: '3 5', fillColor: def.col, fillOpacity: o.k === 'bush' ? 0.35 : 0.1, interactive: false }).addTo(this.objLayer);
-        L.marker(this.ll(o), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-obj k-${o.k} ${wait ? 'wait' : ''}">${def.ic}</div>` }) }).addTo(this.objLayer);
+        L.marker(this.ll(o), { interactive: false, icon: L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: `<div class="mk-obj k-${o.k} ${wait ? 'wait' : ''}">${def.ic}${this.floorsOn() && o.f != null ? `<span class="fl-b">${o.f + 1}</span>` : ''}</div>` }) }).addTo(this.objLayer);
       }
       if (me.role === 'hunter') for (const f of (this.fakes || []).filter((q) => T < q.until)) L.marker(this.ll(f), { interactive: false, icon: L.divIcon({ className: '', iconSize: [20, 20], iconAnchor: [10, 10], html: `<div class="mk"><div class="mk-pl" style="background:${f.c || '#5fd38d'}"></div><div class="mk-name">${String(f.name).replace(/[<>&"]/g, '')}</div></div>` }) }).addTo(this.objLayer);
       for (const s of (this.smokes || []).filter((q) => T < q.until)) L.circle(this.ll(s), { radius: 25, color: '#b0b8c4', weight: 0, fillColor: '#c9d1dc', fillOpacity: 0.55, interactive: false }).addTo(this.objLayer);
