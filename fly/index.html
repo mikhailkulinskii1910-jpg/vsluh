@@ -395,6 +395,7 @@ const CONFIG = {
   learning: 1,          // 1 — обучаемые синапсы меняются, 0 — заморожены
   learnRate: 0.15,
   weightDecay: 0.002,   // медленное забывание выученного, доля в секунду
+  learnAnneal: 180,     // через сколько секунд жизни скорость обучения падает вдвое (0 — не падает)
   eligTau: 0.7,         // время жизни следа активности синапса, с
   explore: 0.5,         // сила случайных проб в повороте и подъёме
   exploreTau: 0.35,
@@ -494,7 +495,7 @@ function getStructure(data, mode) {
   for (let e = 0; e < E; e++) off[src[e] + 1]++;
   for (let i = 0; i < N; i++) off[i + 1] += off[i];
   const fill = off.slice(0, N);
-  const tgt = new Int32Array(E);
+  const tgt = N < 65536 ? new Uint16Array(E) : new Int32Array(E);   // меньше памяти — быстрее обход
   const edge = new Int32Array(E);
   for (let e = 0; e < E; e++) {
     const k = fill[src[e]]++;
@@ -1221,7 +1222,13 @@ class FlySim {
       let bump = false;
       if (f.x > h || f.x < -h) { f.x = clamp(f.x, -h, h); f.heading = -f.heading; bump = true; }
       if (f.z > h || f.z < -h) { f.z = clamp(f.z, -h, h); f.heading = Math.PI - f.heading; bump = true; }
-      if (this.bounceObstacles(f, 0.07)) bump = true;
+      if (this.bounceObstacles(f, 0.07)) {
+        bump = true;
+        f.y = Math.min(cfg.arenaTop, f.y + 0.12);   // после удара муха подскакивает вверх
+      }
+      f.bumpCool = Math.max(0, (f.bumpCool || 0) - dt);
+      if (bump && f.bumpCool > 0) bump = false;      // повторный удар сразу после первого не считаем
+      if (bump) f.bumpCool = 0.3;
       if (bump && f.state !== 'rest') {
         f.speed *= 0.5;
         f.bumps += 1;
@@ -1241,7 +1248,11 @@ class FlySim {
     f.da = f.da * Math.exp(-dt / cfg.daTau) + daAdd;
     f.daBar += (f.da - f.daBar) * Math.min(1, dt / cfg.daBaselineTau);
     f.delta = f.da - f.daBar;
-    if (cfg.learning && wasFlying) f.learner.learn(f.delta, cfg.learnRate * tr.learn, cfg.weightDecay, dt);
+    if (cfg.learning && wasFlying) {
+      // с возрастом муха учится медленнее: молодая ищет, взрослая лишь подстраивается
+      const age = cfg.learnAnneal > 0 ? 1 / (1 + f.lifeTime / cfg.learnAnneal) : 1;
+      f.learner.learn(f.delta, cfg.learnRate * tr.learn * age, cfg.weightDecay * age, dt);
+    }
 
     const drain = (f.state === 'rest' ? cfg.energyDrain * 0.3 : cfg.energyDrain) + cfg.moveCost * f.speed * (f.state === 'escape' ? 0.5 : 1);
     f.energy -= drain * dt;

@@ -74,7 +74,8 @@
   на странице встраиваются как обычный скрипт, воркер эволюции создаётся из Blob).
 - `data/fly_network.json` — подсеть (2000 нейронов, 106022 связей).
 - `tools/build_network.py` — построение подсети из исходных файлов FlyWire.
-- `tools/check_sim.mjs` — проверка симуляции без браузера: `node fly/tools/check_sim.mjs 180`.
+- `tools/check_sim.mjs` — быстрая проверка симуляции без браузера: `node fly/tools/check_sim.mjs 180`.
+- `tools/test_sim.mjs` — автотесты (мозг не молчит, нет NaN, скорость, обучение лучше, чем без него): `node fly/tools/test_sim.mjs`.
 
 ## Источники данных
 
