@@ -114,9 +114,10 @@
       <label for="flyCount">Мух</label>
       <select id="flyCount">
         <option value="1">1</option>
-        <option value="3">3</option>
-        <option value="6" selected>6</option>
-        <option value="12">12</option>
+        <option value="4">4</option>
+        <option value="8" selected>8</option>
+        <option value="16">16</option>
+        <option value="24">24 (медленно)</option>
       </select>
     </div>
     <div>
@@ -127,6 +128,7 @@
         <option value="2">2×</option>
         <option value="4">4×</option>
         <option value="8">8×</option>
+        <option value="32">32×</option>
       </select>
     </div>
     <div class="pill-row">
@@ -134,7 +136,10 @@
       <button id="newBtn">Новый мир</button>
     </div>
   </div>
-  <label class="toggle"><input type="checkbox" id="reflexes" checked> Врождённые рефлексы поиска еды (полёт по шлейфу запаха, подлёт к фрукту)</label>
+  <label class="toggle"><input type="checkbox" id="learning" checked> Обучение дофамином: мухи сами учатся искать еду и облетать препятствия</label>
+  <label class="toggle"><input type="checkbox" id="inherit" checked> Новая муха наследует выученное лучшей мухой (с небольшими отличиями)</label>
+  <label class="toggle"><input type="checkbox" id="resume" checked> Продолжать с выученного мозга, сохранённого в этом браузере <button id="forgetBtn" style="margin-left:6px;padding:3px 8px;font-size:12px">Забыть</button></label>
+  <label class="toggle"><input type="checkbox" id="reflexes"> Подсказки-правила поиска еды (полёт по шлейфу и подлёт), только для сравнения</label>
 </details>
 
 <div id="errorBanner" class="card" hidden style="margin-top:12px;border-color:var(--warn);color:var(--warn)"></div>
@@ -191,8 +196,9 @@
           <span style="--c:#81c784">механосенсорные</span>
           <span style="--c:#ff7043">моторные</span>
           <span style="--c:#7e57c2">промежуточные</span>
+          <span style="--c:#ffd54f">дофаминовые</span>
         </div>
-        <p class="muted">Яркость точки — текущая активность нейрона. Мозг медленно вращается.</p>
+        <p class="muted">Яркость точки — текущая активность нейрона. Дофаминовые нейроны вспыхивают, когда муха получает награду. Мозг медленно вращается.</p>
       </div>
       <div class="card">
         <h2>Активность по группам</h2>
@@ -205,7 +211,18 @@
         <div class="row" style="margin-top:14px"><span>Сигнал поворота от коннектома</span><b id="turnNow">–</b></div>
         <div class="row"><span>Скорость полёта</span><b id="speedNow">–</b></div>
         <div class="row"><span>Поведение</span><b id="navNow">–</b></div>
-        <p class="muted" style="margin-top:12px">Коннектом даёт сигнал скорости и поворота. Врождённые рефлексы (если включены) добавляют полёт по шлейфу запаха и подлёт к фрукту. Рефлекс бегства от стрекозы, посадка, еда и сон ночью заданы правилами.</p>
+        <p class="muted" style="margin-top:12px">Скорость задаёт коннектом. Поворот складывается из сигнала коннектома и выученной команды, подъём — выученная команда. Посадка на фрукт по касанию, рефлекс бегства от стрекозы и сон ночью заданы правилами.</p>
+      </div>
+      <div class="card">
+        <h2>Дофамин и обучение</h2>
+        <div class="bars">
+          <div style="--c:#ffd54f"><div class="lbl"><span>Дофамин</span><b id="daNow">0.00</b></div><div class="track"><i id="daBar"></i></div></div>
+          <div style="--c:#7ee0c3"><div class="lbl"><span>Ошибка предсказания награды</span><b id="rpeNow">0.00</b></div><div class="track"><i id="rpeBar"></i></div></div>
+        </div>
+        <p class="muted">Всплеск дофамина: посадка на фрукт, еда, усиление запаха. Провал: удар о бортик, камень или стебель, стрекоза рядом. Синапсы меняются на «дофамин минус ожидание».</p>
+        <h2 style="margin-top:14px">Выученные синапсы</h2>
+        <div id="weights" class="muted"></div>
+        <p class="muted" style="margin-top:8px">Поворот учится на разнице «слева минус справа», подъём — на сумме сторон и постоянном смещении. Зелёный — положительный вес, красный — отрицательный.</p>
       </div>
     </div>
   </section>
@@ -228,7 +245,7 @@
         <canvas id="evoChart" class="chart" width="540" height="220" style="margin-top:6px"></canvas>
         <label class="row" style="justify-content:flex-start;gap:8px;margin-top:12px"><input type="checkbox" id="useEvolved" checked> Использовать лучший геном в саду</label>
         <div class="pill-row" style="margin-top:10px">
-          <button id="evoBtn" class="primary">Остановить</button>
+          <button id="evoBtn" class="primary">Запустить эволюцию</button>
           <button id="saveBtn">Показать геном</button>
           <button id="copyBtn" hidden>Копировать</button>
         </div>
@@ -238,9 +255,9 @@
       <div class="card">
         <h2>Как это устроено</h2>
         <p class="muted">Геном задаёт силу синапсов, пороги нейронов, чувствительность сенсоров и силу моторов. Топология коннектома не меняется.</p>
-        <p class="muted">Фитнес: 5 очков за посадку на фрукт, 0,05 за секунду жизни, −4 за смерть от стрекозы, −2 за голод.</p>
+        <p class="muted">Фитнес: 5 очков за посадку на фрукт, 0,05 за секунду жизни, −4 за смерть от стрекозы, −2 за голод. За 40 секунд муха почти не успевает научиться, поэтому эволюция подбирает в основном врождённые параметры.</p>
         <p class="muted">Каждое поколение — 20 мух, каждая проживает 2 мира по 40 секунд в одиночку. Лучший геном проверяется на двух фиксированных мирах: так видно настоящий прогресс.</p>
-        <p class="muted">Эволюция идёт в фоновом потоке и перезапускается при смене проводки или рефлексов.</p>
+        <p class="muted">Эволюция генома идёт в фоновом потоке и перезапускается при смене проводки, обучения или правил. В саду работает ещё и естественный отбор: новая муха наследует выученные синапсы лучшей живой мухи.</p>
       </div>
     </div>
   </section>
@@ -266,6 +283,15 @@
           <span style="--c:#4fc3f7">сенсоры</span>
           <span style="--c:#7ee0c3">энергия</span>
         </div>
+      </div>
+      <div class="card">
+        <h2>Обучение колонии</h2>
+        <canvas id="learnChart" class="chart" width="880" height="240"></canvas>
+        <div class="legend">
+          <span style="--c:#7ee0c3">посадок на фрукт в минуту на муху</span>
+          <span style="--c:#ff7043">ударов в минуту на муху</span>
+        </div>
+        <p class="muted" id="learnNote">Кривая появится через минуту симуляции. Ускорьте время, чтобы увидеть обучение быстрее.</p>
       </div>
       <div class="card">
         <h2>Все мухи</h2>
@@ -343,6 +369,9 @@ const CONFIG = {
   weightScale: 0.3,     // вес синапса = min(число синапсов, maxSyn) * weightScale
   maxSyn: 20,
   noise: 0.01,          // фоновый шум на каждый нейрон
+  brainEvery: 2,        // мозг считается на каждом N-м шаге физики (2 → 30 раз в секунду)
+  sensoryFeedback: 0.02,// во сколько раз ослаблены синапсы НА рецепторные нейроны (у мухи они
+                        // регулируют силу сигнала, а не гасят разряд)
   // входы мозга
   odorGain: 0.6,        // обонятельный вход
   contactGain: 0.8,     // механосенсорный вход от стен, камней и стеблей
@@ -360,9 +389,30 @@ const CONFIG = {
   escapeSpeed: 2.4,
   escapeTime: 0.35,
   nightActivity: 0.2,   // доля дневной активности ночью
+  // обучение дофамином (правило трёх факторов: вход × след × дофамин)
+  learning: 1,          // 1 — обучаемые синапсы меняются, 0 — заморожены
+  learnRate: 0.15,
+  weightDecay: 0.002,   // медленное забывание выученного, доля в секунду
+  eligTau: 1.0,         // время жизни следа активности синапса, с
+  explore: 0.5,         // сила случайных проб в повороте и подъёме
+  exploreTau: 0.35,
+  learnTurnGain: 3.0,   // сила выученного поворота, рад/с
+  learnClimbGain: 0.9,  // сила выученного подъёма, ед./с
+  daTau: 0.3,           // как быстро затухает всплеск дофамина, с
+  daBaselineTau: 8,     // ожидание награды (вычитается из дофамина)
+  daFood: 1.5,          // всплеск при посадке на фрукт
+  daFeed: 0.4,          // дофамин в секунду, пока муха ест
+  daOdor: 6.0,          // за усиление запаха (врождённая тяга к запаху фруктов)
+  daBump: -2.0,         // провал при ударе о стену, камень или стебель
+  daThreat: -0.6,       // провал рядом со стрекозой (в секунду)
+  daInject: 0.5,        // ток в дофаминовые нейроны подсети при всплеске
+  // разные мухи
+  traitSpread: 0.25,    // разброс индивидуальных качеств (±25%)
+  inherit: 1,           // новая муха наследует выученные синапсы лучшей мухи
+  mutation: 0.15,       // шум при наследовании (доля от размаха весов)
   // врождённые рефлексы поиска еды по запаху (по данным о поведении дрозофилы;
   // этих цепей нет в подсети, поэтому они заданы правилами и их можно выключить)
-  reflexes: 1,          // 1 — включены, 0 — муха управляется только коннектомом
+  reflexes: 0,          // 1 — включены (для сравнения), 0 — муха учится сама
   odorDetect: 0.03,     // порог, с которого муха замечает запах
   tropoGain: 2.5,       // поворот к антенне, где запах сильнее
   surgeGain: 3.0,       // разворот против ветра, пока запах чувствуется
@@ -370,12 +420,12 @@ const CONFIG = {
   approachDist: 0.9,    // с какого расстояния муха видит фрукт и подлетает к нему
   // энергия и еда
   energyMax: 100,
-  energyDrain: 0.35,    // расход в полёте без движения, ед./с
-  moveCost: 0.5,        // дополнительный расход на скорость 1, ед./с
+  energyDrain: 0.25,    // расход в полёте без движения, ед./с
+  moveCost: 0.35,       // дополнительный расход на скорость 1, ед./с
   feedRate: 22,         // сколько энергии муха получает за секунду еды
   foodAmount: 70,       // средний запас фрукта
   foodRegrow: 14,       // через сколько секунд вырастает новый фрукт
-  foodCount: 24,
+  foodCount: 44,
   // запах и ветер
   plumeSpread: 0.25,    // ширина шлейфа у источника
   plumeGrowth: 0.3,     // расширение шлейфа на единицу расстояния по ветру
@@ -384,10 +434,10 @@ const CONFIG = {
   windSpeed: 0.35,
   antennaOffset: 0.1,
   // мир
-  arenaHalf: 5.0,
+  arenaHalf: 8.0,
   arenaTop: 2.5,
-  stoneCount: 12,
-  plantCount: 7,
+  stoneCount: 24,
+  plantCount: 14,
   dayLength: 150,       // секунд на полные сутки
   // хищник (стрекоза)
   predatorSpeed: 0.6,
@@ -459,9 +509,42 @@ function getStructure(data, mode) {
     mechL: pick(1, 0), mechR: pick(1, 1),
     motL: pick(2, 0), motR: pick(2, 1),
   };
+  const daIdx = [];
+  for (let i = 0; i < N; i++) if (data.nt_list[data.nt[i]] === 'dopamine') daIdx.push(i);
+  groups.da = Int32Array.from(daIdx);
+  // входы обучаемого выхода: средняя активность популяций нейронов слева и справа
+  const cls = (name) => data.cls_list.indexOf(name);
+  const popDefs = [
+    ['Рецепторы запаха', (i) => data.group[i] === 0],
+    ['Проекционные нейроны', (i) => data.group[i] === 3 && data.cls[i] === cls('ALPN')],
+    ['Локальные нейроны', (i) => data.group[i] === 3 && data.cls[i] === cls('ALLN')],
+    ['Механорецепторы', (i) => data.group[i] === 1],
+    ['Восходящие нейроны', (i) => data.group[i] === 3 && data.cls[i] === cls('AN')],
+    ['Остальные нейроны', (i) => data.group[i] === 3 && ![cls('ALPN'), cls('ALLN'), cls('AN')].includes(data.cls[i])],
+  ];
+  groups.populations = [];
+  for (const [name, test] of popDefs) {
+    for (const [side, label] of [[0, 'слева'], [1, 'справа']]) {
+      const idx = [];
+      for (let i = 0; i < N; i++) if (data.side[i] === side && test(i)) idx.push(i);
+      if (idx.length) groups.populations.push({ name: `${name} ${label}`, idx: Int32Array.from(idx) });
+    }
+  }
   const net = { N, off, tgt, edge, groups };
   byMode.set(mode, net);
   return net;
+}
+
+// Таблица равномерного шума [0,1) для нейронов (общая для всех мух)
+const NOISE_MASK = 65535;
+const NOISE_TABLE = (() => {
+  const r = mulberry32(4242);
+  const t = new Float32Array(NOISE_MASK + 1);
+  for (let i = 0; i < t.length; i++) t[i] = r();
+  return t;
+})();
+function addTo(I, idx, val) {
+  for (let q = 0; q < idx.length; q++) I[idx[q]] += val;
 }
 
 // ---- мозг одной мухи ---------------------------------------------------------
@@ -484,9 +567,11 @@ class Brain {
   setConfig(cfg) {
     this.cfg = cfg;
     const { data, net, w } = this;
+    const fb = cfg.sensoryFeedback ?? 1;
     for (let k = 0; k < w.length; k++) {
       const e = net.edge[k];
-      w[k] = (data.inhibitory[e] ? -1 : 1) * Math.min(data.syn[e], cfg.maxSyn) * cfg.weightScale;
+      const toSensory = data.group[net.tgt[k]] <= 1;
+      w[k] = (data.inhibitory[e] ? -1 : 1) * Math.min(data.syn[e], cfg.maxSyn) * cfg.weightScale * (toSensory ? fb : 1);
     }
   }
 
@@ -496,34 +581,42 @@ class Brain {
   }
 
   // inp: сила входа для обонятельных и механосенсорных групп слева и справа
-  step(inp, rng) {
+  // every: сколько шагов физики покрывает этот шаг мозга (постоянные времени пересчитываются)
+  step(inp, rng, every = 1) {
     const { net, I, v, spike, refr, rate, w, cfg, active } = this;
     const { off, tgt, N, groups } = net;
-    I.fill(0);
-    for (let a = 0; a < this.nActive; a++) {
+    // фоновый шум: из общей таблицы со случайного места (быстрее, чем rng на каждый нейрон)
+    const sIn = every === 1 ? 1 : (1 - Math.pow(cfg.decay, every)) / (1 - cfg.decay);
+    const noise = cfg.noise * sIn;
+    let p = (rng() * NOISE_MASK) | 0;
+    for (let i = 0; i < N; i++) { I[i] = noise * NOISE_TABLE[p]; p = (p + 1) & NOISE_MASK; }
+    for (let a = 0, na = this.nActive; a < na; a++) {
       const i = active[a];
       for (let k = off[i], end = off[i + 1]; k < end; k++) I[tgt[k]] += w[k];
     }
-    for (const i of groups.olfL) I[i] += inp.olfL;
-    for (const i of groups.olfR) I[i] += inp.olfR;
-    for (const i of groups.mechL) I[i] += inp.mechL;
-    for (const i of groups.mechR) I[i] += inp.mechR;
+    addTo(I, groups.olfL, inp.olfL * sIn);
+    addTo(I, groups.olfR, inp.olfR * sIn);
+    addTo(I, groups.mechL, inp.mechL * sIn);
+    addTo(I, groups.mechR, inp.mechR * sIn);
+    if (inp.da) addTo(I, groups.da, inp.da * sIn);
     let n = 0;
-    const { decay, threshold, refractory, noise } = cfg;
+    const decay = every === 1 ? cfg.decay : Math.pow(cfg.decay, every);
+    const threshold = cfg.threshold;
+    const refractory = Math.max(0, Math.ceil(cfg.refractory / every));
+    const keep = every === 1 ? 0.95 : Math.pow(0.95, every), gain = 1 - keep;
+    // при редком счёте один спайк заменяет every шагов, поэтому вклад в частоту делим
+    const sv = 1 / every;
     for (let i = 0; i < N; i++) {
-      I[i] += noise * rng();
+      let s = 0;
       if (refr[i] > 0) {
         refr[i]--;
-        spike[i] = 0;
       } else {
-        v[i] = v[i] * decay + I[i];
-        if (v[i] >= threshold) {
-          spike[i] = 1; v[i] = 0; refr[i] = refractory; active[n++] = i;
-        } else {
-          spike[i] = 0;
-        }
+        const vi = v[i] * decay + I[i];
+        if (vi >= threshold) { s = 1; v[i] = 0; refr[i] = refractory; active[n++] = i; }
+        else v[i] = vi;
       }
-      rate[i] = rate[i] * 0.95 + 0.05 * spike[i];
+      spike[i] = s;
+      rate[i] = rate[i] * keep + gain * s * sv;
     }
     this.nActive = n;
   }
@@ -533,6 +626,115 @@ class Brain {
     let s = 0;
     for (const i of arr) s += this.rate[i];
     return s / arr.length;
+  }
+}
+
+// Нормальное распределение (Бокс — Мюллер)
+function normal(rng) {
+  return Math.sqrt(-2 * Math.log(rng() + 1e-12)) * Math.cos(TAU * rng());
+}
+
+// ---- обучаемый выход ------------------------------------------------------------
+// Синапсы от всех нейронов подсети к двум командам: «поворот» и «подъём».
+// Аналог выходных синапсов грибовидного тела, которые у мухи меняет дофамин.
+// Правило трёх факторов (REINFORCE): след = вход × случайная проба;
+// изменение веса = скорость × (дофамин − ожидание) × след.
+class Learner {
+  // populations: пары популяций [слева, справа]. Поворот учится на разнице сторон
+  // (двусторонняя симметрия), подъём — на их сумме и постоянном смещении.
+  constructor(populations) {
+    const pairs = [];
+    for (let j = 0; j + 1 < populations.length; j += 2) {
+      pairs.push({ name: populations[j].name.replace(/ слева$/, ''), L: populations[j].idx, R: populations[j + 1].idx });
+    }
+    this.pairs = pairs;
+    const p = pairs.length;
+    this.p = p;
+    this.nT = p;            // веса поворота: по разнице сторон
+    this.nC = p + 1;        // веса подъёма: по сумме сторон + смещение
+    this.W = new Float32Array(this.nT + this.nC);
+    this.E = new Float32Array(this.nT + this.nC);
+    this.mean = new Float32Array(2 * p);
+    this.vari = new Float32Array(2 * p).fill(1e-4);
+    this.x = new Float32Array(this.nT + this.nC);
+    this.noise = [0, 0];
+    this.action = [0, 0];
+    this.out = [0, 0];
+  }
+
+  randomize(rng, scale) {
+    for (let k = 0; k < this.W.length; k++) this.W[k] = (rng() * 2 - 1) * scale;
+    this.resetTraces();
+  }
+
+  // Наследование: копия весов родителя с небольшим шумом
+  copyFrom(parent, rng, mutation) {
+    let range = 0;
+    for (let k = 0; k < parent.W.length; k++) range = Math.max(range, Math.abs(parent.W[k]));
+    const sigma = mutation * Math.max(range, 0.05);
+    for (let k = 0; k < this.W.length; k++) this.W[k] = parent.W[k] + normal(rng) * sigma;
+    this.resetTraces();
+  }
+
+  resetTraces() {
+    this.E.fill(0);
+    this.mean.fill(0);
+    this.vari.fill(1e-4);
+    this.noise = [0, 0];
+  }
+
+  norm() {
+    let s = 0;
+    for (let k = 0; k < this.W.length; k++) s += this.W[k] * this.W[k];
+    return Math.sqrt(s);
+  }
+
+  // нормированная активность популяции (отклонение от среднего за ~4 с)
+  feature(rate, idx, j, a) {
+    let r = 0;
+    for (let q = 0; q < idx.length; q++) r += rate[idx[q]];
+    r /= idx.length;
+    const m = this.mean[j] + (r - this.mean[j]) * a;
+    this.mean[j] = m;
+    const d = r - m;
+    this.vari[j] += (d * d - this.vari[j]) * a;
+    return d / Math.sqrt(this.vari[j] + 1e-6);
+  }
+
+  step(rate, cfg, explore, dt, rng) {
+    const { p, nT, W, E, x, pairs } = this;
+    const a = Math.min(1, dt / 4);
+    for (let j = 0; j < p; j++) {
+      const l = this.feature(rate, pairs[j].L, 2 * j, a);
+      const r = this.feature(rate, pairs[j].R, 2 * j + 1, a);
+      x[j] = (l - r) * 0.7;          // разница сторон → поворот
+      x[nT + j] = (l + r) * 0.5;     // сумма сторон → подъём
+    }
+    x[nT + p] = 1;                   // смещение подъёма
+    let o0 = 0, o1 = 0;
+    for (let k = 0; k < nT; k++) o0 += W[k] * x[k];
+    for (let k = nT; k < W.length; k++) o1 += W[k] * x[k];
+    const tau = cfg.exploreTau;
+    for (let k = 0; k < 2; k++) {
+      this.noise[k] += -this.noise[k] / tau * dt + Math.sqrt(2 * dt / tau) * normal(rng);
+    }
+    const sig = cfg.explore * explore;
+    const n0 = sig * this.noise[0], n1 = sig * this.noise[1];
+    this.out = [o0, o1];
+    this.action = [o0 + n0, o1 + n1];
+    const lam = Math.exp(-dt / cfg.eligTau);
+    for (let k = 0; k < nT; k++) E[k] = E[k] * lam + x[k] * n0;
+    for (let k = nT; k < W.length; k++) E[k] = E[k] * lam + x[k] * n1;
+  }
+
+  learn(delta, lr, decay, dt) {
+    const k = lr * delta * dt;
+    const keep = 1 - decay * dt;
+    const { W, E } = this;
+    for (let j = 0; j < W.length; j++) {
+      const w = W[j] * keep + k * E[j];
+      W[j] = w > 4 ? 4 : w < -4 ? -4 : w;
+    }
   }
 }
 
@@ -554,6 +756,9 @@ class FlySim {
     this.historyTimer = 0;
     this.totalEaten = 0;
     this.totalDeaths = 0;
+    this.totalBumps = 0;
+    this.feedBuckets = [];   // посадки на фрукты по 30-секундным интервалам (кривая обучения)
+    this.bumpBuckets = [];   // удары о стены и препятствия по тем же интервалам
     this.wind = { angle: this.rng() * TAU, x: 0, z: 0, speed: this.cfg.windSpeed };
     this.updateWind(0);
     this.obstacles = this.makeObstacles();
@@ -579,6 +784,30 @@ class FlySim {
   }
 
   resetFly(cause) { this.respawn(this.fly, cause); }
+
+  // Лучшая муха по еде за жизнь (для сохранения выученного)
+  bestFly() {
+    return this.bestParent(null) || this.flies[0];
+  }
+
+  // Засеять всех мух сохранёнными синапсами (с небольшими отличиями)
+  seedLearners(W, generation = 1) {
+    if (!W || W.length !== this.flies[0].learner.W.length) return false;
+    const src = { W: Float32Array.from(W) };
+    for (const f of this.flies) {
+      f.learner.copyFrom(src, this.rng, this.cfg.mutation);
+      f.generation = generation + 1;
+    }
+    return true;
+  }
+
+  // Кривая обучения: посадок на фрукт в минуту на одну муху по 30-секундным интервалам
+  learningCurve() {
+    const n = Math.floor(this.time / 30);
+    const out = [];
+    for (let b = 0; b < n; b++) out.push({ t: (b + 1) * 30, feed: (this.feedBuckets[b] || 0) * 2 / this.flies.length, bumps: (this.bumpBuckets[b] || 0) * 2 / this.flies.length });
+    return out;
+  }
 
   daylight() { return 0.5 + 0.5 * Math.cos(TAU * this.time / this.cfg.dayLength); }
 
@@ -648,18 +877,48 @@ class FlySim {
     const f = {
       id,
       brain: new Brain(this.data, this.net, this.cfg),
+      learner: new Learner(this.net.groups.populations),
       lives: 0, eaten: 0, deaths: { starve: 0, predator: 0 },
+      generation: 1, bumps: 0,
     };
     this.respawn(f, null);
     return f;
   }
 
+  // Лучшая живая муха колонии: больше всего еды за время жизни
+  bestParent(except) {
+    let best = null, bs = -1;
+    for (const o of this.flies || []) {
+      if (o === except) continue;
+      const score = o.eatenLife / Math.max(o.lifeTime, 30);
+      if (score > bs) { bs = score; best = o; }
+    }
+    return bs > 0 ? best : null;
+  }
+
   respawn(f, cause) {
+    const cfg = this.cfg;
     if (cause) {
       f.deaths[cause] += 1;
       this.totalDeaths += 1;
       this.logEvent(`Муха ${f.id + 1}: ${cause === 'predator' ? 'поймала стрекоза' : 'умерла от голода'}`);
     }
+    // Новая муха: свои качества и либо выученные синапсы лучшей мухи с мутациями,
+    // либо почти нулевые синапсы (наивная муха)
+    const parent = cause && cfg.inherit ? this.bestParent(f) : null;
+    if (parent) {
+      f.learner.copyFrom(parent.learner, this.rng, cfg.mutation);
+      f.generation = parent.generation + 1;
+      f.parent = parent.id;
+      this.logEvent(`Родилась муха ${f.id + 1}: потомок мухи ${parent.id + 1}, поколение ${f.generation}`);
+    } else {
+      f.learner.randomize(this.rng, 0.002);
+      f.generation = cause ? 1 : (f.generation || 1);
+      f.parent = null;
+    }
+    const sp = cfg.traitSpread;
+    const trait = () => 1 + sp * (this.rng() * 2 - 1);
+    f.traits = { odor: trait(), contact: trait(), motor: trait(), learn: trait(), explore: trait() };
     const h = this.cfg.arenaHalf - 0.8;
     let x = 0, z = 0;
     for (let k = 0; k < 60; k++) {
@@ -679,7 +938,8 @@ class FlySim {
       lastOdor: -1e9, nav: 'search',
       odorL: 0, odorR: 0, contactL: 0, contactR: 0, threatL: 0, threatR: 0,
       rL: 0, rR: 0,
-      lifeTime: 0,
+      lifeTime: 0, eatenLife: 0,
+      da: 0, daBar: 0, prevOdor: 0, delta: 0, climb: 0,
       trail: [],
     });
     f.brain.reset();
@@ -702,6 +962,7 @@ class FlySim {
       if (!f.alive) continue;
       const dx = x - f.x, dy = y - f.y, dz = z - f.z;
       const along = dx * wx + dz * wz;
+      if (along > 6 * cfg.plumeLength || along < -4 * cfg.odorNear) continue;   // слишком далеко
       const cx = dx - along * wx, cz = dz - along * wz;
       const cross2 = cx * cx + cz * cz + dy * dy * 0.6;
       const strength = Math.sqrt(f.amount / f.max);
@@ -745,6 +1006,26 @@ class FlySim {
     }
   }
 
+  // Отскок от камней и стеблей: курс отражается от поверхности
+  bounceObstacles(f, pad) {
+    let hit = false;
+    for (const o of this.obstacles) {
+      if (f.y > o.height + 0.03) continue;
+      const dx = f.x - o.x, dz = f.z - o.z;
+      const d = Math.hypot(dx, dz);
+      const min = o.r + pad;
+      if (d < min) {
+        hit = true;
+        const nx = d > 1e-6 ? dx / d : 1, nz = d > 1e-6 ? dz / d : 0;
+        f.x = o.x + nx * min; f.z = o.z + nz * min;
+        let vx = Math.sin(f.heading), vz = Math.cos(f.heading);
+        const dot = vx * nx + vz * nz;
+        if (dot < 0) { vx -= 2 * dot * nx; vz -= 2 * dot * nz; f.heading = Math.atan2(vx, vz); }
+      }
+    }
+    return hit;
+  }
+
   sense(f) {
     const a = this.cfg.antennaOffset;
     const rx = Math.cos(f.heading), rz = -Math.sin(f.heading); // вектор «вправо»
@@ -777,12 +1058,25 @@ class FlySim {
     const g = this.net.groups;
     this.sense(f);
     const hunger = 1 - f.energy / cfg.energyMax;
-    f.brain.step({
-      olfL: f.odorL * cfg.odorGain + hunger * cfg.hungerGain,
-      olfR: f.odorR * cfg.odorGain + hunger * cfg.hungerGain,
-      mechL: f.contactL * cfg.contactGain + f.threatL * cfg.predatorGain,
-      mechR: f.contactR * cfg.contactGain + f.threatR * cfg.predatorGain,
-    }, this.rng);
+    const tr = f.traits;
+    // Плавное кодирование: без стимула рецептор молчит, с ростом стимула частота
+    // растёт и насыщается (как у настоящих рецепторных нейронов)
+    const olf = (o) => 0.07 + 0.4 * cfg.odorGain * tr.odor * o / (o + 0.15) + hunger * cfg.hungerGain * 0.15;
+    const mech = (c, t) => 0.07 + 0.3 * (c * cfg.contactGain * tr.contact + t * cfg.predatorGain);
+    const every = Math.max(1, cfg.brainEvery | 0);
+    f.brainTick = (f.brainTick || 0) + 1;
+    const brainNow = f.brainTick % every === 0;
+    if (brainNow) {
+      f.brain.step({
+        olfL: olf(f.odorL),
+        olfR: olf(f.odorR),
+        mechL: mech(f.contactL, f.threatL),
+        mechR: mech(f.contactR, f.threatR),
+        da: Math.max(0, f.da) * cfg.daInject,
+      }, this.rng, every);
+    }
+    const wasFlying = f.state === 'fly';
+    let daAdd = 0;
     const rL = f.brain.meanRate(g.motL);
     const rR = f.brain.meanRate(g.motR);
     f.rL = rL; f.rR = rR;
@@ -831,8 +1125,14 @@ class FlySim {
       if (daylight > 0.35 && f.stateTime > 3) { f.state = 'fly'; f.stateTime = 0; }
     } else {
       // полёт: скорость с инерцией, курс — плавный дрейф плюс саккады
-      let target = clamp(cfg.motorSpeed * (rL + rR) / 2, 0, 1.5) * activity;
-      let drive = cfg.motorTurn * (rL - rR);
+      let target = clamp(cfg.motorSpeed * tr.motor * (rL + rR) / 2, 0, 1.5) * activity;
+      let drive = cfg.motorTurn * tr.motor * (rL - rR);
+      // выученные команды: поворот и подъём
+      if (brainNow) f.learner.step(f.brain.rate, cfg, tr.explore, dt * every, this.rng);
+      const learnedTurn = cfg.learnTurnGain * Math.tanh(f.learner.action[0]);
+      const learnedClimb = cfg.learnClimbGain * Math.tanh(f.learner.action[1]);
+      drive += learnedTurn;
+      f.climb = learnedClimb;
       // врождённые рефлексы: тропотаксис, полёт против ветра по шлейфу, прочёсывание
       const odor = f.odorL + f.odorR;
       f.nav = 'search';
@@ -876,19 +1176,27 @@ class FlySim {
         f.saccadeLeft = cfg.saccadeTime;
         f.saccadeAcc = 0;
       }
-      // высота: обычно крейсерская; по сильному запаху — к ближайшему фрукту.
-      // Высотой управляет правило, а не подсеть коннектома.
-      targetY = 0.55 + 0.35 * Math.sin(this.time * 0.2 + f.phase);
+      // высота: при подсказках-рефлексах — правило, иначе выученная команда подъёма
       const food = this.nearestFood(f);
-      if (food && f.odorL + f.odorR > 0.25) {
-        targetY = food.y + food.size + 0.08;
-        const dh = Math.hypot(food.x - f.x, food.z - f.z);
-        if (dh < cfg.landRadius && Math.abs(f.y - (food.y + food.size * 0.75)) < 0.3 && hunger > 0.12) {
+      if (cfg.reflexes) {
+        targetY = 0.55 + 0.35 * Math.sin(this.time * 0.2 + f.phase);
+        if (food && f.odorL + f.odorR > 0.25) targetY = food.y + food.size + 0.08;
+      } else {
+        targetY = f.y + f.climb;   // при подъёме 1.5×(target − y) даёт скорость ≈ climb
+      }
+      // посадка по касанию: лапки чувствуют сахар, муха садится и выпускает хоботок
+      if (food) {
+        const d3 = Math.hypot(food.x - f.x, food.z - f.z, (food.y + food.size * 0.75) - f.y);
+        if (d3 < cfg.landRadius && hunger > 0.12) {
           f.state = 'feed'; f.stateTime = 0; f.feedFood = food;
           f.feedDX = (this.rng() - 0.5) * food.size * 0.8;
           f.feedDZ = (this.rng() - 0.5) * food.size * 0.8;
           f.eaten += 1;
+          f.eatenLife += 1;
           this.totalEaten += 1;
+          daAdd += cfg.daFood;
+          const b = Math.floor(this.time / 30);
+          this.feedBuckets[b] = (this.feedBuckets[b] || 0) + 1;
           if (f.id === this.hero) this.logEvent(`Муха ${f.id + 1} села на фрукт и ест`);
         }
       }
@@ -900,11 +1208,32 @@ class FlySim {
       f.y = clamp(f.y + clamp(1.5 * (targetY - f.y), -climb, climb) * dt, 0.03, cfg.arenaTop);
       f.x += Math.sin(f.heading) * f.speed * dt;
       f.z += Math.cos(f.heading) * f.speed * dt;
+      // отскок от бортиков: курс отражается, скорость падает
       const h = cfg.arenaHalf - 0.05;
-      f.x = clamp(f.x, -h, h);
-      f.z = clamp(f.z, -h, h);
-      this.pushOut(f, 0.07);
+      let bump = false;
+      if (f.x > h || f.x < -h) { f.x = clamp(f.x, -h, h); f.heading = -f.heading; bump = true; }
+      if (f.z > h || f.z < -h) { f.z = clamp(f.z, -h, h); f.heading = Math.PI - f.heading; bump = true; }
+      if (this.bounceObstacles(f, 0.07)) bump = true;
+      if (bump && f.state !== 'rest') {
+        f.speed *= 0.5;
+        f.bumps += 1;
+        this.totalBumps += 1;
+        daAdd += cfg.daBump;
+        const b = Math.floor(this.time / 30);
+        this.bumpBuckets[b] = (this.bumpBuckets[b] || 0) + 1;
+      }
     }
+
+    // ---- дофамин: награда за еду и запах, провал за удары и стрекозу ----
+    const odorNow = (f.odorL + f.odorR) / 2;
+    if (wasFlying) daAdd += cfg.daOdor * (odorNow - f.prevOdor) * (0.3 + hunger);
+    f.prevOdor = odorNow;
+    if (f.state === 'feed') daAdd += cfg.daFeed * dt;
+    daAdd += cfg.daThreat * threat * dt;
+    f.da = f.da * Math.exp(-dt / cfg.daTau) + daAdd;
+    f.daBar += (f.da - f.daBar) * Math.min(1, dt / cfg.daBaselineTau);
+    f.delta = f.da - f.daBar;
+    if (cfg.learning && wasFlying) f.learner.learn(f.delta, cfg.learnRate * tr.learn, cfg.weightDecay, dt);
 
     const drain = (f.state === 'rest' ? cfg.energyDrain * 0.3 : cfg.energyDrain) + cfg.moveCost * f.speed * (f.state === 'escape' ? 0.5 : 1);
     f.energy -= drain * dt;
@@ -966,6 +1295,21 @@ class FlySim {
     this.updateWind(dt);
     this.stepPredator(dt);
     for (const f of this.flies) this.stepFly(f, dt, daylight);
+    // мухи не проходят сквозь друг друга
+    const fl = this.flies;
+    for (let i = 0; i < fl.length; i++) {
+      for (let j = i + 1; j < fl.length; j++) {
+        const a = fl[i], b = fl[j];
+        if (a.state === 'feed' || b.state === 'feed') continue;
+        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+        const d = Math.hypot(dx, dy, dz);
+        if (d < 0.14 && d > 1e-6) {
+          const push = (0.14 - d) / 2;
+          a.x -= dx / d * push; a.y -= dy / d * push; a.z -= dz / d * push;
+          b.x += dx / d * push; b.y += dy / d * push; b.z += dz / d * push;
+        }
+      }
+    }
     for (let k = 0; k < this.food.length; k++) {
       const food = this.food[k];
       if (!food.alive && this.time >= food.regrowAt) this.food[k] = this.randomFood(food.kind);
@@ -1165,14 +1509,14 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 sceneEl.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x9cc4dd, 9, 26);
+scene.fog = new THREE.Fog(0x9cc4dd, 14, 42);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.03, 120);
-camera.position.set(7, 6, 8);
+camera.position.set(10, 8.5, 12);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.3, 0);
 controls.enableDamping = true;
 controls.minDistance = 0.6;
-controls.maxDistance = 18;
+controls.maxDistance = 30;
 controls.maxPolarAngle = Math.PI * 0.48;
 
 const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x3a3020, 1.1);
@@ -1554,9 +1898,11 @@ function buildBrainPoints() {
 function updateBrainColors() {
   const N = data.ids.length;
   const base = GROUP_COLORS.map((c) => new THREE.Color(c));
+  const daColor = new THREE.Color(0xffd54f);
+  const daNt = data.nt_list.indexOf('dopamine');
   const rate = sim.rate;
   for (let i = 0; i < N; i++) {
-    const c = base[data.group[i]];
+    const c = data.nt[i] === daNt ? daColor : base[data.group[i]];
     const a = 0.12 + 0.88 * Math.min(1, rate[i] * 6);
     brainColors[i * 3] = c.r * a;
     brainColors[i * 3 + 1] = c.g * a;
@@ -1578,7 +1924,8 @@ function computeGroupRates() {
 }
 
 function worldConfig() {
-  const cfg = { flyCount: Number($('flyCount').value), reflexes: $('reflexes').checked ? 1 : 0 };
+  const cfg = { flyCount: Number($('flyCount').value), reflexes: $('reflexes').checked ? 1 : 0,
+    learning: $('learning').checked ? 1 : 0, inherit: $('inherit').checked ? 1 : 0 };
   if ($('useEvolved').checked && evoState && evoState.best) Object.assign(cfg, decode(evoState.best));
   return cfg;
 }
@@ -1594,8 +1941,25 @@ function rebuildWorld() {
   for (let i = 0; i < SMELL; i++) smellAge[i] = 99; // частицы появятся заново
 }
 
+// ---- сохранение выученного мозга (только в этом браузере) ----------------
+const SAVE_KEY = 'fly-connectome-brain-v1';
+function loadBrain() {
+  try { const v = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return v && Array.isArray(v.W) ? v : null; } catch (e) { return null; }
+}
+function saveBrain() {
+  if (!sim || !$('learning').checked) return;
+  const b = sim.bestFly();
+  if (!b || b.eatenLife < 1) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ W: Array.from(b.learner.W), generation: b.generation, mode: sim.mode, savedAt: Date.now() })); } catch (e) { /* хранилище недоступно */ }
+}
+let saveTimer = 0;
+
 function newSim() {
   sim = new FlySim(data, { mode: $('mode').value, seed: 1 + Math.floor(Math.random() * 1e6), config: worldConfig() });
+  const saved = $('resume').checked ? loadBrain() : null;
+  if (saved && saved.mode === sim.mode && sim.seedLearners(saved.W, saved.generation || 1)) {
+    sim.logEvent(`Мухи продолжают с сохранённого мозга (поколение ${saved.generation || 1})`);
+  }
   rebuildWorld();
   lastLogKey = '';
 }
@@ -1632,13 +1996,13 @@ function startEvolution() {
   evoState = null;
   $('evoBtn').textContent = 'Остановить';
   evoWorker.postMessage({ type: 'start', mode: $('mode').value, pop: 20, seconds: 40, data,
-    extra: { reflexes: $('reflexes').checked ? 1 : 0 } });
+    extra: { reflexes: $('reflexes').checked ? 1 : 0, learning: $('learning').checked ? 1 : 0, inherit: 0 } });
   $('status').textContent = 'Эволюция идёт в фоне: 20 мух, 2 мира по 40 с на каждую.';
 }
 
 function stopEvolution() {
   evoRunning = false;
-  $('evoBtn').textContent = 'Запустить';
+  $('evoBtn').textContent = 'Запустить эволюцию';
   if (evoWorker) evoWorker.postMessage({ type: 'stop' });
   $('status').textContent = 'Эволюция остановлена.';
 }
@@ -1774,7 +2138,8 @@ function updateStats() {
   $('energyBar').style.width = `${pct}%`;
   $('energyBar2').style.width = `${pct}%`;
   const st = STATE_NAMES[f.state] || f.state;
-  $('stateChip').textContent = f.state === 'fly' ? `${st}: ${NAV_NAMES[f.nav] || 'ищет'}` : st;
+  const daTxt = f.delta > 0.3 ? ' · дофамин ▲' : f.delta < -0.3 ? ' · дофамин ▼' : '';
+  $('stateChip').textContent = (f.state === 'fly' && sim.cfg.reflexes ? `${st}: ${NAV_NAMES[f.nav] || 'ищет'}` : st) + daTxt;
   const p = sim.predator;
   $('predChip').textContent = p.cooldown > 0 ? 'Стрекоза сыта' : (p.hunting ? 'Стрекоза охотится!' : 'Стрекоза патрулирует');
   $('colonySize').textContent = sim.flies.length;
@@ -1797,8 +2162,10 @@ function updateStats() {
     }
   }
   if (activeTab === 'stats' && (tableTimer++ % 15 === 0)) {
+    const pc = (x) => `${x >= 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`;
     $('flyTable').innerHTML = sim.flies.map((m) =>
-      `<div class="row"><span>Муха ${m.id + 1}${m.id === sim.hero ? ' (выбрана)' : ''} · ${STATE_NAMES[m.state]}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eaten} еды · жизнь ${m.lives}</b></div>`).join('');
+      `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row" style="margin:0"><span>Муха ${m.id + 1}${m.id === sim.hero ? ' (выбрана)' : ''} · поколение ${m.generation}${m.parent !== null && m.parent !== undefined ? ` · потомок мухи ${m.parent + 1}` : ''}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eatenLife} еды</b></div>` +
+      `<div style="font-size:12px">${STATE_NAMES[m.state]} · обоняние ${pc(m.traits.odor)} · осязание ${pc(m.traits.contact)} · моторы ${pc(m.traits.motor)} · обучаемость ${pc(m.traits.learn)} · любопытство ${pc(m.traits.explore)} · сила синапсов ${m.learner.norm().toFixed(2)}</div></div>`).join('');
   }
 }
 
@@ -1811,8 +2178,57 @@ function updateBrainTab() {
   const f = sim.fly;
   $('turnNow').textContent = (sim.cfg.motorTurn * (f.rL - f.rR)).toFixed(2);
   $('speedNow').textContent = f.speed.toFixed(2) + ' ед/с';
-  $('navNow').textContent = f.state === 'fly' ? (NAV_NAMES[f.nav] || 'ищет') : (STATE_NAMES[f.state] || f.state);
+  $('navNow').textContent = f.state === 'fly' ? (sim.cfg.reflexes ? (NAV_NAMES[f.nav] || 'ищет') : 'учится сама') : (STATE_NAMES[f.state] || f.state);
   $('netSize').textContent = `${data.ids.length} нейронов · ${data.src.length} связей · ${$('mode').value === 'random' ? 'контроль' : 'коннектом'}`;
+  $('daNow').textContent = f.da.toFixed(2);
+  $('daBar').style.width = Math.round(Math.min(1, Math.max(0, f.da) / 2) * 100) + '%';
+  $('rpeNow').textContent = f.delta.toFixed(2);
+  $('rpeBar').style.width = Math.round(Math.min(1, Math.abs(f.delta) / 2) * 100) + '%';
+  if (weightsTimer++ % 20 === 0) renderWeights(f.learner);
+}
+
+let weightsTimer = 0;
+function renderWeights(L) {
+  const bar = (w) => {
+    const pct = Math.round(Math.min(1, Math.abs(w) / 4) * 50);
+    const color = w >= 0 ? '#7ee0c3' : '#ff7b5c';
+    const left = w >= 0 ? 50 : 50 - pct;
+    return `<span style="position:relative;display:inline-block;width:90px;height:8px;background:var(--line);border-radius:4px;vertical-align:middle"><i style="position:absolute;left:${left}%;width:${pct}%;top:0;bottom:0;background:${color};border-radius:4px"></i></span>`;
+  };
+  const rows = [];
+  rows.push('<div class="row"><span><b style="color:var(--text)">Поворот</b> (слева − справа)</span><b></b></div>');
+  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[j])} ${L.W[j].toFixed(2)}</b></div>`));
+  rows.push('<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">Подъём</b> (сумма сторон)</span><b></b></div>');
+  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[L.nT + j])} ${L.W[L.nT + j].toFixed(2)}</b></div>`));
+  const bias = L.W[L.W.length - 1];
+  rows.push(`<div class="row"><span>Смещение (${bias < 0 ? 'держаться ниже' : 'держаться выше'})</span><b>${bar(bias)} ${bias.toFixed(2)}</b></div>`);
+  $('weights').innerHTML = rows.join('');
+}
+
+function drawLearnChart() {
+  const c = $('learnChart');
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#243041';
+  ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(0, (H * k) / 4); ctx.lineTo(W, (H * k) / 4); ctx.stroke(); }
+  const curve = sim.learningCurve();
+  if (curve.length < 2) return;
+  // скользящее среднее по 3 интервалам (1,5 минуты)
+  const sm = (k) => curve.map((_, i) => { const a = curve.slice(Math.max(0, i - 2), i + 1); return a.reduce((x, y) => x + y[k], 0) / a.length; });
+  const feed = sm('feed'), bumps = sm('bumps');
+  const maxF = Math.max(0.5, ...feed), maxB = Math.max(1, ...bumps);
+  const line = (vals, max, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+    vals.forEach((v, i) => { const x = (i / (vals.length - 1)) * (W - 4) + 2; const y = H - 6 - (v / max) * (H - 12); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+  };
+  line(bumps, maxB, '#ff7043');
+  line(feed, maxF, '#7ee0c3');
+  const third = Math.max(1, Math.floor(feed.length / 3));
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  $('learnNote').textContent = `За ${Math.round(sim.time / 60)} мин симуляции: посадок в минуту на муху ${avg(curve.slice(0, third).map((x) => x.feed)).toFixed(2)} в начале → ${avg(curve.slice(-third).map((x) => x.feed)).toFixed(2)} сейчас; ударов ${avg(curve.slice(0, third).map((x) => x.bumps)).toFixed(1)} → ${avg(curve.slice(-third).map((x) => x.bumps)).toFixed(1)}. Шкалы у линий свои.`;
 }
 
 // ---- свет и время суток ------------------------------------------------------
@@ -1934,9 +2350,25 @@ function syncScene() {
   }
 }
 
+// Адаптивное качество: если кадры идут медленно, снижаем чёткость и мягкость теней
+let frameAvg = 16, quality = 2, qualityTimer = 0;
+function adaptQuality(real) {
+  frameAvg = frameAvg * 0.95 + real * 1000 * 0.05;
+  qualityTimer += real;
+  if (qualityTimer < 2) return;
+  if (frameAvg > 34 && quality > 0) {
+    quality -= 1;
+    qualityTimer = 0;
+    renderer.setPixelRatio(quality === 1 ? 1.25 : 1);
+    if (quality === 0) { renderer.shadowMap.type = THREE.BasicShadowMap; sun.shadow.mapSize.set(512, 512); sun.shadow.map && sun.shadow.map.dispose(); sun.shadow.map = null; }
+    lastW = -1;
+  }
+}
+
 function frame(now) {
   const real = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
+  if (activeTab === 'scene') adaptQuality(real);
   if (!paused) {
     acc += real * speed;
     const t0 = performance.now();
@@ -1947,13 +2379,15 @@ function frame(now) {
     }
   }
   updateStats();
+  saveTimer += real;
+  if (saveTimer > 20) { saveTimer = 0; saveBrain(); }
   if (activeTab === 'scene') {
     updateLight();
     syncScene();
     resizeScene();
     renderer.render(scene, camera);
   }
-  if (activeTab === 'stats') drawChart();
+  if (activeTab === 'stats') { drawChart(); if (tableTimer % 15 === 1) drawLearnChart(); }
   if (activeTab === 'brain') {
     if (!brainPoints) buildBrainPoints();
     updateBrainColors();
@@ -1971,6 +2405,8 @@ function frame(now) {
 // ---- управление -------------------------------------------------------------
 $('mode').addEventListener('change', () => { newSim(); if (evoRunning) startEvolution(); });
 $('reflexes').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
+$('learning').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
+$('inherit').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('flyCount').addEventListener('change', newSim);
 $('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
 $('pauseBtn').addEventListener('click', (e) => {
@@ -1978,13 +2414,19 @@ $('pauseBtn').addEventListener('click', (e) => {
   e.target.textContent = paused ? 'Продолжить' : 'Пауза';
 });
 $('newBtn').addEventListener('click', newSim);
+$('forgetBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* нет хранилища */ }
+  sim.logEvent('Сохранённый мозг забыт. «Новый мир» начнёт с наивных мух.');
+  lastLogKey = '';
+});
 $('nextBtn').addEventListener('click', () => { sim.hero = (sim.hero + 1) % sim.flies.length; lastLogKey = ''; });
 $('smellBtn').addEventListener('click', (e) => { showSmell = !showSmell; e.target.textContent = showSmell ? 'Запах: виден' : 'Запах: скрыт'; });
 $('camBtn').addEventListener('click', (e) => {
   followCam = !followCam;
   e.target.textContent = followCam ? 'Камера: следить' : 'Камера: обзор';
   if (!followCam) {
-    camera.position.set(6.5, 5.5, 7.5);
+    camera.position.set(10, 8.5, 12);
     controls.target.set(0, 0.3, 0);
     controls.update();
   }
@@ -1995,9 +2437,9 @@ $('copyBtn').addEventListener('click', copyGenome);
 $('useEvolved').addEventListener('change', () => sim.setConfig(worldConfig()));
 
 function updateSettingsSummary() {
-  $('settingsSummary').textContent = `${$('mode').value === 'random' ? 'контроль' : 'коннектом'} · ${$('flyCount').value} мух · ${$('speed').value}× · рефлексы ${$('reflexes').checked ? 'вкл' : 'выкл'}`;
+  $('settingsSummary').textContent = `${$('mode').value === 'random' ? 'контроль' : 'коннектом'} · ${$('flyCount').value} мух · ${$('speed').value}× · обучение ${$('learning').checked ? 'вкл' : 'выкл'}${$('reflexes').checked ? ' · правила вкл' : ''}`;
 }
-for (const id of ['mode', 'flyCount', 'speed', 'reflexes']) $(id).addEventListener('change', updateSettingsSummary);
+for (const id of ['mode', 'flyCount', 'speed', 'reflexes', 'learning', 'inherit']) $(id).addEventListener('change', updateSettingsSummary);
 if (window.innerWidth < 640) $('settings').open = false;
 updateSettingsSummary();
 
@@ -2007,7 +2449,7 @@ async function main() {
   data = await res.json();
   newSim();
   buildBrainPoints();
-  startEvolution();
+  $('status').textContent = 'Эволюция не запущена: она нагружает процессор вместе с садом. Нажмите «Запустить эволюцию».';
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 main().catch((err) => {

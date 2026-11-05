@@ -114,9 +114,10 @@
       <label for="flyCount">Мух</label>
       <select id="flyCount">
         <option value="1">1</option>
-        <option value="3">3</option>
-        <option value="6" selected>6</option>
-        <option value="12">12</option>
+        <option value="4">4</option>
+        <option value="8" selected>8</option>
+        <option value="16">16</option>
+        <option value="24">24 (медленно)</option>
       </select>
     </div>
     <div>
@@ -127,6 +128,7 @@
         <option value="2">2×</option>
         <option value="4">4×</option>
         <option value="8">8×</option>
+        <option value="32">32×</option>
       </select>
     </div>
     <div class="pill-row">
@@ -134,7 +136,10 @@
       <button id="newBtn">Новый мир</button>
     </div>
   </div>
-  <label class="toggle"><input type="checkbox" id="reflexes" checked> Врождённые рефлексы поиска еды (полёт по шлейфу запаха, подлёт к фрукту)</label>
+  <label class="toggle"><input type="checkbox" id="learning" checked> Обучение дофамином: мухи сами учатся искать еду и облетать препятствия</label>
+  <label class="toggle"><input type="checkbox" id="inherit" checked> Новая муха наследует выученное лучшей мухой (с небольшими отличиями)</label>
+  <label class="toggle"><input type="checkbox" id="resume" checked> Продолжать с выученного мозга, сохранённого в этом браузере <button id="forgetBtn" style="margin-left:6px;padding:3px 8px;font-size:12px">Забыть</button></label>
+  <label class="toggle"><input type="checkbox" id="reflexes"> Подсказки-правила поиска еды (полёт по шлейфу и подлёт), только для сравнения</label>
 </details>
 
 <div id="errorBanner" class="card" hidden style="margin-top:12px;border-color:var(--warn);color:var(--warn)"></div>
@@ -191,8 +196,9 @@
           <span style="--c:#81c784">механосенсорные</span>
           <span style="--c:#ff7043">моторные</span>
           <span style="--c:#7e57c2">промежуточные</span>
+          <span style="--c:#ffd54f">дофаминовые</span>
         </div>
-        <p class="muted">Яркость точки — текущая активность нейрона. Мозг медленно вращается.</p>
+        <p class="muted">Яркость точки — текущая активность нейрона. Дофаминовые нейроны вспыхивают, когда муха получает награду. Мозг медленно вращается.</p>
       </div>
       <div class="card">
         <h2>Активность по группам</h2>
@@ -205,7 +211,18 @@
         <div class="row" style="margin-top:14px"><span>Сигнал поворота от коннектома</span><b id="turnNow">–</b></div>
         <div class="row"><span>Скорость полёта</span><b id="speedNow">–</b></div>
         <div class="row"><span>Поведение</span><b id="navNow">–</b></div>
-        <p class="muted" style="margin-top:12px">Коннектом даёт сигнал скорости и поворота. Врождённые рефлексы (если включены) добавляют полёт по шлейфу запаха и подлёт к фрукту. Рефлекс бегства от стрекозы, посадка, еда и сон ночью заданы правилами.</p>
+        <p class="muted" style="margin-top:12px">Скорость задаёт коннектом. Поворот складывается из сигнала коннектома и выученной команды, подъём — выученная команда. Посадка на фрукт по касанию, рефлекс бегства от стрекозы и сон ночью заданы правилами.</p>
+      </div>
+      <div class="card">
+        <h2>Дофамин и обучение</h2>
+        <div class="bars">
+          <div style="--c:#ffd54f"><div class="lbl"><span>Дофамин</span><b id="daNow">0.00</b></div><div class="track"><i id="daBar"></i></div></div>
+          <div style="--c:#7ee0c3"><div class="lbl"><span>Ошибка предсказания награды</span><b id="rpeNow">0.00</b></div><div class="track"><i id="rpeBar"></i></div></div>
+        </div>
+        <p class="muted">Всплеск дофамина: посадка на фрукт, еда, усиление запаха. Провал: удар о бортик, камень или стебель, стрекоза рядом. Синапсы меняются на «дофамин минус ожидание».</p>
+        <h2 style="margin-top:14px">Выученные синапсы</h2>
+        <div id="weights" class="muted"></div>
+        <p class="muted" style="margin-top:8px">Поворот учится на разнице «слева минус справа», подъём — на сумме сторон и постоянном смещении. Зелёный — положительный вес, красный — отрицательный.</p>
       </div>
     </div>
   </section>
@@ -228,7 +245,7 @@
         <canvas id="evoChart" class="chart" width="540" height="220" style="margin-top:6px"></canvas>
         <label class="row" style="justify-content:flex-start;gap:8px;margin-top:12px"><input type="checkbox" id="useEvolved" checked> Использовать лучший геном в саду</label>
         <div class="pill-row" style="margin-top:10px">
-          <button id="evoBtn" class="primary">Остановить</button>
+          <button id="evoBtn" class="primary">Запустить эволюцию</button>
           <button id="saveBtn">Показать геном</button>
           <button id="copyBtn" hidden>Копировать</button>
         </div>
@@ -238,9 +255,9 @@
       <div class="card">
         <h2>Как это устроено</h2>
         <p class="muted">Геном задаёт силу синапсов, пороги нейронов, чувствительность сенсоров и силу моторов. Топология коннектома не меняется.</p>
-        <p class="muted">Фитнес: 5 очков за посадку на фрукт, 0,05 за секунду жизни, −4 за смерть от стрекозы, −2 за голод.</p>
+        <p class="muted">Фитнес: 5 очков за посадку на фрукт, 0,05 за секунду жизни, −4 за смерть от стрекозы, −2 за голод. За 40 секунд муха почти не успевает научиться, поэтому эволюция подбирает в основном врождённые параметры.</p>
         <p class="muted">Каждое поколение — 20 мух, каждая проживает 2 мира по 40 секунд в одиночку. Лучший геном проверяется на двух фиксированных мирах: так видно настоящий прогресс.</p>
-        <p class="muted">Эволюция идёт в фоновом потоке и перезапускается при смене проводки или рефлексов.</p>
+        <p class="muted">Эволюция генома идёт в фоновом потоке и перезапускается при смене проводки, обучения или правил. В саду работает ещё и естественный отбор: новая муха наследует выученные синапсы лучшей живой мухи.</p>
       </div>
     </div>
   </section>
@@ -266,6 +283,15 @@
           <span style="--c:#4fc3f7">сенсоры</span>
           <span style="--c:#7ee0c3">энергия</span>
         </div>
+      </div>
+      <div class="card">
+        <h2>Обучение колонии</h2>
+        <canvas id="learnChart" class="chart" width="880" height="240"></canvas>
+        <div class="legend">
+          <span style="--c:#7ee0c3">посадок на фрукт в минуту на муху</span>
+          <span style="--c:#ff7043">ударов в минуту на муху</span>
+        </div>
+        <p class="muted" id="learnNote">Кривая появится через минуту симуляции. Ускорьте время, чтобы увидеть обучение быстрее.</p>
       </div>
       <div class="card">
         <h2>Все мухи</h2>
@@ -400,14 +426,14 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 sceneEl.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x9cc4dd, 9, 26);
+scene.fog = new THREE.Fog(0x9cc4dd, 14, 42);
 const camera = new THREE.PerspectiveCamera(55, 1, 0.03, 120);
-camera.position.set(7, 6, 8);
+camera.position.set(10, 8.5, 12);
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.target.set(0, 0.3, 0);
 controls.enableDamping = true;
 controls.minDistance = 0.6;
-controls.maxDistance = 18;
+controls.maxDistance = 30;
 controls.maxPolarAngle = Math.PI * 0.48;
 
 const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x3a3020, 1.1);
@@ -789,9 +815,11 @@ function buildBrainPoints() {
 function updateBrainColors() {
   const N = data.ids.length;
   const base = GROUP_COLORS.map((c) => new THREE.Color(c));
+  const daColor = new THREE.Color(0xffd54f);
+  const daNt = data.nt_list.indexOf('dopamine');
   const rate = sim.rate;
   for (let i = 0; i < N; i++) {
-    const c = base[data.group[i]];
+    const c = data.nt[i] === daNt ? daColor : base[data.group[i]];
     const a = 0.12 + 0.88 * Math.min(1, rate[i] * 6);
     brainColors[i * 3] = c.r * a;
     brainColors[i * 3 + 1] = c.g * a;
@@ -813,7 +841,8 @@ function computeGroupRates() {
 }
 
 function worldConfig() {
-  const cfg = { flyCount: Number($('flyCount').value), reflexes: $('reflexes').checked ? 1 : 0 };
+  const cfg = { flyCount: Number($('flyCount').value), reflexes: $('reflexes').checked ? 1 : 0,
+    learning: $('learning').checked ? 1 : 0, inherit: $('inherit').checked ? 1 : 0 };
   if ($('useEvolved').checked && evoState && evoState.best) Object.assign(cfg, decode(evoState.best));
   return cfg;
 }
@@ -829,8 +858,25 @@ function rebuildWorld() {
   for (let i = 0; i < SMELL; i++) smellAge[i] = 99; // частицы появятся заново
 }
 
+// ---- сохранение выученного мозга (только в этом браузере) ----------------
+const SAVE_KEY = 'fly-connectome-brain-v1';
+function loadBrain() {
+  try { const v = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return v && Array.isArray(v.W) ? v : null; } catch (e) { return null; }
+}
+function saveBrain() {
+  if (!sim || !$('learning').checked) return;
+  const b = sim.bestFly();
+  if (!b || b.eatenLife < 1) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ W: Array.from(b.learner.W), generation: b.generation, mode: sim.mode, savedAt: Date.now() })); } catch (e) { /* хранилище недоступно */ }
+}
+let saveTimer = 0;
+
 function newSim() {
   sim = new FlySim(data, { mode: $('mode').value, seed: 1 + Math.floor(Math.random() * 1e6), config: worldConfig() });
+  const saved = $('resume').checked ? loadBrain() : null;
+  if (saved && saved.mode === sim.mode && sim.seedLearners(saved.W, saved.generation || 1)) {
+    sim.logEvent(`Мухи продолжают с сохранённого мозга (поколение ${saved.generation || 1})`);
+  }
   rebuildWorld();
   lastLogKey = '';
 }
@@ -867,13 +913,13 @@ function startEvolution() {
   evoState = null;
   $('evoBtn').textContent = 'Остановить';
   evoWorker.postMessage({ type: 'start', mode: $('mode').value, pop: 20, seconds: 40, data,
-    extra: { reflexes: $('reflexes').checked ? 1 : 0 } });
+    extra: { reflexes: $('reflexes').checked ? 1 : 0, learning: $('learning').checked ? 1 : 0, inherit: 0 } });
   $('status').textContent = 'Эволюция идёт в фоне: 20 мух, 2 мира по 40 с на каждую.';
 }
 
 function stopEvolution() {
   evoRunning = false;
-  $('evoBtn').textContent = 'Запустить';
+  $('evoBtn').textContent = 'Запустить эволюцию';
   if (evoWorker) evoWorker.postMessage({ type: 'stop' });
   $('status').textContent = 'Эволюция остановлена.';
 }
@@ -1009,7 +1055,8 @@ function updateStats() {
   $('energyBar').style.width = `${pct}%`;
   $('energyBar2').style.width = `${pct}%`;
   const st = STATE_NAMES[f.state] || f.state;
-  $('stateChip').textContent = f.state === 'fly' ? `${st}: ${NAV_NAMES[f.nav] || 'ищет'}` : st;
+  const daTxt = f.delta > 0.3 ? ' · дофамин ▲' : f.delta < -0.3 ? ' · дофамин ▼' : '';
+  $('stateChip').textContent = (f.state === 'fly' && sim.cfg.reflexes ? `${st}: ${NAV_NAMES[f.nav] || 'ищет'}` : st) + daTxt;
   const p = sim.predator;
   $('predChip').textContent = p.cooldown > 0 ? 'Стрекоза сыта' : (p.hunting ? 'Стрекоза охотится!' : 'Стрекоза патрулирует');
   $('colonySize').textContent = sim.flies.length;
@@ -1032,8 +1079,10 @@ function updateStats() {
     }
   }
   if (activeTab === 'stats' && (tableTimer++ % 15 === 0)) {
+    const pc = (x) => `${x >= 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`;
     $('flyTable').innerHTML = sim.flies.map((m) =>
-      `<div class="row"><span>Муха ${m.id + 1}${m.id === sim.hero ? ' (выбрана)' : ''} · ${STATE_NAMES[m.state]}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eaten} еды · жизнь ${m.lives}</b></div>`).join('');
+      `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row" style="margin:0"><span>Муха ${m.id + 1}${m.id === sim.hero ? ' (выбрана)' : ''} · поколение ${m.generation}${m.parent !== null && m.parent !== undefined ? ` · потомок мухи ${m.parent + 1}` : ''}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eatenLife} еды</b></div>` +
+      `<div style="font-size:12px">${STATE_NAMES[m.state]} · обоняние ${pc(m.traits.odor)} · осязание ${pc(m.traits.contact)} · моторы ${pc(m.traits.motor)} · обучаемость ${pc(m.traits.learn)} · любопытство ${pc(m.traits.explore)} · сила синапсов ${m.learner.norm().toFixed(2)}</div></div>`).join('');
   }
 }
 
@@ -1046,8 +1095,57 @@ function updateBrainTab() {
   const f = sim.fly;
   $('turnNow').textContent = (sim.cfg.motorTurn * (f.rL - f.rR)).toFixed(2);
   $('speedNow').textContent = f.speed.toFixed(2) + ' ед/с';
-  $('navNow').textContent = f.state === 'fly' ? (NAV_NAMES[f.nav] || 'ищет') : (STATE_NAMES[f.state] || f.state);
+  $('navNow').textContent = f.state === 'fly' ? (sim.cfg.reflexes ? (NAV_NAMES[f.nav] || 'ищет') : 'учится сама') : (STATE_NAMES[f.state] || f.state);
   $('netSize').textContent = `${data.ids.length} нейронов · ${data.src.length} связей · ${$('mode').value === 'random' ? 'контроль' : 'коннектом'}`;
+  $('daNow').textContent = f.da.toFixed(2);
+  $('daBar').style.width = Math.round(Math.min(1, Math.max(0, f.da) / 2) * 100) + '%';
+  $('rpeNow').textContent = f.delta.toFixed(2);
+  $('rpeBar').style.width = Math.round(Math.min(1, Math.abs(f.delta) / 2) * 100) + '%';
+  if (weightsTimer++ % 20 === 0) renderWeights(f.learner);
+}
+
+let weightsTimer = 0;
+function renderWeights(L) {
+  const bar = (w) => {
+    const pct = Math.round(Math.min(1, Math.abs(w) / 4) * 50);
+    const color = w >= 0 ? '#7ee0c3' : '#ff7b5c';
+    const left = w >= 0 ? 50 : 50 - pct;
+    return `<span style="position:relative;display:inline-block;width:90px;height:8px;background:var(--line);border-radius:4px;vertical-align:middle"><i style="position:absolute;left:${left}%;width:${pct}%;top:0;bottom:0;background:${color};border-radius:4px"></i></span>`;
+  };
+  const rows = [];
+  rows.push('<div class="row"><span><b style="color:var(--text)">Поворот</b> (слева − справа)</span><b></b></div>');
+  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[j])} ${L.W[j].toFixed(2)}</b></div>`));
+  rows.push('<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">Подъём</b> (сумма сторон)</span><b></b></div>');
+  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[L.nT + j])} ${L.W[L.nT + j].toFixed(2)}</b></div>`));
+  const bias = L.W[L.W.length - 1];
+  rows.push(`<div class="row"><span>Смещение (${bias < 0 ? 'держаться ниже' : 'держаться выше'})</span><b>${bar(bias)} ${bias.toFixed(2)}</b></div>`);
+  $('weights').innerHTML = rows.join('');
+}
+
+function drawLearnChart() {
+  const c = $('learnChart');
+  const ctx = c.getContext('2d');
+  const W = c.width, H = c.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#243041';
+  ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(0, (H * k) / 4); ctx.lineTo(W, (H * k) / 4); ctx.stroke(); }
+  const curve = sim.learningCurve();
+  if (curve.length < 2) return;
+  // скользящее среднее по 3 интервалам (1,5 минуты)
+  const sm = (k) => curve.map((_, i) => { const a = curve.slice(Math.max(0, i - 2), i + 1); return a.reduce((x, y) => x + y[k], 0) / a.length; });
+  const feed = sm('feed'), bumps = sm('bumps');
+  const maxF = Math.max(0.5, ...feed), maxB = Math.max(1, ...bumps);
+  const line = (vals, max, color) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.beginPath();
+    vals.forEach((v, i) => { const x = (i / (vals.length - 1)) * (W - 4) + 2; const y = H - 6 - (v / max) * (H - 12); if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.stroke();
+  };
+  line(bumps, maxB, '#ff7043');
+  line(feed, maxF, '#7ee0c3');
+  const third = Math.max(1, Math.floor(feed.length / 3));
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  $('learnNote').textContent = `За ${Math.round(sim.time / 60)} мин симуляции: посадок в минуту на муху ${avg(curve.slice(0, third).map((x) => x.feed)).toFixed(2)} в начале → ${avg(curve.slice(-third).map((x) => x.feed)).toFixed(2)} сейчас; ударов ${avg(curve.slice(0, third).map((x) => x.bumps)).toFixed(1)} → ${avg(curve.slice(-third).map((x) => x.bumps)).toFixed(1)}. Шкалы у линий свои.`;
 }
 
 // ---- свет и время суток ------------------------------------------------------
@@ -1169,9 +1267,25 @@ function syncScene() {
   }
 }
 
+// Адаптивное качество: если кадры идут медленно, снижаем чёткость и мягкость теней
+let frameAvg = 16, quality = 2, qualityTimer = 0;
+function adaptQuality(real) {
+  frameAvg = frameAvg * 0.95 + real * 1000 * 0.05;
+  qualityTimer += real;
+  if (qualityTimer < 2) return;
+  if (frameAvg > 34 && quality > 0) {
+    quality -= 1;
+    qualityTimer = 0;
+    renderer.setPixelRatio(quality === 1 ? 1.25 : 1);
+    if (quality === 0) { renderer.shadowMap.type = THREE.BasicShadowMap; sun.shadow.mapSize.set(512, 512); sun.shadow.map && sun.shadow.map.dispose(); sun.shadow.map = null; }
+    lastW = -1;
+  }
+}
+
 function frame(now) {
   const real = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
+  if (activeTab === 'scene') adaptQuality(real);
   if (!paused) {
     acc += real * speed;
     const t0 = performance.now();
@@ -1182,13 +1296,15 @@ function frame(now) {
     }
   }
   updateStats();
+  saveTimer += real;
+  if (saveTimer > 20) { saveTimer = 0; saveBrain(); }
   if (activeTab === 'scene') {
     updateLight();
     syncScene();
     resizeScene();
     renderer.render(scene, camera);
   }
-  if (activeTab === 'stats') drawChart();
+  if (activeTab === 'stats') { drawChart(); if (tableTimer % 15 === 1) drawLearnChart(); }
   if (activeTab === 'brain') {
     if (!brainPoints) buildBrainPoints();
     updateBrainColors();
@@ -1206,6 +1322,8 @@ function frame(now) {
 // ---- управление -------------------------------------------------------------
 $('mode').addEventListener('change', () => { newSim(); if (evoRunning) startEvolution(); });
 $('reflexes').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
+$('learning').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
+$('inherit').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('flyCount').addEventListener('change', newSim);
 $('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
 $('pauseBtn').addEventListener('click', (e) => {
@@ -1213,13 +1331,19 @@ $('pauseBtn').addEventListener('click', (e) => {
   e.target.textContent = paused ? 'Продолжить' : 'Пауза';
 });
 $('newBtn').addEventListener('click', newSim);
+$('forgetBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* нет хранилища */ }
+  sim.logEvent('Сохранённый мозг забыт. «Новый мир» начнёт с наивных мух.');
+  lastLogKey = '';
+});
 $('nextBtn').addEventListener('click', () => { sim.hero = (sim.hero + 1) % sim.flies.length; lastLogKey = ''; });
 $('smellBtn').addEventListener('click', (e) => { showSmell = !showSmell; e.target.textContent = showSmell ? 'Запах: виден' : 'Запах: скрыт'; });
 $('camBtn').addEventListener('click', (e) => {
   followCam = !followCam;
   e.target.textContent = followCam ? 'Камера: следить' : 'Камера: обзор';
   if (!followCam) {
-    camera.position.set(6.5, 5.5, 7.5);
+    camera.position.set(10, 8.5, 12);
     controls.target.set(0, 0.3, 0);
     controls.update();
   }
@@ -1230,9 +1354,9 @@ $('copyBtn').addEventListener('click', copyGenome);
 $('useEvolved').addEventListener('change', () => sim.setConfig(worldConfig()));
 
 function updateSettingsSummary() {
-  $('settingsSummary').textContent = `${$('mode').value === 'random' ? 'контроль' : 'коннектом'} · ${$('flyCount').value} мух · ${$('speed').value}× · рефлексы ${$('reflexes').checked ? 'вкл' : 'выкл'}`;
+  $('settingsSummary').textContent = `${$('mode').value === 'random' ? 'контроль' : 'коннектом'} · ${$('flyCount').value} мух · ${$('speed').value}× · обучение ${$('learning').checked ? 'вкл' : 'выкл'}${$('reflexes').checked ? ' · правила вкл' : ''}`;
 }
-for (const id of ['mode', 'flyCount', 'speed', 'reflexes']) $(id).addEventListener('change', updateSettingsSummary);
+for (const id of ['mode', 'flyCount', 'speed', 'reflexes', 'learning', 'inherit']) $(id).addEventListener('change', updateSettingsSummary);
 if (window.innerWidth < 640) $('settings').open = false;
 updateSettingsSummary();
 
@@ -1242,7 +1366,7 @@ async function main() {
   data = await res.json();
   newSim();
   buildBrainPoints();
-  startEvolution();
+  $('status').textContent = 'Эволюция не запущена: она нагружает процессор вместе с садом. Нажмите «Запустить эволюцию».';
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 }
 main().catch((err) => {
