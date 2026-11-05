@@ -92,7 +92,7 @@ test('раскраска: отрезки по типу дороги', () => {
 });
 
 test('штраф: дворовые проезды и пешеходные дорожки дороже, велодорожка — со скидкой', () => {
-  assert.equal(R.wayPenalty('highway=primary', 100), 0);
+  assert.equal(R.wayPenalty('highway=residential', 100), 0);
   assert.ok(R.wayPenalty('highway=service service=parking_aisle', 100) > R.wayPenalty('highway=service', 100));
   assert.ok(R.wayPenalty('highway=footway', 100) > 0);
   assert.ok(R.wayPenalty('highway=cycleway', 100) < 0);
@@ -110,4 +110,17 @@ test('штраф: путь через дворы проигрывает чуть
   const yards = { distance: 1070, ascent: 0, bikeShare: 0, penaltyM: 1168 };
   const roads = { distance: 1450, ascent: 0, bikeShare: 0, penaltyM: 370 };
   assert.equal(R.pickBest([yards, roads]).distance, 1450);
+});
+
+test('штраф: проезжая часть больших улиц дороже тротуара вдоль неё', () => {
+  assert.ok(R.wayPenalty('highway=primary', 100) > R.wayPenalty('highway=footway footway=sidewalk', 100));
+  assert.ok(R.wayPenalty('highway=secondary', 100) > R.wayPenalty('highway=footway', 100));
+  assert.equal(R.wayPenalty('highway=primary cycleway:right=lane', 100), -10, 'с велополосой — уже велоинфраструктура');
+});
+
+test('профиль velo.brf: тротуары дешёвые, проспекты дорогие', () => {
+  const brf = require('fs').readFileSync(require('path').join(__dirname, '../../js/velo.brf'), 'utf8');
+  assert.match(brf, /footway=sidewalk\|crossing then 1\.05/);
+  assert.match(brf, /highway=primary\|primary_link {5}\) then \( if isbike then 1\.2 else {2}5 {2}\)/);
+  assert.match(brf, /else if footaccess then \( if bicycle=dismount then 1\.5 else 0\.3 \)/);
 });

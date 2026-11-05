@@ -470,15 +470,47 @@
     return r;
   }
 
+  /*
+   * Свой городской профиль (js/velo.brf): тротуары и велодорожки вместо проезжей части больших улиц.
+   * Стандартные профили BRouter считают тротуар «велосипеду нельзя» (×5 к стоимости) и уводят на проспекты.
+   * Профиль загружается на сервер маршрутов один раз за запуск; сервер со временем удаляет такие профили —
+   * тогда загружаем заново.
+   */
+  let veloProfile = null, veloProfileId = null;
+  function uploadVeloProfile(staleId) {
+    if (veloProfile && (!staleId || staleId !== veloProfileId)) return veloProfile;
+    veloProfile = (async () => {
+      const brf = await (await fetch('js/velo.brf')).text();
+      const res = await fetch(S.settings.get().routerUrl.replace(/\/$/, '') + '/profile', {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: brf,
+      });
+      const j = await res.json();
+      if (!j.profileid) throw new Error(j.error || 'профиль маршрутов не загрузился');
+      return (veloProfileId = j.profileid);
+    })().catch(e => { veloProfile = null; throw e; });
+    return veloProfile;
+  }
+  async function fetchVelo(points, alt = 0) {
+    const id = await uploadVeloProfile();
+    try { return await fetchOne(points, id, alt); }
+    catch { return fetchOne(points, await uploadVeloProfile(id), alt); } // профиль удалён с сервера — загружаем снова
+  }
+
   /**
-   * Маршрут по выбранному режиму. «Больше велодорожек» (best): строим варианты нескольких профилей
-   * параллельно и берём тот, где больше всего велодорожек, если он не дороже самого выгодного (допуск 0% — без потери времени).
+   * Маршрут по выбранному режиму. «Велодорожки без потери времени» (best): строим варианты своего профиля
+   * (с альтернативами) и safety параллельно и берём тот, где больше всего велодорожек, если он не дороже
+   * самого выгодного (допуск 0%). Если свой профиль недоступен — стандартные профили BRouter.
    */
   async function fetchRoute(points) {
+    if (plan.profile === 'velo') return fetchVelo(points).catch(() => fetchOne(points, 'safety'));
     if (plan.profile !== 'best') return fetchOne(points, plan.profile);
-    const jobs = [['safety', 0], ['trekking', 0], ['fastbike', 0]];
-    if (points.length === 2) jobs.push(['trekking', 1]); // альтернативы BRouter строит только для двух точек
-    const settled = await Promise.allSettled(jobs.map(([pr, al]) => fetchOne(points, pr, al)));
+    const two = points.length === 2; // альтернативы BRouter строит только для двух точек
+    const jobs = [() => fetchVelo(points, 0), () => fetchOne(points, 'safety', 0)];
+    if (two) jobs.push(() => fetchVelo(points, 1), () => fetchVelo(points, 2));
+    let settled = await Promise.allSettled(jobs.map(j => j()));
+    if (!settled.some(x => x.status === 'fulfilled')) {
+      settled = await Promise.allSettled([fetchOne(points, 'safety', 0), fetchOne(points, 'trekking', 0)]);
+    }
     const cands = settled.filter(x => x.status === 'fulfilled').map(x => x.value);
     if (!cands.length) throw settled[0].reason || new Error('сервер маршрутов недоступен');
     return RT.pickBest(cands);

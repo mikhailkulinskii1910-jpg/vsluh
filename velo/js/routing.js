@@ -28,26 +28,32 @@
 
   /**
    * «Неудобные» участки для велосипеда: метров штрафа за метр пути.
-   * Дворовые проезды и пешеходные дорожки короче на карте, но медленнее и неудобнее (люди, машины, бордюры),
-   * поэтому самый короткий путь «через дворы» не должен выигрывать у нормальной дороги.
+   * Большие автодороги без велополосы — главное, чего избегаем: ехать по проезжей части проспекта опасно,
+   * рядом почти всегда есть тротуар или велодорожка. Тротуары и пешеходные дорожки — почти без штрафа.
+   * Дворовые проезды и стоянки штрафуем, чтобы маршрут не срезал «через дома».
    */
-  const PENALTY = { footway: 0.8, pedestrian: 0.8, path: 0.6, steps: 4, service: 0.5, track: 0.3, living_street: 0.3 };
-  // обычные повороты не штрафуем (они есть везде, особенно на извилистых велодорожках);
-  // резкие повороты и развороты — признак зигзагов между домами
+  const PENALTY = {
+    trunk: 1.5, trunk_link: 1.5, primary: 0.7, primary_link: 0.7, secondary: 0.4, secondary_link: 0.4,
+    tertiary: 0.15, tertiary_link: 0.15,
+    footway: 0.1, pedestrian: 0.15, path: 0.15, living_street: 0.1, steps: 4, service: 0.25, track: 0.3,
+  };
+  // резкие повороты и развороты на дворовых проездах — признак петляния между домами
   const SHARP_M = 60, UTURN_M = 200;
   const BIKE_BONUS = 0.1; // велоинфраструктура при прочих равных лучше: 10% «скидки» с длины
 
-  /** Дворовый или пешеходный участок без велоинфраструктуры. */
+  /** Дворовый проезд без велоинфраструктуры. */
   function isYardTags(tags) {
     return !isBikeTags(tags) && YARD.has(tagsToObj(tags).highway);
   }
-  const YARD = new Set(['service', 'footway', 'pedestrian', 'path', 'steps', 'living_street', 'track']);
+  const YARD = new Set(['service', 'living_street', 'track']);
 
   function wayPenalty(tags, d) {
     if (isBikeTags(tags)) return -BIKE_BONUS * d;
     const t = tagsToObj(tags);
     let k = PENALTY[t.highway] || 0;
     if (t.highway === 'service' && /parking|driveway/.test(t.service || '')) k = 0.9; // стоянки и заезды во дворы
+    if (t.highway === 'footway' && /sidewalk|crossing/.test(t.footway || '')) k = 0; // тротуар вдоль улицы и переход
+    else if (t.highway === 'footway') k = 0.3; // дорожка между домами
     return k * d;
   }
 
