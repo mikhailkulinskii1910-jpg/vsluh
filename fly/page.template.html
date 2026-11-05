@@ -580,8 +580,10 @@ function makeFly() {
     body.add(hip);
     legs.push({ hip, femur, knee, ankle, sx, row });
   }
-  shadowAll(root);
-  for (const b of blurs) b.castShadow = false;
+  // тени только от крупных частей: тонкие ноги, щетинки и крылья почти не видны в тени,
+  // а каждая тень — лишний проход отрисовки
+  const noShadow = new Set([FLY_MATS.bristle, FLY_MATS.leg, FLY_MATS.wing, FLY_MATS.blur]);
+  root.traverse((o) => { if (o.isMesh) o.castShadow = !noShadow.has(o.material) && o !== proboscis; });
   root.scale.setScalar(1.6);
   return { root, body, wings, blurs, legs, proboscis };
 }

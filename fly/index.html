@@ -393,7 +393,7 @@ const CONFIG = {
   learning: 1,          // 1 — обучаемые синапсы меняются, 0 — заморожены
   learnRate: 0.15,
   weightDecay: 0.002,   // медленное забывание выученного, доля в секунду
-  eligTau: 1.0,         // время жизни следа активности синапса, с
+  eligTau: 0.7,         // время жизни следа активности синапса, с
   explore: 0.5,         // сила случайных проб в повороте и подъёме
   exploreTau: 0.35,
   learnTurnGain: 3.0,   // сила выученного поворота, рад/с
@@ -432,7 +432,7 @@ const CONFIG = {
   plumeLength: 3.5,     // затухание шлейфа по ветру
   odorNear: 0.4,        // радиус запаха против ветра
   windSpeed: 0.35,
-  antennaOffset: 0.1,
+  antennaOffset: 0.2,   // полубаза антенн (шире реальной, чтобы различать стороны в грубом поле запаха)
   // мир
   arenaHalf: 8.0,
   arenaTop: 2.5,
@@ -1663,8 +1663,10 @@ function makeFly() {
     body.add(hip);
     legs.push({ hip, femur, knee, ankle, sx, row });
   }
-  shadowAll(root);
-  for (const b of blurs) b.castShadow = false;
+  // тени только от крупных частей: тонкие ноги, щетинки и крылья почти не видны в тени,
+  // а каждая тень — лишний проход отрисовки
+  const noShadow = new Set([FLY_MATS.bristle, FLY_MATS.leg, FLY_MATS.wing, FLY_MATS.blur]);
+  root.traverse((o) => { if (o.isMesh) o.castShadow = !noShadow.has(o.material) && o !== proboscis; });
   root.scale.setScalar(1.6);
   return { root, body, wings, blurs, legs, proboscis };
 }
