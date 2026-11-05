@@ -35,8 +35,46 @@
     };
   }
 
-  /** Стиль MapLibre. bike — показывать ли велодорожки зелёным. */
-  function build({ bike = true } = {}) {
+  /*
+   * Заведения (слой poi схемы OpenMapTiles): цветная точка по типу и название.
+   * Цвета: еда — янтарный, магазины — сиреневый, здоровье — красный, учёба — голубой,
+   * досуг и спорт — зелёный, велосипедное (веломагазины, прокат, парковки) — ярко-зелёный, остальное — серый.
+   */
+  const POI_GROUPS = [
+    ['Еда', '#e8b04a', ['restaurant', 'fast_food', 'cafe', 'bar', 'beer', 'ice_cream', 'bakery', 'confectionery', 'pub', 'food_court']],
+    ['Магазины', '#b48cf0', ['shop', 'grocery', 'clothing_store', 'alcohol_shop', 'jewelry', 'florist', 'furniture', 'hairdresser', 'laundry', 'mobile_phone', 'shoe', 'car', 'hardware', 'books', 'gift', 'music', 'optician', 'pet', 'stationery', 'toys', 'electronics', 'butcher', 'beauty', 'convenience', 'supermarket', 'department_store', 'marketplace']],
+    ['Здоровье', '#ff6b6b', ['hospital', 'pharmacy', 'doctors', 'dentist', 'clinic', 'veterinary']],
+    ['Учёба', '#6fb4ff', ['school', 'college', 'university', 'kindergarten', 'library']],
+    ['Досуг', '#5fd1a0', ['cinema', 'theatre', 'museum', 'art_gallery', 'attraction', 'castle', 'monument', 'zoo', 'stadium', 'sports_centre', 'swimming_pool', 'fitness_centre', 'pitch', 'playground', 'park', 'golf', 'ice_rink']],
+    ['Велосипед', BIKE, ['bicycle', 'bicycle_rental', 'bicycle_parking']],
+  ];
+  const POI_COLOR = ['match', ['get', 'class'], ...POI_GROUPS.flatMap(([, c, cl]) => [cl, c]), '#9a9a9a'];
+  const POI_COLOR_SUB = ['match', ['get', 'subclass'], ['bicycle', 'bicycle_rental', 'bicycle_parking'], BIKE, POI_COLOR];
+  const POI_FILTER = ['all', ['match', ['geometry-type'], ['Point', 'MultiPoint'], true, false],
+    ['!', ['match', ['get', 'class'], ['bus', 'railway', 'rail', 'airport', 'ferry_terminal', 'entrance', 'aerialway'], true, false]]];
+  // важные (rank меньше) видны раньше, мелкие — только при сильном увеличении
+  const POI_MINRANK = ['step', ['zoom'], 6, 16, 14, 17, 30, 18, 999];
+  const POI_LAYERS = ['poi-dot', 'poi-label'];
+  function poiLayers(visible) {
+    const vis = visible ? 'visible' : 'none';
+    const f = ['all', POI_FILTER, ['<=', ['coalesce', ['get', 'rank'], 30], POI_MINRANK]];
+    return [
+      { id: 'poi-dot', type: 'circle', source: 'omt', 'source-layer': 'poi', minzoom: 15, filter: f, layout: { visibility: vis },
+        paint: { 'circle-color': POI_COLOR_SUB, 'circle-radius': ['interpolate', ['linear'], ['zoom'], 15, 3.5, 18, 6],
+          'circle-stroke-color': '#000', 'circle-stroke-width': 1.5 } },
+      { id: 'poi-label', type: 'symbol', source: 'omt', 'source-layer': 'poi', minzoom: 16, filter: f,
+        layout: { visibility: vis, 'text-field': NAME, 'text-font': FONT, 'text-size': 11, 'text-max-width': 9,
+          'text-anchor': 'left', 'text-offset': [0.8, 0], 'text-optional': true },
+        paint: { 'text-color': POI_COLOR_SUB, 'text-halo-color': '#000', 'text-halo-width': 1.4 } },
+    ];
+  }
+  /** Только заведения на прозрачном фоне — поверх спутника. */
+  function buildPoi() {
+    return { version: 8, glyphs: GLYPHS, sources: { omt: { type: 'vector', url: SOURCE } }, layers: poiLayers(true) };
+  }
+
+  /** Стиль MapLibre. bike — показывать ли велодорожки зелёным, poi — заведения. */
+  function build({ bike = true, poi = false } = {}) {
     return {
       version: 8,
       glyphs: GLYPHS,
@@ -82,6 +120,7 @@
         label('place-small', 'place', cls('suburb', 'quarter', 'neighbourhood', 'village', 'hamlet'), 11, '#8a8a8a', { minzoom: 11 }),
         label('place-town', 'place', cls('town'), 13, '#d0d0d0'),
         label('place-city', 'place', cls('city'), ['interpolate', ['linear'], ['zoom'], 5, 12, 12, 17], '#f2f2f2'),
+        ...poiLayers(poi),
       ],
     };
   }
@@ -95,5 +134,5 @@
   }
 
   const BIKE_LAYERS = ['cycleway-glow', 'cycleway-allowed', 'cycleway'];
-  root.VeloVectorStyle = { build, supported, BIKE, BIKE_ALLOWED, BIKE_LAYERS };
+  root.VeloVectorStyle = { build, buildPoi, supported, BIKE, BIKE_ALLOWED, BIKE_LAYERS, POI_LAYERS, POI_GROUPS };
 })(window);

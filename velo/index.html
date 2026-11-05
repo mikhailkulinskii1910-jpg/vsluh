@@ -37,6 +37,12 @@
       <button data-base="osm" class="on">Схема</button>
       <button data-base="sat">Спутник</button>
       <button data-bike class="on">Велодорожки</button>
+      <button data-poi class="on">Заведения</button>
+      <div id="poi-legend" class="poi-legend">
+        <span><i style="background:#e8b04a"></i>еда</span><span><i style="background:#b48cf0"></i>магазины</span>
+        <span><i style="background:#ff6b6b"></i>здоровье</span><span><i style="background:#6fb4ff"></i>учёба</span>
+        <span><i style="background:#5fd1a0"></i>досуг</span><span><i style="background:#4ade80"></i>вело</span>
+      </div>
       <div id="bike-legend" class="bike-legend">
         <span><i class="lg-solid"></i>велодорожка</span>
         <span><i class="lg-dash"></i>можно на велосипеде</span>
@@ -62,7 +68,7 @@
   <div id="toast" class="toast" hidden></div>
 
   <div id="point-menu" class="point-menu" hidden>
-    <div class="row between"><b id="pm-title"></b><button id="pm-close" class="icon-btn" aria-label="Закрыть"><span data-icon="close" data-size="18"></span></button></div>
+    <div class="row between"><div class="pm-head"><b id="pm-title"></b><small id="pm-kind" class="muted" hidden></small></div><button id="pm-close" class="icon-btn" aria-label="Закрыть"><span data-icon="close" data-size="18"></span></button></div>
     <div class="row">
       <button id="pm-route" class="primary grow">Маршрут сюда</button>
       <button id="pm-save" class="ghost">Сохранить</button>

@@ -31,6 +31,7 @@
     base: cfg.base === 'sat' ? 'sat' : 'osm',
     elev: !!cfg.elev,
     bike: cfg.bike !== false,
+    poi: cfg.poi !== false,
   };
   const plan = {
     wps: [], coords: null, distance: 0, time: 0, ascent: 0, stats: null,
@@ -63,6 +64,7 @@
   function renderAttribution() {
     const parts = [state.base === 'sat' ? 'Снимки © Esri, Maxar, Earthstar Geographics'
       : vectorOn ? 'Карта © OpenFreeMap, OpenMapTiles, участники OpenStreetMap' : 'Карта © участники OpenStreetMap'];
+    if (state.base === 'sat' && state.poi) parts.push('заведения: OpenFreeMap, OpenMapTiles, участники OpenStreetMap');
     if (state.bike) parts.push('велополосы и веломаршруты: CyclOSM');
     if (state.elev) parts.push('высоты: Terrain Tiles (Mapzen, AWS)');
     parts.push('маршруты: BRouter', 'поиск: Photon (komoot)');
@@ -99,21 +101,70 @@
   const VS = root.VeloVectorStyle;
   let vectorOn = false;
 
+  /** Векторный слой MapLibre внутри Leaflet, двигается в одном кадре с маршрутом и стрелкой. */
+  function glLayer(style) {
+    const l = L.maplibreGL({ style, interactive: false });
+    l._throttledUpdate = l._update; // без задержки (у плагина по умолчанию раз в 32 мс)
+    const transform = l._transformGL;
+    l._transformGL = function (gl) { transform.call(this, gl); if (gl.isStyleLoaded()) gl.redraw(); };
+    return l;
+  }
+
+  /*
+   * Слой «Заведения»: на схеме — слои внутри векторной подложки, на спутнике — отдельный
+   * прозрачный векторный слой поверх снимков.
+   */
+  let poiOverlay = null;
+  function poiGl() {
+    const l = vectorOn ? baseLayer : poiOverlay;
+    return l && l.getMaplibreMap ? l.getMaplibreMap() : null;
+  }
+  function applyPoi() {
+    if (poiOverlay) { map.removeLayer(poiOverlay); poiOverlay = null; }
+    if (vectorOn) {
+      const m = poiGl();
+      const setVis = () => VS.POI_LAYERS.forEach(id => { if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', state.poi ? 'visible' : 'none'); });
+      if (m) { if (m.isStyleLoaded()) setVis(); else m.once('styledata', setVis); }
+    } else if (state.poi && VS && VS.supported() && L.maplibreGL) {
+      poiOverlay = glLayer(VS.buildPoi()).addTo(map);
+      poiOverlay.getContainer().style.zIndex = 6; // над снимками (z 1) и слоем велодорожек (z 5)
+    }
+    const b = document.querySelector('#layer-pop [data-poi]');
+    if (b) b.classList.toggle('on', state.poi);
+    const pl = document.getElementById('poi-legend');
+    if (pl) pl.hidden = !state.poi;
+    S.settings.set({ poi: state.poi });
+  }
+
+  /** Заведение под пальцем (в радиусе ~14 px) или null. */
+  function poiAt(latlng) {
+    const m = state.poi && poiGl();
+    if (!m || !m.isStyleLoaded() || !m.getLayer('poi-dot')) return null;
+    const p = m.project([latlng.lng, latlng.lat]);
+    const feats = m.queryRenderedFeatures([[p.x - 14, p.y - 14], [p.x + 14, p.y + 14]], { layers: ['poi-dot', 'poi-label'] });
+    const f = feats.find(x => x.properties && (x.properties['name:ru'] || x.properties.name));
+    if (!f) return null;
+    const [lng, lat] = f.geometry.coordinates;
+    const pr = f.properties;
+    return { latlng: L.latLng(lat, lng), name: pr['name:ru'] || pr.name, kind: poiKind(pr) };
+  }
+  function poiKind(pr) {
+    const g = VS.POI_GROUPS.find(([, , cl]) => cl.includes(pr.subclass) || cl.includes(pr.class));
+    return g ? g[0] : '';
+  }
+
   function applyBase() {
     if (baseLayer) map.removeLayer(baseLayer);
     vectorOn = state.base === 'osm' && !!(VS && VS.supported() && L.maplibreGL);
     if (vectorOn) {
       // без задержки + синхронная перерисовка: векторная подложка двигается в том же кадре, что маршрут
       // и стрелка, иначе при слежении за позицией карта «отстаёт» и линия маршрута съезжает с дорог
-      baseLayer = L.maplibreGL({ style: VS.build({ bike: state.bike }), interactive: false });
-      baseLayer._throttledUpdate = baseLayer._update; // без задержки (у плагина по умолчанию раз в 32 мс)
-      const transform = baseLayer._transformGL;
-      baseLayer._transformGL = function (gl) { transform.call(this, gl); if (gl.isStyleLoaded()) gl.redraw(); };
-      baseLayer.addTo(map);
+      baseLayer = glLayer(VS.build({ bike: state.bike, poi: state.poi })).addTo(map);
     } else {
       baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 19, className: 'base-tiles' }).addTo(map);
     }
     applyBikeLayer();
+    applyPoi();
     document.body.classList.toggle('base-osm', state.base === 'osm' && !vectorOn); // фильтр инверсии — только для растровой схемы
     $$('#layer-pop [data-base]').forEach(b => b.classList.toggle('on', b.dataset.base === state.base));
     S.settings.set({ base: state.base });
@@ -135,7 +186,9 @@
   map.on('click', e => {
     $('#search-results').hidden = true;
     if (Date.now() - longPressAt < 800) return; // это было долгое нажатие — открыто меню точки
-    if (state.tab === 'route') addWaypoint(e.latlng);
+    const poi = poiAt(e.latlng);
+    if (state.tab === 'route') addWaypoint(poi ? poi.latlng : e.latlng);
+    else if (poi) openPointMenu(poi.latlng, null, poi);
   });
   window.addEventListener('resize', () => map.invalidateSize());
 
@@ -820,9 +873,11 @@
 
   /** Меню точки: долгое нажатие на карту или нажатие на сохранённое место. */
   let menuPoint = null;
-  function openPointMenu(latlng, place) {
-    menuPoint = { latlng, place };
-    $('#pm-title').textContent = place ? place.name : `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+  function openPointMenu(latlng, place, poi) {
+    menuPoint = { latlng, place, poi };
+    $('#pm-title').textContent = place ? place.name : poi ? poi.name : `${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}`;
+    $('#pm-kind').textContent = poi && poi.kind ? poi.kind : '';
+    $('#pm-kind').hidden = !(poi && poi.kind);
     $('#pm-save').hidden = !!place;
     $('#pm-del').hidden = !place;
     $('#point-menu').hidden = false;
@@ -997,6 +1052,7 @@
       $('#layer-pop').hidden = true;
     }));
     $('#layer-pop [data-bike]').addEventListener('click', () => { state.bike = !state.bike; applyBikeLayer(); });
+    $('#layer-pop [data-poi]').addEventListener('click', () => { state.poi = !state.poi; applyPoi(); });
     $('#btn-elev').addEventListener('click', () => { state.elev = !state.elev; applyElev(); if (state.elev) toast('Перепады высот: светлее — выше'); });
 
     const si = $('#search-input');
@@ -1012,8 +1068,8 @@
       if (e.key === 'Enter') { clearTimeout(searchTimer); suggest(si.value.trim()); }
       if (e.key === 'Escape') { $('#search-results').hidden = true; si.blur(); }
     });
-    $('#pm-route').addEventListener('click', () => { if (menuPoint) chooseDestination({ lat: menuPoint.latlng.lat, lon: menuPoint.latlng.lng, name: menuPoint.place ? menuPoint.place.name : 'Точка на карте' }); closePointMenu(); });
-    $('#pm-save').addEventListener('click', () => { const p = menuPoint; closePointMenu(); if (p) savePlace(p.latlng); });
+    $('#pm-route').addEventListener('click', () => { if (menuPoint) chooseDestination({ lat: menuPoint.latlng.lat, lon: menuPoint.latlng.lng, name: menuPoint.place ? menuPoint.place.name : menuPoint.poi ? menuPoint.poi.name : 'Точка на карте' }); closePointMenu(); });
+    $('#pm-save').addEventListener('click', () => { const p = menuPoint; closePointMenu(); if (p) savePlace(p.latlng, p.poi && p.poi.name); });
     $('#pm-del').addEventListener('click', () => { const p = menuPoint; closePointMenu(); if (p && p.place) deletePlace(p.place.id); });
     $('#pm-close').addEventListener('click', closePointMenu);
     $('#btn-save-dest').addEventListener('click', () => {
