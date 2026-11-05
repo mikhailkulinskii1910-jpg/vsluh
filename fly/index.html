@@ -1,18 +1,12 @@
-<!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Муха на коннектоме · эволюция</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<title>Муха на коннектоме</title>
 <style>
-  :root { --bg:#0b0d12; --panel:rgba(18,22,30,.84); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; --warn:#ff7043; }
-  @media (prefers-color-scheme: light) {
-    :root { --bg:#eef1f5; --panel:rgba(255,255,255,.92); --line:#d0d6e0; --text:#1b2330; --muted:#5d6878; --accent:#0f8a6b; }
-  }
+  :root { color-scheme: dark; --bg:#0b0d12; --panel:rgba(18,22,30,.84); --line:#2a3240; --text:#e6e9ef; --muted:#8b95a7; --accent:#7ee0c3; --warn:#ff7043; }
+  body { background: var(--bg); color: var(--text); }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow:hidden; }
   #scene { position:fixed; inset:0; }
   .panel { position:fixed; background:var(--panel); border:1px solid var(--line); border-radius:12px; backdrop-filter: blur(6px); padding:12px 14px; font-size:14px; box-sizing:border-box; }
-  #left { position:fixed; top:12px; left:12px; width:270px; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 24px); overflow:auto; }
+  #left { position:fixed; top:16px; left:16px; width:270px; display:flex; flex-direction:column; gap:10px; max-height:calc(100vh - 24px); overflow:auto; }
   #left .panel { position:static; }
   h1 { font-size:16px; margin:0 0 8px; font-weight:600; }
   h2 { font-size:14px; margin:0 0 6px; font-weight:600; }
@@ -23,7 +17,7 @@
   #log { margin:8px 0 0; padding:0; list-style:none; font-size:12px; color:var(--muted); min-height:60px; }
   #log li { margin:2px 0; }
   #log li.predator { color:var(--warn); }
-  #controls { top:12px; right:12px; width:260px; }
+  #controls { top:16px; right:16px; width:260px; }
   #controls label { display:block; color:var(--muted); font-size:12px; margin-top:8px; }
   select, button { font: inherit; color:var(--text); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px; width:100%; box-sizing:border-box; margin-top:4px; }
   button { cursor:pointer; }
@@ -34,7 +28,7 @@
   #chartPanel canvas, #evoChart { width:100%; height:110px; display:block; }
   .legend { display:flex; gap:10px; font-size:12px; color:var(--muted); margin-top:4px; flex-wrap:wrap; }
   .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:middle; background:var(--c); }
-  #brainPanel { bottom:12px; right:12px; width:260px; }
+  #brainPanel { bottom:16px; right:16px; width:260px; }
   #brainPanel canvas { width:100%; height:220px; display:block; border-radius:8px; }
   #status { font-size:12px; color:var(--muted); margin-top:6px; min-height:16px; }
   @media (max-width: 760px) {
@@ -44,8 +38,6 @@
     #chartPanel { bottom:8px; width:calc(100vw - 24px); }
   }
 </style>
-</head>
-<body>
 <div id="scene"></div>
 
 <div id="left">
@@ -76,8 +68,10 @@
     <label class="check"><input type="checkbox" id="useEvolved" checked> Использовать лучшего в сцене</label>
     <div class="btns">
       <button id="evoBtn">Остановить</button>
-      <button id="saveBtn">Скачать геном</button>
+      <button id="saveBtn">Показать геном</button>
     </div>
+    <textarea id="genomeBox" readonly hidden rows="6" style="width:100%;box-sizing:border-box;margin-top:8px;font:12px ui-monospace,monospace;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px"></textarea>
+    <button id="copyBtn" hidden>Копировать геном</button>
     <div id="status"></div>
   </div>
 </div>
@@ -364,7 +358,7 @@ function drawEvoChart(history) {
   line('bench', '#7ee0c3');
 }
 
-function saveGenome() {
+function showGenome() {
   if (!evoState) return;
   const payload = {
     description: 'Геном мухи, подобранный эволюцией на подсети коннектома FlyWire',
@@ -374,12 +368,22 @@ function saveGenome() {
     parameters: decode(evoState.best),
     genes: GENES.map((g) => g.key),
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `fly-genome-gen${evoState.gen + 1}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const box = $('genomeBox');
+  box.value = JSON.stringify(payload, null, 2);
+  box.hidden = false;
+  $('copyBtn').hidden = false;
+  box.select();
+}
+
+async function copyGenome() {
+  const box = $('genomeBox');
+  try {
+    await navigator.clipboard.writeText(box.value);
+    $('status').textContent = 'Геном скопирован.';
+  } catch (err) {
+    box.select();
+    $('status').textContent = 'Выделите текст и скопируйте вручную.';
+  }
 }
 
 // ---- отрисовка ------------------------------------------------------------
@@ -526,7 +530,7 @@ $('pauseBtn').addEventListener('click', (e) => {
   e.target.textContent = paused ? 'Продолжить' : 'Пауза';
 });
 $('newBtn').addEventListener('click', () => sim.resetFly(null));
-$('brainBtn').addEventListener('click', () => { showBrain = !showBrain; $('brainPanel').style.display = showBrain ? '' : 'none'; });
+$('brainBtn').addEventListener('click', () => { showBrain = !showBrain; $('brainPanel').hidden = !showBrain; });
 let topView = false;
 $('camBtn').addEventListener('click', (e) => {
   topView = !topView;
@@ -536,7 +540,8 @@ $('camBtn').addEventListener('click', (e) => {
   controls.update();
 });
 $('evoBtn').addEventListener('click', () => (evoRunning ? stopEvolution() : startEvolution()));
-$('saveBtn').addEventListener('click', saveGenome);
+$('saveBtn').addEventListener('click', showGenome);
+$('copyBtn').addEventListener('click', copyGenome);
 $('useEvolved').addEventListener('change', () => {
   if ($('useEvolved').checked && evoState) sim.setConfig(decode(evoState.best));
   else sim.setConfig({});
@@ -556,5 +561,3 @@ main().catch((err) => {
   console.error(err);
 });
 </script>
-</body>
-</html>
