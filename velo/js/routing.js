@@ -1,10 +1,9 @@
 /* Маршруты: разбор ответа BRouter, доля велодорожек, выбор варианта
    «максимум велодорожек без потери времени». Работает в браузере (window.VeloRouting) и в Node (тесты). */
 (function (root, factory) {
-  const api = factory();
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.VeloRouting = api;
-})(typeof self !== 'undefined' ? self : this, function () {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./geo.js'));
+  else root.VeloRouting = factory(root.VeloGeo);
+})(typeof self !== 'undefined' ? self : this, function (G) {
   /** Строка тегов BRouter «highway=cycleway surface=asphalt» → объект. */
   function tagsToObj(s) {
     const o = {};
@@ -28,6 +27,49 @@
   }
 
   /**
+   * «Неудобные» участки для велосипеда: метров штрафа за метр пути.
+   * Дворовые проезды и пешеходные дорожки короче на карте, но медленнее и неудобнее (люди, машины, бордюры),
+   * поэтому самый короткий путь «через дворы» не должен выигрывать у нормальной дороги.
+   */
+  const PENALTY = { footway: 0.8, pedestrian: 0.8, path: 0.6, steps: 4, service: 0.5, track: 0.3, living_street: 0.3 };
+  // обычные повороты не штрафуем (они есть везде, особенно на извилистых велодорожках);
+  // резкие повороты и развороты — признак зигзагов между домами
+  const SHARP_M = 60, UTURN_M = 200;
+  const BIKE_BONUS = 0.1; // велоинфраструктура при прочих равных лучше: 10% «скидки» с длины
+
+  /** Дворовый или пешеходный участок без велоинфраструктуры. */
+  function isYardTags(tags) {
+    return !isBikeTags(tags) && YARD.has(tagsToObj(tags).highway);
+  }
+  const YARD = new Set(['service', 'footway', 'pedestrian', 'path', 'steps', 'living_street', 'track']);
+
+  function wayPenalty(tags, d) {
+    if (isBikeTags(tags)) return -BIKE_BONUS * d;
+    const t = tagsToObj(tags);
+    let k = PENALTY[t.highway] || 0;
+    if (t.highway === 'service' && /parking|driveway/.test(t.service || '')) k = 0.9; // стоянки и заезды во дворы
+    return k * d;
+  }
+
+  /**
+   * Штраф за повороты по геометрии: зигзаги между домами и развороты делают путь медленнее.
+   * Штрафуем только повороты на дворовых проездах и пешеходных дорожках: на дорогах и велодорожках
+   * «развороты» в геометрии — это переходы и изгибы, а не петляние между домами.
+   * yard[i] — участок, который заканчивается в точке i, дворовый (см. isYardTags).
+   */
+  function turnPenalty(coords, yard) {
+    if (!G || !G.findTurns || coords.length < 3) return 0;
+    const cum = [0];
+    for (let i = 1; i < coords.length; i++) cum.push(cum[i - 1] + G.distance(coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1]));
+    let j = 0;
+    return G.findTurns(coords).reduce((s, t) => {
+      while (j < cum.length - 1 && cum[j + 1] < t.along) j++;
+      if (yard && !yard[j] && !yard[Math.min(j + 1, yard.length - 1)]) return s;
+      return s + (t.kind === 'uturn' ? UTURN_M : t.kind === 'sharp' ? SHARP_M : 0);
+    }, 0);
+  }
+
+  /**
    * Разбор GeoJSON-ответа BRouter.
    * bikeShare — доля длины по велоинфраструктуре (null, если профиль не отдаёт теги, как fastbike);
    * bikeFlags[i] — участок, который заканчивается в точке i, идёт по велоинфраструктуре.
@@ -37,7 +79,7 @@
     const p = f.properties;
     const coords = f.geometry.coordinates.map(c => [c[1], c[0]]);
     const msgs = p.messages || [];
-    let bikeShare = null, bikeFlags = null;
+    let bikeShare = null, bikeFlags = null, yardFlags = null, wayPen = 0;
     if (msgs.length > 1) {
       const h = msgs[0];
       const iLon = h.indexOf('Longitude'), iLat = h.indexOf('Latitude'), iD = h.indexOf('Distance'), iT = h.indexOf('WayTags');
@@ -48,14 +90,17 @@
           const d = +r[iD] || 0;
           total += d;
           if (isBikeTags(r[iT])) bike += d;
+          wayPen += wayPenalty(r[iT], d);
         }
         bikeShare = total ? bike / total : 0;
         // строка сообщения описывает участок до своей конечной точки
         bikeFlags = new Array(coords.length).fill(false);
+        yardFlags = new Array(coords.length).fill(false);
         let ri = 0;
         for (let i = 0; i < coords.length; i++) {
           const r = rows[Math.min(ri, rows.length - 1)];
           bikeFlags[i] = isBikeTags(r[iT]);
+          yardFlags[i] = isYardTags(r[iT]);
           const lat = +r[iLat] / 1e6, lon = +r[iLon] / 1e6;
           if (ri < rows.length - 1 && Math.abs(coords[i][0] - lat) < 2e-6 && Math.abs(coords[i][1] - lon) < 2e-6) ri++;
         }
@@ -68,11 +113,15 @@
       ascent: +p['filtered ascend'] || 0,
       bikeShare,
       bikeFlags,
+      penaltyM: Math.round(wayPen + turnPenalty(coords, yardFlags)),
     };
   }
 
-  /** Единая «стоимость» для сравнения вариантов разных профилей: метры + подъём (8 м пути за 1 м подъёма). */
-  function cost(r) { return r.distance + 8 * r.ascent; }
+  /**
+   * Единая «стоимость» для сравнения вариантов разных профилей, в метрах ровной дороги:
+   * длина + подъём (8 м за 1 м подъёма) + штрафы за дворы, пешеходные дорожки и повороты.
+   */
+  function cost(r) { return r.distance + 8 * r.ascent + (r.penaltyM || 0); }
 
   /**
    * Выбор варианта: среди тех, что дороже самого выгодного не больше чем на tol (0% — без потери времени),
@@ -112,5 +161,5 @@
     return runs.length ? runs : [{ bike: false, coords }];
   }
 
-  return { tagsToObj, isBikeTags, parseBRouter, cost, pickBest, splitByBike };
+  return { tagsToObj, isBikeTags, parseBRouter, cost, pickBest, splitByBike, wayPenalty, turnPenalty, isYardTags, PENALTY };
 });

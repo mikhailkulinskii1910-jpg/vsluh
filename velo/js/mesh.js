@@ -114,6 +114,7 @@
           if (this.peers.has(from) || this.answering.has(from)) return;
           this.answering.add(from);
           const sdp = await this.decrypt(m.offer.sdp); // чужое лобби — не расшифруется, пропускаем
+          this.sawPeer = true; // участник лобби найден через трекер (соединение ещё может не пройти)
           const pc = this.newPc();
           pc.ondatachannel = e => this.bind(from, pc, e.channel);
           await pc.setRemoteDescription({ type: 'offer', sdp });
@@ -127,6 +128,7 @@
           if (!p || this.peers.has(from)) return;
           this.pending.delete(m.offer_id);
           await p.pc.setRemoteDescription({ type: 'answer', sdp: await this.decrypt(m.answer.sdp) });
+          this.sawPeer = true;
           this.bind(from, p.pc, p.dc);
         }
       } catch { this.answering.delete(from); }
@@ -187,5 +189,5 @@
     }
   }
 
-  root.VeloMesh = { TrackerMesh };
+  root.VeloMesh = { TrackerMesh, ICE };
 })(window);

@@ -90,3 +90,24 @@ test('раскраска: отрезки по типу дороги', () => {
   assert.equal(runs[0].coords.length, 3);
   assert.equal(runs[1].bike, false);
 });
+
+test('штраф: дворовые проезды и пешеходные дорожки дороже, велодорожка — со скидкой', () => {
+  assert.equal(R.wayPenalty('highway=primary', 100), 0);
+  assert.ok(R.wayPenalty('highway=service service=parking_aisle', 100) > R.wayPenalty('highway=service', 100));
+  assert.ok(R.wayPenalty('highway=footway', 100) > 0);
+  assert.ok(R.wayPenalty('highway=cycleway', 100) < 0);
+  assert.ok(R.wayPenalty('highway=footway bicycle=designated', 100) < 0);
+  assert.equal(R.isYardTags('highway=service'), true);
+  assert.equal(R.isYardTags('highway=footway bicycle=designated'), false);
+});
+
+test('штраф: путь через дворы проигрывает чуть более длинной дороге (Раменки)', () => {
+  // зигзаг между домами: 3 разворота на дворовых проездах
+  const zig = [[55.7, 37.5], [55.7009, 37.5], [55.7009, 37.5003], [55.7, 37.5003], [55.7, 37.5006], [55.7009, 37.5006], [55.7009, 37.5009]];
+  const yard = zig.map(() => true), road = zig.map(() => false);
+  assert.ok(R.turnPenalty(zig, yard) > 0);
+  assert.equal(R.turnPenalty(zig, road), 0, 'на дорогах «развороты» геометрии не штрафуются');
+  const yards = { distance: 1070, ascent: 0, bikeShare: 0, penaltyM: 1168 };
+  const roads = { distance: 1450, ascent: 0, bikeShare: 0, penaltyM: 370 };
+  assert.equal(R.pickBest([yards, roads]).distance, 1450);
+});

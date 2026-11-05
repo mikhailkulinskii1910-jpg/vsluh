@@ -36,6 +36,9 @@
       this.code = code;
       this.mesh = new root.VeloMesh.TrackerMesh({
         roomId: code,
+        // свои TURN-серверы (для мобильного интернета, где прямое соединение не проходит) — в config.js
+        ...(root.VELO_CONFIG && Array.isArray(root.VELO_CONFIG.iceServers) && root.VELO_CONFIG.iceServers.length
+          ? { iceServers: root.VeloMesh.ICE.concat(root.VELO_CONFIG.iceServers) } : {}),
         onPeerJoin: id => this.onPeerJoin(id),
         onPeerLeave: id => this.onPeerLeave(id),
         onMessage: (m, id) => this.onMessage(m, id),
@@ -113,7 +116,11 @@
       clearTimeout(this.hostTimer);
       this.hostTimer = setTimeout(() => {
         if (this.hostPeer || this.host) return;
-        this.emit('error', { type: 'error', message: 'Лобби не найдено: хост не в сети или код неверный' });
+        const message = this.mesh && this.mesh.sawPeer
+          ? 'Лобби найдено, но сеть не пропускает прямое соединение между телефонами (так бывает в мобильном интернете). ' +
+            'Подключите оба телефона к одному Wi-Fi или раздайте интернет с одного из них и попробуйте снова.'
+          : 'Лобби не найдено: проверьте код и что у создателя лобби открыто приложение и есть интернет';
+        this.emit('error', { type: 'error', message });
         this.stopMesh();
       }, HOST_WAIT_MS);
     }

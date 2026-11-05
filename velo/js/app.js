@@ -100,7 +100,13 @@
     if (baseLayer) map.removeLayer(baseLayer);
     vectorOn = state.base === 'osm' && !!(VS && VS.supported() && L.maplibreGL);
     if (vectorOn) {
-      baseLayer = L.maplibreGL({ style: VS.build({ bike: state.bike }), interactive: false }).addTo(map);
+      // без задержки + синхронная перерисовка: векторная подложка двигается в том же кадре, что маршрут
+      // и стрелка, иначе при слежении за позицией карта «отстаёт» и линия маршрута съезжает с дорог
+      baseLayer = L.maplibreGL({ style: VS.build({ bike: state.bike }), interactive: false });
+      baseLayer._throttledUpdate = baseLayer._update; // без задержки (у плагина по умолчанию раз в 32 мс)
+      const transform = baseLayer._transformGL;
+      baseLayer._transformGL = function (gl) { transform.call(this, gl); if (gl.isStyleLoaded()) gl.redraw(); };
+      baseLayer.addTo(map);
     } else {
       baseLayer = L.tileLayer(baseTemplate(), { maxZoom: 19, className: 'base-tiles' }).addTo(map);
     }
@@ -167,8 +173,13 @@
     $('#bat').innerHTML = b.level == null ? '—' : `${Math.round(b.level * 100)}%${b.charging ? ' ' + icon('bolt', 12, 'charging') : ''}`;
   }
 
+  /** Где рисовать стрелку: во время навигации — на линии маршрута (как в навигаторах), иначе — сырой GPS. */
+  function shownPos() {
+    return (nav.active && nav.snap) || state.fix;
+  }
+
   function updateMe() {
-    const f = state.fix;
+    const f = shownPos();
     if (!f) return;
     meMarker.setLatLng([f.lat, f.lon]).setOpacity(1);
     meMarker.setIcon(arrowIcon(f.hdg));
@@ -188,10 +199,11 @@
     const fix = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, alt: c.altitude, t: p.timestamp, spd, hdg: hdg ?? (prev ? prev.hdg : null) };
     const first = !state.fix;
     state.fix = fix;
-    if (first) map.setView([fix.lat, fix.lon], 15);
-    else if (state.follow) map.panTo([fix.lat, fix.lon], { animate: true, duration: 0.4 });
     if (state.rec) recordPoint(fix);
     if (nav.active) updateNav();
+    const at = shownPos();
+    if (first) map.setView([at.lat, at.lon], 15);
+    else if (state.follow) map.panTo([at.lat, at.lon], { animate: true, duration: 0.4 });
     updateMe();
     updateHud();
     emit('fix', fix);
@@ -318,6 +330,7 @@
 
   function stopNav(silent) {
     nav.active = false;
+    nav.snap = null;
     document.body.classList.remove('navigating');
     $('#nav-bar').hidden = true;
     $('#nav-card').hidden = true;
@@ -329,6 +342,14 @@
     const f = state.fix;
     if (!nav.active || !f) return;
     const pr = G.projectOnPolyline(nav.coords, f.lat, f.lon);
+    // GPS в городе гуляет на 10–30 м: если мы рядом с маршрутом, ставим стрелку на линию маршрута
+    const snapR = Math.min(35, Math.max(15, f.acc || 0));
+    if (pr.dist <= snapR) {
+      const p = G.pointAlong(nav.coords, nav.cum, pr.along);
+      const q = G.pointAlong(nav.coords, nav.cum, Math.min(nav.total, pr.along + 15));
+      const hdg = pr.along + 1 < nav.total ? G.bearing(p[0], p[1], q[0], q[1]) : f.hdg;
+      nav.snap = Object.assign({}, f, { lat: p[0], lon: p[1], hdg });
+    } else nav.snap = null;
     if (pr.dist > 60) {
       nav.off++;
       if (nav.off === 3) toast('Вы сошли с маршрута, перестраиваю…');
@@ -884,7 +905,7 @@
     $('#btn-follow').addEventListener('click', () => {
       state.follow = !state.follow;
       renderFollow();
-      if (state.follow && state.fix) map.panTo([state.fix.lat, state.fix.lon]);
+      if (state.follow && state.fix) { const at = shownPos(); map.panTo([at.lat, at.lon]); }
     });
     $('#btn-layers').addEventListener('click', () => { $('#layer-pop').hidden = !$('#layer-pop').hidden; });
     $$('#layer-pop [data-base]').forEach(b => b.addEventListener('click', () => {
