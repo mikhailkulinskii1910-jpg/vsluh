@@ -76,16 +76,18 @@ body.base-osm .base-tiles { filter: invert(1) grayscale(1) contrast(1.5) brightn
 .tool.on { background: var(--card); color: var(--blue); outline: 2px solid var(--blue); outline-offset: -2px; }
 /* кнопка «моё местоположение» — круглая, справа внизу над панелью */
 .locate {
+  /* цвета с фото: тёмный графит, бирюзовая грань, приглушённый серо-зелёный */
+  --loc-bg: #161e1d; --loc-on: #2a9d86; --loc-off: #8fb3ab;
   position: absolute; right: 12px; bottom: 28px; z-index: 520;
   width: 60px; height: 60px; padding: 0; border: 0; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  background: #1c1c1e; color: #fff; box-shadow: 0 3px 14px rgba(0, 0, 0, .6);
+  background: var(--loc-bg); color: var(--loc-off); box-shadow: 0 3px 14px rgba(0, 0, 0, .6);
   -webkit-tap-highlight-color: transparent; transition: transform .12s ease;
 }
 .locate:active { transform: scale(.94); }
-.locate:focus-visible { outline: 2px solid #3d8bff; outline-offset: 2px; }
-.locate .loc-on { display: none; color: #3d8bff; }
-button.locate.on { background: #1c1c1e; border: 0; color: #fff; }
+.locate:focus-visible { outline: 2px solid var(--loc-on); outline-offset: 2px; }
+.locate .loc-on { display: none; color: var(--loc-on); }
+button.locate.on { background: var(--loc-bg); border: 0; color: var(--loc-off); }
 .locate.on .loc-on { display: block; }
 .locate.on .loc-off { display: none; }
 .pop {
