@@ -10,6 +10,8 @@ export const CONFIG = {
   maxSyn: 20,
   noise: 0.01,          // фоновый шум на каждый нейрон
   brainEvery: 2,        // мозг считается на каждом N-м шаге физики (2 → 30 раз в секунду)
+  olfBase: 0.091,       // ток рецепторов запаха без запаха (чуть выше порога: спонтанная активность)
+  mechBase: 0.07,       // ток механорецепторов в покое
   sensoryFeedback: 0.02,// во сколько раз ослаблены синапсы НА рецепторные нейроны (у мухи они
                         // регулируют силу сигнала, а не гасят разряд)
   // входы мозга
@@ -38,6 +40,7 @@ export const CONFIG = {
   exploreTau: 0.35,
   learnTurnGain: 3.0,   // сила выученного поворота, рад/с
   learnClimbGain: 0.9,  // сила выученного подъёма, ед./с
+  learnSpeed: 1,        // 1 — муха учится и скорости полёта
   daTau: 0.3,           // как быстро затухает всплеск дофамина, с
   daBaselineTau: 8,     // ожидание награды (вычитается из дофамина)
   daFood: 1.5,          // всплеск при посадке на фрукт
@@ -280,8 +283,9 @@ function normal(rng) {
 // Правило трёх факторов (REINFORCE): след = вход × случайная проба;
 // изменение веса = скорость × (дофамин − ожидание) × след.
 export class Learner {
-  // populations: пары популяций [слева, справа]. Поворот учится на разнице сторон
-  // (двусторонняя симметрия), подъём — на их сумме и постоянном смещении.
+  // populations: пары популяций [слева, справа]. Признаки: разница сторон (p),
+  // сумма сторон (p) и постоянное смещение (1).
+  // Команды: поворот — по разнице (двусторонняя симметрия); подъём и скорость — по сумме и смещению.
   constructor(populations) {
     const pairs = [];
     for (let j = 0; j + 1 < populations.length; j += 2) {
@@ -290,16 +294,19 @@ export class Learner {
     this.pairs = pairs;
     const p = pairs.length;
     this.p = p;
-    this.nT = p;            // веса поворота: по разнице сторон
-    this.nC = p + 1;        // веса подъёма: по сумме сторон + смещение
-    this.W = new Float32Array(this.nT + this.nC);
-    this.E = new Float32Array(this.nT + this.nC);
+    this.nT = p;            // веса поворота
+    this.nC = p + 1;        // веса подъёма
+    this.nS = p + 1;        // веса скорости
+    // [начало весов, длина, начало признаков] для каждой команды
+    this.outs = [[0, p, 0], [p, p + 1, p], [2 * p + 1, p + 1, p]];
+    this.W = new Float32Array(this.nT + this.nC + this.nS);
+    this.E = new Float32Array(this.W.length);
     this.mean = new Float32Array(2 * p);
     this.vari = new Float32Array(2 * p).fill(1e-4);
-    this.x = new Float32Array(this.nT + this.nC);
-    this.noise = [0, 0];
-    this.action = [0, 0];
-    this.out = [0, 0];
+    this.x = new Float32Array(2 * p + 1);
+    this.noise = [0, 0, 0];
+    this.action = [0, 0, 0];
+    this.out = [0, 0, 0];
   }
 
   randomize(rng, scale) {
@@ -312,7 +319,7 @@ export class Learner {
     let range = 0;
     for (let k = 0; k < parent.W.length; k++) range = Math.max(range, Math.abs(parent.W[k]));
     const sigma = mutation * Math.max(range, 0.05);
-    for (let k = 0; k < this.W.length; k++) this.W[k] = parent.W[k] + normal(rng) * sigma;
+    for (let k = 0; k < this.W.length; k++) this.W[k] = (parent.W[k] || 0) + normal(rng) * sigma;
     this.resetTraces();
   }
 
@@ -320,7 +327,7 @@ export class Learner {
     this.E.fill(0);
     this.mean.fill(0);
     this.vari.fill(1e-4);
-    this.noise = [0, 0];
+    this.noise = [0, 0, 0];
   }
 
   norm() {
@@ -342,29 +349,28 @@ export class Learner {
   }
 
   step(rate, cfg, explore, dt, rng) {
-    const { p, nT, W, E, x, pairs } = this;
+    const { p, W, E, x, pairs, outs } = this;
     const a = Math.min(1, dt / 4);
     for (let j = 0; j < p; j++) {
       const l = this.feature(rate, pairs[j].L, 2 * j, a);
       const r = this.feature(rate, pairs[j].R, 2 * j + 1, a);
-      x[j] = (l - r) * 0.7;          // разница сторон → поворот
-      x[nT + j] = (l + r) * 0.5;     // сумма сторон → подъём
+      x[j] = (l - r) * 0.7;          // разница сторон
+      x[p + j] = (l + r) * 0.5;      // сумма сторон
     }
-    x[nT + p] = 1;                   // смещение подъёма
-    let o0 = 0, o1 = 0;
-    for (let k = 0; k < nT; k++) o0 += W[k] * x[k];
-    for (let k = nT; k < W.length; k++) o1 += W[k] * x[k];
+    x[2 * p] = 1;                    // смещение
     const tau = cfg.exploreTau;
-    for (let k = 0; k < 2; k++) {
-      this.noise[k] += -this.noise[k] / tau * dt + Math.sqrt(2 * dt / tau) * normal(rng);
-    }
     const sig = cfg.explore * explore;
-    const n0 = sig * this.noise[0], n1 = sig * this.noise[1];
-    this.out = [o0, o1];
-    this.action = [o0 + n0, o1 + n1];
     const lam = Math.exp(-dt / cfg.eligTau);
-    for (let k = 0; k < nT; k++) E[k] = E[k] * lam + x[k] * n0;
-    for (let k = nT; k < W.length; k++) E[k] = E[k] * lam + x[k] * n1;
+    for (let c = 0; c < 3; c++) {
+      const [w0, len, x0] = outs[c];
+      let o = 0;
+      for (let k = 0; k < len; k++) o += W[w0 + k] * x[x0 + k];
+      this.noise[c] += -this.noise[c] / tau * dt + Math.sqrt(2 * dt / tau) * normal(rng);
+      const nz = sig * this.noise[c] * (c === 2 ? 0.6 : 1);
+      this.out[c] = o;
+      this.action[c] = o + nz;
+      for (let k = 0; k < len; k++) E[w0 + k] = E[w0 + k] * lam + x[x0 + k] * nz;
+    }
   }
 
   learn(delta, lr, decay, dt) {
@@ -701,8 +707,8 @@ export class FlySim {
     const tr = f.traits;
     // Плавное кодирование: без стимула рецептор молчит, с ростом стимула частота
     // растёт и насыщается (как у настоящих рецепторных нейронов)
-    const olf = (o) => 0.07 + 0.4 * cfg.odorGain * tr.odor * o / (o + 0.15) + hunger * cfg.hungerGain * 0.15;
-    const mech = (c, t) => 0.07 + 0.3 * (c * cfg.contactGain * tr.contact + t * cfg.predatorGain);
+    const olf = (o) => cfg.olfBase + 0.4 * cfg.odorGain * tr.odor * o / (o + 0.15) + hunger * cfg.hungerGain * 0.15;
+    const mech = (c, t) => cfg.mechBase + 0.3 * (c * cfg.contactGain * tr.contact + t * cfg.predatorGain);
     const every = Math.max(1, cfg.brainEvery | 0);
     f.brainTick = (f.brainTick || 0) + 1;
     const brainNow = f.brainTick % every === 0;
@@ -773,6 +779,8 @@ export class FlySim {
       const learnedClimb = cfg.learnClimbGain * Math.tanh(f.learner.action[1]);
       drive += learnedTurn;
       f.climb = learnedClimb;
+      // выученная скорость: множитель от 0.55 до 1.8
+      if (cfg.learnSpeed) target *= Math.exp(0.6 * Math.tanh(f.learner.action[2]));
       // врождённые рефлексы: тропотаксис, полёт против ветра по шлейфу, прочёсывание
       const odor = f.odorL + f.odorR;
       f.nav = 'search';

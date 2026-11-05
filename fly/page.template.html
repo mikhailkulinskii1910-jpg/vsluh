@@ -211,7 +211,7 @@
         <div class="row" style="margin-top:14px"><span>Сигнал поворота от коннектома</span><b id="turnNow">–</b></div>
         <div class="row"><span>Скорость полёта</span><b id="speedNow">–</b></div>
         <div class="row"><span>Поведение</span><b id="navNow">–</b></div>
-        <p class="muted" style="margin-top:12px">Скорость задаёт коннектом. Поворот складывается из сигнала коннектома и выученной команды, подъём — выученная команда. Посадка на фрукт по касанию, рефлекс бегства от стрекозы и сон ночью заданы правилами.</p>
+        <p class="muted" style="margin-top:12px">Скорость задаёт коннектом, выученная команда её ускоряет или замедляет. Поворот складывается из сигнала коннектома и выученной команды, подъём — выученная команда. Посадка на фрукт по касанию, рефлекс бегства от стрекозы и сон ночью заданы правилами.</p>
       </div>
       <div class="card">
         <h2>Дофамин и обучение</h2>
@@ -222,7 +222,7 @@
         <p class="muted">Всплеск дофамина: посадка на фрукт, еда, усиление запаха. Провал: удар о бортик, камень или стебель, стрекоза рядом. Синапсы меняются на «дофамин минус ожидание».</p>
         <h2 style="margin-top:14px">Выученные синапсы</h2>
         <div id="weights" class="muted"></div>
-        <p class="muted" style="margin-top:8px">Поворот учится на разнице «слева минус справа», подъём — на сумме сторон и постоянном смещении. Зелёный — положительный вес, красный — отрицательный.</p>
+        <p class="muted" style="margin-top:8px">Поворот учится на разнице «слева минус справа», подъём и скорость — на сумме сторон и постоянном смещении. Зелёный — положительный вес, красный — отрицательный.</p>
       </div>
     </div>
   </section>
@@ -861,7 +861,7 @@ function rebuildWorld() {
 }
 
 // ---- сохранение выученного мозга (только в этом браузере) ----------------
-const SAVE_KEY = 'fly-connectome-brain-v1';
+const SAVE_KEY = 'fly-connectome-brain-v2';
 function loadBrain() {
   try { const v = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return v && Array.isArray(v.W) ? v : null; } catch (e) { return null; }
 }
@@ -1119,8 +1119,13 @@ function renderWeights(L) {
   L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[j])} ${L.W[j].toFixed(2)}</b></div>`));
   rows.push('<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">Подъём</b> (сумма сторон)</span><b></b></div>');
   L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[L.nT + j])} ${L.W[L.nT + j].toFixed(2)}</b></div>`));
-  const bias = L.W[L.W.length - 1];
+  const bias = L.W[L.nT + L.nC - 1];
   rows.push(`<div class="row"><span>Смещение (${bias < 0 ? 'держаться ниже' : 'держаться выше'})</span><b>${bar(bias)} ${bias.toFixed(2)}</b></div>`);
+  const s0 = L.nT + L.nC;
+  rows.push('<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">Скорость</b> (сумма сторон)</span><b></b></div>');
+  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[s0 + j])} ${L.W[s0 + j].toFixed(2)}</b></div>`));
+  const sb = L.W[s0 + L.nS - 1];
+  rows.push(`<div class="row"><span>Смещение (${sb < 0 ? 'медленнее' : 'быстрее'})</span><b>${bar(sb)} ${sb.toFixed(2)}</b></div>`);
   $('weights').innerHTML = rows.join('');
 }
 
