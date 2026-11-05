@@ -13,6 +13,12 @@ export const GENES = [
   { key: 'motorTurn', min: 0.5, max: 6 },
   { key: 'noise', min: 0, max: 0.03 },
   { key: 'predatorGain', min: 0, max: 2 },
+  // гены обучаемости: эволюция отбирает способность учиться
+  { key: 'learnRate', min: 0.03, max: 0.4 },
+  { key: 'explore', min: 0.2, max: 1.0 },
+  { key: 'eligTau', min: 0.3, max: 2.0 },
+  { key: 'daOdor', min: 1, max: 15 },
+  { key: 'daBump', min: -4, max: -0.5 },
 ];
 
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
