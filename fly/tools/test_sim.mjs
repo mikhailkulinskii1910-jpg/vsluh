@@ -88,5 +88,28 @@ check('с обучением мухи едят чаще, чем без него'
   check('новые нейроны переносятся между потоками', sim2.flies.every((f, i) => f.brain.nNew === sim.flies[i].brain.nNew && f.brain.gN === sim.flies[i].brain.gN));
 }
 
+// 8. Новый мир: белки лазают по деревьям, осенью запасают жёлуди, ночью укрываются; зимой еды меньше
+{
+  const sim = new FlySim(data, { seed: 41, config: { flyCount: 10, forceStage: 5 } });
+  sim.time = 2 * sim.cfg.seasonLength;          // начало осени
+  let treeT = 0, shelterNight = 0, night = 0;
+  for (let k = 0; k < 5 * 3600; k++) {
+    sim.step(1 / 60);
+    for (const f of sim.flies) {
+      if (f.inTree) treeT += 1 / 60;
+      if (sim.daylight() < 0.3) { night++; if (f.state === 'shelter') shelterNight++; }
+    }
+  }
+  const stash = sim.shelters.reduce((a, x) => a + x.stash, 0) + sim.flies.filter((f) => f.carry).length;
+  check('белки лазают по деревьям', treeT > 30, `${treeT.toFixed(0)} особе-секунд на деревьях`);
+  check('белки осенью запасают жёлуди', stash > 0 || sim.events.some((e) => e.text.includes('жёлудь')), `в дуплах ${stash}`);
+  check('ночью особи укрываются', night > 0 && shelterNight / night > 0.3, `в укрытиях ${(100 * shelterNight / Math.max(1, night)).toFixed(0)}% ночного времени`);
+  const alive = (k) => sim.food.filter((x) => x.alive).length;
+  const autumnFood = alive();
+  sim.time = 3 * sim.cfg.seasonLength;          // зима
+  for (let k = 0; k < 2 * 3600; k++) sim.step(1 / 60);
+  check('зимой еды меньше', alive() < autumnFood, `осенью ${autumnFood}, зимой ${alive()}`);
+}
+
 console.log(failed ? `\nПровалено проверок: ${failed}` : '\nВсе проверки пройдены');
 process.exit(failed ? 1 : 0);

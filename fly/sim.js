@@ -69,7 +69,7 @@ export const CONFIG = {
   feedRate: 22,         // сколько энергии муха получает за секунду еды
   foodAmount: 70,       // средний запас фрукта
   foodRegrow: 14,       // через сколько секунд вырастает новый фрукт
-  foodCount: 90,
+  foodCount: 130,
   // запах и ветер
   plumeSpread: 0.25,    // ширина шлейфа у источника
   plumeGrowth: 0.3,     // расширение шлейфа на единицу расстояния по ветру
@@ -78,11 +78,17 @@ export const CONFIG = {
   windSpeed: 0.35,
   antennaOffset: 0.2,   // полубаза антенн (шире реальной, чтобы различать стороны в грубом поле запаха)
   // мир
-  arenaHalf: 12.0,      // сад 24×24
-  arenaTop: 6.0,        // высота до крон деревьев
-  stoneCount: 40,
+  arenaHalf: 15.0,      // сад 30×30
+  arenaTop: 6.0,        // высота полёта над землёй
+  stoneCount: 34,
   plantCount: 24,
-  treeCount: 10,        // фруктовые деревья
+  treeCount: 22,        // фруктовые деревья
+  bushCount: 24,        // кусты с ягодами
+  hillCount: 8,         // холмы
+  burrowCount: 14,      // норы в земле (у каждого дерева ещё и дупло)
+  seasonLength: 300,    // секунд симуляции на сезон (2 суток); год — 20 минут
+  owlCount: 2,          // ночные хищники: совы
+  foxCount: 1,          // и лиса
   treeFoodShare: 0.35,  // доля фруктов, висящих на деревьях
   predatorCount: 3,
   dayLength: 150,       // секунд на полные сутки
@@ -119,6 +125,7 @@ export const CONFIG = {
   freezeTime: 0.5,      // замирание, с
   dashTime: 0.25,       // рывок, с
   gateCooldown: 1.5,
+  hideRange: 10,        // как далеко особь ищет укрытие
   ethoWindow: 600,      // дневник поведения помнит последние ~10 минут симуляции
   // колония
   flyCount: 1,
@@ -137,22 +144,34 @@ export function mulberry32(seed) {
 }
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+
+// Высота рельефа: сумма плавных холмов {x, z, h, r}
+export function terrainHeight(hills, x, z) {
+  let y = 0;
+  for (const H of hills) {
+    const d2 = ((x - H.x) ** 2 + (z - H.z) ** 2) / (H.r * H.r);
+    if (d2 < 9) y += H.h * Math.exp(-d2);
+  }
+  return y;
+}
 const smooth = (x) => x * x * (3 - 2 * x);
 const TAU = Math.PI * 2;
 
 // ---- типы еды ------------------------------------------------------------------
 // place: где лежит; eat: диапазон морфы, которой еда доступна; energy: сытность
 export const FOOD_TYPES = [
-  { key: 'apple', name: 'Яблоко', size: 0.11, energy: 1.0, place: 'fruit', eat: [0, 0.8], count: 12 },
-  { key: 'banana', name: 'Банан', size: 0.09, energy: 1.0, place: 'fruit', eat: [0, 0.8], count: 10 },
-  { key: 'grape', name: 'Виноград', size: 0.06, energy: 0.9, place: 'fruit', eat: [0, 0.8], count: 10 },
-  { key: 'nectar', name: 'Нектар цветка', size: 0.05, energy: 0.6, place: 'flower', eat: [0, 0.35], count: 14 },
-  { key: 'mushroom', name: 'Гриб', size: 0.09, energy: 0.9, place: 'ground', eat: [0.2, 1], count: 12 },
-  { key: 'seeds', name: 'Семена', size: 0.07, energy: 0.8, place: 'ground', eat: [0.3, 1], count: 18 },
-  { key: 'acorn', name: 'Жёлудь', size: 0.07, energy: 1.6, place: 'undertree', eat: [0.6, 1], count: 14 },
-  { key: 'berry', name: 'Ягоды', size: 0.06, energy: 0.8, place: 'bush', eat: [0, 1], count: 14 },
-  { key: 'cheese', name: 'Сыр', size: 0.1, energy: 2.0, place: 'ground', eat: [0.65, 1], count: 4 },
+  // season: доля урожая весной, летом, осенью, зимой; perish — портится зимой
+  { key: 'apple', name: 'Яблоко', size: 0.11, energy: 1.0, place: 'fruit', eat: [0, 1], count: 14, season: [0.1, 0.7, 1, 0.02], perish: true },
+  { key: 'banana', name: 'Банан', size: 0.09, energy: 1.0, place: 'fruit', eat: [0, 1], count: 10, season: [0.1, 0.8, 0.6, 0.02], perish: true },
+  { key: 'grape', name: 'Виноград', size: 0.06, energy: 0.9, place: 'fruit', eat: [0, 1], count: 12, season: [0.05, 0.6, 1, 0.02], perish: true },
+  { key: 'nectar', name: 'Нектар цветка', size: 0.05, energy: 0.6, place: 'flower', eat: [0, 0.3], count: 16, season: [1, 0.8, 0.2, 0], perish: true },
+  { key: 'mushroom', name: 'Гриб', size: 0.09, energy: 0.9, place: 'ground', eat: [0.15, 1], count: 16, season: [0.3, 0.4, 1, 0.05] },
+  { key: 'seeds', name: 'Семена', size: 0.07, energy: 0.8, place: 'ground', eat: [0.25, 1], count: 22, season: [0.4, 0.7, 1, 0.3] },
+  { key: 'acorn', name: 'Жёлудь', size: 0.07, energy: 1.6, place: 'undertree', eat: [0.55, 1], count: 20, season: [0.05, 0.2, 1, 0.2] },
+  { key: 'berry', name: 'Ягоды', size: 0.06, energy: 0.8, place: 'bush', eat: [0, 1], count: 18, season: [0.1, 1, 0.7, 0.05], perish: true },
+  { key: 'cheese', name: 'Сыр', size: 0.1, energy: 2.0, place: 'ground', eat: [0.55, 1], count: 4, season: [0.5, 0.5, 0.5, 0.5] },
 ];
+export const SEASONS = ['Весна', 'Лето', 'Осень', 'Зима'];
 
 // ---- паттерны поведения для дневника ------------------------------------------------
 // ev — действие, ctx — ситуация; timed — действие длится (считается время, а не случаи)
@@ -162,17 +181,20 @@ export const ETHO_PATTERNS = [
   { key: 'dashThreat', name: 'Рывок от стрекозы', ev: 'dash', ctx: 'threat', desc: 'делает рывок, когда рядом стрекоза' },
   { key: 'turnLoss', name: 'Развороты после потери запаха', ev: 'saccade', ctx: 'loss', desc: 'резко разворачивается, когда запах пропал' },
   { key: 'descendOdor', name: 'Снижение по запаху', ev: 'descend', ctx: 'rise', timed: true, flyersOnly: true, desc: 'снижается, пока запах усиливается' },
+  { key: 'hideNight', name: 'Укрытие в сумерках', ev: 'hide', ctx: 'dark', desc: 'по своему решению прячется в нору или дупло, когда темнеет' },
+  { key: 'hideThreat', name: 'Укрытие от хищника', ev: 'hide', ctx: 'threat', desc: 'по своему решению прячется, когда рядом хищник' },
 ];
 
 // ---- стадии тела ------------------------------------------------------------------
 export const STAGES = [
   { name: 'Муха', from: 0 },
-  { name: 'Жук', from: 0.2 },
-  { name: 'Сверчок', from: 0.45 },
-  { name: 'Землеройка', from: 0.65 },
-  { name: 'Мышь', from: 0.85 },
+  { name: 'Жук', from: 0.18 },
+  { name: 'Сверчок', from: 0.38 },
+  { name: 'Землеройка', from: 0.56 },
+  { name: 'Мышь', from: 0.72 },
+  { name: 'Белка', from: 0.86 },
 ];
-export const STAGE_CENTERS = [0.08, 0.32, 0.55, 0.75, 0.93];
+export const STAGE_CENTERS = [0.08, 0.28, 0.47, 0.64, 0.79, 0.93];
 export function stageOf(m) {
   let k = 0;
   for (let i = 0; i < STAGES.length; i++) if (m >= STAGES[i].from) k = i;
@@ -180,13 +202,17 @@ export function stageOf(m) {
 }
 // Свойства тела по морфе: размер, полёт, скорость, запас и расход энергии
 export function bodyOf(m, cfg) {
-  const walk = m >= 0.45;
+  const walk = m >= 0.38;
+  const stage = stageOf(m);
   return {
     morph: m,
-    stage: stageOf(m),
+    stage,
     size: 1 + 5 * m * m,
     walk,
-    maxY: walk ? 0.05 : cfg.arenaTop * (1 - m / 0.45 * 0.85),
+    climber: stage === 5,          // белка лазает по деревьям
+    insect: !walk,                 // насекомые мёрзнут зимой
+    fur: stage >= 3,               // мех греет
+    maxY: walk ? 0.05 : cfg.arenaTop * (1 - m / 0.38 * 0.85),
     speed: 1 + 0.8 * m,
     energyMax: cfg.energyMax * (1 + 1.4 * m),
     drain: 1 + 0.9 * m,
@@ -555,31 +581,33 @@ export class Learner {
     this.pairs = pairs;
     const p = pairs.length;
     this.p = p;
-    this.nT = p; this.nC = p + 1; this.nS = p + 1;
+    // признаки: разница сторон (p) | сумма сторон (p), освещённость, голод, смещение
+    const L = p + 3;
+    this.extraNames = ['Освещённость', 'Голод'];
+    this.nT = p; this.nC = L; this.nS = L;
     // [начало весов, длина, начало признаков, вид: g — непрерывная, b — да/нет, название]
-    this.outs = [
-      [0, p, 0, 'g', 'Поворот'],
-      [p, p + 1, p, 'g', 'Подъём'],
-      [2 * p + 1, p + 1, p, 'g', 'Скорость'],
-      [3 * p + 2, p + 1, p, 'b', 'Замирание'],
-      [4 * p + 3, p + 1, p, 'b', 'Рывок'],
-    ];
-    this.W = new Float32Array(5 * p + 4);
+    const names = [['Подъём', 'g'], ['Скорость', 'g'], ['Замирание', 'b'], ['Рывок', 'b'], ['Укрытие', 'b']];
+    this.outs = [[0, p, 0, 'g', 'Поворот']];
+    names.forEach(([n, k], i) => this.outs.push([p + i * L, L, p, k, n]));
+    this.W = new Float32Array(p + names.length * L);
     this.E = new Float32Array(this.W.length);
     this.gateBias = gateBias;
-    this.biasIdx = [4 * p + 2, 5 * p + 3];          // смещения дискретных действий
+    this.biasIdx = this.outs.filter((o) => o[3] === 'b').map((o) => o[0] + o[1] - 1);   // смещения дискретных действий
+    // исходная осторожность: «укрытие» пробуется реже (вылазка в укрытие дорого стоит)
+    this.biasVal = this.outs.filter((o) => o[3] === 'b').map((o) => (o[4] === 'Укрытие' ? gateBias - 1.5 : gateBias));
     this.mean = new Float32Array(2 * p);
     this.vari = new Float32Array(2 * p).fill(1e-4);
-    this.x = new Float32Array(2 * p + 1);
-    this.noise = [0, 0, 0, 0, 0];
-    this.action = [0, 0, 0, 0, 0];
-    this.out = [0, 0, 0, 0, 0];
-    this.prob = [0, 0, 0, 0, 0];
+    this.x = new Float32Array(2 * p + 3);
+    const n = this.outs.length;
+    this.noise = new Array(n).fill(0);
+    this.action = new Array(n).fill(0);
+    this.out = new Array(n).fill(0);
+    this.prob = new Array(n).fill(0);
   }
 
   randomize(rng, scale) {
     for (let k = 0; k < this.W.length; k++) this.W[k] = (rng() * 2 - 1) * scale;
-    for (const k of this.biasIdx) this.W[k] = this.gateBias;
+    this.biasIdx.forEach((k, i) => { this.W[k] = this.biasVal[i]; });
     this.resetTraces();
   }
 
@@ -590,7 +618,8 @@ export class Learner {
     const sigma = mutation * Math.min(Math.max(range, 0.05), 2);
     const same = parent.W.length === this.W.length;
     for (let k = 0; k < this.W.length; k++) {
-      const base = same ? parent.W[k] : (this.biasIdx.includes(k) ? this.gateBias : 0);
+      const bi = this.biasIdx.indexOf(k);
+      const base = same ? parent.W[k] : (bi >= 0 ? this.biasVal[bi] : 0);
       this.W[k] = base + normal(rng) * sigma;
     }
     this.resetTraces();
@@ -600,7 +629,7 @@ export class Learner {
     this.E.fill(0);
     this.mean.fill(0);
     this.vari.fill(1e-4);
-    this.noise = [0, 0, 0, 0, 0];
+    this.noise.fill(0);
   }
 
   norm() {
@@ -633,7 +662,8 @@ export class Learner {
   }
 
   // allowGates: можно ли сейчас запускать замирание и рывок
-  step(brain, cfg, explore, dt, rng, allowGates = false) {
+  // extra: [освещённость 0…1, голод 0…1] — ощущения, которых нет в подсети коннектома
+  step(brain, cfg, explore, dt, rng, allowGates = false, extra = [0.5, 0]) {
     const { p, W, E, x, pairs, outs } = this;
     const a = Math.min(1, dt / 4);
     for (let j = 0; j < p; j++) {
@@ -642,7 +672,9 @@ export class Learner {
       x[j] = (l - r) * 0.7;
       x[p + j] = (l + r) * 0.5;
     }
-    x[2 * p] = 1;
+    x[2 * p] = (extra[0] - 0.5) * 2;
+    x[2 * p + 1] = (extra[1] - 0.5) * 2;
+    x[2 * p + 2] = 1;
     const tau = cfg.exploreTau;
     const sig = cfg.explore * explore;
     const lam = Math.exp(-dt / cfg.eligTau);
@@ -672,18 +704,29 @@ export class Learner {
     }
   }
 
-  learn(delta, lr, decay, dt) {
-    const k = lr * delta * dt;
-    const keep = 1 - decay * dt;
+  // Непрерывные команды учатся с обычной скоростью. Дискретные действия — медленнее и сильнее
+  // тянутся к исходной осторожности: становятся частыми, только если это стабильно вознаграждается.
+  learn(delta, lr, decay, dt, gateScale = 0.25, gateDecay = 0.02) {
     const { W, E } = this;
-    for (let j = 0; j < W.length; j++) {
-      const w = W[j] * keep + k * E[j];
-      W[j] = w > 4 ? 4 : w < -4 ? -4 : w;
-    }
-    // смещения действий забываются не к нулю, а к исходной осторожности
-    for (const j of this.biasIdx) {
-      const w = this.gateBias + (W[j] / keep - this.gateBias) * keep;
-      W[j] = w > 4 ? 4 : w < -8 ? -8 : w;
+    const k = lr * delta * dt, keep = 1 - decay * dt;
+    const kG = k * gateScale, keepG = 1 - gateDecay * dt;
+    let bi = 0;
+    for (const [w0, len, , kind] of this.outs) {
+      if (kind === 'g') {
+        for (let j = w0; j < w0 + len; j++) {
+          const w = W[j] * keep + k * E[j];
+          W[j] = w > 4 ? 4 : w < -4 ? -4 : w;
+        }
+      } else {
+        const b0 = this.biasVal[bi++];
+        for (let j = w0; j < w0 + len - 1; j++) {
+          const w = W[j] * keepG + kG * E[j];
+          W[j] = w > 3 ? 3 : w < -3 ? -3 : w;
+        }
+        const j = w0 + len - 1;
+        const w = b0 + (W[j] - b0) * keepG + kG * E[j];
+        W[j] = w > 4 ? 4 : w < -10 ? -10 : w;
+      }
     }
   }
 }
@@ -711,7 +754,9 @@ export class FlySim {
     this.bumpBuckets = [];   // удары о стены и препятствия по тем же интервалам
     this.wind = { angle: this.rng() * TAU, x: 0, z: 0, speed: this.cfg.windSpeed };
     this.updateWind(0);
+    this.hills = this.makeHills();
     this.obstacles = this.makeObstacles();
+    this.shelters = this.makeShelters();
     this.food = [];
     // еда всех типов: доли по FOOD_TYPES, общее число — foodCount
     const totalW = FOOD_TYPES.reduce((a, t) => a + t.count, 0);
@@ -720,7 +765,9 @@ export class FlySim {
       for (let k = 0; k < n; k++) this.food.push(this.randomFood(kind));
     });
     this.predators = [];
-    for (let k = 0; k < Math.max(1, this.cfg.predatorCount); k++) this.predators.push(this.randomPredator());
+    for (let k = 0; k < Math.max(1, this.cfg.predatorCount); k++) this.predators.push(this.randomPredator('dragonfly'));
+    for (let k = 0; k < (this.cfg.owlCount || 0); k++) this.predators.push(this.randomPredator('owl'));
+    for (let k = 0; k < (this.cfg.foxCount || 0); k++) this.predators.push(this.randomPredator('fox'));
     this.flies = [];
     for (let i = 0; i < Math.max(1, this.cfg.flyCount); i++) this.flies.push(this.makeFly(i));
     this.hero = 0;
@@ -788,9 +835,10 @@ export class FlySim {
       food: f.nearFoodDist < 1.5,
       loss: this.time - (f.lostAt ?? -1e9) < 2,
       rise: f.odorTrend > 0.002,
+      dark: this.daylight() < 0.3,
     };
-    const ev = { freeze: !!f.evFreeze, dash: !!f.evDash, saccade: !!f.evSaccade, descend: !f.body.walk && vy < -0.15 };
-    f.evFreeze = f.evDash = f.evSaccade = false;
+    const ev = { freeze: !!f.evFreeze, dash: !!f.evDash, saccade: !!f.evSaccade, descend: !f.body.walk && vy < -0.15, hide: !!f.evHide };
+    f.evFreeze = f.evDash = f.evSaccade = f.evHide = false;
     if (!flying) return;
     for (const P of this.etho) {
       if (P.flyersOnly && f.body.walk) continue;
@@ -901,7 +949,12 @@ export class FlySim {
     return out;
   }
 
-  daylight() { return 0.5 + 0.5 * Math.cos(TAU * this.time / this.cfg.dayLength); }
+  // освещённость: летом дни длиннее, зимой короче
+  daylight() {
+    const base = 0.5 + 0.5 * Math.cos(TAU * this.time / this.cfg.dayLength);
+    const shift = [0, 0.15, 0, -0.15][this.season().k];
+    return clamp(base + shift, 0, 1);
+  }
 
   logEvent(text) {
     this.events.push({ t: this.time, text });
@@ -909,6 +962,56 @@ export class FlySim {
   }
 
   // ---- объекты мира ----------------------------------------------------------
+
+  makeHills() {
+    const out = [];
+    const h = this.cfg.arenaHalf;
+    for (let k = 0; k < this.cfg.hillCount; k++) {
+      out.push({ x: (this.rng() * 2 - 1) * (h - 2), z: (this.rng() * 2 - 1) * (h - 2), h: 0.4 + this.rng() * 1.1, r: 2 + this.rng() * 2.8 });
+    }
+    return out;
+  }
+
+  // высота земли в точке (сумма плавных холмов)
+  groundAt(x, z) { return terrainHeight(this.hills, x, z); }
+
+  season() {
+    const y = this.time / this.cfg.seasonLength;
+    return { k: Math.floor(y) % 4, frac: y % 1, year: Math.floor(y / 4) + 1, day: Math.floor((this.time % this.cfg.seasonLength) / this.cfg.dayLength) + 1 };
+  }
+
+  // Укрытия: норы на земле и дупла в деревьях; у лисы своя нора
+  makeShelters() {
+    const out = [];
+    const h = this.cfg.arenaHalf - 1;
+    for (let k = 0; k < this.cfg.burrowCount; k++) {
+      let x = 0, z = 0;
+      for (let t = 0; t < 60; t++) { x = (this.rng() * 2 - 1) * h; z = (this.rng() * 2 - 1) * h; if (this.clearOfObstacles(x, z, 0.4)) break; }
+      out.push({ kind: 'burrow', x, z, y: this.groundAt(x, z), heading: this.rng() * TAU, stash: 0 });
+    }
+    for (const t of this.obstacles) {
+      if (t.kind !== 'tree') continue;
+      const a = this.rng() * TAU;
+      out.push({ kind: 'hollow', x: t.x + Math.cos(a) * (t.r + 0.02), z: t.z + Math.sin(a) * (t.r + 0.02), y: t.base + t.height * 0.55, heading: a, tree: t, stash: 0 });
+    }
+    return out;
+  }
+
+  canUse(f, sh) {
+    if (sh.kind === 'burrow') return f.body.walk;
+    if (sh.kind === 'hollow') return f.body.climber || !f.body.walk;   // белка; насекомые — в щели коры
+    return false;
+  }
+
+  nearestShelter(f, maxD, kind = null) {
+    let best = null, bd = maxD;
+    for (const sh of this.shelters) {
+      if (!this.canUse(f, sh) || (kind && sh.kind !== kind)) continue;
+      const d = Math.hypot(sh.x - f.x, sh.z - f.z, (sh.y - f.y) * 0.5);
+      if (d < bd) { bd = d; best = sh; }
+    }
+    return best;
+  }
 
   makeObstacles() {
     const out = [];
@@ -923,13 +1026,14 @@ export class FlySim {
         if (Math.hypot(x, z) < 0.9) continue;
         if (out.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + Math.max(gap, o.gap || 0))) continue;
         const height = hMin + this.rng() * (hMax - hMin);
-        const o = { kind, x, z, r, height, gap, seed: Math.floor(this.rng() * 1e6) };
-        if (kind === 'tree') { o.canopy = 1.0 + this.rng() * 0.7; o.canopyY = height * 0.78; }
+        const o = { kind, x, z, r, height, gap, seed: Math.floor(this.rng() * 1e6), base: this.groundAt(x, z) };
+        if (kind === 'tree') { o.canopy = 1.0 + this.rng() * 0.7; o.canopyY = o.base + height * 0.78; }
         out.push(o);
         made++;
       }
     };
     place('tree', this.cfg.treeCount, 0.22, 0.36, 3.0, 5.0, 2.6);
+    place('bush', this.cfg.bushCount, 0.35, 0.7, 0.5, 1.0, 0.8);
     place('stone', this.cfg.stoneCount, 0.18, 0.4, 0.18, 0.55);
     place('plant', this.cfg.plantCount, 0.05, 0.08, 1.2, 2.1);
     return out;
@@ -950,6 +1054,7 @@ export class FlySim {
     const stones = this.obstacles.filter((o) => o.kind === 'stone');
     const trees = this.obstacles.filter((o) => o.kind === 'tree');
     const plants = this.obstacles.filter((o) => o.kind === 'plant');
+    const bushes = this.obstacles.filter((o) => o.kind === 'bush');
     const groundSpot = () => {
       let x = 0, z = 0;
       for (let k = 0; k < 60; k++) {
@@ -968,19 +1073,24 @@ export class FlySim {
     } else if (T.place === 'fruit' && stones.length && this.rng() < 0.3) {
       const o = pick(stones);
       x = o.x + (this.rng() - 0.5) * o.r * 0.6; z = o.z + (this.rng() - 0.5) * o.r * 0.6;
-      base = o.height;
+      base = o.base + o.height;
     } else if (T.place === 'flower' && plants.length) {
       const o = pick(plants);
-      x = o.x; z = o.z; base = o.height;
+      x = o.x; z = o.z; base = o.base + o.height;
     } else if (T.place === 'undertree' && trees.length) {
       const t = pick(trees);
       const a = this.rng() * TAU, rr = t.r + 0.2 + this.rng() * t.canopy;
       x = t.x + Math.cos(a) * rr; z = t.z + Math.sin(a) * rr;
-    } else if (T.place === 'bush') {
-      [x, z] = groundSpot();
-      base = 0.25 + this.rng() * 0.25;
+      base = this.groundAt(x, z);
+    } else if (T.place === 'bush' && bushes.length) {
+      // ягоды на кусте
+      const b = pick(bushes);
+      const a = this.rng() * TAU;
+      x = b.x + Math.cos(a) * b.r * 0.85; z = b.z + Math.sin(a) * b.r * 0.85;
+      base = b.base + b.height * (0.4 + this.rng() * 0.45);
     } else {
       [x, z] = groundSpot();
+      base = this.groundAt(x, z);
     }
     return { kind, x, z, y: base + size * 0.7, base, size, amount: max, max, alive: true, regrowAt: 0, hanging };
   }
@@ -990,12 +1100,40 @@ export class FlySim {
     return f.body.morph >= e[0] && f.body.morph <= e[1];
   }
 
-  randomPredator() {
+  // Хищники: стрекоза (днём, ловит летящих насекомых), сова (ночью, ловит зверьков и крупных
+  // насекомых вне укрытий), лиса (в сумерки и ночью, ловит зверьков на земле)
+  randomPredator(kind = 'dragonfly') {
     const h = this.cfg.arenaHalf - 0.6;
-    return {
-      x: (this.rng() * 2 - 1) * h, y: 1.4, z: (this.rng() * 2 - 1) * h,
-      heading: this.rng() * TAU, speed: this.cfg.predatorSpeed, cooldown: 4, hunting: false,
-    };
+    const x = (this.rng() * 2 - 1) * h, z = (this.rng() * 2 - 1) * h;
+    const p = { kind, x, y: this.groundAt(x, z) + 1.4, z, heading: this.rng() * TAU, speed: this.cfg.predatorSpeed, cooldown: 4, hunting: false, active: true, resting: false };
+    if (kind === 'owl') {
+      const trees = this.obstacles.filter((o) => o.kind === 'tree');
+      const t = trees.length ? trees[Math.floor(this.rng() * trees.length)] : null;
+      p.perch = t ? { x: t.x + 0.3, y: t.canopyY + 0.2, z: t.z } : { x, y: 3, z };
+      Object.assign(p, p.perch);
+    } else if (kind === 'fox') {
+      const a = this.rng() * TAU;
+      const dx = Math.cos(a) * (h - 0.5), dz = Math.sin(a) * (h - 0.5);
+      p.den = { x: dx, z: dz, y: this.groundAt(dx, dz) };
+      Object.assign(p, p.den);
+      this.shelters.push({ kind: 'den', x: dx, z: dz, y: p.den.y, heading: a + Math.PI, stash: 0 });
+    }
+    return p;
+  }
+
+  predActive(p, daylight) {
+    if (p.kind === 'owl') return daylight < 0.35;
+    if (p.kind === 'fox') return daylight < 0.45;
+    return daylight > 0.3;
+  }
+
+  // может ли хищник поймать особь
+  canCatch(p, f) {
+    if (f.state === 'shelter') return false;
+    if (p.kind === 'dragonfly') return !f.body.walk && (f.state === 'fly' || f.state === 'escape');
+    if (p.kind === 'owl') return f.body.stage >= 1;
+    if (p.kind === 'fox') return f.body.walk && !f.inTree;
+    return false;
   }
 
   makeFly(id) {
@@ -1003,7 +1141,7 @@ export class FlySim {
       id,
       brain: new Brain(this.data, this.net, this.cfg),
       learner: new Learner(this.net.groups.populations, this.cfg.gateBias),
-      lives: 0, eaten: 0, deaths: { starve: 0, predator: 0 },
+      lives: 0, eaten: 0, deaths: { starve: 0, predator: 0, cold: 0 },
       generation: 1, bumps: 0,
     };
     this.respawn(f, null);
@@ -1027,7 +1165,9 @@ export class FlySim {
     if (cause) {
       f.deaths[cause] += 1;
       this.totalDeaths += 1;
-      this.logEvent(`Муха ${f.id + 1}: ${cause === 'predator' ? 'поймала стрекоза' : 'умерла от голода'}`);
+      const who = { dragonfly: 'стрекоза', owl: 'сова', fox: 'лиса' }[f.lastKiller] || 'хищник';
+      const name = f.body ? STAGES[f.body.stage].name : 'Муха';
+      this.logEvent(`${name} ${f.id + 1}: ${cause === 'predator' ? `поймала ${who}` : cause === 'cold' ? 'замёрзла' : 'умерла от голода'}`);
     }
     // Новая муха: свои качества и либо выученные синапсы лучшей мухи с мутациями,
     // либо почти нулевые синапсы (наивная муха)
@@ -1068,7 +1208,8 @@ export class FlySim {
       if (this.clearOfObstacles(x, z, 0.3)) break;
     }
     Object.assign(f, {
-      x, y: 0.7, z,
+      x, y: this.groundAt(x, z) + 0.7, z,
+      inTree: null, shelter: null, carry: false, home: null,
       heading: this.rng() * TAU,
       speed: 0,
       energy: f.energyMax,
@@ -1129,7 +1270,7 @@ export class FlySim {
   obstacleProx(x, y, z) {
     let best = 0;
     for (const o of this.obstacles) {
-      if (y > o.height + 0.1) continue;
+      if (y > o.base + o.height + 0.1) continue;
       const v = Math.max(0, 1 - (Math.hypot(x - o.x, z - o.z) - o.r) / 0.3);
       if (v > best) best = v;
     }
@@ -1139,7 +1280,7 @@ export class FlySim {
   // Выталкивает объект из камней и стеблей (если он ниже их верхушки)
   pushOut(p, pad) {
     for (const o of this.obstacles) {
-      if (p.y > o.height + 0.03) continue;
+      if (p.y > o.base + o.height + 0.03) continue;
       const dx = p.x - o.x, dz = p.z - o.z;
       const d = Math.hypot(dx, dz);
       const min = o.r + pad;
@@ -1154,7 +1295,9 @@ export class FlySim {
   bounceObstacles(f, pad) {
     let hit = false;
     for (const o of this.obstacles) {
-      if (f.y > o.height + 0.03) continue;
+      if (f.y > o.base + o.height + 0.03) continue;
+      if (f.inTree === o) continue;                     // белка на своём дереве
+      if ((f.state === 'hide' || f.state === 'cache') && f.shelter && f.shelter.tree === o) continue;   // летит к дуплу в этом дереве
       const dx = f.x - o.x, dz = f.z - o.z;
       const d = Math.hypot(dx, dz);
       const min = o.r + pad;
@@ -1182,13 +1325,18 @@ export class FlySim {
     // угроза — от ближайшей стрекозы
     let p = this.predators[0], pd = Infinity;
     for (const q of this.predators) {
+      if (!q.active) continue;
       const d = (q.x - f.x) ** 2 + (q.y - f.y) ** 2 + (q.z - f.z) ** 2;
       if (d < pd) { pd = d; p = q; }
     }
     f.nearPred = p;
+    f.nearPredDist = Math.sqrt(pd);
+    if (f.state === 'shelter' || !p.active) { f.threatL = 0; f.threatR = 0; return; }
     const sense = this.cfg.predatorSense;
-    f.threatL = Math.max(0, 1 - Math.hypot(lx - p.x, f.y - p.y, lz - p.z) / sense);
-    f.threatR = Math.max(0, 1 - Math.hypot(qx - p.x, f.y - p.y, qz - p.z) / sense);
+    // зверьки слышат дальше: радиус растёт с размером тела
+    const range = sense * (1 + f.body.morph * 1.5);
+    f.threatL = Math.max(0, 1 - Math.hypot(lx - p.x, f.y - p.y, lz - p.z) / range);
+    f.threatR = Math.max(0, 1 - Math.hypot(qx - p.x, f.y - p.y, qz - p.z) / range);
   }
 
   nearestFood(f) {
@@ -1272,8 +1420,52 @@ export class FlySim {
       }
     } else if (f.state === 'rest') {
       f.speed = 0;
-      targetY = 0.03;
+      targetY = this.groundAt(f.x, f.z) + 0.03;
       if (daylight > 0.35 && f.stateTime > 3) { f.state = 'fly'; f.stateTime = 0; }
+    } else if (f.state === 'hide' || f.state === 'cache') {
+      // бег (полёт) к укрытию; с жёлудем — к своему дуплу
+      const sh = f.shelter;
+      const dx = sh.x - f.x, dz = sh.z - f.z, dy = sh.y - f.y;
+      const d = Math.hypot(dx, dz, dy * 0.6);
+      f.heading = Math.atan2(dx, dz);
+      f.speed = Math.min(1.5 * f.body.speed, d * 3 + 0.3);
+      if (f.body.climber || !f.body.walk) { f.y += clamp(dy, -1, 1) * Math.min(1, dt * 3); f.inTree = sh.tree || null; }
+      targetY = f.y;
+      if (d < 0.3) {
+        f.x = sh.x; f.z = sh.z; f.y = sh.y;
+        if (f.state === 'cache') {
+          sh.stash += 1; f.carry = false;
+          if (f.id === this.hero) this.logEvent(`Белка ${f.id + 1} спрятала жёлудь в дупле (запас ${sh.stash})`);
+          f.state = 'fly'; f.inTree = sh.tree || null;
+        } else {
+          f.state = 'shelter'; f.safeTime = 0;
+        }
+        f.stateTime = 0;
+      } else if (f.stateTime > 15) { f.state = 'fly'; f.stateTime = 0; f.carry = false; }
+    } else if (f.state === 'shelter') {
+      // в укрытии: хищники не видят, расход энергии ниже
+      const sh = f.shelter;
+      f.x = sh.x; f.z = sh.z; f.y = sh.y; f.speed = 0; targetY = f.y;
+      // опасны только те хищники, которые ловят такую особь
+      let danger = false;
+      for (const q of this.predators) {
+        if (!q.active) continue;
+        const relevant = q.kind === 'dragonfly' ? !f.body.walk : q.kind === 'owl' ? f.body.stage >= 1 : f.body.walk;
+        const r = q.kind === 'dragonfly' ? 2.5 : 6;   // стрекоза замечает добычу только вблизи
+        if (relevant && Math.hypot(q.x - f.x, q.z - f.z) < r) { danger = true; break; }
+      }
+      f.safeTime = danger ? 0 : (f.safeTime || 0) + dt;
+      // белка зимой ест запасы из дупла
+      if (sh.kind === 'hollow' && sh.stash > 0 && hunger > 0.4) {
+        sh.stash -= 1;
+        f.energy = Math.min(f.energyMax, f.energy + 0.5 * f.energyMax);
+        f.eaten += 1; f.eatenLife += 1; this.totalEaten += 1;
+        if (f.id === this.hero) this.logEvent(`${STAGES[f.body.stage].name} ${f.id + 1} съела запас из дупла (осталось ${sh.stash})`);
+      }
+      const night = daylight < 0.3;
+      if (f.stateTime > 4 && f.safeTime > 3 && (!night || hunger > 0.75 || f.stateTime > 120)) {
+        f.state = 'fly'; f.stateTime = 0; f.inTree = sh.kind === 'hollow' ? sh.tree : null;
+      }
     } else {
       // полёт: скорость с инерцией, курс — плавный дрейф плюс саккады
       let target = clamp(cfg.motorSpeed * tr.motor * (rL + rR) / 2, 0, 1.5) * activity;
@@ -1284,9 +1476,15 @@ export class FlySim {
       f.gateCool = Math.max(0, (f.gateCool || 0) - dt);
       const canGate = cfg.gates && f.freezeLeft <= 0 && f.dashLeft <= 0 && f.gateCool <= 0;
       if (brainNow) {
-        f.learner.step(f.brain, cfg, tr.explore, dt * physEvery, this.rng, canGate);
+        f.learner.step(f.brain, cfg, tr.explore, dt * physEvery, this.rng, canGate, [daylight, hunger]);
         if (canGate && f.learner.action[3]) { f.freezeLeft = cfg.freezeTime; f.gateCool = cfg.gateCooldown; f.evFreeze = true; }
         else if (canGate && f.learner.action[4]) { f.dashLeft = cfg.dashTime; f.gateCool = cfg.gateCooldown; f.evDash = true; }
+        else if (canGate && f.learner.action[5]) {
+          // выученное решение спрятаться: бежать к ближайшему укрытию
+          const sh = this.nearestShelter(f, cfg.hideRange);
+          f.gateCool = cfg.gateCooldown; f.evHide = true;
+          if (sh) { f.state = 'hide'; f.stateTime = 0; f.shelter = sh; }
+        }
       }
       const learnedTurn = cfg.learnTurnGain * Math.tanh(f.learner.action[0]);
       const learnedClimb = cfg.learnClimbGain * Math.tanh(f.learner.action[1]);
@@ -1354,7 +1552,17 @@ export class FlySim {
       f.nearFoodDist = food ? Math.hypot(food.x - f.x, food.z - f.z) : Infinity;
       if (food) {
         const d3 = Math.hypot(food.x - f.x, food.z - f.z, (food.y + food.size * 0.75) - f.y);
-        if (d3 < cfg.landRadius * (1 + 1.5 * f.body.morph) && hunger > 0.12) {
+        const hoard = f.body.climber && food.kind === 6 && this.season().k === 2 && hunger < 0.2;
+        if (hoard && d3 < cfg.landRadius * (1 + 1.5 * f.body.morph)) {
+          // инстинкт запасания: сытая белка осенью уносит жёлудь в своё дупло
+          if (!f.home) f.home = this.nearestShelter(f, 40, 'hollow');
+          if (f.home) {
+            const take = Math.min(food.amount, 30);
+            food.amount -= take;
+            if (food.amount <= 0.01) { food.alive = false; food.amount = 0; food.regrowAt = this.time + cfg.foodRegrow; }
+            f.carry = true; f.state = 'cache'; f.shelter = f.home; f.stateTime = 0;
+          }
+        } else if (d3 < cfg.landRadius * (1 + 1.5 * f.body.morph) && hunger > 0.12) {
           f.state = 'feed'; f.stateTime = 0; f.feedFood = food;
           f.feedDX = (this.rng() - 0.5) * food.size * 0.8;
           f.feedDZ = (this.rng() - 0.5) * food.size * 0.8;
@@ -1367,13 +1575,25 @@ export class FlySim {
           if (f.id === this.hero) this.logEvent(`Муха ${f.id + 1} села на фрукт и ест`);
         }
       }
-      if (daylight < 0.15 && this.rng() < dt * 0.4) { f.state = 'rest'; f.stateTime = 0; }
+      if (daylight < 0.15 && this.rng() < dt * 0.4) {
+        const sh = this.nearestShelter(f, 5);
+        if (sh) { f.state = 'hide'; f.shelter = sh; } else f.state = 'rest';
+        f.stateTime = 0;
+      }
+      // белка зимой помнит свой запас и возвращается к нему, когда голодна
+      if (f.body.climber && this.season().k === 3 && hunger > 0.5 && f.home && f.home.stash > 0) {
+        f.state = 'hide'; f.shelter = f.home; f.stateTime = 0;
+      }
     }
 
     if (f.state !== 'feed') {
       const climb = f.state === 'escape' ? 1.6 : 0.8;
-      // бескрылые формы ходят по земле, крупные летуны не поднимаются высоко
-      f.y = f.body.walk ? 0.03 + 0.02 * f.body.size : clamp(f.y + clamp(1.5 * (targetY - f.y), -climb, climb) * dt, 0.03, f.body.maxY);
+      // бескрылые ходят по земле (по холмам), летуны держатся над землёй; белка может быть на дереве
+      const gy = this.groundAt(f.x, f.z);
+      if (f.state === 'hide' || f.state === 'cache' || f.state === 'shelter') { /* высота задана выше */ }
+      else if (f.inTree) f.y = f.inTree.canopyY - f.inTree.canopy * 0.55;
+      else if (f.body.walk) f.y = gy + 0.03 + 0.02 * f.body.size;
+      else f.y = clamp(f.y + clamp(1.5 * (targetY - f.y), -climb, climb) * dt, gy + 0.03, gy + f.body.maxY);
       f.x += Math.sin(f.heading) * f.speed * dt;
       f.z += Math.cos(f.heading) * f.speed * dt;
       // отскок от бортиков: курс отражается, скорость падает
@@ -1381,6 +1601,16 @@ export class FlySim {
       let bump = false;
       if (f.x > h || f.x < -h) { f.x = clamp(f.x, -h, h); f.heading = -f.heading; bump = true; }
       if (f.z > h || f.z < -h) { f.z = clamp(f.z, -h, h); f.heading = Math.PI - f.heading; bump = true; }
+      // белка: залезает на дерево, если хочет вверх (выученная команда подъёма), и спускается, если вниз
+      if (f.body.climber && f.state === 'fly') {
+        if (!f.inTree && f.climb > 0.25) {
+          for (const o of this.obstacles) if (o.kind === 'tree' && Math.hypot(o.x - f.x, o.z - f.z) < o.r + 0.5) { f.inTree = o; break; }
+        } else if (f.inTree && f.climb < -0.35) f.inTree = null;
+        if (f.inTree) {
+          const t = f.inTree, dx = f.x - t.x, dz = f.z - t.z, d = Math.hypot(dx, dz), maxR = t.canopy * 0.9;
+          if (d > maxR) { f.x = t.x + dx / d * maxR; f.z = t.z + dz / d * maxR; f.heading += Math.PI * 0.8; }
+        }
+      } else if (!f.body.climber) f.inTree = null;
       if (this.bounceObstacles(f, f.body.pad)) {
         bump = true;
         f.y = Math.min(cfg.arenaTop, f.y + 0.12);   // после удара муха подскакивает вверх
@@ -1428,14 +1658,23 @@ export class FlySim {
     }
 
     const drain = (f.state === 'rest' ? cfg.energyDrain * 0.3 : cfg.energyDrain) + cfg.moveCost * f.speed * (f.state === 'escape' ? 0.5 : 1);
-    const bodyDrain = f.body.drain;
+    // холод: зимой расход выше; мех греет; насекомые мёрзнут вне укрытий
+    const sk = this.season().k;
+    let cold = [1, 1, 1.1, 1.6][sk];
+    if (sk === 3 && f.body.fur) cold = 1.25;
+    if (sk === 3 && f.body.insect && f.state !== 'shelter') cold = 3.2;
+    const bodyDrain = f.body.drain * cold * (f.state === 'shelter' ? 0.4 : 1);
     f.energy -= drain * bodyDrain * dt;
 
-    const flying = !f.body.walk && (f.state === 'fly' || f.state === 'escape');
-    if (flying && p.cooldown <= 0 && Math.hypot(p.x - f.x, p.y - f.y, p.z - f.z) < cfg.predatorKill) {
-      p.cooldown = cfg.predatorRest;
-      this.respawn(f, 'predator');
-      return;
+    for (const q of this.predators) {
+      if (!q.active || q.cooldown > 0 || !this.canCatch(q, f)) continue;
+      const kill = q.kind === 'owl' ? 0.32 : q.kind === 'fox' ? 0.38 : cfg.predatorKill;
+      if (Math.hypot(q.x - f.x, q.y - f.y, q.z - f.z) < kill * (1 + f.body.morph)) {
+        q.cooldown = q.kind === 'dragonfly' ? cfg.predatorRest : 25;
+        f.lastKiller = q.kind;
+        this.respawn(f, 'predator');
+        return;
+      }
     }
     if (f.energy <= 0) { this.respawn(f, 'starve'); return; }
 
@@ -1445,48 +1684,83 @@ export class FlySim {
   }
 
   // Стрекоза охотится на летящих мух поблизости, иначе патрулирует
-  stepPredator(p, dt) {
+  stepPredator(p, dt, daylight) {
     const cfg = this.cfg;
     p.cooldown = Math.max(0, p.cooldown - dt);
-    let target = null, bd = cfg.predatorChase;
-    if (p.cooldown <= 0) {
-      for (const f of this.flies) {
-        if (f.body.walk || (f.state !== 'fly' && f.state !== 'escape')) continue;
-        const d = Math.hypot(f.x - p.x, f.y - p.y, f.z - p.z);
-        if (f.speed < 0.12 && d > 0.35) continue;   // неподвижную добычу стрекоза не замечает
-        if (d < bd) { bd = d; target = f; }
+    p.active = this.predActive(p, daylight);
+    const g = this.groundAt(p.x, p.z);
+    const h = cfg.arenaHalf - 0.2;
+    if (!p.active) {
+      p.hunting = false;
+      if (p.kind === 'owl') {
+        // днём сова спит на ветке
+        const d = Math.hypot(p.perch.x - p.x, p.perch.z - p.z, p.perch.y - p.y);
+        if (d > 0.1) { const k = Math.min(1, 2 * dt / d); p.x += (p.perch.x - p.x) * k; p.y += (p.perch.y - p.y) * k; p.z += (p.perch.z - p.z) * k; p.heading = Math.atan2(p.perch.x - p.x, p.perch.z - p.z) || p.heading; }
+        p.resting = d < 0.3; p.speed = 0;
+        return;
       }
-    }
-    p.hunting = !!target;
-    if (target) {
-      const want = Math.atan2(target.x - p.x, target.z - p.z);
-      let diff = want - p.heading;
-      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-      p.heading += clamp(diff, -2.6 * dt, 2.6 * dt);
-      p.speed += (cfg.predatorChaseSpeed - p.speed) * Math.min(1, dt * 2);
-      p.y += clamp(target.y - p.y, -1, 1) * dt * 1.5;
+      if (p.kind === 'fox') {
+        // днём лиса спит в норе
+        const d = Math.hypot(p.den.x - p.x, p.den.z - p.z);
+        if (d > 0.2) { p.heading = Math.atan2(p.den.x - p.x, p.den.z - p.z); p.speed = 1.2; }
+        else p.speed = 0;
+        p.resting = d <= 0.2;
+      } else {
+        // ночью стрекоза сидит низко и не охотится
+        p.speed += (0 - p.speed) * Math.min(1, dt);
+        p.y += ((g + 0.5) - p.y) * dt * 0.5;
+        p.resting = true;
+        return;
+      }
     } else {
-      p.heading += (this.rng() - 0.5) * 2.0 * dt;
-      p.speed += (cfg.predatorSpeed - p.speed) * Math.min(1, dt);
-      p.y += ((1.3 + 0.4 * Math.sin(this.time * 0.4)) - p.y) * dt * 0.8;
+      p.resting = false;
+      let target = null;
+      if (p.cooldown <= 0) {
+        let bd = Infinity;
+        for (const f of this.flies) {
+          if (!this.canCatch(p, f)) continue;
+          const d = Math.hypot(f.x - p.x, f.y - p.y, f.z - p.z);
+          const still = f.speed < 0.12;
+          // все хищники замечают движение; сова слышит и неподвижных вблизи
+          const range = p.kind === 'dragonfly' ? (still ? 0.35 : cfg.predatorChase) : p.kind === 'owl' ? (still ? 1.2 : 5) : (still ? 1.5 : 6);
+          if (d < range && d < bd) { bd = d; target = f; }
+        }
+      }
+      p.hunting = !!target;
+      const chase = p.kind === 'owl' ? 2.4 : p.kind === 'fox' ? 2.0 : cfg.predatorChaseSpeed;
+      const patrol = p.kind === 'owl' ? 1.0 : p.kind === 'fox' ? 0.8 : cfg.predatorSpeed;
+      if (target) {
+        const want = Math.atan2(target.x - p.x, target.z - p.z);
+        let diff = want - p.heading;
+        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+        p.heading += clamp(diff, -2.8 * dt, 2.8 * dt);
+        p.speed += (chase - p.speed) * Math.min(1, dt * 2);
+        if (p.kind !== 'fox') p.y += clamp(target.y - p.y, -1, 1) * dt * (p.kind === 'owl' ? 2.5 : 1.5);
+      } else {
+        p.heading += (this.rng() - 0.5) * 2.0 * dt;
+        p.speed += (patrol - p.speed) * Math.min(1, dt);
+        if (p.kind === 'owl') p.y += ((g + 2.6 + 0.4 * Math.sin(this.time * 0.3)) - p.y) * dt * 0.8;
+        else if (p.kind === 'dragonfly') p.y += ((g + 1.3 + 0.4 * Math.sin(this.time * 0.4)) - p.y) * dt * 0.8;
+      }
     }
     p.x += Math.sin(p.heading) * p.speed * dt;
     p.z += Math.cos(p.heading) * p.speed * dt;
-    const h = cfg.arenaHalf - 0.2;
     if (Math.abs(p.x) > h || Math.abs(p.z) > h) {
       p.heading += Math.PI;
       p.x = clamp(p.x, -h, h);
       p.z = clamp(p.z, -h, h);
     }
-    p.y = clamp(p.y, 0.25, cfg.arenaTop);
-    this.pushOut(p, 0.12);
+    const g2 = this.groundAt(p.x, p.z);
+    if (p.kind === 'fox') p.y = g2 + 0.02;
+    else p.y = clamp(p.y, g2 + 0.25, g2 + cfg.arenaTop);
+    this.pushOut(p, p.kind === 'fox' ? 0.2 : 0.12);
   }
 
   step(dt = 1 / 60) {
     this.time += dt;
     const daylight = this.daylight();
     this.updateWind(dt);
-    for (const p of this.predators) this.stepPredator(p, dt);
+    for (const p of this.predators) this.stepPredator(p, dt, daylight);
     for (const f of this.flies) { this.stepFly(f, dt, daylight); this.observe(f, dt); }
     this.decayEtho(dt);
     // мухи не проходят сквозь друг друга
@@ -1504,9 +1778,23 @@ export class FlySim {
         }
       }
     }
+    const se = this.season();
     for (let k = 0; k < this.food.length; k++) {
       const food = this.food[k];
-      if (!food.alive && this.time >= food.regrowAt) this.food[k] = this.randomFood(food.kind);
+      const T = FOOD_TYPES[food.kind];
+      if (!food.alive && this.time >= food.regrowAt) {
+        // новая еда появляется с вероятностью по урожаю сезона, иначе — позже
+        if (this.rng() < T.season[se.k]) this.food[k] = this.randomFood(food.kind);
+        else food.regrowAt = this.time + this.cfg.foodRegrow;
+      } else if (food.alive) {
+        // зимой фрукты, ягоды и нектар портятся
+        if (se.k === 3 && T.perish) {
+          food.amount -= 2 * dt;
+          if (food.amount <= 0) { food.alive = false; food.amount = 0; food.regrowAt = this.time + this.cfg.foodRegrow; }
+        }
+        // осенью спелые фрукты падают с веток
+        if (se.k === 2 && food.hanging && this.rng() < dt * 0.01) { food.hanging = false; food.base = this.groundAt(food.x, food.z); food.y = food.base + food.size * 0.7; }
+      }
     }
     this.historyTimer += dt;
     if (this.historyTimer >= 0.1) {

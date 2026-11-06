@@ -68,7 +68,7 @@ export class Island {
       eaten: this.sim.totalEaten,
       deaths: this.sim.totalDeaths,
       selections: this.selections,
-      stages: [0, 1, 2, 3, 4].map((k) => flies.filter((f) => f.body.stage === k).length),
+      stages: [0, 1, 2, 3, 4, 5].map((k) => flies.filter((f) => f.body.stage === k).length),
       morph: flies.reduce((a, f) => a + f.body.morph, 0) / flies.length,
       grown: flies.reduce((a, f) => a + f.brain.gN, 0) / flies.length,
       neurons: flies.reduce((a, f) => a + f.brain.net.N + f.brain.nNew, 0) / flies.length,
