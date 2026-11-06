@@ -583,6 +583,36 @@ export class FlySim {
 
   resetFly(cause) { this.respawn(this.fly, cause); }
 
+  // Состояние особей для переноса в турбопоток и обратно (без потерь, без мутаций)
+  exportGenomes() {
+    return this.flies.map((f) => ({
+      W: Float32Array.from(f.learner.W), traits: { ...f.traits }, morph: f.body.morph, generation: f.generation,
+      lives: f.lives, eaten: f.eaten, deaths: { ...f.deaths },
+      grown: { gN: f.brain.gN, gSrc: f.brain.gSrc.slice(0, f.brain.gN), gDst: f.brain.gDst.slice(0, f.brain.gN), gW: f.brain.gW.slice(0, f.brain.gN) },
+    }));
+  }
+
+  importGenomes(list) {
+    if (!list) return;
+    this.flies.forEach((f, i) => {
+      const g = list[i];
+      if (!g) return;
+      f.learner.W.set(g.W.length === f.learner.W.length ? g.W : f.learner.W);
+      f.learner.resetTraces();
+      f.traits = { ...g.traits };
+      f.body = bodyOf(g.morph, this.cfg);
+      f.energyMax = f.body.energyMax;
+      f.energy = Math.min(f.energy, f.energyMax);
+      f.generation = g.generation;
+      f.lives = g.lives; f.eaten = g.eaten; f.deaths = { ...g.deaths };
+      const b = f.brain, n = Math.min(g.grown.gN, b.gSrc.length);
+      b.gSrc.set(g.grown.gSrc.subarray ? g.grown.gSrc.subarray(0, n) : g.grown.gSrc.slice(0, n));
+      b.gDst.set(g.grown.gDst.subarray ? g.grown.gDst.subarray(0, n) : g.grown.gDst.slice(0, n));
+      b.gW.set(g.grown.gW.subarray ? g.grown.gW.subarray(0, n) : g.grown.gW.slice(0, n));
+      b.gE.fill(0); b.gAge.fill(0); b.gN = n;
+    });
+  }
+
   // Лучшая муха по еде за жизнь (для сохранения выученного)
   bestFly() {
     return this.bestParent(null) || this.flies[0];
@@ -919,9 +949,10 @@ export class FlySim {
     // растёт и насыщается (как у настоящих рецепторных нейронов)
     const olf = (o) => cfg.olfBase + 0.4 * cfg.odorGain * tr.odor * o / (o + 0.15) + hunger * cfg.hungerGain * 0.15;
     const mech = (c, t) => cfg.mechBase + 0.3 * (c * cfg.contactGain * tr.contact + t * cfg.predatorGain);
-    const every = Math.max(1, cfg.brainEvery | 0);
+    const physEvery = Math.max(1, cfg.brainEvery | 0);
+    const every = physEvery * Math.max(1, Math.round(dt * 60));   // сколько шагов по 1/60 с покрывает шаг мозга
     f.brainTick = (f.brainTick || 0) + 1;
-    const brainNow = f.brainTick % every === 0;
+    const brainNow = f.brainTick % physEvery === 0;
     if (brainNow) {
       f.brain.step({
         olfL: olf(f.odorL),
@@ -984,7 +1015,7 @@ export class FlySim {
       let target = clamp(cfg.motorSpeed * tr.motor * (rL + rR) / 2, 0, 1.5) * activity;
       let drive = cfg.motorTurn * tr.motor * (rL - rR);
       // выученные команды: поворот и подъём
-      if (brainNow) f.learner.step(f.brain.rate, cfg, tr.explore, dt * every, this.rng);
+      if (brainNow) f.learner.step(f.brain.rate, cfg, tr.explore, dt * physEvery, this.rng);
       const learnedTurn = cfg.learnTurnGain * Math.tanh(f.learner.action[0]);
       const learnedClimb = cfg.learnClimbGain * Math.tanh(f.learner.action[1]);
       drive += learnedTurn;
@@ -1100,8 +1131,8 @@ export class FlySim {
     f.daBar += (f.da - f.daBar) * Math.min(1, dt / cfg.daBaselineTau);
     f.delta = f.da - f.daBar;
     if (cfg.structural && brainNow) {
-      f.brain.plasticity(f.delta, cfg, dt * every);
-      f.growTimer = (f.growTimer || 0) + dt * every;
+      f.brain.plasticity(f.delta, cfg, dt * physEvery);
+      f.growTimer = (f.growTimer || 0) + dt * physEvery;
       if (f.growTimer >= cfg.growEvery) { f.brain.grow(cfg, this.rng, f.growTimer); f.growTimer = 0; }
     }
     if (cfg.learning && wasFlying) {

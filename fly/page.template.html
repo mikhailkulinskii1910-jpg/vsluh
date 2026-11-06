@@ -131,6 +131,7 @@
         <option value="4">4×</option>
         <option value="8">8×</option>
         <option value="32">32×</option>
+        <option value="1000">×1000 без изображения</option>
       </select>
     </div>
     <div class="pill-row">
@@ -159,6 +160,19 @@
           <span class="chip" id="stateChip">–</span>
           <span class="chip" id="predChip">Стрекоза патрулирует</span>
         </div>
+      </div>
+      <div id="turboPanel" hidden style="position:absolute;inset:0;z-index:3;background:var(--bg);padding:16px;overflow:auto;box-sizing:border-box">
+        <h2>Турборежим ×1000</h2>
+        <p class="muted">Изображение отключено: сад живёт в фоновом потоке так быстро, как позволяет процессор. Выберите другую скорость, чтобы вернуться — особи вернутся со всем выученным, своими телами и связями.</p>
+        <div class="row"><span>Фактическая скорость</span><b id="tbSpeed">–</b></div>
+        <div class="row"><span>Прожито в турборежиме</span><b id="tbTime">–</b></div>
+        <div class="row"><span>Прошло суток в саду</span><b id="tbDays">–</b></div>
+        <div class="row"><span>Посадок на еду в минуту на особь</span><b id="tbRate">–</b></div>
+        <div class="row"><span>Посадок всего / погибло</span><b id="tbEaten">–</b></div>
+        <div class="row"><span>Поколений (максимум)</span><b id="tbGen">–</b></div>
+        <div class="row"><span>Тела</span><b id="tbStages">–</b></div>
+        <label class="toggle"><input type="checkbox" id="turboLite"> Облегчённый расчёт: примерно вдвое быстрее, но особи учатся хуже</label>
+        <p class="muted" id="tbNote" style="margin-top:8px"></p>
       </div>
       <div class="energy">
         <div class="row" style="margin:0"><span>Энергия</span><b id="energyText">–</b></div>
@@ -1305,6 +1319,91 @@ async function copyGenome() {
   }
 }
 
+// ---- турборежим ×1000: сад в фоновом потоке без изображения ----------------------
+const TURBO_WORKER = `
+let token = 0, sim = null;
+self.onmessage = async (e) => {
+  const m = e.data;
+  if (m.type === 'start') {
+    const my = ++token;
+    sim = new FlySim(m.data, { mode: m.mode, seed: m.seed, config: m.config });
+    sim.time = m.time;
+    sim.importGenomes(m.genomes);
+    const t0 = performance.now(), start = sim.time, target = m.target;
+    while (my === token) {
+      const c0 = performance.now();
+      while (performance.now() - c0 < 250) {
+        // не быстрее цели (×1000)
+        if ((sim.time - start) > target * (performance.now() - t0) / 1000) break;
+        for (let k = 0; k < 20; k++) sim.step(m.dt);
+      }
+      const real = (performance.now() - t0) / 1000;
+      const c = sim.learningCurve().slice(-4);
+      self.postMessage({ type: 'stats', time: sim.time, lived: sim.time - start, speed: (sim.time - start) / Math.max(real, 1e-3),
+        eaten: sim.totalEaten, deaths: sim.totalDeaths, rate: c.length ? c.reduce((a, b) => a + b.feed, 0) / c.length : 0,
+        stages: [0, 1, 2, 3, 4].map((k) => sim.flies.filter((f) => f.body.stage === k).length),
+        maxGen: Math.max(...sim.flies.map((f) => f.generation)) });
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  } else if (m.type === 'stop') {
+    token++;
+    if (sim) self.postMessage({ type: 'final', genomes: sim.exportGenomes(), time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths });
+  }
+};
+`;
+let turboWorker = null, turboOn = false, turboBase = null;
+
+function startTurbo() {
+  if (turboOn) stopTurbo(() => startTurbo());
+  turboOn = true;
+  turboBase = { eaten: sim.totalEaten, deaths: sim.totalDeaths };
+  const lite = $('turboLite').checked;
+  const src = document.getElementById('core').textContent + '\n' + TURBO_WORKER;
+  turboWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
+  turboWorker.onmessage = (e) => onTurbo(e.data);
+  turboWorker.onerror = (e) => { $('tbNote').textContent = 'Ошибка турборежима: ' + e.message; };
+  const cfg = { ...worldConfig(), ...(lite ? { brainEvery: 2 } : {}) };
+  turboWorker.postMessage({ type: 'start', data, mode: sim.mode, seed: 1 + Math.floor(Math.random() * 1e6), config: cfg,
+    genomes: sim.exportGenomes(), time: sim.time, dt: lite ? 1 / 30 : 1 / 60, target: 1000 });
+  $('turboPanel').hidden = false;
+  $('tbNote').textContent = `Особей: ${sim.flies.length}. ×1000 достижимо только для 1–2 особей; на каждую особь нужно около 3 мс процессора на секунду симуляции.`;
+}
+
+let turboDone = null;
+function stopTurbo(then) {
+  if (!turboOn || !turboWorker) { turboOn = false; $('turboPanel').hidden = true; if (then) then(); return; }
+  turboDone = then || null;
+  turboWorker.postMessage({ type: 'stop' });
+}
+
+function onTurbo(m) {
+  if (m.type === 'stats') {
+    $('tbSpeed').textContent = `×${Math.round(m.speed)}`;
+    $('tbTime').textContent = m.lived >= 3600 ? `${(m.lived / 3600).toFixed(1)} ч` : `${Math.round(m.lived / 60)} мин`;
+    $('tbDays').textContent = (m.time / sim.cfg.dayLength).toFixed(1);
+    $('tbRate').textContent = m.rate.toFixed(2);
+    $('tbEaten').textContent = `${m.eaten} / ${m.deaths}`;
+    $('tbGen').textContent = m.maxGen;
+    $('tbStages').textContent = STAGES.map((g, k) => m.stages[k] ? `${g.name.toLowerCase()} ${m.stages[k]}` : '').filter(Boolean).join(', ');
+  } else if (m.type === 'final') {
+    // особи возвращаются в сад со всем, что накопили
+    sim.importGenomes(m.genomes);
+    sim.time = m.time;
+    const lived = m.time - (sim.turboStartTime ?? m.time);
+    sim.totalEaten = turboBase.eaten + m.eaten;
+    sim.totalDeaths = turboBase.deaths + m.deaths;
+    sim.logEvent(`Турборежим: сад прожил ${Math.round(lived / 60)} мин симуляции`);
+    lastLogKey = '';
+    turboWorker.terminate();
+    turboWorker = null;
+    turboOn = false;
+    $('turboPanel').hidden = true;
+    lastW = -1;
+    const next = turboDone; turboDone = null;
+    if (next) next();
+  }
+}
+
 // ---- суперэволюция: острова в фоновых потоках ---------------------------------
 const SUPER_WORKER = `
 let token = 0, island = null;
@@ -1769,7 +1868,7 @@ function frame(now) {
   const real = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   if (activeTab === 'scene') adaptQuality(real);
-  if (!paused) {
+  if (!paused && !turboOn) {
     acc += real * speed;
     const t0 = performance.now();
     while (acc >= DT) {
@@ -1784,7 +1883,7 @@ function frame(now) {
   if (activeTab === 'super' && (superUiTimer++ % 20 === 0)) updateSuperUI();
   saveTimer += real;
   if (saveTimer > 20) { saveTimer = 0; saveBrain(); }
-  if (activeTab === 'scene') {
+  if (activeTab === 'scene' && !turboOn) {
     updateLight();
     syncScene();
     resizeScene();
@@ -1806,19 +1905,26 @@ function frame(now) {
 }
 
 // ---- управление -------------------------------------------------------------
-$('mode').addEventListener('change', () => { newSim(); if (evoRunning) startEvolution(); });
+const leaveTurbo = (then) => { if (turboOn) { $('speed').value = '1'; speed = 1; stopTurbo(then); } else then(); };
+$('mode').addEventListener('change', () => leaveTurbo(() => { newSim(); if (evoRunning) startEvolution(); }));
 $('reflexes').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
 $('learning').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
 $('inherit').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('bodyMode').addEventListener('change', () => { sim.setConfig(worldConfig()); updateBodyPanel(); });
 $('morphSpeed').addEventListener('change', () => sim.setConfig(worldConfig()));
-$('flyCount').addEventListener('change', newSim);
-$('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
+$('flyCount').addEventListener('change', () => leaveTurbo(newSim));
+$('speed').addEventListener('change', (e) => {
+  const v = Number(e.target.value);
+  if (v === 1000) { sim.turboStartTime = sim.time; startTurbo(); return; }
+  if (turboOn) stopTurbo();
+  speed = v;
+});
+$('turboLite').addEventListener('change', () => { if (turboOn) stopTurbo(() => { sim.turboStartTime = sim.time; startTurbo(); }); });
 $('pauseBtn').addEventListener('click', (e) => {
   paused = !paused;
   e.target.textContent = paused ? 'Продолжить' : 'Пауза';
 });
-$('newBtn').addEventListener('click', newSim);
+$('newBtn').addEventListener('click', () => leaveTurbo(newSim));
 $('forgetBtn').addEventListener('click', (e) => {
   e.preventDefault();
   try { localStorage.removeItem(SAVE_KEY); } catch (err) { /* нет хранилища */ }
