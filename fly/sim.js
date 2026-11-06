@@ -69,7 +69,7 @@ export const CONFIG = {
   feedRate: 22,         // сколько энергии муха получает за секунду еды
   foodAmount: 70,       // средний запас фрукта
   foodRegrow: 14,       // через сколько секунд вырастает новый фрукт
-  foodCount: 130,
+  foodCount: 170,
   // запах и ветер
   plumeSpread: 0.25,    // ширина шлейфа у источника
   plumeGrowth: 0.3,     // расширение шлейфа на единицу расстояния по ветру
@@ -87,8 +87,12 @@ export const CONFIG = {
   hillCount: 8,         // холмы
   burrowCount: 14,      // норы в земле (у каждого дерева ещё и дупло)
   seasonLength: 300,    // секунд симуляции на сезон (2 суток); год — 20 минут
-  owlCount: 2,          // ночные хищники: совы
+  owlCount: 1,          // ночные хищники: совы
   foxCount: 1,          // и лиса
+  spiderCount: 8,       // паутины между стеблями и кустами
+  hawkCount: 1,         // ястреб (днём)
+  snakeCount: 2,        // змеи (днём, проникают в норы, зимой спят)
+  martenCount: 1,       // куница (в сумерки и ночью, лазает по деревьям)
   treeFoodShare: 0.35,  // доля фруктов, висящих на деревьях
   predatorCount: 3,
   dayLength: 150,       // секунд на полные сутки
@@ -159,19 +163,33 @@ const TAU = Math.PI * 2;
 
 // ---- типы еды ------------------------------------------------------------------
 // place: где лежит; eat: диапазон морфы, которой еда доступна; energy: сытность
+// eaters — какие стадии едят (по номерам STAGES); season — урожай весной, летом, осенью, зимой
+const E = (...keys) => keys.map((k) => ['fly', 'bee', 'beetle', 'cricket', 'lizard', 'shrew', 'mouse', 'hedgehog', 'squirrel', 'hare'].indexOf(k));
 export const FOOD_TYPES = [
-  // season: доля урожая весной, летом, осенью, зимой; perish — портится зимой
-  { key: 'apple', name: 'Яблоко', size: 0.11, energy: 1.0, place: 'fruit', eat: [0, 1], count: 14, season: [0.1, 0.7, 1, 0.02], perish: true },
-  { key: 'banana', name: 'Банан', size: 0.09, energy: 1.0, place: 'fruit', eat: [0, 1], count: 10, season: [0.1, 0.8, 0.6, 0.02], perish: true },
-  { key: 'grape', name: 'Виноград', size: 0.06, energy: 0.9, place: 'fruit', eat: [0, 1], count: 12, season: [0.05, 0.6, 1, 0.02], perish: true },
-  { key: 'nectar', name: 'Нектар цветка', size: 0.05, energy: 0.6, place: 'flower', eat: [0, 0.3], count: 16, season: [1, 0.8, 0.2, 0], perish: true },
-  { key: 'mushroom', name: 'Гриб', size: 0.09, energy: 0.9, place: 'ground', eat: [0.15, 1], count: 16, season: [0.3, 0.4, 1, 0.05] },
-  { key: 'seeds', name: 'Семена', size: 0.07, energy: 0.8, place: 'ground', eat: [0.25, 1], count: 22, season: [0.4, 0.7, 1, 0.3] },
-  { key: 'acorn', name: 'Жёлудь', size: 0.07, energy: 1.6, place: 'undertree', eat: [0.55, 1], count: 20, season: [0.05, 0.2, 1, 0.2] },
-  { key: 'berry', name: 'Ягоды', size: 0.06, energy: 0.8, place: 'bush', eat: [0, 1], count: 18, season: [0.1, 1, 0.7, 0.05], perish: true },
-  { key: 'cheese', name: 'Сыр', size: 0.1, energy: 2.0, place: 'ground', eat: [0.55, 1], count: 4, season: [0.5, 0.5, 0.5, 0.5] },
+  { key: 'apple', name: 'Яблоко', size: 0.11, energy: 1.0, place: 'fruit', eaters: E('fly', 'beetle', 'mouse', 'hedgehog', 'squirrel'), count: 14, season: [0.1, 0.7, 1, 0.02], perish: true },
+  { key: 'banana', name: 'Банан', size: 0.09, energy: 1.0, place: 'fruit', eaters: E('fly', 'beetle', 'mouse', 'hedgehog', 'squirrel'), count: 8, season: [0.1, 0.8, 0.6, 0.02], perish: true },
+  { key: 'grape', name: 'Виноград', size: 0.06, energy: 0.9, place: 'fruit', eaters: E('fly', 'bee', 'beetle', 'mouse', 'squirrel'), count: 12, season: [0.05, 0.6, 1, 0.02], perish: true },
+  { key: 'nectar', name: 'Нектар цветка', size: 0.05, energy: 0.6, place: 'flower', eaters: E('fly', 'bee'), count: 18, season: [1, 0.8, 0.2, 0], perish: true },
+  { key: 'mushroom', name: 'Гриб', size: 0.09, energy: 0.9, place: 'ground', eaters: E('beetle', 'shrew', 'mouse', 'hedgehog', 'squirrel'), count: 16, season: [0.3, 0.4, 1, 0.05] },
+  { key: 'seeds', name: 'Семена', size: 0.07, energy: 0.8, place: 'ground', eaters: E('cricket', 'mouse', 'squirrel', 'hare'), count: 20, season: [0.4, 0.7, 1, 0.3] },
+  { key: 'acorn', name: 'Жёлудь', size: 0.07, energy: 1.6, place: 'undertree', eaters: E('mouse', 'squirrel'), count: 20, season: [0.05, 0.2, 1, 0.2] },
+  { key: 'berry', name: 'Ягоды', size: 0.06, energy: 0.8, place: 'bush', eaters: E('fly', 'beetle', 'cricket', 'mouse', 'hedgehog', 'squirrel', 'hare'), count: 18, season: [0.1, 1, 0.7, 0.05], perish: true },
+  { key: 'cheese', name: 'Сыр', size: 0.1, energy: 2.0, place: 'ground', eaters: E('mouse', 'hedgehog', 'squirrel'), count: 4, season: [0.5, 0.5, 0.5, 0.5] },
+  { key: 'worm', name: 'Червяки и личинки', size: 0.07, energy: 1.2, place: 'ground', eaters: E('lizard', 'shrew', 'hedgehog'), count: 22, season: [0.8, 1, 0.8, 0.1] },
+  { key: 'clover', name: 'Клевер', size: 0.08, energy: 0.7, place: 'ground', eaters: E('cricket', 'mouse', 'hare'), count: 22, season: [0.9, 1, 0.6, 0.05] },
 ];
 export const SEASONS = ['Весна', 'Лето', 'Осень', 'Зима'];
+
+// ---- хищники: имя, радиус поимки, сколько секунд сыт после охоты ----
+export const PREDATORS = {
+  dragonfly: { name: 'стрекоза', kill: 0.2, rest: 12 },
+  spider: { name: 'паук', kill: 0.35, rest: 20 },
+  hawk: { name: 'ястреб', kill: 0.45, rest: 80 },
+  snake: { name: 'змея', kill: 0.35, rest: 70 },
+  owl: { name: 'сова', kill: 0.32, rest: 50 },
+  fox: { name: 'лиса', kill: 0.38, rest: 50 },
+  marten: { name: 'куница', kill: 0.4, rest: 50 },
+};
 
 // ---- паттерны поведения для дневника ------------------------------------------------
 // ev — действие, ctx — ситуация; timed — действие длится (считается время, а не случаи)
@@ -186,15 +204,22 @@ export const ETHO_PATTERNS = [
 ];
 
 // ---- стадии тела ------------------------------------------------------------------
+// Стадии эволюции тела. fly — летает; insect — насекомое (мёрзнет зимой); coldBlood — холоднокровное;
+// fur — мех; climber — лазает по деревьям; spines — колючки; armor — панцирь; fast — очень быстрый
 export const STAGES = [
-  { name: 'Муха', from: 0 },
-  { name: 'Жук', from: 0.18 },
-  { name: 'Сверчок', from: 0.38 },
-  { name: 'Землеройка', from: 0.56 },
-  { name: 'Мышь', from: 0.72 },
-  { name: 'Белка', from: 0.86 },
+  { key: 'fly', name: 'Муха', from: 0, fly: true, insect: true },
+  { key: 'bee', name: 'Пчела', from: 0.1, fly: true, insect: true },
+  { key: 'beetle', name: 'Жук', from: 0.2, fly: true, insect: true, armor: true },
+  { key: 'cricket', name: 'Сверчок', from: 0.3, insect: true },
+  { key: 'lizard', name: 'Ящерица', from: 0.4, coldBlood: true },
+  { key: 'shrew', name: 'Землеройка', from: 0.5, fur: true },
+  { key: 'mouse', name: 'Мышь', from: 0.6, fur: true },
+  { key: 'hedgehog', name: 'Ёж', from: 0.7, fur: true, spines: true },
+  { key: 'squirrel', name: 'Белка', from: 0.8, fur: true, climber: true },
+  { key: 'hare', name: 'Заяц', from: 0.9, fur: true, fast: true },
 ];
-export const STAGE_CENTERS = [0.08, 0.28, 0.47, 0.64, 0.79, 0.93];
+export const STAGE_CENTERS = STAGES.map((g, k) => (k + 0.5) / STAGES.length);
+export const stageIndex = (key) => STAGES.findIndex((g) => g.key === key);
 export function stageOf(m) {
   let k = 0;
   for (let i = 0; i < STAGES.length; i++) if (m >= STAGES[i].from) k = i;
@@ -202,18 +227,23 @@ export function stageOf(m) {
 }
 // Свойства тела по морфе: размер, полёт, скорость, запас и расход энергии
 export function bodyOf(m, cfg) {
-  const walk = m >= 0.38;
   const stage = stageOf(m);
+  const S = STAGES[stage];
+  const walk = !S.fly;
   return {
     morph: m,
     stage,
+    key: S.key,
     size: 1 + 5 * m * m,
     walk,
-    climber: stage === 5,          // белка лазает по деревьям
-    insect: !walk,                 // насекомые мёрзнут зимой
-    fur: stage >= 3,               // мех греет
-    maxY: walk ? 0.05 : cfg.arenaTop * (1 - m / 0.38 * 0.85),
-    speed: 1 + 0.8 * m,
+    climber: !!S.climber,
+    insect: !!S.insect,
+    fur: !!S.fur,
+    coldBlood: !!S.coldBlood,
+    spines: !!S.spines,
+    armor: !!S.armor,
+    maxY: walk ? 0.05 : cfg.arenaTop * (1 - m / 0.3 * 0.85),
+    speed: (1 + 0.8 * m) * (S.fast ? 1.5 : S.spines ? 0.7 : 1),
     energyMax: cfg.energyMax * (1 + 1.4 * m),
     drain: 1 + 0.9 * m,
     pad: 0.07 + 0.12 * m,
@@ -768,6 +798,9 @@ export class FlySim {
     for (let k = 0; k < Math.max(1, this.cfg.predatorCount); k++) this.predators.push(this.randomPredator('dragonfly'));
     for (let k = 0; k < (this.cfg.owlCount || 0); k++) this.predators.push(this.randomPredator('owl'));
     for (let k = 0; k < (this.cfg.foxCount || 0); k++) this.predators.push(this.randomPredator('fox'));
+    for (const [kind, n] of [['spider', this.cfg.spiderCount], ['hawk', this.cfg.hawkCount], ['snake', this.cfg.snakeCount], ['marten', this.cfg.martenCount]]) {
+      for (let k = 0; k < (n || 0); k++) this.predators.push(this.randomPredator(kind));
+    }
     this.flies = [];
     for (let i = 0; i < Math.max(1, this.cfg.flyCount); i++) this.flies.push(this.makeFly(i));
     this.hero = 0;
@@ -1096,8 +1129,7 @@ export class FlySim {
   }
 
   canEat(f, food) {
-    const e = FOOD_TYPES[food.kind].eat;
-    return f.body.morph >= e[0] && f.body.morph <= e[1];
+    return FOOD_TYPES[food.kind].eaters.includes(f.body.stage);
   }
 
   // Хищники: стрекоза (днём, ловит летящих насекомых), сова (ночью, ловит зверьков и крупных
@@ -1117,6 +1149,27 @@ export class FlySim {
       p.den = { x: dx, z: dz, y: this.groundAt(dx, dz) };
       Object.assign(p, p.den);
       this.shelters.push({ kind: 'den', x: dx, z: dz, y: p.den.y, heading: a + Math.PI, stash: 0 });
+    } else if (kind === 'spider') {
+      // паутина между стеблем или кустом и соседним местом, на высоте полёта насекомых
+      const hosts = this.obstacles.filter((o) => o.kind === 'plant' || o.kind === 'bush');
+      const o = hosts.length ? hosts[Math.floor(this.rng() * hosts.length)] : { x, z, base: 0, height: 1, r: 0.1 };
+      const a = this.rng() * TAU;
+      p.x = o.x + Math.cos(a) * (o.r + 0.35); p.z = o.z + Math.sin(a) * (o.r + 0.35);
+      p.y = o.base + 0.35 + this.rng() * Math.max(0.3, o.height * 0.7);
+      p.heading = a; p.speed = 0;
+    } else if (kind === 'hawk') {
+      const trees = this.obstacles.filter((o) => o.kind === 'tree').sort((u, v) => (v.base + v.height) - (u.base + u.height));
+      const t = trees[Math.floor(this.rng() * Math.min(3, trees.length))];
+      p.perch = t ? { x: t.x, y: t.base + t.height + 0.2, z: t.z } : { x, y: 5, z };
+      Object.assign(p, p.perch);
+    } else if (kind === 'snake') {
+      const burrows = this.shelters.filter((q) => q.kind === 'burrow');
+      p.home = burrows.length ? burrows[Math.floor(this.rng() * burrows.length)] : { x, y: this.groundAt(x, z), z };
+      Object.assign(p, { x: p.home.x, y: p.home.y, z: p.home.z });
+    } else if (kind === 'marten') {
+      const hollows = this.shelters.filter((q) => q.kind === 'hollow');
+      p.home = hollows.length ? hollows[Math.floor(this.rng() * hollows.length)] : { x, y: this.groundAt(x, z), z };
+      Object.assign(p, { x: p.home.x, y: p.home.y, z: p.home.z });
     }
     return p;
   }
@@ -1124,16 +1177,41 @@ export class FlySim {
   predActive(p, daylight) {
     if (p.kind === 'owl') return daylight < 0.35;
     if (p.kind === 'fox') return daylight < 0.45;
+    if (p.kind === 'marten') return daylight < 0.5;
+    if (p.kind === 'spider') return true;
+    if (p.kind === 'hawk') return daylight > 0.35;
+    if (p.kind === 'snake') return daylight > 0.25 && this.season().k !== 3;   // зимой змея спит
     return daylight > 0.3;
   }
 
   // может ли хищник поймать особь
-  canCatch(p, f) {
-    if (f.state === 'shelter') return false;
-    if (p.kind === 'dragonfly') return !f.body.walk && (f.state === 'fly' || f.state === 'escape');
-    if (p.kind === 'owl') return f.body.stage >= 1;
-    if (p.kind === 'fox') return f.body.walk && !f.inTree;
+  // под кроной дерева или у куста особь не видна с высоты
+  underCover(f) {
+    for (const o of this.obstacles) {
+      const d = Math.hypot(o.x - f.x, o.z - f.z);
+      if ((o.kind === 'tree' && d < o.canopy * 0.9) || (o.kind === 'bush' && d < o.r + 0.25)) return true;
+    }
     return false;
+  }
+
+  // ignoreShelter — проверить, опасен ли хищник этой особи вообще (без учёта укрытия)
+  canCatch(p, f, ignoreShelter = false) {
+    const b = f.body;
+    const airborne = !b.walk && (f.state === 'fly' || f.state === 'escape' || f.state === 'hide');
+    if (f.state === 'shelter' && !ignoreShelter) {
+      // змея проникает в норы за мелкими зверьками
+      return p.kind === 'snake' && f.shelter && f.shelter.kind === 'burrow' && b.stage >= 3 && b.stage <= 6;
+    }
+    switch (p.kind) {
+      case 'dragonfly': return airborne && !b.armor;                         // жука с панцирем не берёт
+      case 'spider': return airborne && !b.armor;                            // паутина держит мух и пчёл
+      case 'owl': return b.stage >= 1 && b.stage !== stageIndex('bee');
+      case 'fox': return b.walk && !f.inTree && !b.spines;                   // ежа лиса не берёт
+      case 'hawk': return b.walk && !f.inTree && !b.spines && b.stage >= 4 && !this.underCover(f);   // охотится только на открытом месте
+      case 'snake': return b.walk && !f.inTree && b.stage >= 3 && b.stage <= 6;
+      case 'marten': return b.walk && !b.spines && b.stage >= 5;            // лазает и по деревьям
+      default: return false;
+    }
   }
 
   makeFly(id) {
@@ -1165,7 +1243,7 @@ export class FlySim {
     if (cause) {
       f.deaths[cause] += 1;
       this.totalDeaths += 1;
-      const who = { dragonfly: 'стрекоза', owl: 'сова', fox: 'лиса' }[f.lastKiller] || 'хищник';
+      const who = (PREDATORS[f.lastKiller] || {}).name || 'хищник';
       const name = f.body ? STAGES[f.body.stage].name : 'Муха';
       this.logEvent(`${name} ${f.id + 1}: ${cause === 'predator' ? `поймала ${who}` : cause === 'cold' ? 'замёрзла' : 'умерла от голода'}`);
     }
@@ -1325,7 +1403,7 @@ export class FlySim {
     // угроза — от ближайшей стрекозы
     let p = this.predators[0], pd = Infinity;
     for (const q of this.predators) {
-      if (!q.active) continue;
+      if (!q.active || q.kind === 'spider' || q.resting) continue;       // паутину особи не чувствуют
       const d = (q.x - f.x) ** 2 + (q.y - f.y) ** 2 + (q.z - f.z) ** 2;
       if (d < pd) { pd = d; p = q; }
     }
@@ -1380,7 +1458,8 @@ export class FlySim {
     const rR = f.brain.meanRate(g.motR);
     f.rL = rL; f.rR = rR;
     // суточный ритм: днём мухи активны, ночью отдыхают
-    const activity = cfg.nightActivity + (1 - cfg.nightActivity) * smooth(clamp((daylight - 0.1) / 0.5, 0, 1));
+    let activity = cfg.nightActivity + (1 - cfg.nightActivity) * smooth(clamp((daylight - 0.1) / 0.5, 0, 1));
+    if (f.body.coldBlood) activity *= clamp(daylight * 1.4, 0.15, 1);   // ящерица греется на солнце
     const threat = Math.max(f.threatL, f.threatR);
     const p = f.nearPred || this.predators[0];
     f.stateTime += dt;
@@ -1449,8 +1528,8 @@ export class FlySim {
       // опасны только те хищники, которые ловят такую особь
       let danger = false;
       for (const q of this.predators) {
-        if (!q.active) continue;
-        const relevant = q.kind === 'dragonfly' ? !f.body.walk : q.kind === 'owl' ? f.body.stage >= 1 : f.body.walk;
+        if (!q.active || q.kind === 'spider') continue;
+        const relevant = this.canCatch(q, f, true);
         const r = q.kind === 'dragonfly' ? 2.5 : 6;   // стрекоза замечает добычу только вблизи
         if (relevant && Math.hypot(q.x - f.x, q.z - f.z) < r) { danger = true; break; }
       }
@@ -1662,15 +1741,17 @@ export class FlySim {
     const sk = this.season().k;
     let cold = [1, 1, 1.1, 1.6][sk];
     if (sk === 3 && f.body.fur) cold = 1.25;
-    if (sk === 3 && f.body.insect && f.state !== 'shelter') cold = 3.2;
+    if (sk === 3 && (f.body.insect || f.body.coldBlood) && f.state !== 'shelter') cold = 3.2;
     const bodyDrain = f.body.drain * cold * (f.state === 'shelter' ? 0.4 : 1);
     f.energy -= drain * bodyDrain * dt;
 
     for (const q of this.predators) {
       if (!q.active || q.cooldown > 0 || !this.canCatch(q, f)) continue;
-      const kill = q.kind === 'owl' ? 0.32 : q.kind === 'fox' ? 0.38 : cfg.predatorKill;
-      if (Math.hypot(q.x - f.x, q.y - f.y, q.z - f.z) < kill * (1 + f.body.morph)) {
-        q.cooldown = q.kind === 'dragonfly' ? cfg.predatorRest : 25;
+      const P = PREDATORS[q.kind] || { kill: cfg.predatorKill, rest: cfg.predatorRest };
+      const kill = q.kind === 'dragonfly' ? cfg.predatorKill : P.kill;
+      const reach = q.kind === 'spider' ? kill : kill * (1 + f.body.morph);
+      if (Math.hypot(q.x - f.x, q.y - f.y, q.z - f.z) < reach) {
+        q.cooldown = q.kind === 'dragonfly' ? cfg.predatorRest : P.rest;
         f.lastKiller = q.kind;
         this.respawn(f, 'predator');
         return;
@@ -1690,6 +1771,8 @@ export class FlySim {
     p.active = this.predActive(p, daylight);
     const g = this.groundAt(p.x, p.z);
     const h = cfg.arenaHalf - 0.2;
+    if (p.kind === 'spider') { p.resting = p.cooldown > 0; p.hunting = false; return; }   // паутина неподвижна
+    if (p.kind === 'hawk' || p.kind === 'snake' || p.kind === 'marten') { this.stepHunter(p, dt, g, h); return; }
     if (!p.active) {
       p.hunting = false;
       if (p.kind === 'owl') {
@@ -1754,6 +1837,59 @@ export class FlySim {
     if (p.kind === 'fox') p.y = g2 + 0.02;
     else p.y = clamp(p.y, g2 + 0.25, g2 + cfg.arenaTop);
     this.pushOut(p, p.kind === 'fox' ? 0.2 : 0.12);
+  }
+
+  // Ястреб, змея, куница: днёвка/ночёвка дома, охота по своим правилам
+  stepHunter(p, dt, g, h) {
+    const home = p.kind === 'hawk' ? p.perch : p.home;
+    if (!p.active) {
+      p.hunting = false;
+      const d = Math.hypot(home.x - p.x, home.z - p.z, home.y - p.y);
+      if (d > 0.15) {
+        const k = Math.min(1, (p.kind === 'hawk' ? 3 : 1.2) * dt / d);
+        p.x += (home.x - p.x) * k; p.z += (home.z - p.z) * k; p.y += (home.y - p.y) * k;
+        p.heading = Math.atan2(home.x - p.x, home.z - p.z) || p.heading;
+        p.speed = 1;
+      } else p.speed = 0;
+      p.resting = d <= 0.3;
+      return;
+    }
+    p.resting = false;
+    // поиск добычи: замечают движение, неподвижных — только вблизи
+    let target = null, bd = Infinity;
+    const range = { hawk: [7, 1.5], snake: [2.5, 1.2], marten: [6, 1.5] }[p.kind];
+    if (p.cooldown <= 0) {
+      for (const f of this.flies) {
+        if (!this.canCatch(p, f)) continue;
+        const d = Math.hypot(f.x - p.x, f.z - p.z, (f.y - p.y) * (p.kind === 'hawk' ? 0.3 : 1));
+        const r = f.state === 'shelter' ? 4 : f.speed < 0.12 ? range[1] : range[0];   // змея находит норы с добычей
+        if (d < r && d < bd) { bd = d; target = f; }
+      }
+    }
+    p.hunting = !!target;
+    const chase = { hawk: 3.0, snake: 1.2, marten: 2.3 }[p.kind];
+    const patrol = { hawk: 1.4, snake: 0.35, marten: 1.0 }[p.kind];
+    if (target) {
+      const want = Math.atan2(target.x - p.x, target.z - p.z);
+      let diff = want - p.heading;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      p.heading += clamp(diff, -3 * dt, 3 * dt);
+      p.speed += (chase - p.speed) * Math.min(1, dt * 2);
+      if (p.kind === 'hawk') p.y += clamp(target.y - p.y, -2, 2) * dt * 2.5;            // пике
+      else if (p.kind === 'marten') p.y += (target.y - p.y) * Math.min(1, dt * 2);      // лезет за белкой на дерево
+    } else {
+      p.heading += (this.rng() - 0.5) * (p.kind === 'snake' ? 3 : 1.5) * dt;
+      p.speed += (patrol - p.speed) * Math.min(1, dt);
+      if (p.kind === 'hawk') p.y += ((g + 5.5) - p.y) * dt * 0.6;                       // парит высоко
+    }
+    p.x += Math.sin(p.heading) * p.speed * dt;
+    p.z += Math.cos(p.heading) * p.speed * dt;
+    if (Math.abs(p.x) > h || Math.abs(p.z) > h) { p.heading += Math.PI; p.x = clamp(p.x, -h, h); p.z = clamp(p.z, -h, h); }
+    const g2 = this.groundAt(p.x, p.z);
+    if (p.kind === 'snake') p.y = g2 + 0.02;
+    else if (p.kind === 'marten') { if (!target || target.y - g2 < 0.3) p.y = g2 + 0.02; p.y = Math.max(p.y, g2 + 0.02); }
+    else p.y = clamp(p.y, g2 + 0.3, g2 + 7);
+    if (p.kind !== 'hawk' && !(p.kind === 'marten' && p.y > g2 + 0.3)) this.pushOut(p, 0.15);
   }
 
   step(dt = 1 / 60) {

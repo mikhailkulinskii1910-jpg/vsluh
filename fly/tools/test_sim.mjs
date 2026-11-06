@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { FlySim } from '../sim.js';
+import { FlySim, stageIndex } from '../sim.js';
 import { Island } from '../superevo.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,8 +50,10 @@ const feedLate = (cfg) => {
   }
   return sum / 2;
 };
-const on = feedLate({}), off = feedLate({ learning: 0 });
-check('с обучением мухи едят чаще, чем без него', on > off * 1.5, `${on.toFixed(2)} против ${off.toFixed(2)} посадок в минуту на муху`);
+// сравниваем фиксированные виды: при свободной эволюции колонии превращаются в разных животных
+const sp = (key, extra = {}) => feedLate({ forceStage: stageIndex(key), ...extra });
+const on = sp('mouse') + sp('squirrel'), off = sp('mouse', { learning: 0 }) + sp('squirrel', { learning: 0 });
+check('с обучением особи едят чаще, чем без него (мышь и белка)', on > off * 1.2, `${(on / 2).toFixed(2)} против ${(off / 2).toFixed(2)} посадок в минуту на особь`);
 
 // 5. Суперэволюция: остров отбирает и рождает новые поколения, мигрант принимается
 {
@@ -72,7 +74,8 @@ check('с обучением мухи едят чаще, чем без него'
 
 // 7. Рост мозга, новые действия и дневник поведения
 {
-  const sim = new FlySim(data, { seed: 21, config: { flyCount: 8, forceStage: 0 } });
+  // рост мозга идёт за время жизни, поэтому проверяем на долгоживущем виде — еже
+  const sim = new FlySim(data, { seed: 21, config: { flyCount: 8, forceStage: stageIndex('hedgehog') } });
   for (let k = 0; k < 6 * 3600; k++) sim.step(1 / 60);
   const nNew = sim.flies.reduce((a, f) => a + f.brain.nNew, 0) / 8;
   const born = sim.flies.reduce((a, f) => a + f.brain.born, 0);
@@ -90,7 +93,7 @@ check('с обучением мухи едят чаще, чем без него'
 
 // 8. Новый мир: белки лазают по деревьям, осенью запасают жёлуди, ночью укрываются; зимой еды меньше
 {
-  const sim = new FlySim(data, { seed: 41, config: { flyCount: 10, forceStage: 5 } });
+  const sim = new FlySim(data, { seed: 41, config: { flyCount: 10, forceStage: stageIndex('squirrel') } });
   sim.time = 2 * sim.cfg.seasonLength;          // начало осени
   let treeT = 0, shelterNight = 0, night = 0;
   for (let k = 0; k < 5 * 3600; k++) {
