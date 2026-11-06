@@ -171,6 +171,9 @@
         <div class="row"><span>Посадок всего / погибло</span><b id="tbEaten">–</b></div>
         <div class="row"><span>Поколений (максимум)</span><b id="tbGen">–</b></div>
         <div class="row"><span>Тела</span><b id="tbStages">–</b></div>
+        <div class="toolbar" style="grid-template-columns:1fr;margin-top:6px"><div><label for="turboThreads">Потоков</label>
+          <select id="turboThreads"><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></div></div>
+        <div class="row"><span>Потоки: скорость каждого</span><b id="tbThreads">–</b></div>
         <label class="toggle"><input type="checkbox" id="turboLite"> Облегчённый расчёт: примерно вдвое быстрее, но особи учатся хуже</label>
         <p class="muted" id="tbNote" style="margin-top:8px"></p>
       </div>
@@ -2761,89 +2764,156 @@ async function copyGenome() {
   }
 }
 
-// ---- турборежим ×1000: сад в фоновом потоке без изображения ----------------------
+// ---- турборежим ×1000: сад в фоновых потоках без изображения --------------------
+// Колония делится на группы, каждый поток ведёт свою группу в собственной копии сада
+// (еды и стрекоз — пропорционально размеру группы). Потоки идут синхронно порциями
+// по несколько секунд симуляции; раз в минуту симуляции лучшая особь мигрирует в остальные потоки.
 const TURBO_WORKER = `
-let token = 0, sim = null;
-self.onmessage = async (e) => {
+let sim = null, id = 0;
+const score = (f) => (f.eatenLife * 60) / Math.max(f.lifeTime, 30);
+function bestGenome() {
+  let b = sim.flies[0];
+  for (const f of sim.flies) if (score(f) > score(b)) b = f;
+  const g = sim.exportGenomes()[sim.flies.indexOf(b)];
+  g.score = score(b);
+  return g;
+}
+self.onmessage = (e) => {
   const m = e.data;
-  if (m.type === 'start') {
-    const my = ++token;
+  if (m.type === 'init') {
+    id = m.id;
     sim = new FlySim(m.data, { mode: m.mode, seed: m.seed, config: m.config });
     sim.time = m.time;
     sim.importGenomes(m.genomes);
-    const t0 = performance.now(), start = sim.time, target = m.target;
-    while (my === token) {
-      const c0 = performance.now();
-      while (performance.now() - c0 < 250) {
-        // не быстрее цели (×1000)
-        if ((sim.time - start) > target * (performance.now() - t0) / 1000) break;
-        for (let k = 0; k < 20; k++) sim.step(m.dt);
-      }
-      const real = (performance.now() - t0) / 1000;
-      const c = sim.learningCurve().slice(-4);
-      self.postMessage({ type: 'stats', time: sim.time, lived: sim.time - start, speed: (sim.time - start) / Math.max(real, 1e-3),
-        eaten: sim.totalEaten, deaths: sim.totalDeaths, rate: c.length ? c.reduce((a, b) => a + b.feed, 0) / c.length : 0,
-        stages: [0, 1, 2, 3, 4].map((k) => sim.flies.filter((f) => f.body.stage === k).length),
-        maxGen: Math.max(...sim.flies.map((f) => f.generation)) });
-      await new Promise((r) => setTimeout(r, 0));
-    }
+    self.postMessage({ type: 'ready', id });
+  } else if (m.type === 'run') {
+    const t0 = performance.now(), end = sim.time + m.seconds;
+    while (sim.time < end) sim.step(m.dt);
+    const c = sim.learningCurve().slice(-4);
+    self.postMessage({ type: 'done', id, ms: performance.now() - t0, stats: {
+      time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths,
+      rate: c.length ? c.reduce((a, b) => a + b.feed, 0) / c.length : 0, n: sim.flies.length,
+      stages: [0, 1, 2, 3, 4].map((k) => sim.flies.filter((f) => f.body.stage === k).length),
+      maxGen: Math.max(...sim.flies.map((f) => f.generation)), best: m.wantBest ? bestGenome() : null } });
+  } else if (m.type === 'migrant') {
+    // мигрант заменяет худшую особь группы
+    let w = sim.flies[0];
+    for (const f of sim.flies) if (score(f) < score(w)) w = f;
+    const g = m.genome;
+    sim.respawn(w, null, { id: -1, learner: { W: Float32Array.from(g.W) }, traits: g.traits, generation: g.generation, body: { morph: g.morph }, brain: g.grown });
   } else if (m.type === 'stop') {
-    token++;
-    if (sim) self.postMessage({ type: 'final', genomes: sim.exportGenomes(), time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths });
+    self.postMessage({ type: 'final', id, genomes: sim.exportGenomes(), time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths });
   }
 };
 `;
-let turboWorker = null, turboOn = false, turboBase = null;
+let turbo = null;           // состояние запущенного турборежима
+let turboOn = false;
 
 function startTurbo() {
-  if (turboOn) stopTurbo(() => startTurbo());
-  turboOn = true;
-  turboBase = { eaten: sim.totalEaten, deaths: sim.totalDeaths };
+  if (turboOn) { stopTurbo(() => startTurbo()); return; }
   const lite = $('turboLite').checked;
+  const N = sim.flies.length;
+  const K = Math.max(1, Math.min(Number($('turboThreads').value), N));
+  const genomes = sim.exportGenomes();
+  const groups = Array.from({ length: K }, () => []);
+  for (let i = 0; i < N; i++) groups[i % K].push(i);   // особи раздаются по потокам по кругу
+  const base = { ...worldConfig(), ...(lite ? { brainEvery: 2 } : {}) };
   const src = document.getElementById('core').textContent + '\n' + TURBO_WORKER;
-  turboWorker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
-  turboWorker.onmessage = (e) => onTurbo(e.data);
-  turboWorker.onerror = (e) => { $('tbNote').textContent = 'Ошибка турборежима: ' + e.message; };
-  const cfg = { ...worldConfig(), ...(lite ? { brainEvery: 2 } : {}) };
-  turboWorker.postMessage({ type: 'start', data, mode: sim.mode, seed: 1 + Math.floor(Math.random() * 1e6), config: cfg,
-    genomes: sim.exportGenomes(), time: sim.time, dt: lite ? 1 / 30 : 1 / 60, target: 1000 });
+  const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+  turbo = { K, groups, workers: [], stats: [], ms: [], ready: 0, pending: 0, chunk: 2, dt: lite ? 1 / 30 : 1 / 60,
+            startTime: sim.time, startReal: performance.now(), lived: 0, nextMigrate: 60, stopping: null, finals: [],
+            base: { eaten: sim.totalEaten, deaths: sim.totalDeaths } };
+  turboOn = true;
+  groups.forEach((g, i) => {
+    const w = new Worker(url);
+    w.onmessage = (e) => onTurbo(e.data);
+    w.onerror = (e) => { $('tbNote').textContent = 'Ошибка турборежима: ' + e.message; };
+    const frac = g.length / N;
+    const cfg = { ...base, flyCount: g.length, foodCount: Math.max(4, Math.round(sim.cfg.foodCount * frac)),
+                  predatorCount: Math.max(1, Math.round(sim.cfg.predatorCount * frac)) };
+    w.postMessage({ type: 'init', id: i, data, mode: sim.mode, seed: 1 + i * 104729 + Math.floor(Math.random() * 1e5),
+                    config: cfg, genomes: g.map((k) => genomes[k]), time: sim.time });
+    turbo.workers.push(w);
+  });
   $('turboPanel').hidden = false;
-  $('tbNote').textContent = `Особей: ${sim.flies.length}. ×1000 достижимо только для 1–2 особей; на каждую особь нужно около 3 мс процессора на секунду симуляции.`;
+  $('tbNote').textContent = `Особей: ${N}, потоков: ${K}, ядер процессора: ${navigator.hardwareConcurrency || '?'}. Особи из разных потоков не делят еду и не сталкиваются, но раз в минуту симуляции лучшая особь мигрирует в остальные потоки.`;
 }
 
-let turboDone = null;
-function stopTurbo(then) {
-  if (!turboOn || !turboWorker) { turboOn = false; $('turboPanel').hidden = true; if (then) then(); return; }
-  turboDone = then || null;
-  turboWorker.postMessage({ type: 'stop' });
+function turboRound() {
+  const T = turbo;
+  if (!T) return;
+  if (T.stopping) { T.workers.forEach((w) => w.postMessage({ type: 'stop' })); return; }
+  T.pending = T.K;
+  T.roundStart = performance.now();
+  const wantBest = T.lived + T.chunk >= T.nextMigrate;
+  T.workers.forEach((w) => w.postMessage({ type: 'run', seconds: T.chunk, dt: T.dt, wantBest }));
 }
 
 function onTurbo(m) {
-  if (m.type === 'stats') {
-    $('tbSpeed').textContent = `×${Math.round(m.speed)}`;
-    $('tbTime').textContent = m.lived >= 3600 ? `${(m.lived / 3600).toFixed(1)} ч` : `${Math.round(m.lived / 60)} мин`;
-    $('tbDays').textContent = (m.time / sim.cfg.dayLength).toFixed(1);
-    $('tbRate').textContent = m.rate.toFixed(2);
-    $('tbEaten').textContent = `${m.eaten} / ${m.deaths}`;
-    $('tbGen').textContent = m.maxGen;
-    $('tbStages').textContent = STAGES.map((g, k) => m.stages[k] ? `${g.name.toLowerCase()} ${m.stages[k]}` : '').filter(Boolean).join(', ');
+  const T = turbo;
+  if (!T) return;
+  if (m.type === 'ready') {
+    if (++T.ready === T.K) { T.startReal = performance.now(); turboRound(); }
+  } else if (m.type === 'done') {
+    T.stats[m.id] = m.stats;
+    T.ms[m.id] = m.ms;
+    if (--T.pending > 0) return;
+    // все потоки прошли порцию: миграция, статистика, следующая порция
+    const real = (performance.now() - T.roundStart) / 1000;
+    T.lived += T.chunk;
+    if (T.lived >= T.nextMigrate && T.K > 1) {
+      T.nextMigrate += 60;
+      let best = null, from = -1;
+      T.stats.forEach((st, i) => { if (st.best && (!best || st.best.score > best.score)) { best = st.best; from = i; } });
+      if (best) T.workers.forEach((w, i) => { if (i !== from) w.postMessage({ type: 'migrant', genome: best }); });
+    }
+    const speed = T.lived / ((performance.now() - T.startReal) / 1000);
+    showTurboStats(speed);
+    // порция подбирается так, чтобы круг занимал ~0,6 с (меньше ожидания на синхронизации); скорость не выше ×1000
+    T.chunk = Math.max(0.5, Math.min(600, T.chunk * 0.6 / Math.max(real, 1e-3)));
+    const wait = Math.max(0, (T.chunk / 1000 - real) * 1000);
+    setTimeout(turboRound, wait);
   } else if (m.type === 'final') {
-    // особи возвращаются в сад со всем, что накопили
-    sim.importGenomes(m.genomes);
-    sim.time = m.time;
-    const lived = m.time - (sim.turboStartTime ?? m.time);
-    sim.totalEaten = turboBase.eaten + m.eaten;
-    sim.totalDeaths = turboBase.deaths + m.deaths;
-    sim.logEvent(`Турборежим: сад прожил ${Math.round(lived / 60)} мин симуляции`);
+    T.finals[m.id] = m;
+    if (T.finals.filter(Boolean).length < T.K) return;
+    // особи возвращаются в сад со всем, что накопили, в прежнем порядке
+    const list = [];
+    T.groups.forEach((g, i) => g.forEach((k, j) => { list[k] = T.finals[i].genomes[j]; }));
+    sim.importGenomes(list);
+    sim.time = T.startTime + T.lived;
+    sim.totalEaten = T.base.eaten + T.finals.reduce((a, f) => a + f.eaten, 0);
+    sim.totalDeaths = T.base.deaths + T.finals.reduce((a, f) => a + f.deaths, 0);
+    sim.logEvent(`Турборежим: сад прожил ${Math.round(T.lived / 60)} мин симуляции в ${T.K} потоках`);
     lastLogKey = '';
-    turboWorker.terminate();
-    turboWorker = null;
+    T.workers.forEach((w) => w.terminate());
+    const next = T.stopping;
+    turbo = null;
     turboOn = false;
     $('turboPanel').hidden = true;
     lastW = -1;
-    const next = turboDone; turboDone = null;
-    if (next) next();
+    if (typeof next === 'function') next();
   }
+}
+
+function showTurboStats(speed) {
+  const T = turbo, st = T.stats.filter(Boolean);
+  const n = st.reduce((a, x) => a + x.n, 0);
+  $('tbSpeed').textContent = `×${Math.round(speed)}`;
+  $('tbTime').textContent = T.lived >= 3600 ? `${(T.lived / 3600).toFixed(1)} ч` : `${Math.round(T.lived / 60)} мин`;
+  $('tbDays').textContent = ((T.startTime + T.lived) / sim.cfg.dayLength).toFixed(1);
+  $('tbRate').textContent = (st.reduce((a, x) => a + x.rate * x.n, 0) / Math.max(1, n)).toFixed(2);
+  $('tbEaten').textContent = `${st.reduce((a, x) => a + x.eaten, 0)} / ${st.reduce((a, x) => a + x.deaths, 0)}`;
+  $('tbGen').textContent = Math.max(...st.map((x) => x.maxGen));
+  const stages = [0, 0, 0, 0, 0];
+  st.forEach((x) => x.stages.forEach((c, k) => { stages[k] += c; }));
+  $('tbStages').textContent = STAGES.map((g, k) => stages[k] ? `${g.name.toLowerCase()} ${stages[k]}` : '').filter(Boolean).join(', ');
+  $('tbThreads').textContent = T.ms.map((ms) => `×${Math.round(T.chunk / Math.max(ms / 1000, 1e-3))}`).join(' · ');
+}
+
+function stopTurbo(then) {
+  if (!turboOn || !turbo) { turboOn = false; $('turboPanel').hidden = true; if (then) then(); return; }
+  turbo.stopping = then || true;
+  if (turbo.pending === 0 && turbo.ready === turbo.K) turboRound();   // между порциями — сразу
 }
 
 // ---- суперэволюция: острова в фоновых потоках ---------------------------------
@@ -3357,11 +3427,16 @@ $('morphSpeed').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('flyCount').addEventListener('change', () => leaveTurbo(newSim));
 $('speed').addEventListener('change', (e) => {
   const v = Number(e.target.value);
-  if (v === 1000) { sim.turboStartTime = sim.time; startTurbo(); return; }
+  if (v === 1000) { startTurbo(); return; }
   if (turboOn) stopTurbo();
   speed = v;
 });
-$('turboLite').addEventListener('change', () => { if (turboOn) stopTurbo(() => { sim.turboStartTime = sim.time; startTurbo(); }); });
+$('turboLite').addEventListener('change', () => { if (turboOn) stopTurbo(() => startTurbo()); });
+$('turboThreads').addEventListener('change', () => { if (turboOn) stopTurbo(() => startTurbo()); });
+{
+  const cores = navigator.hardwareConcurrency || 2;
+  $('turboThreads').value = String(cores >= 8 ? 4 : cores >= 4 ? 2 : 1);
+}
 $('pauseBtn').addEventListener('click', (e) => {
   paused = !paused;
   e.target.textContent = paused ? 'Продолжить' : 'Пауза';
