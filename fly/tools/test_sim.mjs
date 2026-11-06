@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { FlySim } from '../sim.js';
+import { Island } from '../superevo.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const data = JSON.parse(readFileSync(join(here, '../data/fly_network.json'), 'utf8'));
@@ -51,6 +52,15 @@ const feedLate = (cfg) => {
 };
 const on = feedLate({}), off = feedLate({ learning: 0 });
 check('с обучением мухи едят чаще, чем без него', on > off * 1.5, `${on.toFixed(2)} против ${off.toFixed(2)} посадок в минуту на муху`);
+
+// 5. Суперэволюция: остров отбирает и рождает новые поколения, мигрант принимается
+{
+  const isl = new Island(data, { seed: 5, flyCount: 8 });
+  isl.run(200);
+  const st = isl.stats();
+  isl.receiveMigrant(isl.best());
+  check('остров суперэволюции работает', st.selections >= 3 && st.maxGen >= 2 && Number.isFinite(st.rate), `отборов ${st.selections}, поколений ${st.maxGen}`);
+}
 
 console.log(failed ? `\nПровалено проверок: ${failed}` : '\nВсе проверки пройдены');
 process.exit(failed ? 1 : 0);

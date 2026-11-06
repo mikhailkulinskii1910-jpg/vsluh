@@ -12,7 +12,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
 parts = []
-for name in ["genome.js", "sim.js", "evolution.js"]:
+for name in ["genome.js", "sim.js", "evolution.js", "superevo.js"]:
     lines = []
     for line in (root / name).read_text(encoding="utf-8").splitlines():
         if line.startswith("import "):

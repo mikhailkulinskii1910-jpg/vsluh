@@ -69,7 +69,7 @@ export const CONFIG = {
   feedRate: 22,         // сколько энергии муха получает за секунду еды
   foodAmount: 70,       // средний запас фрукта
   foodRegrow: 14,       // через сколько секунд вырастает новый фрукт
-  foodCount: 44,
+  foodCount: 90,
   // запах и ветер
   plumeSpread: 0.25,    // ширина шлейфа у источника
   plumeGrowth: 0.3,     // расширение шлейфа на единицу расстояния по ветру
@@ -78,10 +78,13 @@ export const CONFIG = {
   windSpeed: 0.35,
   antennaOffset: 0.2,   // полубаза антенн (шире реальной, чтобы различать стороны в грубом поле запаха)
   // мир
-  arenaHalf: 8.0,
-  arenaTop: 2.5,
-  stoneCount: 24,
-  plantCount: 14,
+  arenaHalf: 12.0,      // сад 24×24
+  arenaTop: 6.0,        // высота до крон деревьев
+  stoneCount: 40,
+  plantCount: 24,
+  treeCount: 10,        // фруктовые деревья
+  treeFoodShare: 0.35,  // доля фруктов, висящих на деревьях
+  predatorCount: 3,
   dayLength: 150,       // секунд на полные сутки
   // хищник (стрекоза)
   predatorSpeed: 0.6,
@@ -411,7 +414,8 @@ export class FlySim {
     this.obstacles = this.makeObstacles();
     this.food = [];
     for (let k = 0; k < this.cfg.foodCount; k++) this.food.push(this.randomFood(k % 3));
-    this.predator = this.randomPredator();
+    this.predators = [];
+    for (let k = 0; k < Math.max(1, this.cfg.predatorCount); k++) this.predators.push(this.randomPredator());
     this.flies = [];
     for (let i = 0; i < Math.max(1, this.cfg.flyCount); i++) this.flies.push(this.makeFly(i));
     this.hero = 0;
@@ -419,6 +423,7 @@ export class FlySim {
 
   // Совместимость: «муха» — та, за которой следит камера
   get fly() { return this.flies[this.hero]; }
+  get predator() { return this.predators[0]; }
   get rate() { return this.fly.brain.rate; }
   get lives() { return this.fly.lives; }
   get eaten() { return this.fly.eaten; }
@@ -468,7 +473,7 @@ export class FlySim {
   makeObstacles() {
     const out = [];
     const h = this.cfg.arenaHalf;
-    const place = (kind, count, rMin, rMax, hMin, hMax) => {
+    const place = (kind, count, rMin, rMax, hMin, hMax, gap = 0.5) => {
       let made = 0, tries = 0;
       while (made < count && tries < 2000) {
         tries++;
@@ -476,11 +481,15 @@ export class FlySim {
         const x = (this.rng() * 2 - 1) * (h - r - 0.4);
         const z = (this.rng() * 2 - 1) * (h - r - 0.4);
         if (Math.hypot(x, z) < 0.9) continue;
-        if (out.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + 0.5)) continue;
-        out.push({ kind, x, z, r, height: hMin + this.rng() * (hMax - hMin), seed: Math.floor(this.rng() * 1e6) });
+        if (out.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + r + Math.max(gap, o.gap || 0))) continue;
+        const height = hMin + this.rng() * (hMax - hMin);
+        const o = { kind, x, z, r, height, gap, seed: Math.floor(this.rng() * 1e6) };
+        if (kind === 'tree') { o.canopy = 1.0 + this.rng() * 0.7; o.canopyY = height * 0.78; }
+        out.push(o);
         made++;
       }
     };
+    place('tree', this.cfg.treeCount, 0.22, 0.36, 3.0, 5.0, 2.6);
     place('stone', this.cfg.stoneCount, 0.18, 0.4, 0.18, 0.55);
     place('plant', this.cfg.plantCount, 0.05, 0.08, 1.2, 2.1);
     return out;
@@ -496,8 +505,17 @@ export class FlySim {
     const max = this.cfg.foodAmount * (0.6 + 0.8 * this.rng());
     const h = this.cfg.arenaHalf - 0.4;
     const stones = this.obstacles.filter((o) => o.kind === 'stone');
-    let x = 0, z = 0, base = 0;
-    if (stones.length && this.rng() < 0.3) {
+    const trees = this.obstacles.filter((o) => o.kind === 'tree');
+    let x = 0, z = 0, base = 0, hanging = false;
+    if (trees.length && this.rng() < this.cfg.treeFoodShare) {
+      // фрукт висит на ветке в кроне
+      const t = trees[Math.floor(this.rng() * trees.length)];
+      const a = this.rng() * TAU, rr = t.r + 0.25 + this.rng() * (t.canopy * 0.7);
+      x = t.x + Math.cos(a) * rr;
+      z = t.z + Math.sin(a) * rr;
+      base = t.canopyY - t.canopy * (0.3 + this.rng() * 0.5);
+      hanging = true;
+    } else if (stones.length && this.rng() < 0.3) {
       const o = stones[Math.floor(this.rng() * stones.length)];
       x = o.x + (this.rng() - 0.5) * o.r * 0.6;
       z = o.z + (this.rng() - 0.5) * o.r * 0.6;
@@ -509,7 +527,7 @@ export class FlySim {
         if (this.clearOfObstacles(x, z, 0.15)) break;
       }
     }
-    return { kind, x, z, y: base + size * 0.7, base, size, amount: max, max, alive: true, regrowAt: 0 };
+    return { kind, x, z, y: base + size * 0.7, base, size, amount: max, max, alive: true, regrowAt: 0, hanging };
   }
 
   randomPredator() {
@@ -543,7 +561,8 @@ export class FlySim {
     return bs > 0 ? best : null;
   }
 
-  respawn(f, cause) {
+  // forcedParent: родитель при принудительном отборе (суперэволюция) или мигрант с другого острова
+  respawn(f, cause, forcedParent = null) {
     const cfg = this.cfg;
     if (cause) {
       f.deaths[cause] += 1;
@@ -552,20 +571,25 @@ export class FlySim {
     }
     // Новая муха: свои качества и либо выученные синапсы лучшей мухи с мутациями,
     // либо почти нулевые синапсы (наивная муха)
-    const parent = cause && cfg.inherit ? this.bestParent(f) : null;
+    const parent = forcedParent || (cause && cfg.inherit ? this.bestParent(f) : null);
     if (parent) {
       f.learner.copyFrom(parent.learner, this.rng, cfg.mutation);
       f.generation = parent.generation + 1;
-      f.parent = parent.id;
-      this.logEvent(`Родилась муха ${f.id + 1}: потомок мухи ${parent.id + 1}, поколение ${f.generation}`);
+      f.parent = parent.id >= 0 ? parent.id : null;
+      if (!forcedParent) this.logEvent(`Родилась муха ${f.id + 1}: потомок мухи ${parent.id + 1}, поколение ${f.generation}`);
     } else {
       f.learner.randomize(this.rng, 0.002);
       f.generation = cause ? 1 : (f.generation || 1);
       f.parent = null;
     }
+    // качества: у потомка — родительские с небольшой мутацией (наследуются), иначе случайные
     const sp = cfg.traitSpread;
-    const trait = () => 1 + sp * (this.rng() * 2 - 1);
-    f.traits = { odor: trait(), contact: trait(), motor: trait(), learn: trait(), explore: trait() };
+    const keys = ['odor', 'contact', 'motor', 'learn', 'explore'];
+    f.traits = {};
+    for (const k of keys) {
+      const v = parent && parent.traits ? parent.traits[k] * (1 + 0.06 * normal(this.rng)) : 1 + sp * (this.rng() * 2 - 1);
+      f.traits[k] = clamp(v, 0.5, 1.6);
+    }
     const h = this.cfg.arenaHalf - 0.8;
     let x = 0, z = 0;
     for (let k = 0; k < 60; k++) {
@@ -682,7 +706,13 @@ export class FlySim {
     f.odorR = this.odorAt(qx, f.y, qz);
     f.contactL = Math.max(this.wallProximity(lx, lz), this.obstacleProx(lx, f.y, lz));
     f.contactR = Math.max(this.wallProximity(qx, qz), this.obstacleProx(qx, f.y, qz));
-    const p = this.predator;
+    // угроза — от ближайшей стрекозы
+    let p = this.predators[0], pd = Infinity;
+    for (const q of this.predators) {
+      const d = (q.x - f.x) ** 2 + (q.y - f.y) ** 2 + (q.z - f.z) ** 2;
+      if (d < pd) { pd = d; p = q; }
+    }
+    f.nearPred = p;
     const sense = this.cfg.predatorSense;
     f.threatL = Math.max(0, 1 - Math.hypot(lx - p.x, f.y - p.y, lz - p.z) / sense);
     f.threatR = Math.max(0, 1 - Math.hypot(qx - p.x, f.y - p.y, qz - p.z) / sense);
@@ -730,7 +760,7 @@ export class FlySim {
     // суточный ритм: днём мухи активны, ночью отдыхают
     const activity = cfg.nightActivity + (1 - cfg.nightActivity) * smooth(clamp((daylight - 0.1) / 0.5, 0, 1));
     const threat = Math.max(f.threatL, f.threatR);
-    const p = this.predator;
+    const p = f.nearPred || this.predators[0];
     f.stateTime += dt;
 
     // Рефлекс бегства: резкий взлёт в сторону от стрекозы (у настоящей мухи —
@@ -911,8 +941,7 @@ export class FlySim {
   }
 
   // Стрекоза охотится на летящих мух поблизости, иначе патрулирует
-  stepPredator(dt) {
-    const p = this.predator;
+  stepPredator(p, dt) {
     const cfg = this.cfg;
     p.cooldown = Math.max(0, p.cooldown - dt);
     let target = null, bd = cfg.predatorChase;
@@ -952,7 +981,7 @@ export class FlySim {
     this.time += dt;
     const daylight = this.daylight();
     this.updateWind(dt);
-    this.stepPredator(dt);
+    for (const p of this.predators) this.stepPredator(p, dt);
     for (const f of this.flies) this.stepFly(f, dt, daylight);
     // мухи не проходят сквозь друг друга
     const fl = this.flies;
