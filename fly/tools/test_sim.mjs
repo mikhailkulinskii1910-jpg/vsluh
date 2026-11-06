@@ -70,5 +70,23 @@ check('с обучением мухи едят чаще, чем без него'
   check('тело эволюционирует под отбором', st.morph > 0.2, `средняя морфа ${st.morph.toFixed(2)}, стадии ${JSON.stringify(st.stages)}`);
 }
 
+// 7. Рост мозга, новые действия и дневник поведения
+{
+  const sim = new FlySim(data, { seed: 21, config: { flyCount: 8, forceStage: 0 } });
+  for (let k = 0; k < 6 * 3600; k++) sim.step(1 / 60);
+  const nNew = sim.flies.reduce((a, f) => a + f.brain.nNew, 0) / 8;
+  const born = sim.flies.reduce((a, f) => a + f.brain.born, 0);
+  const finite = sim.flies.every((f) => f.brain.rate.every(Number.isFinite) && f.brain.gW.every(Number.isFinite));
+  check('мозг растёт новыми нейронами', nNew > 2 && born > 0 && finite, `в среднем ${nNew.toFixed(1)} новых нейронов, родилось ${born}`);
+  const eth = sim.ethogram();
+  const acts = eth.find((e) => e.key === 'freezeThreat').events + eth.find((e) => e.key === 'dashFood').events;
+  check('мозг запускает новые действия, дневник их видит', acts > 5 && eth.every((e) => Number.isFinite(e.lift)), `замираний и рывков: ${acts.toFixed(0)}`);
+  // перенос вместе с новыми нейронами без потерь
+  const g = sim.exportGenomes();
+  const sim2 = new FlySim(data, { seed: 22, config: { flyCount: 8 } });
+  sim2.importGenomes(g);
+  check('новые нейроны переносятся между потоками', sim2.flies.every((f, i) => f.brain.nNew === sim.flies[i].brain.nNew && f.brain.gN === sim.flies[i].brain.gN));
+}
+
 console.log(failed ? `\nПровалено проверок: ${failed}` : '\nВсе проверки пройдены');
 process.exit(failed ? 1 : 0);

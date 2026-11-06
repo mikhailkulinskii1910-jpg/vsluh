@@ -141,6 +141,8 @@
   </div>
   <label class="toggle"><input type="checkbox" id="learning" checked> Обучение дофамином: мухи сами учатся искать еду и облетать препятствия</label>
   <label class="toggle"><input type="checkbox" id="inherit" checked> Новая муха наследует выученное лучшей мухой (с небольшими отличиями)</label>
+  <label class="toggle"><input type="checkbox" id="neurogenesis" checked> Рост мозга: рождаются новые нейроны, полезные связи крепнут, ненужные отмирают</label>
+  <label class="toggle"><input type="checkbox" id="gates" checked> Новые действия: замирание и рывок — мозг сам учится, когда их запускать</label>
   <label class="toggle"><input type="checkbox" id="resume" checked> Продолжать с выученного мозга, сохранённого в этом браузере <button id="forgetBtn" style="margin-left:6px;padding:3px 8px;font-size:12px">Забыть</button></label>
   <label class="toggle"><input type="checkbox" id="reflexes"> Подсказки-правила поиска еды (полёт по шлейфу и подлёт), только для сравнения</label>
 </details>
@@ -171,6 +173,8 @@
         <div class="row"><span>Посадок всего / погибло</span><b id="tbEaten">–</b></div>
         <div class="row"><span>Поколений (максимум)</span><b id="tbGen">–</b></div>
         <div class="row"><span>Тела</span><b id="tbStages">–</b></div>
+        <div class="row"><span>Новых нейронов в мозге (в среднем)</span><b id="tbBrain">–</b></div>
+        <div class="row"><span>Освоенные паттерны</span><b id="tbPatterns">–</b></div>
         <div class="toolbar" style="grid-template-columns:1fr;margin-top:6px"><div><label for="turboThreads">Потоков</label>
           <select id="turboThreads"><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option></select></div></div>
         <div class="row"><span>Потоки: скорость каждого</span><b id="tbThreads">–</b></div>
@@ -233,8 +237,10 @@
         <p class="muted" style="margin-top:12px">Скорость задаёт коннектом, выученная команда её ускоряет или замедляет. Поворот складывается из сигнала коннектома и выученной команды, подъём — выученная команда. Посадка на фрукт по касанию, рефлекс бегства от стрекозы и сон ночью заданы правилами.</p>
       </div>
       <div class="card">
-        <h2>Новые связи</h2>
-        <p class="muted">Между нейронами, которые разрядились одновременно, вырастают новые синапсы. Дофамин их укрепляет, а неподкреплённые слабеют и отмирают («используй или потеряешь»). Выросшие связи передаются потомкам. На изображении мозга они показаны линиями.</p>
+        <h2>Рост мозга и новые связи</h2>
+        <p class="muted">Между нейронами, которые разрядились одновременно, вырастают синапсы. Рядом с активными участками рождаются новые нейроны со своими входами и выходами — чаще, когда жизнь приносит награду. Связи, по которым идёт совместная активность, крепнут; дофамин усиливает полезные и ослабляет вредные; молчащие связи отмирают, а нейрон без входов или выходов погибает. Всё выросшее передаётся потомкам. Новые нейроны — белые точки, выросшие связи — линии.</p>
+        <div class="row"><span>Нейронов в мозге</span><b id="neuronsNow">–</b></div>
+        <div class="row"><span>Родилось / погибло нейронов за жизнь</span><b id="neuronsBorn">–</b></div>
         <div class="row"><span>Выросших синапсов сейчас</span><b id="grownNow">–</b></div>
         <div class="row"><span>Образовалось за жизнь</span><b id="grownFormed">–</b></div>
         <div class="row"><span>Отмерло за жизнь</span><b id="grownPruned">–</b></div>
@@ -249,7 +255,7 @@
         <p class="muted">Всплеск дофамина: посадка на фрукт, еда, усиление запаха. Провал: удар о бортик, камень или стебель, стрекоза рядом. Синапсы меняются на «дофамин минус ожидание».</p>
         <h2 style="margin-top:14px">Выученные синапсы</h2>
         <div id="weights" class="muted"></div>
-        <p class="muted" style="margin-top:8px">Поворот учится на разнице «слева минус справа», подъём и скорость — на сумме сторон и постоянном смещении. Зелёный — положительный вес, красный — отрицательный.</p>
+        <p class="muted" style="margin-top:8px">Поворот учится на разнице «слева минус справа», остальные команды — на сумме сторон и смещении. Замирание и рывок запускаются с вероятностью, которая растёт, если после них приходит дофамин. Зелёный — положительный вес, красный — отрицательный.</p>
       </div>
     </div>
   </section>
@@ -334,6 +340,8 @@
         <div class="row"><span>Лучший остров: посадок в минуту на муху</span><b id="supRate">–</b></div>
         <div class="row"><span>Чемпион: посадок в минуту</span><b id="supChamp">–</b></div>
         <div class="row"><span>Тела на островах</span><b id="supStages">–</b></div>
+        <div class="row"><span>Размер мозга (в среднем)</span><b id="supBrain">–</b></div>
+        <div class="row"><span>Освоенные паттерны</span><b id="supPatterns">–</b></div>
         <div class="row"><span>Переселений в сад</span><b id="supMoves">0</b></div>
         <canvas id="superChart" class="chart" width="880" height="240" style="margin-top:8px"></canvas>
         <p class="muted">Линии — острова: посадок на фрукт в минуту на муху по времени симуляции.</p>
@@ -371,6 +379,11 @@
           <span style="--c:#ff7043">ударов в минуту на муху</span>
         </div>
         <p class="muted" id="learnNote">Кривая появится через минуту симуляции. Ускорьте время, чтобы увидеть обучение быстрее.</p>
+      </div>
+      <div class="card">
+        <h2>Паттерны поведения</h2>
+        <p class="muted">Дневник следит, в какой ситуации особи что делают, за последние ~10 минут симуляции. Подъём — во сколько раз действие чаще случается в своей ситуации, чем в среднем. «Освоен» — подъём от ×2,5 и достаточно случаев; «избегается» — действие в этой ситуации реже обычного. Сами действия никто не включает по правилу: мозг учится этому дофамином.</p>
+        <div id="ethoList"></div>
       </div>
       <div class="card">
         <h2>Все мухи</h2>
@@ -548,8 +561,23 @@ const CONFIG = {
   growInit: 0.12,       // начальный вес нового синапса
   growLearn: 0.6,       // скорость изменения новых синапсов дофамином
   growDecay: 0.01,      // забывание: неподкреплённый синапс слабеет
+  growHebb: 0.05,       // совместная активность сама укрепляет связь (правило Хебба)
+  growMax: 0.5,         // предел силы выросшего синапса
   pruneBelow: 0.08,     // слабее этого — удаляется
-  growCap: 600,         // максимум выросших синапсов на мозг
+  growCap: 1200,        // максимум выросших синапсов на мозг
+  // нейрогенез: мозг растёт новыми нейронами
+  neurogenesis: 1,
+  newCap: 150,          // максимум новых нейронов
+  newRate: 0.15,        // вероятность рождения нейрона за попытку (раз в growEvery секунд)
+  newLinks: 4,          // входящих и исходящих связей у нового нейрона
+  newInit: 0.3,         // их начальный вес
+  // новые действия, которые мозг учится запускать сам
+  gates: 1,
+  gateBias: -7.5,        // исходная склонность: действие почти никогда не запускается
+  freezeTime: 0.5,      // замирание, с
+  dashTime: 0.25,       // рывок, с
+  gateCooldown: 1.5,
+  ethoWindow: 600,      // дневник поведения помнит последние ~10 минут симуляции
   // колония
   flyCount: 1,
 };
@@ -582,6 +610,16 @@ const FOOD_TYPES = [
   { key: 'acorn', name: 'Жёлудь', size: 0.07, energy: 1.6, place: 'undertree', eat: [0.6, 1], count: 14 },
   { key: 'berry', name: 'Ягоды', size: 0.06, energy: 0.8, place: 'bush', eat: [0, 1], count: 14 },
   { key: 'cheese', name: 'Сыр', size: 0.1, energy: 2.0, place: 'ground', eat: [0.65, 1], count: 4 },
+];
+
+// ---- паттерны поведения для дневника ------------------------------------------------
+// ev — действие, ctx — ситуация; timed — действие длится (считается время, а не случаи)
+const ETHO_PATTERNS = [
+  { key: 'freezeThreat', name: 'Замирание при стрекозе', ev: 'freeze', ctx: 'threat', desc: 'замирает, когда рядом стрекоза: она не видит неподвижную добычу' },
+  { key: 'dashFood', name: 'Рывок к еде', ev: 'dash', ctx: 'food', desc: 'делает рывок, когда еда близко' },
+  { key: 'dashThreat', name: 'Рывок от стрекозы', ev: 'dash', ctx: 'threat', desc: 'делает рывок, когда рядом стрекоза' },
+  { key: 'turnLoss', name: 'Развороты после потери запаха', ev: 'saccade', ctx: 'loss', desc: 'резко разворачивается, когда запах пропал' },
+  { key: 'descendOdor', name: 'Снижение по запаху', ev: 'descend', ctx: 'rise', timed: true, flyersOnly: true, desc: 'снижается, пока запах усиливается' },
 ];
 
 // ---- стадии тела ------------------------------------------------------------------
@@ -703,14 +741,24 @@ class Brain {
     this.data = data;
     this.net = net;
     const N = net.N;
+    // место под новые нейроны (нейрогенез): они получают номера N, N+1, …
+    const newCap = cfg.newCap || 150;
+    const M = N + newCap;
+    this.newCap = newCap;
     this.w = new Float32Array(net.tgt.length);
-    this.I = new Float32Array(N);
-    this.v = new Float32Array(N);
-    this.spike = new Uint8Array(N);
-    this.refr = new Uint8Array(N);
-    this.rate = new Float32Array(N);
-    this.active = new Int32Array(N);
+    this.I = new Float32Array(M);
+    this.v = new Float32Array(M);
+    this.spike = new Uint8Array(M);
+    this.refr = new Uint8Array(M);
+    this.rate = new Float32Array(M);
+    this.active = new Int32Array(M);
     this.nActive = 0;
+    this.nNew = 0;
+    this.nPos = new Float32Array(newCap * 3);
+    this.nSide = new Uint8Array(newCap);
+    this.nAge = new Float32Array(newCap);
+    this.born = 0;
+    this.died = 0;
     // выросшие синапсы (структурная пластичность)
     const cap = cfg.growCap || 600;
     this.gSrc = new Uint16Array(cap);
@@ -724,10 +772,105 @@ class Brain {
     this.setConfig(cfg);
   }
 
-  clearGrown() { this.gN = 0; this.formed = 0; this.pruned = 0; }
+  clearGrown() { this.gN = 0; this.formed = 0; this.pruned = 0; this.nNew = 0; this.born = 0; this.died = 0; }
+
+  // Всё выросшее: синапсы и новые нейроны (для наследования и переноса между потоками)
+  exportGrowth() {
+    return {
+      gN: this.gN, gSrc: this.gSrc.slice(0, this.gN), gDst: this.gDst.slice(0, this.gN), gW: this.gW.slice(0, this.gN),
+      nNew: this.nNew, nPos: this.nPos.slice(0, this.nNew * 3), nSide: this.nSide.slice(0, this.nNew),
+    };
+  }
+
+  // noise — разброс весов у потомка (0 — точная копия)
+  importGrowth(o, rng, noise = 0) {
+    const N = this.net.N;
+    const nNew = Math.min(o.nNew || 0, this.newCap);
+    this.nNew = nNew;
+    for (let j = 0; j < nNew * 3; j++) this.nPos[j] = o.nPos[j];
+    for (let j = 0; j < nNew; j++) { this.nSide[j] = o.nSide[j]; this.nAge[j] = 0; }
+    for (let i = N; i < N + this.newCap; i++) { this.v[i] = 0; this.spike[i] = 0; this.refr[i] = 0; this.rate[i] = 0; }
+    let n = 0;
+    const lim = N + nNew;
+    for (let g = 0; g < (o.gN || 0) && n < this.gSrc.length; g++) {
+      if (o.gSrc[g] >= lim || o.gDst[g] >= lim) continue;   // ссылки на нейроны, которых нет
+      this.gSrc[n] = o.gSrc[g]; this.gDst[n] = o.gDst[g];
+      this.gW[n] = o.gW[g] * (noise ? 1 + noise * (rng() * 2 - 1) : 1);
+      this.gE[n] = 0; this.gAge[n] = 0;
+      n++;
+    }
+    this.gN = n; this.formed = 0; this.pruned = 0; this.born = 0; this.died = 0;
+  }
+
+  addSyn(a, b, w) {
+    if (this.gN >= this.gSrc.length || a === b) return;
+    const g = this.gN++;
+    this.gSrc[g] = a; this.gDst[g] = b; this.gW[g] = w; this.gE[g] = 0; this.gAge[g] = 0;
+    this.formed += 1;
+  }
+
+  // Нейрогенез: новый нейрон рождается рядом с активным нейроном и получает связи
+  // от нескольких активных нейронов и к нескольким другим
+  birth(cfg, rng) {
+    if (this.nNew >= this.newCap || this.nActive < 4 || this.gN + 2 * cfg.newLinks > this.gSrc.length) return false;
+    const N = this.net.N, data = this.data;
+    const parent = this.active[Math.floor(rng() * this.nActive)];
+    const j = this.nNew++, idx = N + j;
+    for (let c = 0; c < 3; c++) {
+      const base = parent < N ? data.pos[parent * 3 + c] : this.nPos[(parent - N) * 3 + c];
+      this.nPos[j * 3 + c] = base + (rng() - 0.5) * 0.08;
+    }
+    const side = parent < N ? data.side[parent] : this.nSide[parent - N];
+    this.nSide[j] = side <= 1 ? side : (rng() < 0.5 ? 0 : 1);
+    this.nAge[j] = 0;
+    this.v[idx] = 0; this.spike[idx] = 0; this.refr[idx] = 0; this.rate[idx] = 0;
+    for (let k = 0; k < cfg.newLinks; k++) {
+      this.addSyn(this.active[Math.floor(rng() * this.nActive)], idx, cfg.newInit);
+      this.addSyn(idx, this.active[Math.floor(rng() * this.nActive)], cfg.newInit * (rng() < 0.3 ? -1 : 1));
+    }
+    this.born += 1;
+    return true;
+  }
+
+  // Новый нейрон без входов или без выходов погибает; последний переезжает на его место
+  cullNeurons(interval) {
+    const N = this.net.N;
+    if (!this.nNew) return;
+    const inC = new Uint16Array(this.nNew), outC = new Uint16Array(this.nNew);
+    for (let g = 0; g < this.gN; g++) {
+      if (this.gDst[g] >= N) inC[this.gDst[g] - N]++;
+      if (this.gSrc[g] >= N) outC[this.gSrc[g] - N]++;
+    }
+    for (let j = this.nNew - 1; j >= 0; j--) {
+      this.nAge[j] += interval;
+      if (this.nAge[j] < 30 || (inC[j] && outC[j])) continue;
+      const idx = N + j, last = N + this.nNew - 1;
+      for (let g = 0; g < this.gN; g++) {
+        if (this.gSrc[g] === idx || this.gDst[g] === idx) {
+          const l = --this.gN;
+          this.gSrc[g] = this.gSrc[l]; this.gDst[g] = this.gDst[l]; this.gW[g] = this.gW[l]; this.gE[g] = this.gE[l]; this.gAge[g] = this.gAge[l];
+          g--;
+        }
+      }
+      if (idx !== last) {
+        for (let g = 0; g < this.gN; g++) {
+          if (this.gSrc[g] === last) this.gSrc[g] = idx;
+          if (this.gDst[g] === last) this.gDst[g] = idx;
+        }
+        const k = this.nNew - 1;
+        for (let c = 0; c < 3; c++) this.nPos[j * 3 + c] = this.nPos[k * 3 + c];
+        this.nSide[j] = this.nSide[k]; this.nAge[j] = this.nAge[k];
+        this.v[idx] = this.v[last]; this.rate[idx] = this.rate[last]; this.refr[idx] = this.refr[last]; this.spike[idx] = 0;
+      }
+      this.v[last] = 0; this.rate[last] = 0; this.spike[last] = 0;
+      this.nNew -= 1;
+      this.died += 1;
+    }
+  }
 
   // Потомок получает выросшие синапсы родителя (с небольшим шумом весов)
   copyGrownFrom(o, rng) {
+    if (o.nNew !== undefined) { this.importGrowth(o, rng, 0.1); return; }
     const n = Math.min(o.gN || 0, this.gSrc.length);
     for (let g = 0; g < n; g++) {
       this.gSrc[g] = o.gSrc[g]; this.gDst[g] = o.gDst[g];
@@ -751,7 +894,8 @@ class Brain {
       }
     }
     if (nActive < 2) return;
-    for (let k = 0; k < cfg.growTries && this.gN < this.gSrc.length; k++) {
+    const room = cfg.neurogenesis ? Math.floor(this.gSrc.length * 0.67) : this.gSrc.length;
+    for (let k = 0; k < cfg.growTries && this.gN < room; k++) {
       const a = active[Math.floor(rng() * nActive)], b = active[Math.floor(rng() * nActive)];
       if (a === b) continue;
       const g = this.gN++;
@@ -765,11 +909,14 @@ class Brain {
     const lam = Math.exp(-dt / cfg.eligTau);
     const keep = 1 - cfg.growDecay * dt;
     const k = cfg.growLearn * delta * dt;
+    const h = (cfg.growHebb || 0) * dt;
     const { spike, rate, gSrc, gDst, gW, gE } = this;
     for (let g = 0; g < this.gN; g++) {
       gE[g] = gE[g] * lam + spike[gSrc[g]] * rate[gDst[g]];
-      const w = gW[g] * keep + k * gE[g];
-      gW[g] = w > 1.5 ? 1.5 : w < -1 ? -1 : w;
+      // дофамин задаёт знак и силу, совместная активность понемногу укрепляет (сохраняя знак)
+      const w = gW[g] * keep + k * gE[g] + h * gE[g] * Math.sign(gW[g] || 1);
+      const gm = cfg.growMax || 1.5;
+      gW[g] = w > gm ? gm : w < -gm ? -gm : w;
     }
   }
 
@@ -793,7 +940,9 @@ class Brain {
   // every: сколько шагов физики покрывает этот шаг мозга (постоянные времени пересчитываются)
   step(inp, rng, every = 1) {
     const { net, I, v, spike, refr, rate, w, cfg, active } = this;
-    const { off, tgt, N, groups } = net;
+    const { off, tgt, groups } = net;
+    const NC = net.N;              // нейроны коннектома (у них есть связи из FlyWire)
+    const N = NC + this.nNew;      // плюс выросшие нейроны
     // фоновый шум: из общей таблицы со случайного места (быстрее, чем rng на каждый нейрон)
     const sIn = every === 1 ? 1 : (1 - Math.pow(cfg.decay, every)) / (1 - cfg.decay);
     const noise = cfg.noise * sIn;
@@ -801,6 +950,7 @@ class Brain {
     for (let i = 0; i < N; i++) { I[i] = noise * NOISE_TABLE[p]; p = (p + 1) & NOISE_MASK; }
     for (let a = 0, na = this.nActive; a < na; a++) {
       const i = active[a];
+      if (i >= NC) continue;
       for (let k = off[i], end = off[i + 1]; k < end; k++) I[tgt[k]] += w[k];
     }
     for (let g = 0, gn = this.gN; g < gn; g++) if (spike[this.gSrc[g]]) I[this.gDst[g]] += this.gW[g];
@@ -850,43 +1000,57 @@ function normal(rng) {
 // Правило трёх факторов (REINFORCE): след = вход × случайная проба;
 // изменение веса = скорость × (дофамин − ожидание) × след.
 class Learner {
-  // populations: пары популяций [слева, справа]. Признаки: разница сторон (p),
-  // сумма сторон (p) и постоянное смещение (1).
-  // Команды: поворот — по разнице (двусторонняя симметрия); подъём и скорость — по сумме и смещению.
-  constructor(populations) {
+  // populations: пары популяций [слева, справа] из коннектома + динамическая пара «новые нейроны».
+  // Признаки x: разница сторон (p), сумма сторон (p) и смещение (1).
+  // Команды: поворот (по разнице сторон), подъём и скорость (по сумме и смещению) — непрерывные;
+  // замирание и рывок — дискретные действия (да/нет), которые мозг учится запускать сам.
+  constructor(populations, gateBias = -6) {
     const pairs = [];
     for (let j = 0; j + 1 < populations.length; j += 2) {
       pairs.push({ name: populations[j].name.replace(/ слева$/, ''), L: populations[j].idx, R: populations[j + 1].idx });
     }
+    pairs.push({ name: 'Новые нейроны', dyn: true });
     this.pairs = pairs;
     const p = pairs.length;
     this.p = p;
-    this.nT = p;            // веса поворота
-    this.nC = p + 1;        // веса подъёма
-    this.nS = p + 1;        // веса скорости
-    // [начало весов, длина, начало признаков] для каждой команды
-    this.outs = [[0, p, 0], [p, p + 1, p], [2 * p + 1, p + 1, p]];
-    this.W = new Float32Array(this.nT + this.nC + this.nS);
+    this.nT = p; this.nC = p + 1; this.nS = p + 1;
+    // [начало весов, длина, начало признаков, вид: g — непрерывная, b — да/нет, название]
+    this.outs = [
+      [0, p, 0, 'g', 'Поворот'],
+      [p, p + 1, p, 'g', 'Подъём'],
+      [2 * p + 1, p + 1, p, 'g', 'Скорость'],
+      [3 * p + 2, p + 1, p, 'b', 'Замирание'],
+      [4 * p + 3, p + 1, p, 'b', 'Рывок'],
+    ];
+    this.W = new Float32Array(5 * p + 4);
     this.E = new Float32Array(this.W.length);
+    this.gateBias = gateBias;
+    this.biasIdx = [4 * p + 2, 5 * p + 3];          // смещения дискретных действий
     this.mean = new Float32Array(2 * p);
     this.vari = new Float32Array(2 * p).fill(1e-4);
     this.x = new Float32Array(2 * p + 1);
-    this.noise = [0, 0, 0];
-    this.action = [0, 0, 0];
-    this.out = [0, 0, 0];
+    this.noise = [0, 0, 0, 0, 0];
+    this.action = [0, 0, 0, 0, 0];
+    this.out = [0, 0, 0, 0, 0];
+    this.prob = [0, 0, 0, 0, 0];
   }
 
   randomize(rng, scale) {
     for (let k = 0; k < this.W.length; k++) this.W[k] = (rng() * 2 - 1) * scale;
+    for (const k of this.biasIdx) this.W[k] = this.gateBias;
     this.resetTraces();
   }
 
-  // Наследование: копия весов родителя с небольшим шумом
+  // Наследование: копия весов родителя с небольшим шумом (старые геномы без новых действий тоже подходят)
   copyFrom(parent, rng, mutation) {
     let range = 0;
     for (let k = 0; k < parent.W.length; k++) range = Math.max(range, Math.abs(parent.W[k]));
-    const sigma = mutation * Math.max(range, 0.05);
-    for (let k = 0; k < this.W.length; k++) this.W[k] = (parent.W[k] || 0) + normal(rng) * sigma;
+    const sigma = mutation * Math.min(Math.max(range, 0.05), 2);
+    const same = parent.W.length === this.W.length;
+    for (let k = 0; k < this.W.length; k++) {
+      const base = same ? parent.W[k] : (this.biasIdx.includes(k) ? this.gateBias : 0);
+      this.W[k] = base + normal(rng) * sigma;
+    }
     this.resetTraces();
   }
 
@@ -894,20 +1058,17 @@ class Learner {
     this.E.fill(0);
     this.mean.fill(0);
     this.vari.fill(1e-4);
-    this.noise = [0, 0, 0];
+    this.noise = [0, 0, 0, 0, 0];
   }
 
   norm() {
     let s = 0;
-    for (let k = 0; k < this.W.length; k++) s += this.W[k] * this.W[k];
+    for (let k = 0; k < this.W.length; k++) if (!this.biasIdx.includes(k)) s += this.W[k] * this.W[k];
     return Math.sqrt(s);
   }
 
   // нормированная активность популяции (отклонение от среднего за ~4 с)
-  feature(rate, idx, j, a) {
-    let r = 0;
-    for (let q = 0; q < idx.length; q++) r += rate[idx[q]];
-    r /= idx.length;
+  normFeature(r, j, a) {
     const m = this.mean[j] + (r - this.mean[j]) * a;
     this.mean[j] = m;
     const d = r - m;
@@ -915,28 +1076,57 @@ class Learner {
     return d / Math.sqrt(this.vari[j] + 1e-6);
   }
 
-  step(rate, cfg, explore, dt, rng) {
+  popRate(brain, pair, side) {
+    const rate = brain.rate;
+    if (pair.dyn) {
+      const N = brain.net.N;
+      let r = 0, c = 0;
+      for (let j = 0; j < brain.nNew; j++) if (brain.nSide[j] === side) { r += rate[N + j]; c++; }
+      return c ? r / c : 0;
+    }
+    const idx = side === 0 ? pair.L : pair.R;
+    let r = 0;
+    for (let q = 0; q < idx.length; q++) r += rate[idx[q]];
+    return r / idx.length;
+  }
+
+  // allowGates: можно ли сейчас запускать замирание и рывок
+  step(brain, cfg, explore, dt, rng, allowGates = false) {
     const { p, W, E, x, pairs, outs } = this;
     const a = Math.min(1, dt / 4);
     for (let j = 0; j < p; j++) {
-      const l = this.feature(rate, pairs[j].L, 2 * j, a);
-      const r = this.feature(rate, pairs[j].R, 2 * j + 1, a);
-      x[j] = (l - r) * 0.7;          // разница сторон
-      x[p + j] = (l + r) * 0.5;      // сумма сторон
+      const l = this.normFeature(this.popRate(brain, pairs[j], 0), 2 * j, a);
+      const r = this.normFeature(this.popRate(brain, pairs[j], 1), 2 * j + 1, a);
+      x[j] = (l - r) * 0.7;
+      x[p + j] = (l + r) * 0.5;
     }
-    x[2 * p] = 1;                    // смещение
+    x[2 * p] = 1;
     const tau = cfg.exploreTau;
     const sig = cfg.explore * explore;
     const lam = Math.exp(-dt / cfg.eligTau);
-    for (let c = 0; c < 3; c++) {
-      const [w0, len, x0] = outs[c];
+    for (let c = 0; c < outs.length; c++) {
+      const [w0, len, x0, kind] = outs[c];
       let o = 0;
       for (let k = 0; k < len; k++) o += W[w0 + k] * x[x0 + k];
-      this.noise[c] += -this.noise[c] / tau * dt + Math.sqrt(2 * dt / tau) * normal(rng);
-      const nz = sig * this.noise[c] * (c === 2 ? 0.6 : 1);
       this.out[c] = o;
-      this.action[c] = o + nz;
-      for (let k = 0; k < len; k++) E[w0 + k] = E[w0 + k] * lam + x[x0 + k] * nz;
+      if (kind === 'g') {
+        this.noise[c] += -this.noise[c] / tau * dt + Math.sqrt(2 * dt / tau) * normal(rng);
+        const nz = sig * this.noise[c] * (c === 2 ? 0.6 : 1);
+        this.action[c] = o + nz;
+        for (let k = 0; k < len; k++) E[w0 + k] = E[w0 + k] * lam + x[x0 + k] * nz;
+      } else {
+        // дискретное действие: запуск с вероятностью σ(o); след = вход × (действие − вероятность)
+        const pr = 1 / (1 + Math.exp(-o));
+        this.prob[c] = pr;
+        let act = 0;
+        if (allowGates && cfg.gates) {
+          act = rng() < pr ? 1 : 0;
+          for (let k = 0; k < len; k++) E[w0 + k] = E[w0 + k] * lam + x[x0 + k] * (act - pr);
+        } else {
+          for (let k = 0; k < len; k++) E[w0 + k] *= lam;
+        }
+        this.action[c] = act;
+      }
     }
   }
 
@@ -947,6 +1137,11 @@ class Learner {
     for (let j = 0; j < W.length; j++) {
       const w = W[j] * keep + k * E[j];
       W[j] = w > 4 ? 4 : w < -4 ? -4 : w;
+    }
+    // смещения действий забываются не к нулю, а к исходной осторожности
+    for (const j of this.biasIdx) {
+      const w = this.gateBias + (W[j] / keep - this.gateBias) * keep;
+      W[j] = w > 4 ? 4 : w < -8 ? -8 : w;
     }
   }
 }
@@ -1028,12 +1223,98 @@ class FlySim {
 
   resetFly(cause) { this.respawn(this.fly, cause); }
 
+  // ---- дневник поведения ----------------------------------------------------------
+  // Следит, в какой ситуации особи что делают. Паттерн «освоен», когда действие заметно
+  // чаще случается в своей ситуации, чем в среднем: подъём = P(ситуация | действие) / P(ситуация).
+  initEtho() {
+    this.etho = ETHO_PATTERNS.map((d) => ({ ...d, n: 0, nCtx: 0, ctxT: 0, totT: 0, status: 'нет данных', learnedAt: null, learnedGen: null }));
+  }
+
+  observe(f, dt) {
+    if (!this.etho) this.initEtho();
+    const flying = f.state === 'fly';
+    const odor = (f.odorL + f.odorR) / 2;
+    f.odorPeak = Math.max(odor, (f.odorPeak || 0) * Math.exp(-dt / 3));
+    if (f.odorPeak > 0.05 && odor < 0.4 * f.odorPeak && this.time - (f.lostAt ?? -1e9) > 3) f.lostAt = this.time;
+    const trend = (odor - (f.odorPrev2 ?? odor)) / dt;
+    f.odorPrev2 = odor;
+    f.odorTrend = (f.odorTrend || 0) * 0.9 + trend * 0.1;
+    const vy = (f.y - (f.yPrev ?? f.y)) / dt;
+    f.yPrev = f.y;
+    const ctx = {
+      threat: Math.max(f.threatL, f.threatR) > 0.2,
+      food: f.nearFoodDist < 1.5,
+      loss: this.time - (f.lostAt ?? -1e9) < 2,
+      rise: f.odorTrend > 0.002,
+    };
+    const ev = { freeze: !!f.evFreeze, dash: !!f.evDash, saccade: !!f.evSaccade, descend: !f.body.walk && vy < -0.15 };
+    f.evFreeze = f.evDash = f.evSaccade = false;
+    if (!flying) return;
+    for (const P of this.etho) {
+      if (P.flyersOnly && f.body.walk) continue;
+      const c = ctx[P.ctx];
+      P.totT += dt;
+      if (c) P.ctxT += dt;
+      // для «длительных» паттернов событие — каждый шаг в этом состоянии
+      if (ev[P.ev]) { const wgt = P.timed ? dt : 1; P.n += wgt; if (c) P.nCtx += wgt; }
+    }
+  }
+
+  decayEtho(dt) {
+    if (!this.etho) return;
+    const k = Math.exp(-dt / this.cfg.ethoWindow);
+    for (const P of this.etho) {
+      P.n *= k; P.nCtx *= k; P.ctxT *= k; P.totT *= k;
+    }
+    this.ethoTimer = (this.ethoTimer || 0) + dt;
+    if (this.ethoTimer >= 5) { this.ethoTimer = 0; this.ethogram(); }
+  }
+
+  ethogram() {
+    if (!this.etho) this.initEtho();
+    const maxGen = Math.max(...this.flies.map((f) => f.generation));
+    return this.etho.map((P) => {
+      const base = P.totT > 0 ? P.ctxT / P.totT : 0;
+      const share = P.n > 0 ? P.nCtx / P.n : 0;
+      const lift = base > 0.005 ? share / base : 0;
+      const enough = P.n >= (P.timed ? 3 : 6);
+      let status = 'нет данных';
+      if (P.n >= (P.timed ? 1 : 3)) {
+        if (enough && lift >= 2.5) status = 'освоен';
+        else if (lift >= 1.5) status = 'складывается';
+        else if (enough && lift < 0.6) status = 'избегается';
+        else status = 'случайно';
+      }
+      if (status === 'освоен' && !P.learnedAt) {
+        P.learnedAt = this.time; P.learnedGen = maxGen;
+        this.logEvent(`Колония освоила новый паттерн: ${P.name.toLowerCase()}`);
+      }
+      P.status = status;
+      return { key: P.key, name: P.name, desc: P.desc, events: P.n, lift, base, status, learnedAt: P.learnedAt, learnedGen: P.learnedGen };
+    });
+  }
+
+  exportEtho() { return this.etho ? this.etho.map((P) => ({ key: P.key, n: P.n, nCtx: P.nCtx, ctxT: P.ctxT, totT: P.totT })) : null; }
+
+  // Сложить наблюдения из турбопотоков
+  mergeEtho(list) {
+    if (!this.etho) this.initEtho();
+    for (const part of list) {
+      if (!part) continue;
+      for (const q of part) {
+        const P = this.etho.find((x) => x.key === q.key);
+        if (P) { P.n += q.n; P.nCtx += q.nCtx; P.ctxT += q.ctxT; P.totT += q.totT; }
+      }
+    }
+    this.ethogram();
+  }
+
   // Состояние особей для переноса в турбопоток и обратно (без потерь, без мутаций)
   exportGenomes() {
     return this.flies.map((f) => ({
       W: Float32Array.from(f.learner.W), traits: { ...f.traits }, morph: f.body.morph, generation: f.generation,
       lives: f.lives, eaten: f.eaten, deaths: { ...f.deaths },
-      grown: { gN: f.brain.gN, gSrc: f.brain.gSrc.slice(0, f.brain.gN), gDst: f.brain.gDst.slice(0, f.brain.gN), gW: f.brain.gW.slice(0, f.brain.gN) },
+      grown: f.brain.exportGrowth(),
     }));
   }
 
@@ -1042,7 +1323,7 @@ class FlySim {
     this.flies.forEach((f, i) => {
       const g = list[i];
       if (!g) return;
-      f.learner.W.set(g.W.length === f.learner.W.length ? g.W : f.learner.W);
+      if (g.W.length === f.learner.W.length) f.learner.W.set(g.W);
       f.learner.resetTraces();
       f.traits = { ...g.traits };
       f.body = bodyOf(g.morph, this.cfg);
@@ -1050,11 +1331,7 @@ class FlySim {
       f.energy = Math.min(f.energy, f.energyMax);
       f.generation = g.generation;
       f.lives = g.lives; f.eaten = g.eaten; f.deaths = { ...g.deaths };
-      const b = f.brain, n = Math.min(g.grown.gN, b.gSrc.length);
-      b.gSrc.set(g.grown.gSrc.subarray ? g.grown.gSrc.subarray(0, n) : g.grown.gSrc.slice(0, n));
-      b.gDst.set(g.grown.gDst.subarray ? g.grown.gDst.subarray(0, n) : g.grown.gDst.slice(0, n));
-      b.gW.set(g.grown.gW.subarray ? g.grown.gW.subarray(0, n) : g.grown.gW.slice(0, n));
-      b.gE.fill(0); b.gAge.fill(0); b.gN = n;
+      f.brain.importGrowth(g.grown, this.rng, 0);
     });
   }
 
@@ -1183,7 +1460,7 @@ class FlySim {
     const f = {
       id,
       brain: new Brain(this.data, this.net, this.cfg),
-      learner: new Learner(this.net.groups.populations),
+      learner: new Learner(this.net.groups.populations, this.cfg.gateBias),
       lives: 0, eaten: 0, deaths: { starve: 0, predator: 0 },
       generation: 1, bumps: 0,
     };
@@ -1460,7 +1737,15 @@ class FlySim {
       let target = clamp(cfg.motorSpeed * tr.motor * (rL + rR) / 2, 0, 1.5) * activity;
       let drive = cfg.motorTurn * tr.motor * (rL - rR);
       // выученные команды: поворот и подъём
-      if (brainNow) f.learner.step(f.brain.rate, cfg, tr.explore, dt * physEvery, this.rng);
+      f.freezeLeft = Math.max(0, (f.freezeLeft || 0) - dt);
+      f.dashLeft = Math.max(0, (f.dashLeft || 0) - dt);
+      f.gateCool = Math.max(0, (f.gateCool || 0) - dt);
+      const canGate = cfg.gates && f.freezeLeft <= 0 && f.dashLeft <= 0 && f.gateCool <= 0;
+      if (brainNow) {
+        f.learner.step(f.brain, cfg, tr.explore, dt * physEvery, this.rng, canGate);
+        if (canGate && f.learner.action[3]) { f.freezeLeft = cfg.freezeTime; f.gateCool = cfg.gateCooldown; f.evFreeze = true; }
+        else if (canGate && f.learner.action[4]) { f.dashLeft = cfg.dashTime; f.gateCool = cfg.gateCooldown; f.evDash = true; }
+      }
       const learnedTurn = cfg.learnTurnGain * Math.tanh(f.learner.action[0]);
       const learnedClimb = cfg.learnClimbGain * Math.tanh(f.learner.action[1]);
       drive += learnedTurn;
@@ -1499,13 +1784,17 @@ class FlySim {
         }
       }
       target *= f.body.speed;
-      f.speed += (target - f.speed) * Math.min(1, dt * 3);
+      // новые действия: замирание — остановка без поворотов, рывок — короткое ускорение
+      if (f.freezeLeft > 0) { target = 0; drive = 0; f.climb = 0; }
+      else if (f.dashLeft > 0) target = clamp(target * 2.2, 0.9, 2.6);
+      f.speed += (target - f.speed) * Math.min(1, dt * (f.freezeLeft > 0 ? 10 : 3));
       f.heading += 0.35 * drive * dt * activity;
       f.saccadeAcc = f.saccadeAcc * (1 - dt * 0.8) + drive * dt;
       if (f.saccadeLeft > 0) {
         f.heading += f.saccadeRate * dt;
         f.saccadeLeft -= dt;
       } else if (Math.abs(f.saccadeAcc) > cfg.saccadeThreshold) {
+        f.evSaccade = true;
         const ang = Math.sign(f.saccadeAcc) * Math.min(cfg.saccadeAngle, 0.4 + Math.abs(f.saccadeAcc));
         f.saccadeRate = ang / cfg.saccadeTime;
         f.saccadeLeft = cfg.saccadeTime;
@@ -1520,6 +1809,7 @@ class FlySim {
         targetY = f.y + f.climb;   // при подъёме 1.5×(target − y) даёт скорость ≈ climb
       }
       // посадка по касанию: лапки чувствуют сахар, муха садится и выпускает хоботок
+      f.nearFoodDist = food ? Math.hypot(food.x - f.x, food.z - f.z) : Infinity;
       if (food) {
         const d3 = Math.hypot(food.x - f.x, food.z - f.z, (food.y + food.size * 0.75) - f.y);
         if (d3 < cfg.landRadius * (1 + 1.5 * f.body.morph) && hunger > 0.12) {
@@ -1578,7 +1868,16 @@ class FlySim {
     if (cfg.structural && brainNow) {
       f.brain.plasticity(f.delta, cfg, dt * physEvery);
       f.growTimer = (f.growTimer || 0) + dt * physEvery;
-      if (f.growTimer >= cfg.growEvery) { f.brain.grow(cfg, this.rng, f.growTimer); f.growTimer = 0; }
+      if (f.growTimer >= cfg.growEvery) {
+        f.brain.grow(cfg, this.rng, f.growTimer);
+        if (cfg.neurogenesis) {
+          f.brain.cullNeurons(f.growTimer);
+          // рождение нейронов чаще, когда жизнь приносит награду
+          const boost = 0.5 + clamp(f.daBar * 4, 0, 2);
+          if (this.rng() < cfg.newRate * boost) f.brain.birth(cfg, this.rng);
+        }
+        f.growTimer = 0;
+      }
     }
     if (cfg.learning && wasFlying) {
       // с возрастом муха учится медленнее: молодая ищет, взрослая лишь подстраивается
@@ -1612,6 +1911,7 @@ class FlySim {
       for (const f of this.flies) {
         if (f.body.walk || (f.state !== 'fly' && f.state !== 'escape')) continue;
         const d = Math.hypot(f.x - p.x, f.y - p.y, f.z - p.z);
+        if (f.speed < 0.12 && d > 0.35) continue;   // неподвижную добычу стрекоза не замечает
         if (d < bd) { bd = d; target = f; }
       }
     }
@@ -1645,7 +1945,8 @@ class FlySim {
     const daylight = this.daylight();
     this.updateWind(dt);
     for (const p of this.predators) this.stepPredator(p, dt);
-    for (const f of this.flies) this.stepFly(f, dt, daylight);
+    for (const f of this.flies) { this.stepFly(f, dt, daylight); this.observe(f, dt); }
+    this.decayEtho(dt);
     // мухи не проходят сквозь друг друга
     const fl = this.flies;
     for (let i = 0; i < fl.length; i++) {
@@ -1807,7 +2108,7 @@ class Island {
     return {
       W: Array.from(b.learner.W), traits: { ...b.traits }, generation: b.generation, score: this.score(b),
       morph: b.body.morph,
-      grown: { gN: br.gN, gSrc: Array.from(br.gSrc.subarray(0, br.gN)), gDst: Array.from(br.gDst.subarray(0, br.gN)), gW: Array.from(br.gW.subarray(0, br.gN)) },
+      grown: br.exportGrowth(),
     };
   }
 
@@ -1824,6 +2125,8 @@ class Island {
       stages: [0, 1, 2, 3, 4].map((k) => flies.filter((f) => f.body.stage === k).length),
       morph: flies.reduce((a, f) => a + f.body.morph, 0) / flies.length,
       grown: flies.reduce((a, f) => a + f.brain.gN, 0) / flies.length,
+      neurons: flies.reduce((a, f) => a + f.brain.net.N + f.brain.nNew, 0) / flies.length,
+      patterns: this.sim.ethogram().filter((x) => x.status === 'освоен').map((x) => x.name),
     };
   }
 
@@ -2603,7 +2906,8 @@ function computeGroupRates() {
 function worldConfig() {
   const cfg = { flyCount: Number($('flyCount').value), reflexes: $('reflexes').checked ? 1 : 0,
     learning: $('learning').checked ? 1 : 0, inherit: $('inherit').checked ? 1 : 0,
-    forceStage: Number($('bodyMode').value), morphSpeed: Number($('morphSpeed').value) };
+    forceStage: Number($('bodyMode').value), morphSpeed: Number($('morphSpeed').value),
+    neurogenesis: $('neurogenesis').checked ? 1 : 0, gates: $('gates').checked ? 1 : 0 };
   if ($('useEvolved').checked && evoState && evoState.best) Object.assign(cfg, decode(evoState.best));
   return cfg;
 }
@@ -2628,7 +2932,7 @@ function rebuildWorld() {
 }
 
 // ---- сохранение выученного мозга (только в этом браузере) ----------------
-const SAVE_KEY = 'fly-connectome-brain-v2';
+const SAVE_KEY = 'fly-connectome-brain-v3';
 function loadBrain() {
   try { const v = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); return v && Array.isArray(v.W) ? v : null; } catch (e) { return null; }
 }
@@ -2794,7 +3098,9 @@ self.onmessage = (e) => {
       time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths,
       rate: c.length ? c.reduce((a, b) => a + b.feed, 0) / c.length : 0, n: sim.flies.length,
       stages: [0, 1, 2, 3, 4].map((k) => sim.flies.filter((f) => f.body.stage === k).length),
-      maxGen: Math.max(...sim.flies.map((f) => f.generation)), best: m.wantBest ? bestGenome() : null } });
+      maxGen: Math.max(...sim.flies.map((f) => f.generation)), best: m.wantBest ? bestGenome() : null,
+      brain: sim.flies.reduce((a, f) => a + f.brain.nNew, 0) / sim.flies.length,
+      patterns: sim.ethogram().filter((x) => x.status === 'освоен').map((x) => x.name) } });
   } else if (m.type === 'migrant') {
     // мигрант заменяет худшую особь группы
     let w = sim.flies[0];
@@ -2802,7 +3108,7 @@ self.onmessage = (e) => {
     const g = m.genome;
     sim.respawn(w, null, { id: -1, learner: { W: Float32Array.from(g.W) }, traits: g.traits, generation: g.generation, body: { morph: g.morph }, brain: g.grown });
   } else if (m.type === 'stop') {
-    self.postMessage({ type: 'final', id, genomes: sim.exportGenomes(), time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths });
+    self.postMessage({ type: 'final', id, genomes: sim.exportGenomes(), time: sim.time, eaten: sim.totalEaten, deaths: sim.totalDeaths, etho: sim.exportEtho() });
   }
 };
 `;
@@ -2880,6 +3186,7 @@ function onTurbo(m) {
     const list = [];
     T.groups.forEach((g, i) => g.forEach((k, j) => { list[k] = T.finals[i].genomes[j]; }));
     sim.importGenomes(list);
+    sim.mergeEtho(T.finals.map((f) => f.etho));
     sim.time = T.startTime + T.lived;
     sim.totalEaten = T.base.eaten + T.finals.reduce((a, f) => a + f.eaten, 0);
     sim.totalDeaths = T.base.deaths + T.finals.reduce((a, f) => a + f.deaths, 0);
@@ -2907,6 +3214,9 @@ function showTurboStats(speed) {
   const stages = [0, 0, 0, 0, 0];
   st.forEach((x) => x.stages.forEach((c, k) => { stages[k] += c; }));
   $('tbStages').textContent = STAGES.map((g, k) => stages[k] ? `${g.name.toLowerCase()} ${stages[k]}` : '').filter(Boolean).join(', ');
+  $('tbBrain').textContent = (st.reduce((a, x) => a + x.brain * x.n, 0) / Math.max(1, n)).toFixed(1);
+  const pats = [...new Set(st.flatMap((x) => x.patterns))];
+  $('tbPatterns').textContent = pats.length ? pats.join(', ') : 'пока нет';
   $('tbThreads').textContent = T.ms.map((ms) => `×${Math.round(T.chunk / Math.max(ms / 1000, 1e-3))}`).join(' · ');
 }
 
@@ -3011,6 +3321,9 @@ function updateSuperUI() {
   const tot = [0, 0, 0, 0, 0];
   st.forEach((x) => (x.stats.stages || []).forEach((c, k) => { tot[k] += c; }));
   $('supStages').textContent = STAGES.map((g, k) => tot[k] ? `${g.name.toLowerCase()} ${tot[k]}` : '').filter(Boolean).join(', ') || '–';
+  $('supBrain').textContent = `${(st.reduce((a, x) => a + (x.stats.neurons || 2000), 0) / st.length).toFixed(1)} нейронов`;
+  const pats = [...new Set(st.flatMap((x) => x.stats.patterns || []))];
+  $('supPatterns').textContent = pats.length ? pats.join(', ') : 'пока нет';
   $('supMoves').textContent = superMoves;
   const c = $('superChart'), ctx = c.getContext('2d'), W = c.width, H = c.height;
   ctx.clearRect(0, 0, W, H);
@@ -3087,7 +3400,8 @@ function updateStats() {
   $('energyBar2').style.width = `${pct}%`;
   const st = STATE_NAMES[f.state] || f.state;
   const daTxt = f.delta > 0.3 ? ' · дофамин ▲' : f.delta < -0.3 ? ' · дофамин ▼' : '';
-  $('stateChip').textContent = (f.state === 'fly' && sim.cfg.reflexes ? `${st}: ${NAV_NAMES[f.nav] || 'ищет'}` : st) + daTxt;
+  const act = f.freezeLeft > 0 ? 'Замерла' : f.dashLeft > 0 ? 'Рывок' : null;
+  $('stateChip').textContent = (act || (f.state === 'fly' && sim.cfg.reflexes ? `${st}: ${NAV_NAMES[f.nav] || 'ищет'}` : st)) + daTxt;
   const hunting = sim.predators.filter((q) => q.hunting).length;
   $('predChip').textContent = hunting ? `Стрекоз охотится: ${hunting}` : `Стрекоз в саду: ${sim.predators.length}`;
   $('colonySize').textContent = sim.flies.length;
@@ -3113,7 +3427,7 @@ function updateStats() {
     const pc = (x) => `${x >= 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`;
     $('flyTable').innerHTML = sim.flies.map((m) =>
       `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row" style="margin:0"><span>№${m.id + 1} ${STAGES[m.body.stage].name.toLowerCase()}${m.id === sim.hero ? ' (выбрана)' : ''} · поколение ${m.generation}${m.parent !== null && m.parent !== undefined ? ` · потомок мухи ${m.parent + 1}` : ''}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eatenLife} еды</b></div>` +
-      `<div style="font-size:12px">${STATE_NAMES[m.state]} · обоняние ${pc(m.traits.odor)} · осязание ${pc(m.traits.contact)} · моторы ${pc(m.traits.motor)} · обучаемость ${pc(m.traits.learn)} · любопытство ${pc(m.traits.explore)} · сила синапсов ${m.learner.norm().toFixed(2)} · морфа ${m.body.morph.toFixed(2)} · новых связей ${m.brain.gN}</div></div>`).join('');
+      `<div style="font-size:12px">${STATE_NAMES[m.state]} · мозг ${2000 + m.brain.nNew} нейронов · обоняние ${pc(m.traits.odor)} · осязание ${pc(m.traits.contact)} · моторы ${pc(m.traits.motor)} · обучаемость ${pc(m.traits.learn)} · любопытство ${pc(m.traits.explore)} · сила синапсов ${m.learner.norm().toFixed(2)} · морфа ${m.body.morph.toFixed(2)} · новых связей ${m.brain.gN}</div></div>`).join('');
   }
 }
 
@@ -3144,18 +3458,25 @@ function renderWeights(L) {
     return `<span style="position:relative;display:inline-block;width:90px;height:8px;background:var(--line);border-radius:4px;vertical-align:middle"><i style="position:absolute;left:${left}%;width:${pct}%;top:0;bottom:0;background:${color};border-radius:4px"></i></span>`;
   };
   const rows = [];
-  rows.push('<div class="row"><span><b style="color:var(--text)">Поворот</b> (слева − справа)</span><b></b></div>');
-  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[j])} ${L.W[j].toFixed(2)}</b></div>`));
-  rows.push('<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">Подъём</b> (сумма сторон)</span><b></b></div>');
-  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[L.nT + j])} ${L.W[L.nT + j].toFixed(2)}</b></div>`));
-  const bias = L.W[L.nT + L.nC - 1];
-  rows.push(`<div class="row"><span>Смещение (${bias < 0 ? 'держаться ниже' : 'держаться выше'})</span><b>${bar(bias)} ${bias.toFixed(2)}</b></div>`);
-  const s0 = L.nT + L.nC;
-  rows.push('<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">Скорость</b> (сумма сторон)</span><b></b></div>');
-  L.pairs.forEach((p, j) => rows.push(`<div class="row"><span>${p.name}</span><b>${bar(L.W[s0 + j])} ${L.W[s0 + j].toFixed(2)}</b></div>`));
-  const sb = L.W[s0 + L.nS - 1];
-  rows.push(`<div class="row"><span>Смещение (${sb < 0 ? 'медленнее' : 'быстрее'})</span><b>${bar(sb)} ${sb.toFixed(2)}</b></div>`);
+  for (const [w0, len, , kind, name] of L.outs) {
+    const side = name === 'Поворот';
+    const extra = kind === 'b' ? ` — вероятность сейчас ${(L.prob[L.outs.findIndex((o) => o[4] === name)] * 100).toFixed(2)}% за шаг` : '';
+    rows.push(`<div class="row" style="margin-top:8px"><span><b style="color:var(--text)">${name}</b> (${side ? 'слева − справа' : 'сумма сторон'})${extra}</span><b></b></div>`);
+    for (let j = 0; j < L.p; j++) rows.push(`<div class="row"><span>${L.pairs[j].name}</span><b>${bar(L.W[w0 + j])} ${L.W[w0 + j].toFixed(2)}</b></div>`);
+    if (!side) { const bv = L.W[w0 + len - 1]; rows.push(`<div class="row"><span>Смещение</span><b>${bar(bv)} ${bv.toFixed(2)}</b></div>`); }
+  }
   $('weights').innerHTML = rows.join('');
+}
+
+const ETHO_COLORS = { 'освоен': '#7ee0c3', 'складывается': '#ffd54f', 'избегается': '#c9a6ff', 'случайно': '#8c97aa', 'нет данных': '#5a6474' };
+function renderEtho() {
+  const list = sim.ethogram();
+  $('ethoList').innerHTML = list.map((e) => {
+    const learned = e.learnedAt ? ` · освоен на ${Math.round(e.learnedAt / 60)}-й минуте, поколение ${e.learnedGen}` : '';
+    return `<div style="padding:7px 0;border-top:1px solid var(--line)"><div class="row" style="margin:0"><span style="color:var(--text)">${e.name}</span>` +
+      `<b><span style="color:${ETHO_COLORS[e.status]}">${e.status}</span> · ×${e.lift.toFixed(1)}</b></div>` +
+      `<div style="font-size:12px;color:var(--muted)">${e.desc}. Случаев: ${e.events.toFixed(e.events < 10 ? 1 : 0)}${learned}</div></div>`;
+  }).join('');
 }
 
 function updateBodyPanel() {
@@ -3175,21 +3496,29 @@ function renderFoodLegend() {
 }
 
 // выросшие синапсы выбранной особи — линии в изображении мозга
-const GROWN_MAX = 600;
+const GROWN_MAX = 1200;
 const grownGeo = new THREE.BufferGeometry();
 grownGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(GROWN_MAX * 6), 3));
 grownGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(GROWN_MAX * 6), 3));
 grownGeo.setDrawRange(0, 0);
 const grownLines = new THREE.LineSegments(grownGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7 }));
 brainCloud.add(grownLines);
+// новые нейроны — белые точки
+const NEW_MAX = 150;
+const newGeo = new THREE.BufferGeometry();
+newGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(NEW_MAX * 3), 3));
+newGeo.setDrawRange(0, 0);
+const newPts = new THREE.Points(newGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.11, sizeAttenuation: true }));
+brainCloud.add(newPts);
 function updateGrown() {
   const b = sim.fly.brain;
   const pos = grownGeo.attributes.position.array, col = grownGeo.attributes.color.array;
   let sumW = 0;
   const n = Math.min(b.gN, GROWN_MAX);
+  const NC = data.ids.length;
+  const P = (i) => (i < NC ? [data.pos[i * 3], data.pos[i * 3 + 1], data.pos[i * 3 + 2]] : [b.nPos[(i - NC) * 3], b.nPos[(i - NC) * 3 + 1], b.nPos[(i - NC) * 3 + 2]]);
   for (let g = 0; g < n; g++) {
-    const a = b.gSrc[g] * 3, c = b.gDst[g] * 3;
-    pos.set([data.pos[a], data.pos[a + 1], data.pos[a + 2], data.pos[c], data.pos[c + 1], data.pos[c + 2]], g * 6);
+    pos.set([...P(b.gSrc[g]), ...P(b.gDst[g])], g * 6);
     const w = Math.min(1, Math.abs(b.gW[g]) / 0.6);
     const r = 0.3 + 0.7 * w, gg = 0.9, bl = 0.5 + 0.5 * (1 - w);
     col.set([r * 0.5, gg * 0.5, bl * 0.5, r, gg, bl], g * 6);
@@ -3198,6 +3527,12 @@ function updateGrown() {
   grownGeo.setDrawRange(0, n * 2);
   grownGeo.attributes.position.needsUpdate = true;
   grownGeo.attributes.color.needsUpdate = true;
+  const np = newGeo.attributes.position.array;
+  for (let j = 0; j < b.nNew; j++) np.set([b.nPos[j * 3], b.nPos[j * 3 + 1], b.nPos[j * 3 + 2]], j * 3);
+  newGeo.setDrawRange(0, b.nNew);
+  newGeo.attributes.position.needsUpdate = true;
+  $('neuronsNow').textContent = `${NC} + ${b.nNew} новых`;
+  $('neuronsBorn').textContent = `${b.born} / ${b.died}`;
   $('grownNow').textContent = b.gN;
   $('grownFormed').textContent = b.formed;
   $('grownPruned').textContent = b.pruned;
@@ -3401,7 +3736,7 @@ function frame(now) {
     resizeScene();
     renderer.render(scene, camera);
   }
-  if (activeTab === 'stats') { drawChart(); if (tableTimer % 15 === 1) drawLearnChart(); }
+  if (activeTab === 'stats') { drawChart(); if (tableTimer % 15 === 1) { drawLearnChart(); renderEtho(); } }
   if (activeTab === 'brain') {
     if (!brainPoints) buildBrainPoints();
     updateBrainColors();
@@ -3423,6 +3758,8 @@ $('reflexes').addEventListener('change', () => { sim.setConfig(worldConfig()); i
 $('learning').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
 $('inherit').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('bodyMode').addEventListener('change', () => { sim.setConfig(worldConfig()); updateBodyPanel(); });
+$('neurogenesis').addEventListener('change', () => sim.setConfig(worldConfig()));
+$('gates').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('morphSpeed').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('flyCount').addEventListener('change', () => leaveTurbo(newSim));
 $('speed').addEventListener('change', (e) => {

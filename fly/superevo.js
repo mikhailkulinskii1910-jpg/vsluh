@@ -54,7 +54,7 @@ export class Island {
     return {
       W: Array.from(b.learner.W), traits: { ...b.traits }, generation: b.generation, score: this.score(b),
       morph: b.body.morph,
-      grown: { gN: br.gN, gSrc: Array.from(br.gSrc.subarray(0, br.gN)), gDst: Array.from(br.gDst.subarray(0, br.gN)), gW: Array.from(br.gW.subarray(0, br.gN)) },
+      grown: br.exportGrowth(),
     };
   }
 
@@ -71,6 +71,8 @@ export class Island {
       stages: [0, 1, 2, 3, 4].map((k) => flies.filter((f) => f.body.stage === k).length),
       morph: flies.reduce((a, f) => a + f.body.morph, 0) / flies.length,
       grown: flies.reduce((a, f) => a + f.brain.gN, 0) / flies.length,
+      neurons: flies.reduce((a, f) => a + f.brain.net.N + f.brain.nNew, 0) / flies.length,
+      patterns: this.sim.ethogram().filter((x) => x.status === 'освоен').map((x) => x.name),
     };
   }
 
