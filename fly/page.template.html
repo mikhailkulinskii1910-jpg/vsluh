@@ -152,7 +152,7 @@
       <div id="scene"></div>
       <div class="hud">
         <div class="chips">
-          <span class="chip">Муха <b id="heroName">1</b> · жизнь <b id="lives">–</b> · еда <b id="eaten">–</b> · <b id="age">–</b></span>
+          <span class="chip">№<b id="heroName">1</b> · жизнь <b id="lives">–</b> · еда <b id="eaten">–</b> · <b id="age">–</b></span>
         </div>
         <div class="chips">
           <span class="chip" id="dayChip">День</span>
@@ -167,17 +167,17 @@
     </div>
     <div class="below-scene">
       <button id="camBtn">Камера: следить</button>
-      <button id="nextBtn">Следующая муха</button>
+      <button id="nextBtn">Следующая особь</button>
       <button id="smellBtn">Запах: виден</button>
     </div>
     <p class="shot-note">«Следить» — камера летит за выбранной мухой. «Обзор» — весь сад, его можно вращать пальцем или мышью. Светлые частицы — запах фруктов, его сносит ветер.</p>
     <div class="grid" style="margin-top:12px">
       <div class="card">
         <h2>Колония</h2>
-        <div class="row"><span>Мух в саду</span><b id="colonySize">–</b></div>
-        <div class="row"><span>Посадок на фрукты</span><b id="colonyEaten">–</b></div>
-        <div class="row"><span>Погибло мух</span><b id="colonyDeaths">–</b></div>
-        <div class="row"><span>Фруктов сейчас</span><b id="foodNow">–</b></div>
+        <div class="row"><span>Особей в саду</span><b id="colonySize">–</b></div>
+        <div class="row"><span>Посадок на еду</span><b id="colonyEaten">–</b></div>
+        <div class="row"><span>Погибло особей</span><b id="colonyDeaths">–</b></div>
+        <div class="row"><span>Еды сейчас</span><b id="foodNow">–</b></div>
         <div class="row"><span>Ветер</span><b id="windNow">–</b></div>
       </div>
       <div class="card">
@@ -214,6 +214,14 @@
         <div class="row"><span>Скорость полёта</span><b id="speedNow">–</b></div>
         <div class="row"><span>Поведение</span><b id="navNow">–</b></div>
         <p class="muted" style="margin-top:12px">Скорость задаёт коннектом, выученная команда её ускоряет или замедляет. Поворот складывается из сигнала коннектома и выученной команды, подъём — выученная команда. Посадка на фрукт по касанию, рефлекс бегства от стрекозы и сон ночью заданы правилами.</p>
+      </div>
+      <div class="card">
+        <h2>Новые связи</h2>
+        <p class="muted">Между нейронами, которые разрядились одновременно, вырастают новые синапсы. Дофамин их укрепляет, а неподкреплённые слабеют и отмирают («используй или потеряешь»). Выросшие связи передаются потомкам. На изображении мозга они показаны линиями.</p>
+        <div class="row"><span>Выросших синапсов сейчас</span><b id="grownNow">–</b></div>
+        <div class="row"><span>Образовалось за жизнь</span><b id="grownFormed">–</b></div>
+        <div class="row"><span>Отмерло за жизнь</span><b id="grownPruned">–</b></div>
+        <div class="row"><span>Средний вес выросших синапсов</span><b id="grownW">–</b></div>
       </div>
       <div class="card">
         <h2>Дофамин и обучение</h2>
@@ -255,6 +263,25 @@
         <p class="muted" id="status" style="margin-top:10px"></p>
       </div>
       <div class="card">
+        <h2>Эволюция тела</h2>
+        <p class="muted">Игровая механика: в природе насекомые не превращаются в грызунов. Здесь у каждой особи есть наследуемый ген «морфа». Потомок получает морфу родителя с небольшой мутацией, а отбор решает, какое тело выгоднее. От морфы зависят размер, полёт, скорость, запас и расход энергии и то, какую еду особь может есть. Мозг остаётся мушиным коннектомом.</p>
+        <div id="stageBars" class="bars"></div>
+        <div class="row"><span>Средняя морфа колонии</span><b id="morphNow">–</b></div>
+        <div class="toolbar" style="grid-template-columns:1fr 1fr;margin-top:6px">
+          <div><label for="bodyMode">Тело</label><select id="bodyMode">
+            <option value="-1" selected>Эволюционирует само</option>
+            <option value="0">Всем: муха</option><option value="1">Всем: жук</option><option value="2">Всем: сверчок</option>
+            <option value="3">Всем: землеройка</option><option value="4">Всем: мышь</option></select></div>
+          <div><label for="morphSpeed">Скорость эволюции тела</label><select id="morphSpeed">
+            <option value="1">×1</option><option value="3" selected>×3</option><option value="10">×10</option></select></div>
+        </div>
+        <p class="muted">Быстрее всего тело меняется в суперэволюции: там поколения сменяются каждую минуту симуляции.</p>
+      </div>
+      <div class="card">
+        <h2>Еда в саду</h2>
+        <div id="foodLegend" class="muted"></div>
+      </div>
+      <div class="card">
         <h2>Как это устроено</h2>
         <p class="muted">Геном задаёт силу синапсов, пороги нейронов, чувствительность сенсоров и силу моторов. Топология коннектома не меняется.</p>
         <p class="muted">Фитнес: 5 очков за посадку на фрукт, 0,05 за секунду жизни, −4 за смерть от стрекозы, −2 за голод. Геном содержит и гены обучаемости: скорость обучения, силу случайных проб, время следа синапса, награду за запах и наказание за удары. Так эволюция отбирает способность учиться.</p>
@@ -289,6 +316,7 @@
         <div class="row"><span>Отборов</span><b id="supSel">–</b></div>
         <div class="row"><span>Лучший остров: посадок в минуту на муху</span><b id="supRate">–</b></div>
         <div class="row"><span>Чемпион: посадок в минуту</span><b id="supChamp">–</b></div>
+        <div class="row"><span>Тела на островах</span><b id="supStages">–</b></div>
         <div class="row"><span>Переселений в сад</span><b id="supMoves">0</b></div>
         <canvas id="superChart" class="chart" width="880" height="240" style="margin-top:8px"></canvas>
         <p class="muted">Линии — острова: посадок на фрукт в минуту на муху по времени симуляции.</p>
@@ -442,6 +470,16 @@ const appleCutTex = canvasTex(128, 128, (ctx, w, h) => {
   ctx.strokeStyle = '#e6d6a8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(w / 2, h / 2, 26, 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = '#3b2414';
   for (const a of [0, Math.PI]) { ctx.beginPath(); ctx.ellipse(w / 2 + Math.cos(a) * 10, h / 2, 5, 3, 0, 0, Math.PI * 2); ctx.fill(); }
+});
+const mushroomTex = canvasTex(128, 64, (ctx, w, h) => {
+  ctx.fillStyle = '#c62a2a'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 18; i++) { ctx.beginPath(); ctx.arc((i * 37) % w, (i * 23) % (h * 0.8), 3 + (i % 3), 0, Math.PI * 2); ctx.fill(); }
+});
+const cheeseTex = canvasTex(128, 128, (ctx, w, h) => {
+  ctx.fillStyle = '#f4c542'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#d9a72a';
+  for (let i = 0; i < 12; i++) { ctx.beginPath(); ctx.arc((i * 47) % w, (i * 31) % h, 4 + (i % 4) * 2, 0, Math.PI * 2); ctx.fill(); }
 });
 const particleTex = canvasTex(64, 64, (ctx, w, h) => {
   const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -704,6 +742,114 @@ function poseFly(m, f, t) {
   }
 }
 
+// ---- другие стадии тела: жук, сверчок, землеройка, мышь ----
+const CRE_MATS = {
+  shell: std(0x2f7a4a, { metalness: 0.6, roughness: 0.25 }),
+  shellDark: std(0x1c3f2a, { metalness: 0.5, roughness: 0.3 }),
+  chitin: std(0x2a1c10, { roughness: 0.5 }),
+  cricket: std(0x6b4a26, { roughness: 0.6 }),
+  cricketDark: std(0x3f2a14, { roughness: 0.6 }),
+  fur: std(0x6f5f50, { roughness: 0.95 }),
+  furMouse: std(0x9a8f86, { roughness: 0.95 }),
+  pink: std(0xe8a8a8, { roughness: 0.7 }),
+  eyeBlack: std(0x080808, { roughness: 0.15, metalness: 0.2 }),
+  whisker: new THREE.MeshBasicMaterial({ color: 0x222222 }),
+};
+const limb = (len, r, mat) => stick(len, r, mat);
+// Общая модель: root (позиция), body (наклоны), legs[{g, phase}] для походки, wings для летунов
+function makeCreature(stage) {
+  if (stage === 0) { const m = makeFly(); m.stage = 0; return m; }
+  const root = new THREE.Group(), body = new THREE.Group();
+  root.add(body);
+  const legs = [], wings = [];
+  const addLeg = (x, y, z, len, r, mat, phase, spread = 1.0) => {
+    const g = new THREE.Group(); g.position.set(x, y, z);
+    const l = limb(len, r, mat); l.rotation.z = Math.sign(x) * spread * -0.6; g.add(l);
+    body.add(g); legs.push({ g, phase });
+  };
+  if (stage === 1) {
+    // жук: блестящие надкрылья, переднеспинка, голова с усиками, шесть ног
+    const el = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), CRE_MATS.shell);
+    el.scale.set(0.07, 0.06, 0.1); el.position.set(0, -0.005, -0.03);
+    const seam = new THREE.Mesh(new THREE.BoxGeometry(0.003, 0.062, 0.2), CRE_MATS.shellDark); seam.position.set(0, 0.0, -0.03);
+    const pron = ellipsoid(0.05, 0.035, 0.035, CRE_MATS.shellDark); pron.position.set(0, 0.0, 0.07);
+    const head = ellipsoid(0.03, 0.025, 0.025, CRE_MATS.chitin); head.position.set(0, -0.005, 0.11);
+    body.add(el, seam, pron, head);
+    for (const sx of [1, -1]) {
+      const ant = limb(0.07, 0.003, CRE_MATS.chitin); ant.position.set(sx * 0.015, 0.005, 0.13); ant.rotation.set(-1.2, 0, sx * 0.5); body.add(ant);
+      for (let k = 0; k < 3; k++) addLeg(sx * 0.04, -0.02, 0.06 - k * 0.05, 0.07, 0.005, CRE_MATS.chitin, k + (sx > 0 ? 0 : Math.PI));
+      const wHinge = new THREE.Group(); wHinge.position.set(sx * 0.02, 0.04, 0.03);
+      const w = new THREE.Mesh(wingShape, FLY_MATS.wing); if (sx < 0) w.scale.x = -1; wHinge.add(w); body.add(wHinge);
+      wings.push({ hinge: wHinge, side: sx });
+    }
+  } else if (stage === 2) {
+    // сверчок: вытянутое тело, длинные усики, мощные задние ноги
+    const abd = ellipsoid(0.045, 0.04, 0.1, CRE_MATS.cricket); abd.position.set(0, 0, -0.05);
+    const thor = ellipsoid(0.045, 0.042, 0.045, CRE_MATS.cricketDark); thor.position.set(0, 0.005, 0.06);
+    const head = ellipsoid(0.04, 0.042, 0.035, CRE_MATS.cricketDark); head.position.set(0, 0.005, 0.11);
+    body.add(abd, thor, head);
+    for (const sx of [1, -1]) {
+      const eye = ellipsoid(0.012, 0.012, 0.012, CRE_MATS.eyeBlack, 8); eye.position.set(sx * 0.028, 0.02, 0.125); body.add(eye);
+      const ant = limb(0.25, 0.002, CRE_MATS.cricketDark); ant.position.set(sx * 0.012, 0.02, 0.14); ant.rotation.set(-1.4, 0, sx * 0.25); body.add(ant);
+      addLeg(sx * 0.035, -0.02, 0.08, 0.06, 0.005, CRE_MATS.cricketDark, sx > 0 ? 0 : Math.PI);
+      addLeg(sx * 0.035, -0.02, 0.04, 0.06, 0.005, CRE_MATS.cricketDark, sx > 0 ? Math.PI : 0);
+      // задняя прыгательная нога: толстое бедро вверх-назад, голень вниз
+      const hip = new THREE.Group(); hip.position.set(sx * 0.04, 0.0, -0.01);
+      const femur = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.008, 0.12, 6), CRE_MATS.cricket);
+      femur.geometry.translate(0, -0.06, 0); femur.rotation.set(2.3, 0, sx * -0.2); hip.add(femur);
+      const tib = limb(0.11, 0.004, CRE_MATS.cricketDark); tib.position.set(0, 0.04, -0.09); tib.rotation.x = 0.4; hip.add(tib);
+      body.add(hip); legs.push({ g: hip, phase: 0, hind: true });
+    }
+  } else {
+    // землеройка (3) и мышь (4): пушистое тело, мордочка, уши, хвост, четыре лапы
+    const mouse = stage === 4;
+    const furMat = mouse ? CRE_MATS.furMouse : CRE_MATS.fur;
+    const torso = ellipsoid(mouse ? 0.06 : 0.05, mouse ? 0.055 : 0.045, mouse ? 0.1 : 0.11, furMat); torso.position.set(0, 0.01, -0.01);
+    const head = ellipsoid(mouse ? 0.042 : 0.035, mouse ? 0.04 : 0.032, mouse ? 0.05 : 0.045, furMat); head.position.set(0, 0.02, 0.1);
+    const snout = new THREE.Mesh(new THREE.ConeGeometry(mouse ? 0.022 : 0.016, mouse ? 0.05 : 0.08, 10), furMat);
+    snout.rotation.x = Math.PI / 2; snout.position.set(0, 0.015, mouse ? 0.155 : 0.17);
+    const nose = ellipsoid(0.008, 0.007, 0.007, CRE_MATS.pink, 8); nose.position.set(0, 0.015, mouse ? 0.18 : 0.21);
+    body.add(torso, head, snout, nose);
+    for (const sx of [1, -1]) {
+      const eye = ellipsoid(0.009, 0.009, 0.009, CRE_MATS.eyeBlack, 8); eye.position.set(sx * 0.025, 0.035, 0.125); body.add(eye);
+      const ear = new THREE.Mesh(new THREE.CircleGeometry(mouse ? 0.03 : 0.014, 14), CRE_MATS.pink);
+      ear.position.set(sx * (mouse ? 0.03 : 0.025), mouse ? 0.07 : 0.05, 0.09); ear.rotation.set(-0.2, sx * 0.4, 0); ear.material.side = THREE.DoubleSide; body.add(ear);
+      for (const wz of [0.0, 0.01]) {
+        const wh = limb(0.06, 0.0012, CRE_MATS.whisker); wh.position.set(sx * 0.01, 0.015, (mouse ? 0.17 : 0.19) + wz); wh.rotation.set(0, 0, sx * (1.4 + wz * 10)); body.add(wh);
+      }
+      addLeg(sx * 0.035, -0.02, 0.06, 0.04, 0.01, CRE_MATS.pink, sx > 0 ? 0 : Math.PI, 0.3);
+      addLeg(sx * 0.035, -0.02, -0.07, 0.045, 0.012, CRE_MATS.pink, sx > 0 ? Math.PI : 0, 0.3);
+    }
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.008, mouse ? 0.22 : 0.12, 6), CRE_MATS.pink);
+    tail.geometry.translate(0, -(mouse ? 0.11 : 0.06), 0); tail.rotation.x = 1.25; tail.position.set(0, 0.0, -0.1);
+    body.add(tail);
+  }
+  root.traverse((o) => { if (o.isMesh) o.castShadow = o.material !== CRE_MATS.whisker && o.material !== FLY_MATS.wing; });
+  return { root, body, legs, wings, stage, generic: true };
+}
+
+// Поза существа: полёт для летунов, походка для наземных
+function poseCreature(m, f, t) {
+  if (!m.generic) { poseFly(m, f, t); m.root.scale.setScalar(1.6 * Math.pow(f.body.size, 0.8)); return; }
+  const s = 1.6 * Math.pow(f.body.size, 0.8);
+  m.root.scale.setScalar(s);
+  const flying = !f.body.walk && (f.state === 'fly' || f.state === 'escape');
+  m.root.position.set(f.x, f.body.walk ? 0.03 * s + 0.01 : f.y, f.z);
+  m.root.rotation.y = f.heading;
+  const moving = f.speed > 0.05;
+  const gait = moving ? t * (8 + f.speed * 6) : 0;
+  for (const L of m.legs) {
+    if (L.hind) { L.g.rotation.x = moving ? Math.max(0, Math.sin(gait * 0.5)) * -0.6 : 0; continue; }
+    L.g.rotation.x = moving ? Math.sin(gait + L.phase) * 0.5 : 0;
+  }
+  m.body.position.y = moving && m.stage === 2 ? Math.max(0, Math.sin(gait * 0.5)) * 0.03 : (moving ? Math.abs(Math.sin(gait)) * 0.004 : 0);
+  for (const w of m.wings) {
+    w.hinge.visible = flying;
+    if (flying) { const st = Math.sin(t * 70); w.hinge.rotation.set(0, w.side * (0.3 + st * 0.6), w.side * st * 0.3); }
+  }
+  m.body.rotation.x = flying ? -0.15 : 0;
+}
+
 // Стрекоза
 const DF_MATS = {
   body: std(0x1f7f8f, { metalness: 0.45, roughness: 0.3 }),
@@ -765,11 +911,63 @@ function makeFruit(kind, size) {
   } else if (kind === 1) {
     const slice = new THREE.Mesh(new THREE.CylinderGeometry(size, size, size * 0.55, 22), [FRUIT_MATS.bananaSide, FRUIT_MATS.bananaCut, FRUIT_MATS.bananaCut]);
     g.add(slice);
-  } else {
+  } else if (kind === 2) {
     const grape = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 12), FRUIT_MATS.grape);
     const st = stick(size * 0.6, size * 0.08, FRUIT_MATS.stem);
     st.position.y = size * 1.4;
     g.add(grape, st);
+  } else if (kind === 3) {
+    // нектар: светящаяся сердцевина цветка
+    const c = new THREE.Mesh(new THREE.SphereGeometry(size, 12, 8), std(0xffc93c, { emissive: 0x8a5a00, roughness: 0.3 }));
+    c.scale.y = 0.6; c.position.y = size * 0.5;
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: particleTex, color: 0xffd76a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.scale.setScalar(size * 6); glow.position.y = size * 0.6;
+    g.add(c, glow);
+  } else if (kind === 4) {
+    // гриб: шляпка в белых точках и ножка
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(size * 0.35, size * 0.45, size * 1.1, 10), std(0xf2ead8));
+    stem.position.y = size * 0.55;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ map: mushroomTex, roughness: 0.5 }));
+    cap.scale.y = 0.7; cap.position.y = size * 1.05;
+    g.add(stem, cap);
+  } else if (kind === 5) {
+    // семена: горстка зёрен
+    const seedMat = std(0xc9a46a, { roughness: 0.6 });
+    for (let i = 0; i < 7; i++) {
+      const sd = ellipsoid(size * 0.25, size * 0.15, size * 0.4, seedMat, 8);
+      const a = i * 0.9;
+      sd.position.set(Math.cos(a) * size * 0.5 * (i % 2 + 0.5), size * 0.15, Math.sin(a) * size * 0.5);
+      sd.rotation.y = a;
+      g.add(sd);
+    }
+  } else if (kind === 6) {
+    // жёлудь: орешек и шапочка
+    const nut = ellipsoid(size * 0.6, size * 0.8, size * 0.6, std(0x9a6a2e, { roughness: 0.4 }), 12);
+    nut.position.y = size * 0.8;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(size * 0.65, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), std(0x5a4024, { roughness: 0.9 }));
+    cap.position.y = size * 1.25;
+    nut.rotation.z = 1.2; cap.rotation.z = 1.2; cap.position.x = size * 0.45; cap.position.y = size * 0.9;
+    g.add(nut, cap);
+  } else if (kind === 7) {
+    // ягоды на кустике: гроздь и стебелёк до земли
+    const colors = [0xc0213a, 0x2b2f8a, 0xd02a4a];
+    for (let i = 0; i < 4; i++) {
+      const b = new THREE.Mesh(new THREE.SphereGeometry(size * 0.55, 10, 8), std(colors[i % 3], { roughness: 0.2 }));
+      b.position.set((i % 2 - 0.5) * size * 0.8, size * (0.5 + Math.floor(i / 2) * 0.7), (i < 2 ? 0.2 : -0.2) * size);
+      g.add(b);
+    }
+    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.012, 1, 5), std(0x4f7a2e));
+    stalk.geometry.translate(0, -0.5, 0);
+    g.add(stalk);
+    g.userData.stalk = stalk;
+    const leaf = ellipsoid(size * 1.2, size * 0.1, size * 0.5, std(0x5f9a35, { side: THREE.DoubleSide }), 8);
+    leaf.position.set(size, size * 0.2, 0);
+    g.add(leaf);
+  } else {
+    // сыр: клинышек с дырочками
+    const wedge = new THREE.Mesh(new THREE.CylinderGeometry(size * 1.3, size * 1.3, size * 0.9, 16, 1, false, 0, Math.PI / 3), new THREE.MeshStandardMaterial({ map: cheeseTex, roughness: 0.5 }));
+    wedge.position.y = size * 0.45;
+    g.add(wedge);
   }
   shadowAll(g);
   return g;
@@ -945,7 +1143,8 @@ function computeGroupRates() {
 
 function worldConfig() {
   const cfg = { flyCount: Number($('flyCount').value), reflexes: $('reflexes').checked ? 1 : 0,
-    learning: $('learning').checked ? 1 : 0, inherit: $('inherit').checked ? 1 : 0 };
+    learning: $('learning').checked ? 1 : 0, inherit: $('inherit').checked ? 1 : 0,
+    forceStage: Number($('bodyMode').value), morphSpeed: Number($('morphSpeed').value) };
   if ($('useEvolved').checked && evoState && evoState.best) Object.assign(cfg, decode(evoState.best));
   return cfg;
 }
@@ -954,7 +1153,7 @@ function rebuildWorld() {
   for (const m of flyModels) scene.remove(m.root);
   for (const m of fruitModels) scene.remove(m.group);
   for (const m of obstacleModels) scene.remove(m);
-  flyModels = sim.flies.map(() => { const m = makeFly(); scene.add(m.root); return m; });
+  flyModels = sim.flies.map((f) => { const m = makeCreature(f.body.stage); scene.add(m.root); return m; });
   fruitModels = sim.food.map((f) => {
     const group = makeFruit(f.kind, f.size);
     const stem = stick(0.35, 0.006, FRUIT_MATS.stem);
@@ -1141,7 +1340,7 @@ function startSuper() {
     const w = new Worker(url);
     w.onmessage = (e) => onSuper(e.data);
     w.onerror = (e) => { $('superStatus').textContent = 'Ошибка суперэволюции: ' + e.message; };
-    w.postMessage({ type: 'start', id: i, data, mode: $('mode').value, seed: 1 + i * 7919 + Math.floor(Math.random() * 1e5), flyCount: flies, config: { reflexes: 0 } });
+    w.postMessage({ type: 'start', id: i, data, mode: $('mode').value, seed: 1 + i * 7919 + Math.floor(Math.random() * 1e5), flyCount: flies, config: { reflexes: 0, morphSpeed: Number($('morphSpeed').value) } });
     superWorkers.push(w);
   }
   superRunning = true;
@@ -1168,8 +1367,7 @@ function onSuper(m) {
 
 function transferChampion() {
   if (!champion || !sim) return;
-  if (!sim.seedLearners(champion.W, champion.generation)) return;
-  for (const f of sim.flies) f.traits = { ...champion.traits };
+  if (!sim.seedChampion(champion)) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify({ W: champion.W, generation: champion.generation, mode: sim.mode, savedAt: Date.now() })); } catch (e) { /* нет хранилища */ }
   superMoves += 1;
   sim.logEvent(`В сад переселены потомки чемпиона суперэволюции (поколение ${champion.generation})`);
@@ -1198,7 +1396,10 @@ function updateSuperUI() {
   $('supGen').textContent = Math.max(...st.map((x) => x.stats.maxGen));
   $('supSel').textContent = st.reduce((a, x) => a + x.stats.selections, 0);
   $('supRate').textContent = Math.max(...st.map((x) => x.stats.rate)).toFixed(2);
-  $('supChamp').textContent = champion ? `${champion.score.toFixed(2)} (остров ${champion.island + 1}, поколение ${champion.generation})` : '–';
+  $('supChamp').textContent = champion ? `${champion.score.toFixed(2)} (остров ${champion.island + 1}, поколение ${champion.generation}, ${STAGES[stageOf(champion.morph ?? 0)].name.toLowerCase()})` : '–';
+  const tot = [0, 0, 0, 0, 0];
+  st.forEach((x) => (x.stats.stages || []).forEach((c, k) => { tot[k] += c; }));
+  $('supStages').textContent = STAGES.map((g, k) => tot[k] ? `${g.name.toLowerCase()} ${tot[k]}` : '').filter(Boolean).join(', ') || '–';
   $('supMoves').textContent = superMoves;
   const c = $('superChart'), ctx = c.getContext('2d'), W = c.width, H = c.height;
   ctx.clearRect(0, 0, W, H);
@@ -1256,9 +1457,9 @@ let tableTimer = 0;
 function updateStats() {
   const f = sim.fly;
   const e = Math.max(0, f.energy);
-  const pct = (e / CONFIG.energyMax) * 100;
+  const pct = (e / f.energyMax) * 100;
   const age = fmtTime(f.lifeTime);
-  const name = String(f.id + 1);
+  const name = `${f.id + 1} · ${STAGES[f.body.stage].name.toLowerCase()}`;
   $('heroName').textContent = name;
   $('heroName2').textContent = name;
   $('brainHero').textContent = name;
@@ -1269,8 +1470,8 @@ function updateStats() {
   $('age').textContent = age;
   $('age2').textContent = age;
   $('deaths').textContent = `${sim.deaths.predator} / ${sim.deaths.starve}`;
-  $('energyText').textContent = `${Math.round(e)} / ${CONFIG.energyMax}`;
-  $('energyText2').textContent = `${Math.round(e)} / ${CONFIG.energyMax}`;
+  $('energyText').textContent = `${Math.round(e)} / ${Math.round(f.energyMax)}`;
+  $('energyText2').textContent = `${Math.round(e)} / ${Math.round(f.energyMax)}`;
   $('energyBar').style.width = `${pct}%`;
   $('energyBar2').style.width = `${pct}%`;
   const st = STATE_NAMES[f.state] || f.state;
@@ -1300,8 +1501,8 @@ function updateStats() {
   if (activeTab === 'stats' && (tableTimer++ % 15 === 0)) {
     const pc = (x) => `${x >= 1 ? '+' : '−'}${Math.round(Math.abs(x - 1) * 100)}%`;
     $('flyTable').innerHTML = sim.flies.map((m) =>
-      `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row" style="margin:0"><span>Муха ${m.id + 1}${m.id === sim.hero ? ' (выбрана)' : ''} · поколение ${m.generation}${m.parent !== null && m.parent !== undefined ? ` · потомок мухи ${m.parent + 1}` : ''}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eatenLife} еды</b></div>` +
-      `<div style="font-size:12px">${STATE_NAMES[m.state]} · обоняние ${pc(m.traits.odor)} · осязание ${pc(m.traits.contact)} · моторы ${pc(m.traits.motor)} · обучаемость ${pc(m.traits.learn)} · любопытство ${pc(m.traits.explore)} · сила синапсов ${m.learner.norm().toFixed(2)}</div></div>`).join('');
+      `<div style="padding:6px 0;border-top:1px solid var(--line)"><div class="row" style="margin:0"><span>№${m.id + 1} ${STAGES[m.body.stage].name.toLowerCase()}${m.id === sim.hero ? ' (выбрана)' : ''} · поколение ${m.generation}${m.parent !== null && m.parent !== undefined ? ` · потомок мухи ${m.parent + 1}` : ''}</span><b>${Math.round(Math.max(0, m.energy))} эн. · ${m.eatenLife} еды</b></div>` +
+      `<div style="font-size:12px">${STATE_NAMES[m.state]} · обоняние ${pc(m.traits.odor)} · осязание ${pc(m.traits.contact)} · моторы ${pc(m.traits.motor)} · обучаемость ${pc(m.traits.learn)} · любопытство ${pc(m.traits.explore)} · сила синапсов ${m.learner.norm().toFixed(2)} · морфа ${m.body.morph.toFixed(2)} · новых связей ${m.brain.gN}</div></div>`).join('');
   }
 }
 
@@ -1320,10 +1521,10 @@ function updateBrainTab() {
   $('daBar').style.width = Math.round(Math.min(1, Math.max(0, f.da) / 2) * 100) + '%';
   $('rpeNow').textContent = f.delta.toFixed(2);
   $('rpeBar').style.width = Math.round(Math.min(1, Math.abs(f.delta) / 2) * 100) + '%';
-  if (weightsTimer++ % 20 === 0) renderWeights(f.learner);
+  if (weightsTimer++ % 20 === 0) { renderWeights(f.learner); updateGrown(); }
 }
 
-let weightsTimer = 0;
+let weightsTimer = 0, bodyUiTimer = 0;
 function renderWeights(L) {
   const bar = (w) => {
     const pct = Math.round(Math.min(1, Math.abs(w) / 4) * 50);
@@ -1344,6 +1545,52 @@ function renderWeights(L) {
   const sb = L.W[s0 + L.nS - 1];
   rows.push(`<div class="row"><span>Смещение (${sb < 0 ? 'медленнее' : 'быстрее'})</span><b>${bar(sb)} ${sb.toFixed(2)}</b></div>`);
   $('weights').innerHTML = rows.join('');
+}
+
+function updateBodyPanel() {
+  const counts = [0, 0, 0, 0, 0];
+  let morph = 0;
+  for (const f of sim.flies) { counts[f.body.stage] += 1; morph += f.body.morph; }
+  $('stageBars').innerHTML = STAGES.map((g, k) =>
+    `<div style="--c:${['#e0ac4c', '#2f7a4a', '#6b4a26', '#6f5f50', '#9a8f86'][k]}"><div class="lbl"><span>${g.name}</span><b>${counts[k]}</b></div><div class="track"><i style="width:${Math.round(counts[k] / sim.flies.length * 100)}%"></i></div></div>`).join('');
+  $('morphNow').textContent = (morph / sim.flies.length).toFixed(2);
+}
+
+function renderFoodLegend() {
+  const who = (e) => STAGES.filter((g, k) => STAGE_CENTERS[k] >= e[0] && STAGE_CENTERS[k] <= e[1]).map((g) => g.name.toLowerCase()).join(', ');
+  const alive = (kind) => sim.food.filter((x) => x.kind === kind && x.alive).length;
+  $('foodLegend').innerHTML = FOOD_TYPES.map((t, k) =>
+    `<div class="row"><span>${t.name} <span style="font-size:12px">(${who(t.eat)})</span></span><b>сытность ×${t.energy} · ${alive(k)} шт.</b></div>`).join('');
+}
+
+// выросшие синапсы выбранной особи — линии в изображении мозга
+const GROWN_MAX = 600;
+const grownGeo = new THREE.BufferGeometry();
+grownGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(GROWN_MAX * 6), 3));
+grownGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(GROWN_MAX * 6), 3));
+grownGeo.setDrawRange(0, 0);
+const grownLines = new THREE.LineSegments(grownGeo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7 }));
+brainCloud.add(grownLines);
+function updateGrown() {
+  const b = sim.fly.brain;
+  const pos = grownGeo.attributes.position.array, col = grownGeo.attributes.color.array;
+  let sumW = 0;
+  const n = Math.min(b.gN, GROWN_MAX);
+  for (let g = 0; g < n; g++) {
+    const a = b.gSrc[g] * 3, c = b.gDst[g] * 3;
+    pos.set([data.pos[a], data.pos[a + 1], data.pos[a + 2], data.pos[c], data.pos[c + 1], data.pos[c + 2]], g * 6);
+    const w = Math.min(1, Math.abs(b.gW[g]) / 0.6);
+    const r = 0.3 + 0.7 * w, gg = 0.9, bl = 0.5 + 0.5 * (1 - w);
+    col.set([r * 0.5, gg * 0.5, bl * 0.5, r, gg, bl], g * 6);
+    sumW += b.gW[g];
+  }
+  grownGeo.setDrawRange(0, n * 2);
+  grownGeo.attributes.position.needsUpdate = true;
+  grownGeo.attributes.color.needsUpdate = true;
+  $('grownNow').textContent = b.gN;
+  $('grownFormed').textContent = b.formed;
+  $('grownPruned').textContent = b.pruned;
+  $('grownW').textContent = n ? (sumW / n).toFixed(3) : '–';
 }
 
 function drawLearnChart() {
@@ -1443,7 +1690,11 @@ function syncScene() {
   const dtSim = Math.max(0, Math.min(0.5, t - lastFrameSim));
   lastFrameSim = t;
   if (flyModels.length !== sim.flies.length) rebuildWorld();
-  sim.flies.forEach((f, i) => poseFly(flyModels[i], f, t));
+  sim.flies.forEach((f, i) => {
+    // стадия тела сменилась — меняем модель
+    if (flyModels[i].stage !== f.body.stage) { scene.remove(flyModels[i].root); flyModels[i] = makeCreature(f.body.stage); scene.add(flyModels[i].root); }
+    poseCreature(flyModels[i], f, t);
+  });
 
   const hero = sim.fly;
   heroRing.position.set(hero.x, 0.01, hero.z);
@@ -1474,9 +1725,11 @@ function syncScene() {
     if (!food.alive) return;
     m.stem.visible = !!food.hanging;
     const s = 0.45 + 0.55 * Math.sqrt(food.amount / food.max);
-    m.group.position.set(food.x, food.base + (food.kind === 0 ? 0 : food.size * 0.3), food.z);
+    m.group.position.set(food.x, food.base + (food.kind === 1 ? food.size * 0.3 : 0), food.z);
     if (food.kind === 2) m.group.position.y = food.base + food.size * s;
     m.group.scale.setScalar(s);
+    const stalk = m.group.userData.stalk;
+    if (stalk) stalk.scale.y = Math.max(0.01, food.base / s);
   });
 
   updateSmell(dtSim);
@@ -1486,7 +1739,8 @@ function syncScene() {
     controls.enabled = false;
     const fx = Math.sin(hero.heading), fz = Math.cos(hero.heading);
     const still = hero.state === 'feed' || hero.state === 'rest';
-    const back = still ? 0.9 : 1.3, up = still ? 0.45 : 0.6;
+    const k = Math.pow(hero.body.size, 0.8);
+    const back = (still ? 0.9 : 1.3) * k, up = (still ? 0.45 : 0.6) * k;
     const desired = new THREE.Vector3(hero.x - fx * back, hero.y + up, hero.z - fz * back);
     camera.position.lerp(desired, 0.08);
     camera.lookAt(hero.x + fx * 0.15, hero.y, hero.z + fz * 0.15);
@@ -1526,6 +1780,7 @@ function frame(now) {
   }
   updateStats();
   superTick(real);
+  if (activeTab === 'evo' && (bodyUiTimer++ % 20 === 0)) { updateBodyPanel(); renderFoodLegend(); }
   if (activeTab === 'super' && (superUiTimer++ % 20 === 0)) updateSuperUI();
   saveTimer += real;
   if (saveTimer > 20) { saveTimer = 0; saveBrain(); }
@@ -1555,6 +1810,8 @@ $('mode').addEventListener('change', () => { newSim(); if (evoRunning) startEvol
 $('reflexes').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
 $('learning').addEventListener('change', () => { sim.setConfig(worldConfig()); if (evoRunning) startEvolution(); });
 $('inherit').addEventListener('change', () => sim.setConfig(worldConfig()));
+$('bodyMode').addEventListener('change', () => { sim.setConfig(worldConfig()); updateBodyPanel(); });
+$('morphSpeed').addEventListener('change', () => sim.setConfig(worldConfig()));
 $('flyCount').addEventListener('change', newSim);
 $('speed').addEventListener('change', (e) => { speed = Number(e.target.value); });
 $('pauseBtn').addEventListener('click', (e) => {

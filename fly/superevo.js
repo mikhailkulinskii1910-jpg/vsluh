@@ -50,7 +50,12 @@ export class Island {
   best() {
     const flies = [...this.sim.flies].sort((a, b) => this.score(b) - this.score(a));
     const b = flies[0];
-    return { W: Array.from(b.learner.W), traits: { ...b.traits }, generation: b.generation, score: this.score(b) };
+    const br = b.brain;
+    return {
+      W: Array.from(b.learner.W), traits: { ...b.traits }, generation: b.generation, score: this.score(b),
+      morph: b.body.morph,
+      grown: { gN: br.gN, gSrc: Array.from(br.gSrc.subarray(0, br.gN)), gDst: Array.from(br.gDst.subarray(0, br.gN)), gW: Array.from(br.gW.subarray(0, br.gN)) },
+    };
   }
 
   stats() {
@@ -63,13 +68,19 @@ export class Island {
       eaten: this.sim.totalEaten,
       deaths: this.sim.totalDeaths,
       selections: this.selections,
+      stages: [0, 1, 2, 3, 4].map((k) => flies.filter((f) => f.body.stage === k).length),
+      morph: flies.reduce((a, f) => a + f.body.morph, 0) / flies.length,
+      grown: flies.reduce((a, f) => a + f.brain.gN, 0) / flies.length,
     };
   }
 
   // мигрант заменяет худшую муху острова
   receiveMigrant(m) {
     const flies = [...this.sim.flies].sort((a, b) => this.score(a) - this.score(b));
-    const parent = { id: -1, learner: { W: Float32Array.from(m.W) }, traits: m.traits, generation: m.generation };
+    const parent = {
+      id: -1, learner: { W: Float32Array.from(m.W) }, traits: m.traits, generation: m.generation,
+      body: { morph: m.morph ?? 0 }, brain: m.grown,
+    };
     this.sim.respawn(flies[0], null, parent);
   }
 }

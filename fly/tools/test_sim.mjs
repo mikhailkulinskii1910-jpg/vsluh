@@ -62,5 +62,13 @@ check('с обучением мухи едят чаще, чем без него'
   check('остров суперэволюции работает', st.selections >= 3 && st.maxGen >= 2 && Number.isFinite(st.rate), `отборов ${st.selections}, поколений ${st.maxGen}`);
 }
 
+// 6. Эволюция тела: под отбором колония уходит от мушиной формы
+{
+  const isl = new Island(data, { seed: 7, flyCount: 12, config: { morphSpeed: 5 } });
+  isl.run(25 * 60);
+  const st = isl.stats();
+  check('тело эволюционирует под отбором', st.morph > 0.2, `средняя морфа ${st.morph.toFixed(2)}, стадии ${JSON.stringify(st.stages)}`);
+}
+
 console.log(failed ? `\nПровалено проверок: ${failed}` : '\nВсе проверки пройдены');
 process.exit(failed ? 1 : 0);

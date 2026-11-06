@@ -92,6 +92,19 @@ export const CONFIG = {
   predatorChase: 1.6,
   predatorKill: 0.2,
   predatorRest: 12,     // после поимки стрекоза сыта и не охотится
+  // эволюция тела: морфа 0 — муха … 1 — мышь (игровая механика, не биология)
+  morphMutation: 0.04,  // шум морфы у потомка
+  morphSpeed: 1,        // ускорение эволюции тела (множитель мутаций)
+  forceStage: -1,       // -1 — тело эволюционирует само; 0…4 — всем задать стадию
+  // рост новых синапсов (структурная пластичность)
+  structural: 1,
+  growEvery: 2,         // раз в сколько секунд пробовать вырастить синапсы
+  growTries: 6,         // сколько пар одновременно активных нейронов пробовать
+  growInit: 0.12,       // начальный вес нового синапса
+  growLearn: 0.6,       // скорость изменения новых синапсов дофамином
+  growDecay: 0.01,      // забывание: неподкреплённый синапс слабеет
+  pruneBelow: 0.08,     // слабее этого — удаляется
+  growCap: 600,         // максимум выросших синапсов на мозг
   // колония
   flyCount: 1,
 };
@@ -111,6 +124,51 @@ export function mulberry32(seed) {
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const smooth = (x) => x * x * (3 - 2 * x);
 const TAU = Math.PI * 2;
+
+// ---- типы еды ------------------------------------------------------------------
+// place: где лежит; eat: диапазон морфы, которой еда доступна; energy: сытность
+export const FOOD_TYPES = [
+  { key: 'apple', name: 'Яблоко', size: 0.11, energy: 1.0, place: 'fruit', eat: [0, 0.8], count: 12 },
+  { key: 'banana', name: 'Банан', size: 0.09, energy: 1.0, place: 'fruit', eat: [0, 0.8], count: 10 },
+  { key: 'grape', name: 'Виноград', size: 0.06, energy: 0.9, place: 'fruit', eat: [0, 0.8], count: 10 },
+  { key: 'nectar', name: 'Нектар цветка', size: 0.05, energy: 0.6, place: 'flower', eat: [0, 0.35], count: 14 },
+  { key: 'mushroom', name: 'Гриб', size: 0.09, energy: 0.9, place: 'ground', eat: [0.2, 1], count: 12 },
+  { key: 'seeds', name: 'Семена', size: 0.07, energy: 0.8, place: 'ground', eat: [0.3, 1], count: 18 },
+  { key: 'acorn', name: 'Жёлудь', size: 0.07, energy: 1.6, place: 'undertree', eat: [0.6, 1], count: 14 },
+  { key: 'berry', name: 'Ягоды', size: 0.06, energy: 0.8, place: 'bush', eat: [0, 1], count: 14 },
+  { key: 'cheese', name: 'Сыр', size: 0.1, energy: 2.0, place: 'ground', eat: [0.65, 1], count: 4 },
+];
+
+// ---- стадии тела ------------------------------------------------------------------
+export const STAGES = [
+  { name: 'Муха', from: 0 },
+  { name: 'Жук', from: 0.2 },
+  { name: 'Сверчок', from: 0.45 },
+  { name: 'Землеройка', from: 0.65 },
+  { name: 'Мышь', from: 0.85 },
+];
+export const STAGE_CENTERS = [0.08, 0.32, 0.55, 0.75, 0.93];
+export function stageOf(m) {
+  let k = 0;
+  for (let i = 0; i < STAGES.length; i++) if (m >= STAGES[i].from) k = i;
+  return k;
+}
+// Свойства тела по морфе: размер, полёт, скорость, запас и расход энергии
+export function bodyOf(m, cfg) {
+  const walk = m >= 0.45;
+  return {
+    morph: m,
+    stage: stageOf(m),
+    size: 1 + 5 * m * m,
+    walk,
+    maxY: walk ? 0.05 : cfg.arenaTop * (1 - m / 0.45 * 0.85),
+    speed: 1 + 0.8 * m,
+    energyMax: cfg.energyMax * (1 + 1.4 * m),
+    drain: 1 + 0.9 * m,
+    pad: 0.07 + 0.12 * m,
+    antenna: cfg.antennaOffset * (1 + 1.5 * m),
+  };
+}
 
 // ---- структура сети ---------------------------------------------------------
 // Связи раскладываются по источнику (CSR): на каждом шаге обходятся только связи
@@ -208,7 +266,66 @@ export class Brain {
     this.rate = new Float32Array(N);
     this.active = new Int32Array(N);
     this.nActive = 0;
+    // выросшие синапсы (структурная пластичность)
+    const cap = cfg.growCap || 600;
+    this.gSrc = new Uint16Array(cap);
+    this.gDst = new Uint16Array(cap);
+    this.gW = new Float32Array(cap);
+    this.gE = new Float32Array(cap);
+    this.gAge = new Float32Array(cap);
+    this.gN = 0;
+    this.formed = 0;
+    this.pruned = 0;
     this.setConfig(cfg);
+  }
+
+  clearGrown() { this.gN = 0; this.formed = 0; this.pruned = 0; }
+
+  // Потомок получает выросшие синапсы родителя (с небольшим шумом весов)
+  copyGrownFrom(o, rng) {
+    const n = Math.min(o.gN || 0, this.gSrc.length);
+    for (let g = 0; g < n; g++) {
+      this.gSrc[g] = o.gSrc[g]; this.gDst[g] = o.gDst[g];
+      this.gW[g] = o.gW[g] * (1 + 0.1 * (rng() * 2 - 1));
+      this.gE[g] = 0; this.gAge[g] = 0;
+    }
+    this.gN = n; this.formed = 0; this.pruned = 0;
+  }
+
+  // Рост: новые синапсы между нейронами, которые разрядились одновременно; отмирание слабых
+  grow(cfg, rng, interval) {
+    const { active, nActive } = this;
+    for (let g = 0; g < this.gN; g++) {
+      this.gAge[g] += interval;
+      if (this.gAge[g] > 20 && Math.abs(this.gW[g]) < cfg.pruneBelow) {
+        const last = --this.gN;
+        this.gSrc[g] = this.gSrc[last]; this.gDst[g] = this.gDst[last];
+        this.gW[g] = this.gW[last]; this.gE[g] = this.gE[last]; this.gAge[g] = this.gAge[last];
+        this.pruned += 1;
+        g--;
+      }
+    }
+    if (nActive < 2) return;
+    for (let k = 0; k < cfg.growTries && this.gN < this.gSrc.length; k++) {
+      const a = active[Math.floor(rng() * nActive)], b = active[Math.floor(rng() * nActive)];
+      if (a === b) continue;
+      const g = this.gN++;
+      this.gSrc[g] = a; this.gDst[g] = b; this.gW[g] = cfg.growInit; this.gE[g] = 0; this.gAge[g] = 0;
+      this.formed += 1;
+    }
+  }
+
+  // Дофамин укрепляет или ослабляет выросшие синапсы: след = пресинаптический спайк × постсинаптическая частота
+  plasticity(delta, cfg, dt) {
+    const lam = Math.exp(-dt / cfg.eligTau);
+    const keep = 1 - cfg.growDecay * dt;
+    const k = cfg.growLearn * delta * dt;
+    const { spike, rate, gSrc, gDst, gW, gE } = this;
+    for (let g = 0; g < this.gN; g++) {
+      gE[g] = gE[g] * lam + spike[gSrc[g]] * rate[gDst[g]];
+      const w = gW[g] * keep + k * gE[g];
+      gW[g] = w > 1.5 ? 1.5 : w < -1 ? -1 : w;
+    }
   }
 
   setConfig(cfg) {
@@ -241,6 +358,7 @@ export class Brain {
       const i = active[a];
       for (let k = off[i], end = off[i + 1]; k < end; k++) I[tgt[k]] += w[k];
     }
+    for (let g = 0, gn = this.gN; g < gn; g++) if (spike[this.gSrc[g]]) I[this.gDst[g]] += this.gW[g];
     addTo(I, groups.olfL, inp.olfL * sIn);
     addTo(I, groups.olfR, inp.olfR * sIn);
     addTo(I, groups.mechL, inp.mechL * sIn);
@@ -413,7 +531,12 @@ export class FlySim {
     this.updateWind(0);
     this.obstacles = this.makeObstacles();
     this.food = [];
-    for (let k = 0; k < this.cfg.foodCount; k++) this.food.push(this.randomFood(k % 3));
+    // еда всех типов: доли по FOOD_TYPES, общее число — foodCount
+    const totalW = FOOD_TYPES.reduce((a, t) => a + t.count, 0);
+    FOOD_TYPES.forEach((t, kind) => {
+      const n = Math.max(1, Math.round(t.count * this.cfg.foodCount / totalW));
+      for (let k = 0; k < n; k++) this.food.push(this.randomFood(kind));
+    });
     this.predators = [];
     for (let k = 0; k < Math.max(1, this.cfg.predatorCount); k++) this.predators.push(this.randomPredator());
     this.flies = [];
@@ -432,7 +555,30 @@ export class FlySim {
 
   setConfig(config) {
     this.cfg = { ...CONFIG, flyCount: this.cfg.flyCount, ...config };
-    for (const f of this.flies) f.brain.setConfig(this.cfg);
+    for (const f of this.flies) {
+      f.brain.setConfig(this.cfg);
+      if (this.cfg.forceStage >= 0) this.setMorph(f, STAGE_CENTERS[this.cfg.forceStage]);
+    }
+  }
+
+  setMorph(f, m) {
+    const ratio = f.energy / f.energyMax;
+    f.body = bodyOf(clamp(m, 0, 1), this.cfg);
+    f.energyMax = f.body.energyMax;
+    f.energy = ratio * f.energyMax;
+  }
+
+  // Переселение чемпиона суперэволюции: синапсы обучения, качества, тело и выросшие связи
+  seedChampion(ch) {
+    if (!ch || !ch.W) return false;
+    const parent = {
+      id: -1, generation: ch.generation || 1,
+      learner: { W: Float32Array.from(ch.W) }, traits: ch.traits,
+      body: { morph: ch.morph ?? 0 },
+      brain: ch.grown ? { gN: ch.grown.gN, gSrc: ch.grown.gSrc, gDst: ch.grown.gDst, gW: ch.grown.gW } : undefined,
+    };
+    for (const f of this.flies) this.respawn(f, null, parent);
+    return true;
   }
 
   resetFly(cause) { this.respawn(this.fly, cause); }
@@ -499,35 +645,55 @@ export class FlySim {
     return !this.obstacles.some((o) => Math.hypot(o.x - x, o.z - z) < o.r + pad);
   }
 
-  // Фрукт: kind 0 — половинка яблока, 1 — кружок банана, 2 — виноградина
+  // Еда типа kind (см. FOOD_TYPES): фрукты на земле, камнях и ветках, нектар на цветах,
+  // грибы, семена и сыр на земле, жёлуди под деревьями, ягоды на кустиках
   randomFood(kind) {
-    const size = [0.11, 0.09, 0.06][kind];
+    const T = FOOD_TYPES[kind];
+    const size = T.size;
     const max = this.cfg.foodAmount * (0.6 + 0.8 * this.rng());
     const h = this.cfg.arenaHalf - 0.4;
+    const pick = (arr) => arr[Math.floor(this.rng() * arr.length)];
     const stones = this.obstacles.filter((o) => o.kind === 'stone');
     const trees = this.obstacles.filter((o) => o.kind === 'tree');
-    let x = 0, z = 0, base = 0, hanging = false;
-    if (trees.length && this.rng() < this.cfg.treeFoodShare) {
-      // фрукт висит на ветке в кроне
-      const t = trees[Math.floor(this.rng() * trees.length)];
-      const a = this.rng() * TAU, rr = t.r + 0.25 + this.rng() * (t.canopy * 0.7);
-      x = t.x + Math.cos(a) * rr;
-      z = t.z + Math.sin(a) * rr;
-      base = t.canopyY - t.canopy * (0.3 + this.rng() * 0.5);
-      hanging = true;
-    } else if (stones.length && this.rng() < 0.3) {
-      const o = stones[Math.floor(this.rng() * stones.length)];
-      x = o.x + (this.rng() - 0.5) * o.r * 0.6;
-      z = o.z + (this.rng() - 0.5) * o.r * 0.6;
-      base = o.height;
-    } else {
+    const plants = this.obstacles.filter((o) => o.kind === 'plant');
+    const groundSpot = () => {
+      let x = 0, z = 0;
       for (let k = 0; k < 60; k++) {
-        x = (this.rng() * 2 - 1) * h;
-        z = (this.rng() * 2 - 1) * h;
+        x = (this.rng() * 2 - 1) * h; z = (this.rng() * 2 - 1) * h;
         if (this.clearOfObstacles(x, z, 0.15)) break;
       }
+      return [x, z];
+    };
+    let x = 0, z = 0, base = 0, hanging = false;
+    if (T.place === 'fruit' && trees.length && this.rng() < this.cfg.treeFoodShare) {
+      const t = pick(trees);
+      const a = this.rng() * TAU, rr = t.r + 0.25 + this.rng() * (t.canopy * 0.7);
+      x = t.x + Math.cos(a) * rr; z = t.z + Math.sin(a) * rr;
+      base = t.canopyY - t.canopy * (0.3 + this.rng() * 0.5);
+      hanging = true;
+    } else if (T.place === 'fruit' && stones.length && this.rng() < 0.3) {
+      const o = pick(stones);
+      x = o.x + (this.rng() - 0.5) * o.r * 0.6; z = o.z + (this.rng() - 0.5) * o.r * 0.6;
+      base = o.height;
+    } else if (T.place === 'flower' && plants.length) {
+      const o = pick(plants);
+      x = o.x; z = o.z; base = o.height;
+    } else if (T.place === 'undertree' && trees.length) {
+      const t = pick(trees);
+      const a = this.rng() * TAU, rr = t.r + 0.2 + this.rng() * t.canopy;
+      x = t.x + Math.cos(a) * rr; z = t.z + Math.sin(a) * rr;
+    } else if (T.place === 'bush') {
+      [x, z] = groundSpot();
+      base = 0.25 + this.rng() * 0.25;
+    } else {
+      [x, z] = groundSpot();
     }
     return { kind, x, z, y: base + size * 0.7, base, size, amount: max, max, alive: true, regrowAt: 0, hanging };
+  }
+
+  canEat(f, food) {
+    const e = FOOD_TYPES[food.kind].eat;
+    return f.body.morph >= e[0] && f.body.morph <= e[1];
   }
 
   randomPredator() {
@@ -585,6 +751,16 @@ export class FlySim {
     // качества: у потомка — родительские с небольшой мутацией (наследуются), иначе случайные
     const sp = cfg.traitSpread;
     const keys = ['odor', 'contact', 'motor', 'learn', 'explore'];
+    // морфа тела: у потомка — родительская с мутацией, иначе — муха
+    let morph;
+    if (cfg.forceStage >= 0) morph = STAGE_CENTERS[cfg.forceStage];
+    else if (parent && parent.body) morph = parent.body.morph + normal(this.rng) * cfg.morphMutation * cfg.morphSpeed;
+    else morph = Math.abs(normal(this.rng)) * 0.03;
+    f.body = bodyOf(clamp(morph, 0, 1), cfg);
+    f.energyMax = f.body.energyMax;
+    // выросшие синапсы: потомок получает родительские
+    if (parent && parent.brain && parent.brain.gN !== undefined) f.brain.copyGrownFrom(parent.brain, this.rng);
+    else f.brain.clearGrown();
     f.traits = {};
     for (const k of keys) {
       const v = parent && parent.traits ? parent.traits[k] * (1 + 0.06 * normal(this.rng)) : 1 + sp * (this.rng() * 2 - 1);
@@ -601,7 +777,7 @@ export class FlySim {
       x, y: 0.7, z,
       heading: this.rng() * TAU,
       speed: 0,
-      energy: this.cfg.energyMax,
+      energy: f.energyMax,
       state: 'fly', stateTime: 0,
       saccadeAcc: 0, saccadeLeft: 0, saccadeRate: 0,
       feedFood: null, feedDX: 0, feedDZ: 0,
@@ -625,12 +801,15 @@ export class FlySim {
   }
 
   // Запах: шлейф, который ветер сносит от фрукта и постепенно размывает
-  odorAt(x, y, z) {
+  // f — кто нюхает: каждая форма чувствует запах только своей еды
+  odorAt(x, y, z, f = null) {
     const cfg = this.cfg;
     const wx = this.wind.x, wz = this.wind.z;
     let s = 0;
+    const who = f;
     for (const f of this.food) {
       if (!f.alive) continue;
+      if (who && who.body && !this.canEat(who, f)) continue;
       const dx = x - f.x, dy = y - f.y, dz = z - f.z;
       const along = dx * wx + dz * wz;
       if (along > 6 * cfg.plumeLength || along < -4 * cfg.odorNear) continue;   // слишком далеко
@@ -698,12 +877,12 @@ export class FlySim {
   }
 
   sense(f) {
-    const a = this.cfg.antennaOffset;
+    const a = f.body ? f.body.antenna : this.cfg.antennaOffset;
     const rx = Math.cos(f.heading), rz = -Math.sin(f.heading); // вектор «вправо»
     const lx = f.x + rx * a, lz = f.z + rz * a;
     const qx = f.x - rx * a, qz = f.z - rz * a;
-    f.odorL = this.odorAt(lx, f.y, lz);
-    f.odorR = this.odorAt(qx, f.y, qz);
+    f.odorL = this.odorAt(lx, f.y, lz, f);
+    f.odorR = this.odorAt(qx, f.y, qz, f);
     f.contactL = Math.max(this.wallProximity(lx, lz), this.obstacleProx(lx, f.y, lz));
     f.contactR = Math.max(this.wallProximity(qx, qz), this.obstacleProx(qx, f.y, qz));
     // угроза — от ближайшей стрекозы
@@ -721,7 +900,7 @@ export class FlySim {
   nearestFood(f) {
     let best = null, bd = Infinity;
     for (const food of this.food) {
-      if (!food.alive) continue;
+      if (!food.alive || !this.canEat(f, food)) continue;
       const d = (food.x - f.x) ** 2 + (food.z - f.z) ** 2 + (food.y - f.y) ** 2;
       if (d < bd) { bd = d; best = food; }
     }
@@ -734,7 +913,7 @@ export class FlySim {
     const cfg = this.cfg;
     const g = this.net.groups;
     this.sense(f);
-    const hunger = 1 - f.energy / cfg.energyMax;
+    const hunger = 1 - f.energy / f.energyMax;
     const tr = f.traits;
     // Плавное кодирование: без стимула рецептор молчит, с ростом стимула частота
     // растёт и насыщается (как у настоящих рецепторных нейронов)
@@ -788,11 +967,11 @@ export class FlySim {
         f.z = food.z + f.feedDZ;
         f.y = food.y + food.size * 0.75;
         targetY = f.y;
-        const gain = Math.min(cfg.feedRate * dt, food.amount);
-        f.energy = Math.min(cfg.energyMax, f.energy + gain);
+        const gain = Math.min(cfg.feedRate * dt * FOOD_TYPES[food.kind].energy, food.amount);
+        f.energy = Math.min(f.energyMax, f.energy + gain);
         food.amount -= gain;
         if (food.amount <= 0.01) { food.alive = false; food.amount = 0; food.regrowAt = this.time + cfg.foodRegrow; }
-        if (f.energy >= cfg.energyMax * 0.97 || !food.alive) {
+        if (f.energy >= f.energyMax * 0.97 || !food.alive) {
           f.state = 'fly'; f.stateTime = 0; f.y += 0.06; f.feedFood = null;
         }
       }
@@ -843,6 +1022,7 @@ export class FlySim {
           target = Math.max(target, 0.6 * activity);
         }
       }
+      target *= f.body.speed;
       f.speed += (target - f.speed) * Math.min(1, dt * 3);
       f.heading += 0.35 * drive * dt * activity;
       f.saccadeAcc = f.saccadeAcc * (1 - dt * 0.8) + drive * dt;
@@ -866,7 +1046,7 @@ export class FlySim {
       // посадка по касанию: лапки чувствуют сахар, муха садится и выпускает хоботок
       if (food) {
         const d3 = Math.hypot(food.x - f.x, food.z - f.z, (food.y + food.size * 0.75) - f.y);
-        if (d3 < cfg.landRadius && hunger > 0.12) {
+        if (d3 < cfg.landRadius * (1 + 1.5 * f.body.morph) && hunger > 0.12) {
           f.state = 'feed'; f.stateTime = 0; f.feedFood = food;
           f.feedDX = (this.rng() - 0.5) * food.size * 0.8;
           f.feedDZ = (this.rng() - 0.5) * food.size * 0.8;
@@ -884,7 +1064,8 @@ export class FlySim {
 
     if (f.state !== 'feed') {
       const climb = f.state === 'escape' ? 1.6 : 0.8;
-      f.y = clamp(f.y + clamp(1.5 * (targetY - f.y), -climb, climb) * dt, 0.03, cfg.arenaTop);
+      // бескрылые формы ходят по земле, крупные летуны не поднимаются высоко
+      f.y = f.body.walk ? 0.03 + 0.02 * f.body.size : clamp(f.y + clamp(1.5 * (targetY - f.y), -climb, climb) * dt, 0.03, f.body.maxY);
       f.x += Math.sin(f.heading) * f.speed * dt;
       f.z += Math.cos(f.heading) * f.speed * dt;
       // отскок от бортиков: курс отражается, скорость падает
@@ -892,7 +1073,7 @@ export class FlySim {
       let bump = false;
       if (f.x > h || f.x < -h) { f.x = clamp(f.x, -h, h); f.heading = -f.heading; bump = true; }
       if (f.z > h || f.z < -h) { f.z = clamp(f.z, -h, h); f.heading = Math.PI - f.heading; bump = true; }
-      if (this.bounceObstacles(f, 0.07)) {
+      if (this.bounceObstacles(f, f.body.pad)) {
         bump = true;
         f.y = Math.min(cfg.arenaTop, f.y + 0.12);   // после удара муха подскакивает вверх
       }
@@ -918,6 +1099,11 @@ export class FlySim {
     f.da = f.da * Math.exp(-dt / cfg.daTau) + daAdd;
     f.daBar += (f.da - f.daBar) * Math.min(1, dt / cfg.daBaselineTau);
     f.delta = f.da - f.daBar;
+    if (cfg.structural && brainNow) {
+      f.brain.plasticity(f.delta, cfg, dt * every);
+      f.growTimer = (f.growTimer || 0) + dt * every;
+      if (f.growTimer >= cfg.growEvery) { f.brain.grow(cfg, this.rng, f.growTimer); f.growTimer = 0; }
+    }
     if (cfg.learning && wasFlying) {
       // с возрастом муха учится медленнее: молодая ищет, взрослая лишь подстраивается
       const age = cfg.learnAnneal > 0 ? 1 / (1 + f.lifeTime / cfg.learnAnneal) : 1;
@@ -925,9 +1111,10 @@ export class FlySim {
     }
 
     const drain = (f.state === 'rest' ? cfg.energyDrain * 0.3 : cfg.energyDrain) + cfg.moveCost * f.speed * (f.state === 'escape' ? 0.5 : 1);
-    f.energy -= drain * dt;
+    const bodyDrain = f.body.drain;
+    f.energy -= drain * bodyDrain * dt;
 
-    const flying = f.state === 'fly' || f.state === 'escape';
+    const flying = !f.body.walk && (f.state === 'fly' || f.state === 'escape');
     if (flying && p.cooldown <= 0 && Math.hypot(p.x - f.x, p.y - f.y, p.z - f.z) < cfg.predatorKill) {
       p.cooldown = cfg.predatorRest;
       this.respawn(f, 'predator');
@@ -947,7 +1134,7 @@ export class FlySim {
     let target = null, bd = cfg.predatorChase;
     if (p.cooldown <= 0) {
       for (const f of this.flies) {
-        if (f.state !== 'fly' && f.state !== 'escape') continue;
+        if (f.body.walk || (f.state !== 'fly' && f.state !== 'escape')) continue;
         const d = Math.hypot(f.x - p.x, f.y - p.y, f.z - p.z);
         if (d < bd) { bd = d; target = f; }
       }
