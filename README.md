@@ -22,3 +22,7 @@ SwiftUI-версия krisa. У iPhone нет ИК-порта, поэтому с�
 ## Велокарта (`velo/`)
 
 Веб-приложение для велосипедиста: карта России, маршруты по велодорогам, записанные поездки и лобби с гонками и погонями (2 м / 2 с). Сервер лобби — Node.js в `velo/server/`. Подробности, запуск и ограничения: `velo/README.md`.
+
+## ESP32 Web Flasher (`esp32-flasher/`)
+
+Прошивка ESP32 из браузера по USB (Web Serial, на Android — WebUSB для CH340): выбор .bin, автоопределение адресов, карта флеш-памяти, монитор порта. Настроен под Waveshare ESP32-Touch-LCD-3.5. Открыть: https://mikhailkulinskii1910-jpg.github.io/vsluh/esp32-flasher/ · скачать HTML: `esp32-flasher/esp32-flasher.html`.
