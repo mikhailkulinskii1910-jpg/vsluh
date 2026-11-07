@@ -1,0 +1,5 @@
+[
+  {"title": "Калькулятор с дробями", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/calculator_ws35.merged.bin"},
+  {"title": "Фрактал Мандельброта", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/fractal_ws35.merged.bin"},
+  {"title": "Фрактал Мандельброта", "board": "ESP32-2432S024R (2.4″)", "file": "firmware/fractal_cyd.merged.bin"}
+]

@@ -25,4 +25,4 @@ SwiftUI-версия krisa. У iPhone нет ИК-порта, поэтому с�
 
 ## ESP32 Web Flasher (`esp32-flasher/`)
 
-Прошивка ESP32 из браузера по USB (Web Serial, на Android — WebUSB для CH340): выбор .bin, автоопределение адресов, карта флеш-памяти, монитор порта. Настроен под Waveshare ESP32-Touch-LCD-3.5. Открыть: https://mikhailkulinskii1910-jpg.github.io/vsluh/esp32-flasher/ · скачать HTML: `esp32-flasher/esp32-flasher.html`.
+Прошивка ESP32 из браузера по USB (Web Serial, на Android — WebUSB для CH340): выбор .bin, автоопределение адресов, карта флеш-памяти, монитор порта. Настроен под Waveshare ESP32-Touch-LCD-3.5. Готовые прошивки и их исходники Arduino — в `esp32-flasher/firmware/` (калькулятор с дробями, фрактал Мандельброта); список для кнопок «Готовые прошивки» — `firmware/index.json`. Открыть: https://mikhailkulinskii1910-jpg.github.io/vsluh/esp32-flasher/ · скачать HTML: `esp32-flasher/esp32-flasher.html`.

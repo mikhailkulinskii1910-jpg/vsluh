@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>ESP32 Web Flasher</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -98,6 +99,12 @@ select, input[type="text"] {
 .chipinfo dt { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
 .chipinfo dd { margin: 0; font-family: var(--f-mono); font-size: 14px; overflow-wrap: anywhere; }
 
+.catalog { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
+.fw { text-align: left; flex-direction: column; align-items: flex-start; gap: 4px; padding: 12px 14px; min-height: 0; line-height: 1.3; }
+.fw b { font-weight: 600; font-size: 15px; }
+.fw span { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.fw.added { border-color: var(--mask); }
+.sub-h { font-size: 13px; color: var(--muted); margin: 0; }
 .drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted);
   cursor: pointer; transition: border-color .15s, background .15s;
@@ -202,6 +209,10 @@ a { color: var(--copper); }
 
   <section class="panel" aria-labelledby="h-files">
     <h2 id="h-files"><span class="step">02</span>Файлы прошивки</h2>
+    <div id="catalogBox" hidden>
+      <p class="sub-h">Готовые прошивки: нажмите, чтобы добавить</p>
+      <div class="catalog" id="catalog"></div>
+    </div>
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Выбрать файлы .bin">
       <strong>Перетащите .bin сюда</strong> или нажмите, чтобы выбрать.<br>
       Тип файла и адрес определяются автоматически.
@@ -666,8 +677,43 @@ pako/dist/pako.esm.mjs:
     else startMonitor(true);
   };
 
+  // ---------- Готовые прошивки (работают, когда страница открыта с GitHub Pages) ----------
+  async function loadCatalog() {
+    let list;
+    try {
+      const r = await fetch("firmware/index.json", { cache: "no-store" });
+      if (!r.ok) return;
+      list = await r.json();
+    } catch { return; }
+    const box = $("#catalog");
+    for (const item of list) {
+      const b = document.createElement("button");
+      b.className = "fw";
+      b.innerHTML = "<b></b><span></span>";
+      b.querySelector("b").textContent = item.title;
+      b.querySelector("span").textContent = item.board;
+      b.onclick = async () => {
+        b.disabled = true;
+        try {
+          const r = await fetch(item.file);
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const buf = await r.arrayBuffer();
+          files = files.filter((f) => f.kind !== "merged");  // полная прошивка может быть только одна
+          await addFiles([new File([buf], item.file.split("/").pop())]);
+          sys(`Добавлена прошивка «${item.title}» (${item.board}).`);
+          box.querySelectorAll(".fw").forEach((x) => x.classList.remove("added"));
+          b.classList.add("added");
+        } catch (e) { err(`Не удалось скачать «${item.title}»: ${e.message}`); }
+        b.disabled = false;
+      };
+      box.append(b);
+    }
+    $("#catalogBox").hidden = !list.length;
+  }
+
   renderEnv();
   updateUI();
+  loadCatalog();
   if (!E) err("Не загрузилась библиотека esptool-js.");
 })();
 </script>
