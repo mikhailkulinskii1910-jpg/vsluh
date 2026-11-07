@@ -33,6 +33,8 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <BluetoothA2DPSource.h>  // библиотека ESP32-A2DP (Phil Schatzmann)
+#include <esp_gap_bt_api.h>
 #endif
 #include <JPEGDEC.h>
 #include <math.h>
@@ -52,9 +54,28 @@
 
 #define SCREEN_W 320
 #define SCREEN_H 480
-#define BAR_H 44
-#define ROW_H 56
-#define MINI_H 60
+#define HDR_H 96                    // шапка медиатеки
+#define CARD_W 144
+#define CARD_H 176
+#define CARD_GAP 10
+#define HERO_W 296
+#define HERO_H 176
+#define MINI_Y 408                  // мини-плеер
+#define THUMB_MAX 12
+#define PROG_X 66                   // плеер
+#define PROG_W 188
+#define PROG_Y 186
+#define TR_Y 204
+#define DPAD_X 98
+#define DPAD_Y 376
+#define DPAD_R 78
+#define KEY_X 190
+#define KEY_Y 298
+#define VOL_X 262
+#define VOL_Y 298
+#define VOL_TOP 334
+#define VOL_BOT 424
+#define BT_DELAY 0.22f              // задержка звука в Bluetooth-наушниках, с
 #define STRIP_H 32
 #define OUT_RATE 44100
 #define RING_SAMPLES 32768
@@ -72,10 +93,23 @@
 #define C_DIR      MK565(56, 120, 110)
 #define C_OFF      MK565(70, 68, 84)
 #define C_ERR      MK565(255, 110, 126)
+#define C_WHITE    MK565(255, 255, 255)
+#define C_BLACK    0x0000
+#define C_INK      MK565(20, 20, 24)
+#define C_BLUE     MK565(47, 140, 255)
+#define C_GREEN    MK565(60, 215, 125)
+#define C_TXT2     MK565(178, 180, 190)
+#define C_TXT3     MK565(124, 126, 136)
+#define C_PANEL0   MK565(46, 47, 53)
+#define C_PANEL1   MK565(26, 27, 31)
+#define C_INSET    MK565(15, 16, 19)
+#define C_KEY0     MK565(72, 73, 80)
+#define C_KEY1     MK565(44, 45, 51)
 
-enum FontId : uint8_t { FN_BODY, FN_BOLD, FN_SMALL, FN_TITLE, FN_COUNT };
+enum FontId : uint8_t { FN_BODY, FN_BOLD, FN_SMALL, FN_TITLE, FN_TINY, FN_SEMI, FN_COUNT };
 enum MediaKind : uint8_t { MK_NONE, MK_DIR, MK_MP3, MK_WAV, MK_AVI, MK_MP4, MK_OTHER };
-enum Screen : uint8_t { SC_LIST, SC_PLAYER, SC_MSG };
+enum Screen : uint8_t { SC_LIST, SC_PLAYER, SC_MSG, SC_COVER, SC_BT };
+enum BtState : uint8_t { BT_OFF, BT_SCAN, BT_LINK, BT_ON };
 enum TrackType : uint8_t { TT_NONE, TT_MP3, TT_WAV };
 
 // ===================== Типы =====================
@@ -128,10 +162,16 @@ struct Track {                      // текущий звук
 };
 
 struct DecodeTarget { uint16_t* px; int w, h, srcW, srcH; };
+struct JDec { uint16_t* px; int w, h; };
+struct BtDev { char name[33]; int8_t rssi; };
+struct Thumb { std::string key; uint16_t* px; uint32_t used; };
+struct HitRect { int x, y, w, h; };
+struct LibLayout { bool hero; int heroY, secY, gridY, rows, total; };
+struct HeroInfo { bool now; int idx; MediaKind kind; std::string title, sub, badge, tag1, tag2, key, path; };
 
 // ===================== Шрифты =====================
 #include "fonts.h"
-AAFont* FONTS[FN_COUNT] = { &FN_BODY_F, &FN_BOLD_F, &FN_SMALL_F, &FN_TITLE_F };
+AAFont* FONTS[FN_COUNT] = { &FN_BODY_F, &FN_BOLD_F, &FN_SMALL_F, &FN_TITLE_F, &FN_TINY_F, &FN_SEMI_F };
 
 // ===================== Глобальное состояние =====================
 Surface sStrip;
@@ -152,6 +192,32 @@ uint16_t* coverPx = nullptr;        // обложка 200×200
 int volume = 70;
 std::string msgTitle, msgText;
 bool listDirty = true, playerDirty = true, miniDirty = true, progDirty = true;
+int tab = 0;                        // 0 — всё, 1 — музыка, 2 — видео
+std::vector<int> view;              // карточки (индексы entries)
+std::vector<int> heroList;          // что можно показать в большой карточке
+int heroPos = 0;                    // -1 — то, что играет
+bool shuffleOn = false;
+int repeatMode = 0;                 // 0 — нет, 1 — все, 2 — один
+Screen msgBack = SC_LIST;
+uint16_t* bgPx = nullptr;           // размытый фон 320×480
+uint16_t* heroPx = nullptr;
+std::string heroKey;
+bool heroOk = false;
+uint16_t* cover80 = nullptr;
+uint16_t* cover42 = nullptr;
+uint16_t* coverBig = nullptr;
+std::vector<Thumb> thumbs;
+uint32_t thumbClock = 0;
+bool thumbPending = false;
+LibLayout lay;
+void (*renderIdle)() = nullptr;     // звук не должен заикаться во время долгой отрисовки
+volatile uint8_t btState = BT_OFF;  // Bluetooth-наушники
+volatile bool btOut = false;        // звук идёт в наушники, а не в динамик
+BtDev btDevs[8];
+volatile int btDevCount = 0;
+volatile uint32_t btDevsVer = 0;
+char btTarget[33] = "";             // к кому подключаться
+char btName[33] = "";               // кто подключён
 bool wifiOn = false;                // Wi-Fi и веб-сервер для приложения ESP32 Flasher
 volatile bool filesChanged = false; // приложение изменило файлы на карте
 std::string wifiText;               // как подключиться (для экрана сообщения)
@@ -168,6 +234,10 @@ volatile uint16_t aLevel = 0;       // уровень громкости сиг�
 
 // ===================== Платформа =====================
 void pushPixels(int x, int y, int w, int h, const uint16_t* px);
+void prepareTrackArt();
+void btEnable();
+void btDisable();
+void btConnect(const char* name);
 bool fsList(const std::string& p, std::vector<DirEnt>& out);
 void* fsOpen(const char* name, int32_t* size);
 void fsClose(void* h);
@@ -901,9 +971,11 @@ void renderRegion(int y0, int y1, void (*draw)(Surface&, int)) {
   for (int y = y0; y < y1; y += STRIP_H) {
     int h = std::min(STRIP_H, y1 - y);
     surfSize(sStrip, SCREEN_W, h);
-    surfFill(sStrip, C_BG);
+    if (bgPx) memcpy(sStrip.px, bgPx + y * SCREEN_W, (size_t)SCREEN_W * h * 2);
+    else surfFill(sStrip, C_BG);
     draw(sStrip, y);
     pushPixels(0, y, SCREEN_W, h, sStrip.px);
+    if (renderIdle) renderIdle();
   }
 }
 
@@ -959,6 +1031,7 @@ void closeTrack() {
   trk = Track();
   if (coverPx) { free(coverPx); coverPx = nullptr; }
   trackIndex = -1;
+  heroKey.clear();
 }
 
 bool openTrack(const std::string& dir, const std::vector<Entry>& list, int idx) {
@@ -1002,25 +1075,38 @@ bool openTrack(const std::string& dir, const std::vector<Entry>& list, int idx) 
   trackDirEntries = list;
   trackIndex = idx;
   loadCover();
+  prepareTrackArt();
   playerDirty = miniDirty = progDirty = listDirty = true;
   return true;
 }
 
 // Следующий или предыдущий звуковой файл в той же папке
+// (с учётом перемешивания и повтора всей папки)
 bool stepTrack(int dir) {
   if (trackIndex < 0) return false;
-  int n = trackDirEntries.size();
-  for (int k = 1; k <= n; k++) {
-    int i = trackIndex + dir * k;
-    if (i < 0 || i >= n) return false;
+  std::vector<int> audio;
+  int cur = -1;
+  for (int i = 0; i < (int)trackDirEntries.size(); i++) {
     MediaKind m = trackDirEntries[i].kind;
-    if (m == MK_MP3 || m == MK_WAV) {
-      std::string d = trackDir;
-      std::vector<Entry> l = trackDirEntries;
-      return openTrack(d, l, i);
-    }
+    if (m != MK_MP3 && m != MK_WAV) continue;
+    if (i == trackIndex) cur = audio.size();
+    audio.push_back(i);
   }
-  return false;
+  if (audio.empty()) return false;
+  int next;
+  if (shuffleOn && audio.size() > 1) {
+    do next = audio[rand() % audio.size()]; while (next == trackIndex);
+  } else {
+    int p = cur + dir, n = audio.size();
+    if (p < 0 || p >= n) {
+      if (repeatMode != 1) return false;
+      p = (p + n) % n;
+    }
+    next = audio[p];
+  }
+  std::string d = trackDir;
+  std::vector<Entry> l = trackDirEntries;
+  return openTrack(d, l, next);
 }
 
 void seekTrack(float frac) {
@@ -1112,8 +1198,461 @@ void trackTick() {
   }
 }
 
-// ===================== Экран: список файлов =====================
-int listViewH() { return SCREEN_H - BAR_H - (trk.type != TT_NONE ? MINI_H : 0); }
+// ===================== Стиль интерфейса =====================
+// Медиатека — «стекло» поверх размытой обложки, плеер — тёмная панель-пульт.
+static inline uint16_t blendA(uint16_t bg, uint16_t fg, int a) {  // a: 0…255
+  uint32_t rb = bg & 0xF81F;
+  rb += (((fg & 0xF81F) - rb) * (uint32_t)(a >> 2)) >> 6;
+  uint32_t g = bg & 0x07E0;
+  g += (((fg & 0x07E0) - g) * (uint32_t)a) >> 8;
+  return (uint16_t)((rb & 0xF81F) | (g & 0x07E0));
+}
+
+// Скруглённый прямоугольник: заливка с градиентом цвета и прозрачности, рамка 1 px
+void rrectX(Surface& s, float x, float y, float w, float h, float r, uint16_t c0, uint16_t c1, int a0, int a1, bool horiz, uint16_t bc, int ba) {
+  if (w <= 0 || h <= 0) return;
+  float hx = w * 0.5f, hy = h * 0.5f, cx = x + hx, cy = y + hy;
+  if (r > hx) r = hx;
+  if (r > hy) r = hy;
+  int X0 = std::max((int)floorf(x), s.cx0), X1 = std::min((int)ceilf(x + w), s.cx1);
+  int Y0 = std::max((int)floorf(y), s.cy0), Y1 = std::min((int)ceilf(y + h), s.cy1);
+  bool grad = c0 != c1 || a0 != a1;
+  uint16_t c = c0;
+  int a = a0;
+  for (int py = Y0; py < Y1; py++) {
+    float qy = fabsf(py + 0.5f - cy) - (hy - r);
+    if (grad && !horiz) {
+      int t = (int)(clamp01((py + 0.5f - y) / h) * 255);
+      c = mix565(c0, c1, t);
+      a = a0 + (a1 - a0) * t / 255;
+    }
+    uint16_t* row = s.px + py * s.w;
+    for (int px = X0; px < X1; px++) {
+      float qx = fabsf(px + 0.5f - cx) - (hx - r);
+      float d = (qx > 0 && qy > 0) ? sqrtf(qx * qx + qy * qy) - r : fmaxf(qx, qy) - r;
+      float cov = clamp01(0.5f - d);
+      if (cov <= 0) continue;
+      if (grad && horiz) {
+        int t = (int)(clamp01((px + 0.5f - x) / w) * 255);
+        c = mix565(c0, c1, t);
+        a = a0 + (a1 - a0) * t / 255;
+      }
+      if (ba > 0) {
+        float in = clamp01(0.5f - (d + 1.0f));
+        int fa = (int)(in * a);
+        if (fa > 0) row[px] = fa >= 255 ? c : blendA(row[px], c, fa);
+        int ea = (int)((cov - in) * ba);
+        if (ea > 0) row[px] = blendA(row[px], bc, ea);
+      } else {
+        int fa = (int)(cov * a);
+        if (fa > 0) row[px] = fa >= 255 ? c : blendA(row[px], c, fa);
+      }
+    }
+  }
+}
+void rr(Surface& s, float x, float y, float w, float h, float r, uint16_t c, int a) { rrectX(s, x, y, w, h, r, c, c, a, a, false, 0, 0); }
+void glass(Surface& s, float x, float y, float w, float h, float r, int a) { rrectX(s, x, y, w, h, r, C_WHITE, C_WHITE, a, a, false, C_WHITE, std::min(255, a + 34)); }
+void outline(Surface& s, float x, float y, float w, float h, float r, uint16_t c, int a) { rrectX(s, x, y, w, h, r, c, c, 0, 0, false, c, a); }
+
+// Картинка w×h со скруглёнными углами
+void imageRound(Surface& s, int x, int y, int w, int h, float r, const uint16_t* img) {
+  float hx = w * 0.5f, hy = h * 0.5f, cx = x + hx, cy = y + hy;
+  int X0 = std::max(x, s.cx0), X1 = std::min(x + w, s.cx1), Y0 = std::max(y, s.cy0), Y1 = std::min(y + h, s.cy1);
+  for (int py = Y0; py < Y1; py++) {
+    float qy = fabsf(py + 0.5f - cy) - (hy - r);
+    const uint16_t* src = img + (py - y) * w - x;
+    uint16_t* row = s.px + py * s.w;
+    for (int px = X0; px < X1; px++) {
+      float qx = fabsf(px + 0.5f - cx) - (hx - r);
+      if (qx <= -1 && qy <= -1) { row[px] = src[px]; continue; }
+      float d = (qx > 0 && qy > 0) ? sqrtf(qx * qx + qy * qy) - r : fmaxf(qx, qy) - r;
+      int a = (int)(clamp01(0.5f - d) * 255);
+      if (a >= 255) row[px] = src[px];
+      else if (a > 0) row[px] = blendA(row[px], src[px], a);
+    }
+  }
+}
+
+int capBase(const AAFont& f, float y, float h) { return (int)(y + (h + f.asc * 0.74f) * 0.5f + 0.5f); }
+
+// Заглавные буквы (латиница и кириллица в UTF-8)
+std::string upperRu(const std::string& s) {
+  std::string r;
+  r.reserve(s.size());
+  for (size_t i = 0; i < s.size(); i++) {
+    unsigned char c = s[i];
+    if (c >= 'a' && c <= 'z') r += (char)(c - 32);
+    else if (c == 0xD0 && i + 1 < s.size()) {
+      unsigned char d = s[++i];
+      r += (char)0xD0;
+      r += (char)(d >= 0xB0 && d <= 0xBF ? d - 0x20 : d);
+    } else if (c == 0xD1 && i + 1 < s.size()) {
+      unsigned char d = s[++i];
+      if (d >= 0x80 && d <= 0x8F) { r += (char)0xD0; r += (char)(d + 0x20); }
+      else if (d == 0x91) { r += (char)0xD0; r += (char)0x81; }
+      else { r += (char)c; r += (char)d; }
+    } else r += (char)c;
+  }
+  return r;
+}
+static int utf8Len(unsigned char c) { return c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1; }
+// Текст с разрядкой (для подписей капсом, как на пульте)
+int trackedW(const AAFont& f, const std::string& t, int sp) {
+  int w = 0;
+  for (size_t i = 0; i < t.size(); i += utf8Len(t[i])) w += textWN(f, t.c_str() + i, utf8Len(t[i])) + sp;
+  return t.empty() ? 0 : w - sp;
+}
+int drawTracked(Surface& s, const AAFont& f, int x, int base, const std::string& t, int sp, uint16_t col) {
+  for (size_t i = 0; i < t.size(); i += utf8Len(t[i])) x = drawTextN(s, f, x, base, t.c_str() + i, utf8Len(t[i]), col) + sp;
+  return x - sp;
+}
+
+std::string stemOf(const std::string& name) {
+  size_t dot = name.rfind('.');
+  return dot != std::string::npos && dot > 0 ? name.substr(0, dot) : name;
+}
+std::string joinDir(const std::string& dir, const std::string& name) { return (dir == "/" ? "/" : dir + "/") + name; }
+uint32_t hashStr(const std::string& s) {
+  uint32_t h = 2166136261u;
+  for (unsigned char c : s) { h ^= c; h *= 16777619u; }
+  return h;
+}
+
+// ---------- Значки ----------
+void iconChevron(Surface& s, float cx, float cy, float sz, int dir, uint16_t c) {
+  float d = dir * sz * 0.5f;
+  capsuleS(s, cx - d, cy - sz, cx + d, cy, 1.6f, c);
+  capsuleS(s, cx + d, cy, cx - d, cy + sz, 1.6f, c);
+}
+void iconNote(Surface& s, float cx, float cy, float sz, uint16_t c) {
+  float hr = sz * 0.17f;
+  discS(s, cx - sz * 0.12f, cy + sz * 0.3f, hr, c);
+  capsuleS(s, cx + sz * 0.03f, cy + sz * 0.3f, cx + sz * 0.03f, cy - sz * 0.42f, sz * 0.05f, c);
+  capsuleS(s, cx + sz * 0.03f, cy - sz * 0.42f, cx + sz * 0.3f, cy - sz * 0.22f, sz * 0.055f, c);
+  capsuleS(s, cx + sz * 0.3f, cy - sz * 0.22f, cx + sz * 0.3f, cy - sz * 0.08f, sz * 0.05f, c);
+}
+void iconFolderBig(Surface& s, float cx, float cy, float sz, uint16_t c) {
+  roundRectS(s, cx - sz * 0.5f, cy - sz * 0.4f, sz * 0.42f, sz * 0.22f, sz * 0.07f, c, 0, 0);
+  roundRectS(s, cx - sz * 0.5f, cy - sz * 0.28f, sz, sz * 0.66f, sz * 0.09f, c, 0, 0);
+}
+void iconRewind(Surface& s, float cx, float cy, float r, bool fwd, uint16_t c) {
+  float d = fwd ? 1 : -1;
+  for (int k = 0; k < 2; k++) {
+    float ox = cx + d * (k ? r * 0.38f : -r * 0.38f);
+    float xs[] = { ox - d * r * 0.42f, ox + d * r * 0.42f, ox - d * r * 0.42f }, ys[] = { cy - r * 0.48f, cy, cy + r * 0.48f };
+    polyS(s, xs, ys, 3, c);
+  }
+}
+void iconStop(Surface& s, float cx, float cy, float r, uint16_t c) { roundRectS(s, cx - r * 0.45f, cy - r * 0.45f, r * 0.9f, r * 0.9f, 1.5f, c, 0, 0); }
+void iconShuffle(Surface& s, float cx, float cy, uint16_t c) {
+  capsuleS(s, cx - 7, cy - 4, cx + 6, cy + 4, 1.3f, c);
+  capsuleS(s, cx - 7, cy + 4, cx + 6, cy - 4, 1.3f, c);
+  float xa[] = { cx + 4, cx + 9, cx + 4 }, ya[] = { cy - 7, cy - 4, cy - 1 };
+  polyS(s, xa, ya, 3, c);
+  float xb[] = { cx + 4, cx + 9, cx + 4 }, yb[] = { cy + 1, cy + 4, cy + 7 };
+  polyS(s, xb, yb, 3, c);
+}
+void iconSpeaker(Surface& s, float cx, float cy, uint16_t c) {
+  roundRectS(s, cx - 8, cy - 3, 4, 6, 1, c, 0, 0);
+  float xs[] = { cx - 5, cx + 1, cx + 1, cx - 5 }, ys[] = { cy - 3, cy - 7, cy + 7, cy + 3 };
+  polyS(s, xs, ys, 4, c);
+  arcS(s, cx + 1, cy, 4.5f, 1.4f, -50, 50, c);
+  arcS(s, cx + 1, cy, 8, 1.4f, -50, 50, c);
+}
+void iconExpand(Surface& s, float cx, float cy, uint16_t c) {
+  capsuleS(s, cx - 4, cy + 4, cx + 4, cy - 4, 1.2f, c);
+  capsuleS(s, cx + 1, cy - 5, cx + 5, cy - 5, 1.2f, c);
+  capsuleS(s, cx + 5, cy - 5, cx + 5, cy - 1, 1.2f, c);
+  capsuleS(s, cx - 5, cy + 1, cx - 5, cy + 5, 1.2f, c);
+  capsuleS(s, cx - 5, cy + 5, cx - 1, cy + 5, 1.2f, c);
+}
+void drawWifiIcon(Surface& s, float cx, float cy, uint16_t c) {
+  capsuleS(s, cx, cy, cx, cy, 1.8f, c);
+  arcS(s, cx, cy + 1, 6, 2, 45, 135, c);
+  arcS(s, cx, cy + 1, 11, 2, 45, 135, c);
+}
+void iconBt(Surface& s, float cx, float cy, uint16_t c) {
+  capsuleS(s, cx, cy - 9, cx, cy + 9, 1.3f, c);
+  capsuleS(s, cx, cy - 9, cx + 5, cy - 4.5f, 1.3f, c);
+  capsuleS(s, cx + 5, cy - 4.5f, cx - 5, cy + 4.5f, 1.3f, c);
+  capsuleS(s, cx, cy + 9, cx + 5, cy + 4.5f, 1.3f, c);
+  capsuleS(s, cx + 5, cy + 4.5f, cx - 5, cy - 4.5f, 1.3f, c);
+}
+void iconHeadphones(Surface& s, float cx, float cy, uint16_t c) {
+  arcS(s, cx, cy + 1, 7, 1.8f, 0, 180, c);
+  roundRectS(s, cx - 9, cy + 1, 4, 7, 1.5f, c, 0, 0);
+  roundRectS(s, cx + 5, cy + 1, 4, 7, 1.5f, c, 0, 0);
+}
+// Кольцо прогресса: от «12 часов» по часовой стрелке
+void arcProgress(Surface& s, float cx, float cy, float r, float th, float k, uint16_t c) {
+  if (k <= 0) return;
+  if (k > 1) k = 1;
+  float a0 = 90 - 360 * k;
+  if (a0 >= -180) arcS(s, cx, cy, r, th, a0, 90, c);
+  else { arcS(s, cx, cy, r, th, -180, 90, c); arcS(s, cx, cy, r, th, a0 + 360, 180, c); }
+}
+
+// Обложка-заглушка: градиент по имени файла и крупный значок
+static const uint16_t ART_PAL[6][2] = {
+  { MK565(124, 58, 237), MK565(190, 24, 93) }, { MK565(14, 116, 144), MK565(30, 41, 99) },
+  { MK565(234, 88, 12), MK565(159, 18, 57) },  { MK565(37, 99, 235), MK565(55, 48, 163) },
+  { MK565(5, 150, 105), MK565(17, 94, 89) },   { MK565(219, 39, 119), MK565(88, 28, 135) },
+};
+void drawArt(Surface& s, float x, float y, float w, float h, float r, const std::string& name, MediaKind k) {
+  const uint16_t* p = ART_PAL[hashStr(name) % 6];
+  rrectX(s, x, y, w, h, r, p[0], p[1], 255, 255, false, 0, 0);
+  float m = std::min(w, h);
+  rr(s, x + w * 0.62f - m * 0.3f, y + h * 0.34f - m * 0.3f, m * 0.6f, m * 0.6f, m * 0.3f, C_WHITE, 24);
+  uint16_t ic = mix565(p[0], C_WHITE, 225);
+  if (k == MK_DIR) iconFolderBig(s, x + w * 0.5f, y + h * 0.4f, m * 0.36f, ic);
+  else if (k == MK_AVI || k == MK_MP4) iconPlay(s, x + w * 0.52f, y + h * 0.4f, m * 0.22f, ic);
+  else iconNote(s, x + w * 0.5f, y + h * 0.4f, m * 0.38f, ic);
+}
+
+// Капсула с текстом, возвращает ширину
+int pill(Surface& s, int x, int y, int h, const std::string& t, const AAFont& f, uint16_t fill, int fa, uint16_t txt, int padX) {
+  int w = textW(f, t.c_str()) + padX * 2;
+  rrectX(s, x, y, w, h, h * 0.5f, fill, fill, fa, fa, false, C_WHITE, fill == C_WHITE || fa < 140 ? std::min(255, fa + 34) : 0);
+  drawText(s, f, x + padX, capBase(f, y, h), t.c_str(), txt);
+  return w;
+}
+
+// ---------- Картинки: масштаб, фон, JPEG ----------
+// Вписывает изображение с обрезкой краёв (как object-fit: cover)
+void scaleFill(const uint16_t* src, int sw, int sh, uint16_t* dst, int dw, int dh) {
+  float k = std::max((float)dw / sw, (float)dh / sh);
+  float step = 1.0f / k, ox = (sw - dw * step) * 0.5f, oy = (sh - dh * step) * 0.5f;
+  for (int y = 0; y < dh; y++)
+    for (int x = 0; x < dw; x++) {
+      uint32_t R = 0, G = 0, B = 0, n = 0;
+      if (step > 1.5f) {  // уменьшение: среднее по области
+        int x0 = (int)(ox + x * step), x1 = std::max(x0 + 1, (int)(ox + (x + 1) * step));
+        int y0 = (int)(oy + y * step), y1 = std::max(y0 + 1, (int)(oy + (y + 1) * step));
+        int st = std::max(1, (x1 - x0) / 3);
+        for (int yy = y0; yy < y1 && yy < sh; yy += st)
+          for (int xx = x0; xx < x1 && xx < sw; xx += st) {
+            uint16_t c = src[yy * sw + xx];
+            R += c >> 11; G += (c >> 5) & 63; B += c & 31; n++;
+          }
+        dst[y * dw + x] = n ? (uint16_t)(((R / n) << 11) | ((G / n) << 5) | (B / n)) : 0;
+      } else {  // увеличение: билинейно
+        float sx = ox + (x + 0.5f) * step - 0.5f, sy = oy + (y + 0.5f) * step - 0.5f;
+        int ix = std::max(0, std::min(sw - 2, (int)floorf(sx))), iy = std::max(0, std::min(sh - 2, (int)floorf(sy)));
+        float fx = clamp01(sx - ix), fy = clamp01(sy - iy);
+        uint16_t c00 = src[iy * sw + ix], c10 = src[iy * sw + ix + 1], c01 = src[(iy + 1) * sw + ix], c11 = src[(iy + 1) * sw + ix + 1];
+        float w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+        float r = (c00 >> 11) * w00 + (c10 >> 11) * w10 + (c01 >> 11) * w01 + (c11 >> 11) * w11;
+        float g = ((c00 >> 5) & 63) * w00 + ((c10 >> 5) & 63) * w10 + ((c01 >> 5) & 63) * w01 + ((c11 >> 5) & 63) * w11;
+        float b = (c00 & 31) * w00 + (c10 & 31) * w10 + (c01 & 31) * w01 + (c11 & 31) * w11;
+        dst[y * dw + x] = (uint16_t)(((int)(r + 0.5f) << 11) | ((int)(g + 0.5f) << 5) | (int)(b + 0.5f));
+      }
+    }
+}
+
+static const uint8_t BAYER4[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
+static inline uint16_t rgbDither(float r, float g, float b, int x, int y) {
+  float d = (BAYER4[(y & 3) * 4 + (x & 3)] + 0.5f) / 16.0f;
+  int R = (int)(r * (31.0f / 255) + d), G = (int)(g * (63.0f / 255) + d), B = (int)(b * (31.0f / 255) + d);
+  R = R < 0 ? 0 : R > 31 ? 31 : R;
+  G = G < 0 ? 0 : G > 63 ? 63 : G;
+  B = B < 0 ? 0 : B > 31 ? 31 : B;
+  return (uint16_t)((R << 11) | (G << 5) | B);
+}
+
+// Размытый фон экрана: из обложки (сетка средних цветов, плавно растянутая) или по умолчанию
+void makeBackdrop(const uint16_t* src, int sw, int sh) {
+  if (!bgPx) bgPx = (uint16_t*)malloc(SCREEN_W * SCREEN_H * 2);
+  if (!bgPx) return;
+  const int GX = 4, GY = 6;
+  static const uint8_t DEF[GY][GX][3] = {
+    { { 42, 48, 72 }, { 74, 62, 92 }, { 62, 54, 84 }, { 30, 36, 60 } },
+    { { 96, 74, 62 }, { 150, 116, 84 }, { 104, 84, 96 }, { 52, 52, 84 } },
+    { { 60, 92, 112 }, { 124, 102, 124 }, { 160, 96, 72 }, { 72, 62, 104 } },
+    { { 40, 72, 94 }, { 92, 62, 116 }, { 136, 82, 62 }, { 60, 72, 104 } },
+    { { 30, 40, 62 }, { 72, 60, 92 }, { 84, 62, 72 }, { 40, 50, 82 } },
+    { { 20, 24, 38 }, { 36, 34, 54 }, { 44, 40, 54 }, { 24, 28, 46 } },
+  };
+  float G[GY][GX][3];
+  for (int gy = 0; gy < GY; gy++)
+    for (int gx = 0; gx < GX; gx++) {
+      float r = DEF[gy][gx][0], g = DEF[gy][gx][1], b = DEF[gy][gx][2];
+      if (src) {
+        float cw = sw, ch = sh;
+        if (cw / ch > 2.0f / 3) cw = ch * 2 / 3; else ch = cw * 3 / 2;
+        float ox = (sw - cw) / 2, oy = (sh - ch) / 2;
+        int x0 = (int)(ox + cw * gx / GX), x1 = (int)(ox + cw * (gx + 1) / GX), y0 = (int)(oy + ch * gy / GY), y1 = (int)(oy + ch * (gy + 1) / GY);
+        float R = 0, Gg = 0, B = 0;
+        int n = 0;
+        for (int y = y0; y < y1; y += 2)
+          for (int x = x0; x < x1; x += 2) {
+            uint16_t c = src[y * sw + x];
+            R += (c >> 11) * 8.2258f; Gg += ((c >> 5) & 63) * 4.0476f; B += (c & 31) * 8.2258f; n++;
+          }
+        if (n) { r = R / n; g = Gg / n; b = B / n; }
+        float l = 0.3f * r + 0.59f * g + 0.11f * b;  // чуть сочнее и темнее
+        r = (l + (r - l) * 1.3f) * 0.6f; g = (l + (g - l) * 1.3f) * 0.6f; b = (l + (b - l) * 1.3f) * 0.6f;
+      } else { r *= 0.7f; g *= 0.7f; b *= 0.7f; }
+      G[gy][gx][0] = r; G[gy][gx][1] = g; G[gy][gx][2] = b;
+    }
+  for (int y = 0; y < SCREEN_H; y++) {
+    float gyf = (y + 0.5f) * GY / SCREEN_H - 0.5f;
+    int iy = std::max(0, std::min(GY - 2, (int)floorf(gyf)));
+    float ty = clamp01(gyf - iy);
+    ty = ty * ty * (3 - 2 * ty);
+    float dy = (y - SCREEN_H * 0.45f) / (SCREEN_H * 0.6f);
+    for (int x = 0; x < SCREEN_W; x++) {
+      float gxf = (x + 0.5f) * GX / SCREEN_W - 0.5f;
+      int ix = std::max(0, std::min(GX - 2, (int)floorf(gxf)));
+      float tx = clamp01(gxf - ix);
+      tx = tx * tx * (3 - 2 * tx);
+      float dx = (x - SCREEN_W * 0.5f) / (SCREEN_W * 0.6f), v = 1 - 0.32f * (dx * dx + dy * dy);
+      float c[3];
+      for (int k = 0; k < 3; k++) {
+        float top = G[iy][ix][k] + (G[iy][ix + 1][k] - G[iy][ix][k]) * tx;
+        float bot = G[iy + 1][ix][k] + (G[iy + 1][ix + 1][k] - G[iy + 1][ix][k]) * tx;
+        c[k] = (top + (bot - top) * ty) * v;
+      }
+      bgPx[y * SCREEN_W + x] = rgbDither(c[0], c[1], c[2], x, y);
+    }
+  }
+}
+
+JDec gJ;
+int jpegToBuf(JPEGDRAW* d) {
+  int bw = d->iWidthUsed > 0 ? d->iWidthUsed : d->iWidth;
+  for (int yy = 0; yy < d->iHeight; yy++) {
+    int Y = d->y + yy;
+    if (Y >= gJ.h) break;
+    for (int xx = 0; xx < bw; xx++) {
+      int X = d->x + xx;
+      if (X < gJ.w) gJ.px[Y * gJ.w + X] = d->pPixels[yy * d->iWidth + xx];
+    }
+  }
+  return 1;
+}
+// JPEG в буфер с масштабом 1/2/4/8 так, чтобы было не меньше minW×minH
+uint16_t* decodeJpeg(uint8_t* data, int len, int minW, int minH, int* outW, int* outH) {
+  if (!jpeg->openRAM(data, len, jpegToBuf)) return nullptr;
+  int W = jpeg->getWidth(), H = jpeg->getHeight(), s = 1;
+  while (s < 8 && W / (s * 2) >= minW && H / (s * 2) >= minH) s *= 2;
+  int w = W / s, h = H / s;
+  uint16_t* px = w > 0 && h > 0 ? (uint16_t*)calloc((size_t)w * h, 2) : nullptr;
+  if (!px) { jpeg->close(); return nullptr; }
+  gJ.px = px; gJ.w = w; gJ.h = h;
+  jpeg->setPixelType(RGB565_LITTLE_ENDIAN);
+  int ok = jpeg->decode(0, 0, s == 2 ? JPEG_SCALE_HALF : s == 4 ? JPEG_SCALE_QUARTER : s == 8 ? JPEG_SCALE_EIGHTH : 0);
+  jpeg->close();
+  if (!ok) { free(px); return nullptr; }
+  *outW = w;
+  *outH = h;
+  return px;
+}
+bool loadJpegFill(void* f, uint32_t off, uint32_t len, uint16_t* dst, int dw, int dh) {
+  if (!len || len > 1500000) return false;
+  uint8_t* buf = (uint8_t*)malloc(len);
+  if (!buf) return false;
+  fsSeek(f, off);
+  bool ok = fsReadCb(f, buf, len) == (int32_t)len;
+  int w = 0, h = 0;
+  uint16_t* img = ok ? decodeJpeg(buf, len, dw, dh, &w, &h) : nullptr;
+  free(buf);
+  if (!img) return false;
+  scaleFill(img, w, h, dst, dw, dh);
+  free(img);
+  return true;
+}
+// Картинка для файла: обложка из тегов MP3 или первый кадр AVI
+bool loadArt(const std::string& path, MediaKind k, uint16_t* dst, int dw, int dh) {
+  int32_t size;
+  void* f = fsOpen(path.c_str(), &size);
+  if (!f) return false;
+  bool ok = false;
+  if (k == MK_MP3) {
+    TrackInfo ti = TrackInfo();
+    parseMp3Info(f, size, ti);
+    ok = loadJpegFill(f, ti.coverOff, ti.coverLen, dst, dw, dh);
+  } else if (k == MK_AVI) {
+    AviInfo a;
+    std::string err;
+    if (parseAvi(f, size, a, err)) {
+      uint32_t p = a.moviStart;
+      for (int n = 0; n < 300 && p + 8 <= a.moviEnd; n++) {
+        uint8_t c[12];
+        fsSeek(f, p);
+        if (fsReadCb(f, c, 12) < 8) break;
+        uint32_t len = rd32le(c + 4);
+        if (fourcc(c, "LIST")) { p += 12; continue; }
+        if (c[2] == 'd' && (c[3] == 'c' || c[3] == 'b') && len > 0) { ok = loadJpegFill(f, p + 8, len, dst, dw, dh); break; }
+        p += 8 + len + (len & 1);
+      }
+    }
+  }
+  fsClose(f);
+  return ok;
+}
+
+// ---------- Кэш миниатюр карточек ----------
+Thumb* thumbFind(const std::string& key) {
+  for (auto& t : thumbs)
+    if (t.key == key) { t.used = ++thumbClock; return &t; }
+  return nullptr;
+}
+void thumbPut(const std::string& key, uint16_t* px) {
+  int withPx = 0;
+  for (auto& t : thumbs) withPx += t.px != nullptr;
+  if (px && withPx >= THUMB_MAX) {
+    size_t old = SIZE_MAX;
+    for (size_t i = 0; i < thumbs.size(); i++)
+      if (thumbs[i].px && (old == SIZE_MAX || thumbs[i].used < thumbs[old].used)) old = i;
+    if (old != SIZE_MAX) { free(thumbs[old].px); thumbs.erase(thumbs.begin() + old); }
+  }
+  if (thumbs.size() > 64) {  // старые неудачи
+    for (size_t i = 0; i < thumbs.size(); i++)
+      if (!thumbs[i].px) { thumbs.erase(thumbs.begin() + i); break; }
+  }
+  Thumb t;
+  t.key = key;
+  t.px = px;
+  t.used = ++thumbClock;
+  thumbs.push_back(t);
+}
+void thumbForget(const std::string& key) {
+  for (size_t i = 0; i < thumbs.size(); i++)
+    if (thumbs[i].key == key) { free(thumbs[i].px); thumbs.erase(thumbs.begin() + i); return; }
+}
+
+// Обложка трека: фон, маленькие копии для плеера и мини-плеера
+void prepareTrackArt() {
+  if (coverPx) {
+    if (!cover80) cover80 = (uint16_t*)malloc(80 * 80 * 2);
+    if (!cover42) cover42 = (uint16_t*)malloc(42 * 42 * 2);
+    if (cover80) scaleFill(coverPx, 200, 200, cover80, 80, 80);
+    if (cover42) scaleFill(coverPx, 200, 200, cover42, 42, 42);
+  } else {
+    free(cover80); cover80 = nullptr;
+    free(cover42); cover42 = nullptr;
+  }
+  makeBackdrop(coverPx, 200, 200);
+  heroKey.clear();
+}
+
+// ===================== Медиатека =====================
+bool trackOn() { return trk.type != TT_NONE; }
+
+void rebuildView() {
+  view.clear();
+  heroList.clear();
+  for (int i = 0; i < (int)entries.size(); i++) {
+    MediaKind k = entries[i].kind;
+    bool show = tab == 0 || (tab == 1 && (k == MK_MP3 || k == MK_WAV)) || (tab == 2 && (k == MK_AVI || k == MK_MP4));
+    if (!show) continue;
+    view.push_back(i);
+    if (k == MK_MP3 || k == MK_WAV || k == MK_AVI) heroList.push_back(i);
+  }
+  int lo = trackOn() ? -1 : 0;
+  if (heroPos < lo || heroPos >= (int)heroList.size()) heroPos = lo;
+  listDirty = true;
+}
 
 void loadDir(const std::string& dir) {
   std::vector<DirEnt> ents;
@@ -1131,169 +1670,584 @@ void loadDir(const std::string& dir) {
     if ((a.kind == MK_DIR) != (b.kind == MK_DIR)) return a.kind == MK_DIR;
     return lower(a.name) < lower(b.name);
   });
-  listDirty = true;
+  heroPos = trackOn() ? -1 : 0;
+  rebuildView();
 }
 
-void drawBar(Surface& s, int top, const std::string& title, bool back) {
-  if (top >= BAR_H) return;
-  fillRectS(s, 0, -top, SCREEN_W, BAR_H, C_BAR);
-  fillRectS(s, 0, BAR_H - 1 - top, SCREEN_W, 1, C_LINE);
-  if (back) iconBack(s, 16, 22 - top, C_ACCENT);
-  const AAFont& f = *FONTS[FN_BOLD];
-  drawText(s, f, back ? 44 : 16, 28 - top, ellipsize(f, title, SCREEN_W - 70).c_str(), C_TEXT);
+bool heroAvail() { return (heroPos == -1 && trackOn()) || (heroPos >= 0 && heroPos < (int)heroList.size()); }
+int heroCount() { return (int)heroList.size() + (trackOn() ? 1 : 0); }
+
+HeroInfo heroInfo() {
+  HeroInfo h;
+  h.now = heroPos == -1 && trackOn();
+  h.idx = -1;
+  if (h.now) {
+    h.kind = trk.type == TT_MP3 ? MK_MP3 : MK_WAV;
+    h.title = trk.info.title;
+    h.sub = trk.info.artist;
+    if (!trk.info.album.empty()) h.sub += (h.sub.empty() ? "" : " — ") + trk.info.album;
+    if (h.sub.empty()) h.sub = fileName(trackDir == "/" ? std::string("SD-карта") : trackDir);
+    h.badge = trk.paused ? "На паузе" : "Сейчас играет";
+    h.tag1 = trk.type == TT_MP3 ? "MP3" : "WAV";
+    h.tag2 = trk.duration > 0 ? fmtTime(trk.duration) : "";
+    h.key = "#now:" + trk.path;
+    h.path = trk.path;
+  } else if (heroPos >= 0 && heroPos < (int)heroList.size()) {
+    h.idx = heroList[heroPos];
+    const Entry& e = entries[h.idx];
+    h.kind = e.kind;
+    h.title = stemOf(e.name);
+    h.path = joinDir(curDir, e.name);
+    h.key = h.path;
+    h.badge = e.kind == MK_AVI ? "Видео" : "Музыка";
+    h.tag1 = e.kind == MK_AVI ? "AVI" : e.kind == MK_MP3 ? "MP3" : "WAV";
+    h.tag2 = fmtSize(e.size);
+    h.sub = curDir == "/" ? "SD-карта" : "Папка «" + fileName(curDir) + "»";
+  } else h.kind = MK_NONE;
+  return h;
 }
 
-const char* kindLabel(MediaKind k) {
-  switch (k) {
-    case MK_MP3: return "MP3";
-    case MK_WAV: return "WAV";
-    case MK_AVI: return "видео AVI";
-    case MK_MP4: return "MP4 — сначала переведите в AVI";
-    case MK_DIR: return "папка";
-    default: return "";
+// Картинка большой карточки (загружается до отрисовки)
+void ensureHeroImage() {
+  if (!heroAvail()) return;
+  HeroInfo h = heroInfo();
+  if (h.key == heroKey) return;
+  heroKey = h.key;
+  heroOk = false;
+  if (!heroPx) heroPx = (uint16_t*)malloc(HERO_W * HERO_H * 2);
+  if (!heroPx) return;
+  if (h.now) {
+    if (coverPx) { scaleFill(coverPx, 200, 200, heroPx, HERO_W, HERO_H); heroOk = true; }
+  } else if (h.kind == MK_MP3 || h.kind == MK_AVI) heroOk = loadArt(h.path, h.kind, heroPx, HERO_W, HERO_H);
+}
+
+void computeLayout() {
+  lay.hero = heroAvail();
+  int y = 8;
+  lay.heroY = y;
+  if (lay.hero) y += HERO_H + 16;
+  lay.secY = y;
+  y += 36;
+  lay.gridY = y;
+  lay.rows = ((int)view.size() + 1) / 2;
+  y += lay.rows * (CARD_H + CARD_GAP);
+  if (view.empty()) y += 110;
+  y += trackOn() ? (SCREEN_H - MINI_Y) + 6 : 10;
+  lay.total = y;
+}
+int libMaxScroll() { computeLayout(); return std::max(0, lay.total - (SCREEN_H - HDR_H)); }
+
+void cardPos(int vi, int& x, int& y) {  // y — экранная
+  x = 12 + (vi % 2) * (CARD_W + 8);
+  y = HDR_H + lay.gridY + (vi / 2) * (CARD_H + CARD_GAP) - listScroll;
+}
+
+// Кнопки большой карточки (координаты экрана при прокрутке scroll)
+void heroGeom(const HeroInfo& h, HitRect& prim, HitRect& sec, HitRect& prv, HitRect& nxt, bool& hasSec, bool& arrows) {
+  int x = 12, y = HDR_H + lay.heroY - listScroll;
+  int by = y + HERO_H - 48;
+  const char* lbl = h.now ? (trk.paused ? "Слушать" : "Пауза") : h.kind == MK_AVI ? "Смотреть" : "Слушать";
+  prim.x = x + 12; prim.y = by; prim.w = textW(*FONTS[FN_SEMI], lbl) + 52; prim.h = 34;
+  hasSec = h.now;
+  sec.x = prim.x + prim.w + 8; sec.y = by; sec.w = textW(*FONTS[FN_SEMI], "Плеер") + 32; sec.h = 34;
+  arrows = heroCount() > 1;
+  prv.x = x + HERO_W - 74; prv.y = by + 1; prv.w = 32; prv.h = 32;
+  nxt.x = x + HERO_W - 38; nxt.y = by + 1; nxt.w = 32; nxt.h = 32;
+}
+bool hit(const HitRect& r, int x, int y, int pad) { return x >= r.x - pad && x < r.x + r.w + pad && y >= r.y - pad && y < r.y + r.h + pad; }
+
+void drawHero(Surface& s, int top) {
+  int x = 12, y = HDR_H + lay.heroY - listScroll - top;
+  if (y + HERO_H <= 0 || y >= s.h) return;
+  HeroInfo h = heroInfo();
+  if (heroOk) imageRound(s, x, y, HERO_W, HERO_H, 20, heroPx);
+  else drawArt(s, x, y, HERO_W, HERO_H, 20, h.title, h.kind);
+  rrectX(s, x, y, HERO_W, HERO_H, 20, C_BLACK, C_BLACK, 200, 20, true, 0, 0);
+  rrectX(s, x, y, HERO_W, HERO_H, 20, C_BLACK, C_BLACK, 0, 150, false, C_WHITE, 52);
+  // значок «сейчас играет»
+  const AAFont& tiny = *FONTS[FN_TINY];
+  int bw = textW(tiny, h.badge.c_str()) + 34;
+  rrectX(s, x + 12, y + 12, bw, 24, 12, C_BLACK, C_BLACK, 110, 110, false, C_WHITE, 46);
+  if (h.now) discS(s, x + 25, y + 24, 4, trk.paused ? C_TXT2 : C_GREEN);
+  else if (h.kind == MK_AVI) iconPlay(s, x + 25, y + 24, 6, C_WHITE);
+  else iconNote(s, x + 25, y + 24, 12, C_WHITE);
+  drawText(s, tiny, x + 34, capBase(tiny, y + 12, 24), h.badge.c_str(), C_WHITE);
+  // заголовок и подпись
+  const AAFont& tf = *FONTS[FN_TITLE];
+  std::vector<std::string> lines = wrapText(tf, h.title, HERO_W - 40);
+  if (lines.empty()) lines.push_back("");
+  if (lines.size() > 2) { lines[1] = ellipsize(tf, lines[1] + " " + lines[2], HERO_W - 40); lines.resize(2); }
+  for (auto& l : lines) l = ellipsize(tf, l, HERO_W - 40);
+  int by = y + HERO_H - 48;
+  int subBase = by - 12, titleBase = subBase - 21, firstBase = titleBase - 25 * ((int)lines.size() - 1);
+  for (size_t i = 0; i < lines.size(); i++) drawText(s, tf, x + 14, firstBase + 25 * (int)i, lines[i].c_str(), C_WHITE);
+  drawText(s, *FONTS[FN_SMALL], x + 14, subBase, ellipsize(*FONTS[FN_SMALL], h.sub, HERO_W - 30).c_str(), C_TXT2);
+  int tagY = firstBase - 22 - 22;
+  if (tagY >= y + 44) {
+    int tx = x + 14;
+    tx += pill(s, tx, tagY, 22, h.tag1, tiny, C_WHITE, 40, C_WHITE, 10) + 6;
+    if (!h.tag2.empty()) pill(s, tx, tagY, 22, h.tag2, tiny, C_WHITE, 40, C_WHITE, 10);
+  }
+  // кнопки
+  HitRect pr, sc, pv, nx;
+  bool hasSec, arrows;
+  heroGeom(h, pr, sc, pv, nx, hasSec, arrows);
+  int d = -top;
+  rr(s, pr.x, pr.y + d, pr.w, pr.h, 17, C_WHITE, 255);
+  bool pauseIcon = h.now && !trk.paused;
+  if (pauseIcon) iconPause(s, pr.x + 20, pr.y + d + 17, 9, C_INK); else iconPlay(s, pr.x + 20, pr.y + d + 17, 9, C_INK);
+  const char* lbl = h.now ? (trk.paused ? "Слушать" : "Пауза") : h.kind == MK_AVI ? "Смотреть" : "Слушать";
+  drawText(s, *FONTS[FN_SEMI], pr.x + 34, capBase(*FONTS[FN_SEMI], pr.y + d, pr.h), lbl, C_INK);
+  if (hasSec) {
+    glass(s, sc.x, sc.y + d, sc.w, sc.h, 17, 30);
+    drawText(s, *FONTS[FN_SEMI], sc.x + 16, capBase(*FONTS[FN_SEMI], sc.y + d, sc.h), "Плеер", C_WHITE);
+  }
+  if (arrows) {
+    glass(s, pv.x, pv.y + d, 32, 32, 16, 34);
+    iconChevron(s, pv.x + 15, pv.y + d + 16, 5, -1, C_WHITE);
+    glass(s, nx.x, nx.y + d, 32, 32, 16, 34);
+    iconChevron(s, nx.x + 17, nx.y + d + 16, 5, 1, C_WHITE);
   }
 }
 
-void drawEntryIcon(Surface& s, MediaKind k, float cx, float cy) {
-  uint16_t c = k == MK_DIR ? C_DIR : k == MK_AVI ? C_VIDEO : k == MK_MP4 ? C_OFF : C_AUDIO;
-  discS(s, cx, cy, 17, c);
-  if (k == MK_DIR) iconFolder(s, cx, cy, C_TEXT);
-  else if (k == MK_AVI || k == MK_MP4) iconPlay(s, cx + 1, cy, 12, C_TEXT);
-  else drawCentered(s, *FONTS[FN_BOLD], (int)cx, (int)cy + 6, "♪", C_TEXT);
+void drawCard(Surface& s, int top, int vi) {
+  int x, y;
+  cardPos(vi, x, y);
+  y -= top;
+  if (y + CARD_H <= 0 || y >= s.h) return;
+  const Entry& e = entries[view[vi]];
+  std::string full = joinDir(curDir, e.name);
+  bool hasArt = e.kind == MK_MP3 || e.kind == MK_AVI;
+  Thumb* t = hasArt ? thumbFind(full) : nullptr;
+  bool playing = trackOn() && trk.path == full;
+  if (t && t->px) imageRound(s, x, y, CARD_W, CARD_H, 16, t->px);
+  else {
+    if (hasArt && !t) thumbPending = true;
+    drawArt(s, x, y, CARD_W, CARD_H, 16, e.name, e.kind);
+  }
+  rrectX(s, x, y, CARD_W, CARD_H, 16, C_BLACK, C_BLACK, 0, 215, false, 0, 0);
+  if (e.kind == MK_MP4) rr(s, x, y, CARD_W, CARD_H, 16, C_BLACK, 120);
+  if (playing) { outline(s, x, y, CARD_W, CARD_H, 16, C_BLUE, 255); outline(s, x + 1, y + 1, CARD_W - 2, CARD_H - 2, 15, C_BLUE, 255); }
+  else outline(s, x, y, CARD_W, CARD_H, 16, C_WHITE, 46);
+  const AAFont& tiny = *FONTS[FN_TINY];
+  std::string tag = playing ? (trk.paused ? "На паузе" : "Играет") : e.kind == MK_DIR ? "Папка" : e.kind == MK_MP3 ? "MP3" : e.kind == MK_WAV ? "WAV" : e.kind == MK_AVI ? "Видео" : "MP4";
+  if (playing) pill(s, x + 10, y + CARD_H - 82, 20, tag, tiny, C_BLUE, 235, C_WHITE, 9);
+  else pill(s, x + 10, y + CARD_H - 82, 20, tag, tiny, C_WHITE, 46, C_WHITE, 9);
+  const AAFont& sf = *FONTS[FN_SEMI];
+  drawText(s, sf, x + 10, y + CARD_H - 46, ellipsize(sf, stemOf(e.name), CARD_W - 20).c_str(), C_WHITE);
+  std::string sub = e.kind == MK_DIR ? "Открыть папку" : e.kind == MK_MP4 ? "Переведите в AVI" : fmtSize(e.size);
+  drawText(s, tiny, x + 10, y + CARD_H - 27, ellipsize(tiny, sub, CARD_W - 58).c_str(), C_TXT2);
+  if (e.kind != MK_MP4) {
+    float bx = x + CARD_W - 26, by = y + CARD_H - 26;
+    discS(s, bx, by, 15, C_WHITE);
+    if (e.kind == MK_DIR) iconChevron(s, bx + 1.5f, by, 4.5f, 1, C_INK);
+    else if (playing && !trk.paused) iconPause(s, bx, by, 8, C_INK);
+    else iconPlay(s, bx + 1, by, 8, C_INK);
+  }
 }
 
-void drawMini(Surface& s, int top) {
-  int y0 = SCREEN_H - MINI_H - top;
-  fillRectS(s, 0, y0, SCREEN_W, MINI_H, C_CARD);
-  fillRectS(s, 0, y0, SCREEN_W, 1, C_LINE);
-  float k = trk.duration > 0 ? std::min(1.0f, audioClock() / trk.duration) : 0;
-  fillRectS(s, 0, y0, (int)(SCREEN_W * k), 2, C_ACCENT);
-  drawText(s, *FONTS[FN_BOLD], 16, y0 + 26, ellipsize(*FONTS[FN_BOLD], trk.info.title, 230).c_str(), C_TEXT);
-  std::string sub = trk.info.artist.empty() ? fmtTime(audioClock()) + (trk.duration > 0 ? " / " + fmtTime(trk.duration) : std::string()) : trk.info.artist;
-  drawText(s, *FONTS[FN_SMALL], 16, y0 + 46, ellipsize(*FONTS[FN_SMALL], sub, 230).c_str(), C_DIM);
-  discS(s, 288, y0 + 30, 19, C_ACCENT2);
-  if (trk.paused) iconPlay(s, 289, y0 + 30, 15, C_TEXT); else iconPause(s, 288, y0 + 30, 15, C_TEXT);
+void tabGeom(int* xs, int* ws) {
+  static const char* T[3] = { "Всё", "Музыка", "Видео" };
+  int x = 12;
+  for (int k = 0; k < 3; k++) { ws[k] = textW(*FONTS[FN_SEMI], T[k]) + 28; xs[k] = x; x += ws[k] + 4; }
 }
 
-void drawWifiIcon(Surface& s, float cx, float cy, uint16_t c) {
-  capsuleS(s, cx, cy, cx, cy, 1.8f, c);
-  arcS(s, cx, cy + 1, 6, 2, 45, 135, c);
-  arcS(s, cx, cy + 1, 11, 2, 45, 135, c);
+void drawHeader(Surface& s, int top) {
+  int o = -top;
+  rr(s, 0, o, SCREEN_W, HDR_H, 0, C_BLACK, 70);
+  if (listScroll > 0) rr(s, 0, o + HDR_H - 1, SCREEN_W, 1, 0, C_WHITE, 26);
+  // строка с названием папки
+  glass(s, 12, o + 10, 210, 36, 18, 34);
+  if (curDir != "/") iconChevron(s, 29, o + 28, 6, -1, C_WHITE);
+  else iconNote(s, 30, o + 28, 18, C_WHITE);
+  const AAFont& sf = *FONTS[FN_SEMI];
+  const AAFont& tiny = *FONTS[FN_TINY];
+  char cnt[32];
+  snprintf(cnt, sizeof cnt, "%d", (int)entries.size());
+  std::string cs = sdReady ? std::string(cnt) + " шт." : "нет карты";
+  int cw = textW(tiny, cs.c_str());
+  drawText(s, tiny, 210 - cw, capBase(tiny, o + 10, 36), cs.c_str(), C_TXT2);
+  std::string title = curDir == "/" ? "Медиатека" : fileName(curDir);
+  drawText(s, sf, 46, capBase(sf, o + 10, 36), ellipsize(sf, title, 210 - 46 - cw - 10).c_str(), C_WHITE);
+  // Bluetooth
+  glass(s, 228, o + 10, 36, 36, 18, btState != BT_OFF ? 60 : 34);
+  iconBt(s, 246, o + 28, btState != BT_OFF ? C_WHITE : C_TXT2);
+  if (btState == BT_ON) { discS(s, 260, o + 13, 6, MK565(20, 22, 26)); discS(s, 260, o + 13, 4, C_GREEN); }
+  else if (btState != BT_OFF) { discS(s, 260, o + 13, 6, MK565(20, 22, 26)); discS(s, 260, o + 13, 4, C_BLUE); }
+  // Wi-Fi
+  glass(s, 270, o + 10, 36, 36, 18, wifiOn ? 60 : 34);
+  drawWifiIcon(s, 288, o + 33, wifiOn ? C_WHITE : C_TXT2);
+  if (wifiOn) { discS(s, 302, o + 13, 6, MK565(20, 22, 26)); discS(s, 302, o + 13, 4, C_GREEN); }
+  // вкладки
+  static const char* T[3] = { "Всё", "Музыка", "Видео" };
+  int xs[3], ws[3];
+  tabGeom(xs, ws);
+  for (int k = 0; k < 3; k++) {
+    if (k == tab) glass(s, xs[k], o + 56, ws[k], 30, 15, 64);
+    drawText(s, sf, xs[k] + 14, capBase(sf, o + 56, 30), T[k], k == tab ? C_WHITE : C_TXT2);
+  }
+  // перемешивание
+  if (shuffleOn) rrectX(s, 274, o + 55, 32, 32, 16, C_BLUE, C_BLUE, 240, 240, false, C_WHITE, 60);
+  else glass(s, 274, o + 55, 32, 32, 16, 30);
+  iconShuffle(s, 290, o + 71, shuffleOn ? C_WHITE : C_TXT2);
 }
 
-void drawListStrip(Surface& s, int top) {
-  std::string title = curDir == "/" ? "Медиаплеер" : fileName(curDir);
-  drawBar(s, top, title, curDir != "/");
-  if (top < BAR_H) drawWifiIcon(s, 296, 27 - top, wifiOn ? MK565(110, 230, 160) : C_DIM);
-  int viewH = listViewH();
-  if (top + s.h > BAR_H && top < BAR_H + viewH) {
-    s.cy0 = std::max(0, BAR_H - top);
-    s.cy1 = std::min(s.h, BAR_H + viewH - top);
-    if (!sdReady || entries.empty()) {
-      const char* t = !sdReady ? "SD-карта не найдена" : "Здесь нет MP3, WAV и AVI";
-      const char* t2 = !sdReady ? "Вставьте microSD и нажмите сюда" : "Загрузите файлы через приложение ESP32 Flasher";
-      drawCentered(s, *FONTS[FN_BOLD], SCREEN_W / 2, BAR_H + 80 - top, t, C_TEXT);
-      drawCentered(s, *FONTS[FN_SMALL], SCREEN_W / 2, BAR_H + 104 - top, t2, C_DIM);
+void drawMiniBar(Surface& s, int top) {
+  int x = 10, y = MINI_Y - top, w = 300, h = 60;
+  if (y + h <= 0 || y >= s.h) return;
+  rrectX(s, x, y, w, h, 30, MK565(34, 35, 41), MK565(20, 21, 25), 238, 238, false, C_WHITE, 48);
+  if (cover42) imageRound(s, x + 9, y + 9, 42, 42, 21, cover42);
+  else drawArt(s, x + 9, y + 9, 42, 42, 21, trk.info.title, MK_MP3);
+  const AAFont& sf = *FONTS[FN_SEMI];
+  const AAFont& tiny = *FONTS[FN_TINY];
+  drawText(s, sf, x + 62, y + 27, ellipsize(sf, trk.info.title, 148).c_str(), C_WHITE);
+  std::string sub = fmtTime(audioClock()) + (trk.duration > 0 ? " / " + fmtTime(trk.duration) : std::string());
+  if (!trk.info.artist.empty()) sub = trk.info.artist + " · " + sub;
+  drawText(s, tiny, x + 62, y + 45, ellipsize(tiny, sub, 148).c_str(), C_TXT2);
+  iconSkip(s, x + w - 78, y + 30, 11, true, C_WHITE);
+  float pcx = x + w - 32, pcy = y + 30;
+  arcS(s, pcx, pcy, 22, 2.4f, -180, 180, MK565(70, 72, 80));
+  arcProgress(s, pcx, pcy, 22, 2.4f, trk.duration > 0 ? audioClock() / trk.duration : 0, C_WHITE);
+  discS(s, pcx, pcy, 17, C_WHITE);
+  if (trk.paused) iconPlay(s, pcx + 1, pcy, 9, C_INK); else iconPause(s, pcx, pcy, 9, C_INK);
+}
+
+void drawLibStrip(Surface& s, int top) {
+  if (top + s.h > HDR_H) {
+    s.cy0 = std::max(0, HDR_H - top);
+    if (lay.hero) drawHero(s, top);
+    int sy = HDR_H + lay.secY - listScroll - top;
+    if (sy + 34 > 0 && sy < s.h) {
+      const char* sec = !sdReady ? "SD-карта" : tab == 1 ? "Музыка" : tab == 2 ? "Видео" : curDir == "/" ? "На карте" : "В этой папке";
+      drawText(s, *FONTS[FN_BOLD], 14, sy + 22, sec, C_WHITE);
+      if (!view.empty()) {
+        char b[24];
+        snprintf(b, sizeof b, "%d", (int)view.size());
+        const AAFont& tiny = *FONTS[FN_TINY];
+        int w = textW(tiny, b) + 22;
+        pill(s, 308 - w, sy + 6, 22, b, tiny, C_WHITE, 40, C_WHITE, 11);
+      }
     }
-    int first = std::max(0, (int)((top - BAR_H + listScroll) / ROW_H));
-    for (int i = first; i < (int)entries.size(); i++) {
-      int y = BAR_H + i * ROW_H - listScroll - top;
-      if (y >= s.h) break;
-      const Entry& e = entries[i];
-      bool playing = trk.type != TT_NONE && trackDir == curDir && trackIndex == i;
-      drawEntryIcon(s, e.kind, 34, y + ROW_H / 2);
-      uint16_t nameC = e.kind == MK_MP4 ? C_DIM : playing ? C_ACCENT : C_TEXT;
-      drawText(s, *FONTS[FN_BODY], 62, y + 25, ellipsize(*FONTS[FN_BODY], e.name, 240).c_str(), nameC);
-      std::string sub = kindLabel(e.kind);
-      if (e.kind != MK_DIR && e.kind != MK_MP4) sub += " · " + fmtSize(e.size);
-      drawText(s, *FONTS[FN_SMALL], 62, y + 44, ellipsize(*FONTS[FN_SMALL], sub, 240).c_str(), C_DIM);
-      fillRectS(s, 62, y + ROW_H - 1, SCREEN_W - 62, 1, C_LINE);
-    }
-    int total = entries.size() * ROW_H;
-    if (total > viewH) {  // полоса прокрутки
-      int bh = std::max(24, viewH * viewH / total);
-      int by = BAR_H + (viewH - bh) * listScroll / (total - viewH) - top;
-      roundRectS(s, SCREEN_W - 5, by, 3, bh, 1.5f, C_OFF, 0, 0);
+    for (int vi = 0; vi < (int)view.size(); vi++) drawCard(s, top, vi);
+    if (view.empty()) {
+      int ey = HDR_H + lay.gridY + 6 - listScroll - top;
+      const char* t1 = !sdReady ? "SD-карта не найдена" : tab == 1 ? "Здесь нет музыки" : tab == 2 ? "Здесь нет видео" : "Здесь нет MP3, WAV и AVI";
+      const char* t2 = !sdReady ? "Вставьте microSD и нажмите сюда" : "Загрузите файлы по Wi-Fi через ESP32 Flasher";
+      glass(s, 12, ey, 296, 92, 18, 30);
+      drawCentered(s, *FONTS[FN_BOLD], SCREEN_W / 2, ey + 40, t1, C_WHITE);
+      drawCentered(s, *FONTS[FN_TINY], SCREEN_W / 2, ey + 64, t2, C_TXT2);
     }
     s.cy0 = 0;
-    s.cy1 = s.h;
   }
-  if (trk.type != TT_NONE) drawMini(s, top);
+  if (top < HDR_H) drawHeader(s, top);
+  if (trackOn() && top + s.h > MINI_Y) drawMiniBar(s, top);
 }
 
-void renderList() { renderRegion(0, SCREEN_H, drawListStrip); listDirty = miniDirty = false; }
-void renderMini() { if (trk.type != TT_NONE) renderRegion(SCREEN_H - MINI_H, SCREEN_H, drawListStrip); miniDirty = false; }
+void renderList() {
+  rebuildView();
+  computeLayout();
+  listScroll = std::max(0, std::min((int)listScroll, libMaxScroll()));
+  ensureHeroImage();
+  renderRegion(0, SCREEN_H, drawLibStrip);
+  listDirty = miniDirty = false;
+}
+void renderMini() { if (trackOn()) { computeLayout(); renderRegion(MINI_Y, MINI_Y + 60, drawLibStrip); } miniDirty = false; }
 
-// ===================== Экран: плеер =====================
-#define COVER_X 60
-#define COVER_Y 60
-#define PROG_Y 352
-#define CTRL_Y 418
-#define VOL_Y 464
+// Догружает одну миниатюру видимой карточки и перерисовывает её
+bool loadPendingThumb() {
+  computeLayout();
+  for (int vi = 0; vi < (int)view.size(); vi++) {
+    const Entry& e = entries[view[vi]];
+    if (e.kind != MK_MP3 && e.kind != MK_AVI) continue;
+    int x, y;
+    cardPos(vi, x, y);
+    if (y + CARD_H <= HDR_H || y >= SCREEN_H) continue;
+    std::string full = joinDir(curDir, e.name);
+    if (thumbFind(full)) continue;
+    uint16_t* px = (uint16_t*)malloc(CARD_W * CARD_H * 2);
+    bool ok = px && loadArt(full, e.kind, px, CARD_W, CARD_H);
+    if (!ok && px) { free(px); px = nullptr; }
+    thumbPut(full, px);
+    if (ok && screen == SC_LIST) renderRegion(std::max(HDR_H, y), std::min(SCREEN_H, y + CARD_H), drawLibStrip);
+    return true;
+  }
+  thumbPending = false;
+  return false;
+}
+
+// ===================== Плеер =====================
+std::string fmtFormat() {
+  std::string f = trk.type == TT_MP3 ? "MP3" : "WAV";
+  if (trk.rate) {
+    char b[24];
+    if (trk.rate % 1000) snprintf(b, sizeof b, "%u,%u кГц", (unsigned)(trk.rate / 1000), (unsigned)(trk.rate % 1000 / 100));
+    else snprintf(b, sizeof b, "%u кГц", (unsigned)(trk.rate / 1000));
+    f += std::string(" · ") + b;
+  }
+  if (trk.type == TT_MP3 && trk.bitrate) f += " · " + std::to_string(trk.bitrate) + " кбит/с";
+  if (trk.type == TT_WAV) f += " · " + std::to_string(trk.wav.bits) + " бит";
+  if (trk.ch) f += trk.ch == 1 ? " · моно" : " · стерео";
+  return f;
+}
+
+void drawKey(Surface& s, int x, int y, int w, int h, const char* label) {
+  rrectX(s, x, y, w, h, 9, C_KEY0, C_KEY1, 255, 255, false, C_BLACK, 150);
+  rr(s, x + 7, y + 1, w - 14, 1, 0, C_WHITE, 34);
+  drawCentered(s, *FONTS[FN_SEMI], x + w / 2, capBase(*FONTS[FN_SEMI], y, h), label, C_WHITE);
+}
+
+void drawProgress(Surface& s, int o) {
+  const AAFont& tiny = *FONTS[FN_TINY];
+  float k = trk.duration > 0 ? clamp01(audioClock() / trk.duration) : 0;
+  drawText(s, tiny, 22, o + PROG_Y + 4, fmtTime(audioClock()).c_str(), C_WHITE);
+  std::string tot = trk.duration > 0 ? fmtTime(trk.duration) : "--:--";
+  drawText(s, tiny, 298 - textW(tiny, tot.c_str()), o + PROG_Y + 4, tot.c_str(), C_TXT2);
+  rr(s, PROG_X, o + PROG_Y - 2, PROG_W, 4, 2, C_WHITE, 46);
+  rr(s, PROG_X, o + PROG_Y - 2, PROG_W * k, 4, 2, C_WHITE, 255);
+  rr(s, PROG_X + PROG_W * k - 2, o + PROG_Y - 7, 4, 14, 2, C_WHITE, 255);
+}
+
+void drawDpad(Surface& s, float cx, float cy) {
+  const float R = DPAD_R;
+  rrectX(s, cx - R, cy - R, 2 * R, 2 * R, R, C_KEY0, C_KEY1, 255, 255, false, C_BLACK, 160);
+  for (int q = 0; q < 4; q++) {
+    float a = (45 + 90 * q) * 0.0174533f, ca = cosf(a), sa = sinf(a);
+    capsuleS(s, cx + ca * 34, cy + sa * 34, cx + ca * (R - 3), cy + sa * (R - 3), 0.8f, MK565(30, 31, 35));
+  }
+  float d = 56;
+  float ux[] = { cx - 7, cx + 7, cx }, uy[] = { cy - d + 4, cy - d + 4, cy - d - 5 };
+  polyS(s, ux, uy, 3, C_WHITE);
+  float dx[] = { cx - 7, cx + 7, cx }, dy[] = { cy + d - 4, cy + d - 4, cy + d + 5 };
+  polyS(s, dx, dy, 3, C_WHITE);
+  float lx[] = { cx - d + 4, cx - d + 4, cx - d - 5 }, ly[] = { cy - 7, cy + 7, cy };
+  polyS(s, lx, ly, 3, C_WHITE);
+  float rx[] = { cx + d - 4, cx + d - 4, cx + d + 5 }, ry[] = { cy - 7, cy + 7, cy };
+  polyS(s, rx, ry, 3, C_WHITE);
+  const AAFont& tiny = *FONTS[FN_TINY];
+  drawCentered(s, tiny, (int)(cx - d), (int)cy + 22, "−10 с", C_TXT3);
+  drawCentered(s, tiny, (int)(cx + d), (int)cy + 22, "+10 с", C_TXT3);
+  drawCentered(s, tiny, (int)cx + 22, (int)(cy - d) + 4, "+", C_TXT3);
+  drawCentered(s, tiny, (int)cx + 22, (int)(cy + d) + 4, "−", C_TXT3);
+  rrectX(s, cx - 31, cy - 31, 62, 62, 31, MK565(86, 87, 95), C_KEY1, 255, 255, false, C_BLACK, 170);
+  drawCentered(s, *FONTS[FN_SEMI], (int)cx, capBase(*FONTS[FN_SEMI], cy - 31, 62), trk.paused ? "Пуск" : "Пауза", C_WHITE);
+  // кнопка «обложка во весь экран»
+  rrectX(s, cx + 53, cy + 53, 26, 26, 13, C_KEY0, C_KEY1, 255, 255, false, C_BLACK, 160);
+  iconExpand(s, cx + 66, cy + 66, C_TXT2);
+}
+
+void drawVolume(Surface& s, int o) {
+  rrectX(s, VOL_X, o + VOL_Y, 36, 156, 10, C_INSET, C_INSET, 255, 255, false, C_WHITE, 16);
+  if (btOut) iconHeadphones(s, VOL_X + 18, o + VOL_Y + 17, C_BLUE);
+  else iconSpeaker(s, VOL_X + 17, o + VOL_Y + 18, C_WHITE);
+  int tx = VOL_X + 16, t0 = o + VOL_TOP, t1 = o + VOL_BOT;
+  rr(s, tx, t0, 4, t1 - t0, 2, C_WHITE, 40);
+  float ky = t1 - (t1 - t0) * volume / 100.0f;
+  rr(s, tx, ky, 4, t1 - ky, 2, C_BLUE, 255);
+  for (int i = 0; i <= 4; i++) rr(s, tx - 6, t0 + (t1 - t0) * i / 4.0f, 3, 1, 0, C_WHITE, 50);
+  discS(s, tx + 2, ky, 7, C_WHITE);
+  char b[8];
+  snprintf(b, sizeof b, "%d%%", volume);
+  drawCentered(s, *FONTS[FN_TINY], VOL_X + 18, o + VOL_Y + 146, b, C_WHITE);
+}
+
+int audioPosInDir(int* total) {
+  int n = 0, pos = 0;
+  for (int i = 0; i < (int)trackDirEntries.size(); i++) {
+    MediaKind k = trackDirEntries[i].kind;
+    if (k != MK_MP3 && k != MK_WAV) continue;
+    n++;
+    if (i == trackIndex) pos = n;
+  }
+  *total = n;
+  return pos;
+}
 
 void drawPlayerStrip(Surface& s, int top) {
-  drawBar(s, top, "Сейчас играет", true);
-  // обложка
-  int cy = COVER_Y - top;
-  if (cy < s.h && cy + 200 > 0) {
-    if (coverPx) {
-      for (int yy = std::max(0, -cy); yy < 200 && cy + yy < s.h; yy++)
-        memcpy(s.px + (cy + yy) * s.w + COVER_X, coverPx + yy * 200, 400);
-    } else {
-      roundRectS(s, COVER_X, cy, 200, 200, 18, C_CARD, C_LINE, 1);
-      // «пластинка» вместо обложки
-      discS(s, COVER_X + 100, cy + 100, 70, MK565(32, 30, 42));
-      for (int r = 60; r > 30; r -= 9) {
-        roundRectS(s, COVER_X + 100 - r, cy + 100 - r, 2 * r, 2 * r, r, MK565(32, 30, 42), MK565(48, 44, 62), 1);
-      }
-      discS(s, COVER_X + 100, cy + 100, 22, C_ACCENT2);
-      discS(s, COVER_X + 100, cy + 100, 4, C_BG);
+  int o = -top;
+  const AAFont& sf = *FONTS[FN_SEMI];
+  const AAFont& tiny = *FONTS[FN_TINY];
+  if (top < 52) {
+    glass(s, 10, o + 8, 36, 36, 18, 34);
+    iconChevron(s, 27, o + 26, 6, -1, C_WHITE);
+    drawCentered(s, sf, SCREEN_W / 2, capBase(sf, o + 8, 36), "Сейчас играет", C_WHITE);
+    int n = 0, p = audioPosInDir(&n);
+    int rx = 306;
+    if (n > 0) {
+      std::string t = std::to_string(p) + " / " + std::to_string(n);
+      rx -= textW(tiny, t.c_str());
+      drawText(s, tiny, rx, capBase(tiny, o + 8, 36), t.c_str(), C_TXT2);
+      rx -= 10;
+    }
+    if (btOut) iconHeadphones(s, rx - 9, o + 24, C_BLUE);
+  }
+  // корпус-пульт
+  rrectX(s, 10, o + 54, 300, 418, 28, C_PANEL0, C_PANEL1, 250, 250, false, C_WHITE, 36);
+  // экранчик с обложкой
+  rrectX(s, 22, o + 66, 276, 100, 14, C_INSET, C_INSET, 255, 255, false, C_WHITE, 16);
+  if (cover80) imageRound(s, 32, o + 76, 80, 80, 10, cover80);
+  else drawArt(s, 32, o + 76, 80, 80, 10, trk.info.title, MK_MP3);
+  drawText(s, *FONTS[FN_BOLD], 124, o + 98, ellipsize(*FONTS[FN_BOLD], trk.info.title, 166).c_str(), C_WHITE);
+  std::string artist = trk.info.artist.empty() ? std::string("Неизвестный исполнитель") : trk.info.artist;
+  drawTracked(s, tiny, 124, o + 118, upperRu(ellipsize(tiny, artist, 140)), 1, C_TXT2);
+  if (!trk.info.album.empty()) drawText(s, *FONTS[FN_SMALL], 124, o + 137, ellipsize(*FONTS[FN_SMALL], trk.info.album, 166).c_str(), C_TXT3);
+  drawText(s, tiny, 124, o + 156, ellipsize(tiny, fmtFormat(), 166).c_str(), C_TXT3);
+  drawProgress(s, o);
+  // транспорт
+  rrectX(s, 22, o + TR_Y, 276, 72, 14, C_INSET, C_INSET, 255, 255, false, C_WHITE, 16);
+  float iy = o + TR_Y + 26;
+  for (int i = 0; i < 6; i++) {
+    float cx = 22 + 276 * (i + 0.5f) / 6;
+    switch (i) {
+      case 0: iconSkip(s, cx, iy, 11, false, C_WHITE); break;
+      case 1: iconRewind(s, cx, iy, 12, false, C_WHITE); break;
+      case 2: if (trk.paused) iconPlay(s, cx + 1, iy, 15, C_WHITE); else iconPause(s, cx, iy, 15, C_WHITE); break;
+      case 3: iconStop(s, cx, iy, 13, C_WHITE); break;
+      case 4: iconRewind(s, cx, iy, 12, true, C_WHITE); break;
+      case 5: iconSkip(s, cx, iy, 11, true, C_WHITE); break;
     }
   }
-  drawCentered(s, *FONTS[FN_TITLE], SCREEN_W / 2, 296 - top, ellipsize(*FONTS[FN_TITLE], trk.info.title, 290), C_TEXT);
-  std::string sub = trk.info.artist;
-  if (!trk.info.album.empty()) sub += (sub.empty() ? "" : " — ") + trk.info.album;
-  if (sub.empty()) sub = trk.type == TT_WAV ? "WAV" : (trk.bitrate ? "MP3 · " + std::to_string(trk.bitrate) + " кбит/с" : "MP3");
-  drawCentered(s, *FONTS[FN_BODY], SCREEN_W / 2, 322 - top, ellipsize(*FONTS[FN_BODY], sub, 290), C_DIM);
-  // полоса прогресса
-  float t = audioClock(), k = trk.duration > 0 ? std::min(1.0f, t / trk.duration) : 0;
-  roundRectS(s, 24, PROG_Y - top, 272, 4, 2, C_OFF, 0, 0);
-  roundRectS(s, 24, PROG_Y - top, 272 * k, 4, 2, C_ACCENT, 0, 0);
-  discS(s, 24 + 272 * k, PROG_Y + 2 - top, 7, C_TEXT);
-  drawText(s, *FONTS[FN_SMALL], 24, PROG_Y + 24 - top, fmtTime(t).c_str(), C_DIM);
-  std::string tot = trk.duration > 0 ? fmtTime(trk.duration) : "—";
-  drawText(s, *FONTS[FN_SMALL], 296 - textW(*FONTS[FN_SMALL], tot.c_str()), PROG_Y + 24 - top, tot.c_str(), C_DIM);
-  // кнопки
-  iconSkip(s, 84, CTRL_Y - top, 20, false, C_TEXT);
-  discS(s, 160, CTRL_Y - top, 32, C_ACCENT2);
-  if (trk.paused) iconPlay(s, 162, CTRL_Y - top, 24, C_TEXT); else iconPause(s, 160, CTRL_Y - top, 24, C_TEXT);
-  iconSkip(s, 236, CTRL_Y - top, 20, true, C_TEXT);
-  // громкость
-  roundRectS(s, 70, VOL_Y - 2 - top, 180, 4, 2, C_OFF, 0, 0);
-  roundRectS(s, 70, VOL_Y - 2 - top, 180 * volume / 100, 4, 2, C_DIM, 0, 0);
-  capsuleS(s, 30, VOL_Y - top, 42, VOL_Y - top, 1.6f, C_TEXT);
-  capsuleS(s, 278, VOL_Y - top, 290, VOL_Y - top, 1.6f, C_TEXT);
-  capsuleS(s, 284, VOL_Y - 6 - top, 284, VOL_Y + 6 - top, 1.6f, C_TEXT);
+  rr(s, 34, o + TR_Y + 46, 252, 1, 0, C_WHITE, 14);
+  static const char* REP[3] = { "Повтор: нет", "Повтор: все", "Повтор: один" };
+  int bx = drawText(s, tiny, 34, o + TR_Y + 62, REP[repeatMode], repeatMode ? C_WHITE : C_TXT2);
+  float xs[] = { (float)bx + 5, (float)bx + 10, (float)bx + 5 }, ys[] = { (float)o + TR_Y + 54, (float)o + TR_Y + 58, (float)o + TR_Y + 62 };
+  polyS(s, xs, ys, 3, C_TXT3);
+  int cbx = 270, cby = o + TR_Y + 51;
+  std::string sh = "ПЕРЕМЕШАТЬ";
+  drawTracked(s, tiny, cbx - 8 - trackedW(tiny, sh, 1), o + TR_Y + 62, sh, 1, shuffleOn ? C_WHITE : C_TXT2);
+  if (shuffleOn) {
+    rr(s, cbx, cby, 15, 15, 3, C_BLUE, 255);
+    capsuleS(s, cbx + 3.5f, cby + 7.5f, cbx + 6.5f, cby + 10.5f, 1.2f, C_WHITE);
+    capsuleS(s, cbx + 6.5f, cby + 10.5f, cbx + 11.5f, cby + 4.5f, 1.2f, C_WHITE);
+  } else outline(s, cbx, cby, 15, 15, 3, C_TXT3, 255);
+  // нижняя часть: крестовина, клавиши, громкость
+  drawDpad(s, DPAD_X, o + DPAD_Y);
+  drawKey(s, KEY_X, o + KEY_Y, 64, 42, "Меню");
+  drawKey(s, KEY_X, o + KEY_Y + 50, 64, 42, "Инфо");
+  drawKey(s, KEY_X, o + KEY_Y + 100, 64, 42, "Извлечь");
+  drawVolume(s, o);
 }
 
 void renderPlayer() { renderRegion(0, SCREEN_H, drawPlayerStrip); playerDirty = progDirty = false; }
-void renderProgress() { renderRegion(PROG_Y - 12, PROG_Y + 32, drawPlayerStrip); progDirty = false; }
+void renderProgress() { renderRegion(PROG_Y - 14, PROG_Y + 12, drawPlayerStrip); progDirty = false; }
+void renderVolume() { renderRegion(VOL_Y, VOL_Y + 156, drawPlayerStrip); }
 
-// ===================== Экран: сообщение =====================
+// ===================== Обложка во весь экран =====================
+void drawCoverStrip(Surface& s, int top) {
+  int o = -top;
+  if (coverBig) imageRound(s, 16, o + 56, 288, 288, 22, coverBig);
+  else drawArt(s, 16, o + 56, 288, 288, 22, trk.info.title, MK_MP3);
+  outline(s, 16, o + 56, 288, 288, 22, C_WHITE, 50);
+  const AAFont& tf = *FONTS[FN_TITLE];
+  drawCentered(s, tf, SCREEN_W / 2, o + 384, ellipsize(tf, trk.info.title, 290), C_WHITE);
+  drawCentered(s, *FONTS[FN_SMALL], SCREEN_W / 2, o + 408, ellipsize(*FONTS[FN_SMALL], trk.info.artist, 290), C_TXT2);
+  float k = trk.duration > 0 ? clamp01(audioClock() / trk.duration) : 0;
+  rr(s, 40, o + 428, 240, 3, 1.5f, C_WHITE, 46);
+  rr(s, 40, o + 428, 240 * k, 3, 1.5f, C_WHITE, 255);
+  drawCentered(s, *FONTS[FN_TINY], SCREEN_W / 2, o + 458, "Нажмите, чтобы вернуться", C_TXT3);
+}
+void showCover() {
+  if (coverPx && !coverBig) {
+    coverBig = (uint16_t*)malloc(288 * 288 * 2);
+    if (coverBig) scaleFill(coverPx, 200, 200, coverBig, 288, 288);
+  }
+  screen = SC_COVER;
+  renderRegion(0, SCREEN_H, drawCoverStrip);
+}
+void hideCover() {
+  free(coverBig);
+  coverBig = nullptr;
+  screen = SC_PLAYER;
+  playerDirty = true;
+}
+
+// ===================== Bluetooth =====================
+void drawBtStrip(Surface& s, int top) {
+  int o = -top;
+  const AAFont& sf = *FONTS[FN_SEMI];
+  const AAFont& tiny = *FONTS[FN_TINY];
+  const AAFont& bf = *FONTS[FN_BOLD];
+  bool on = btState != BT_OFF;
+  glass(s, 10, o + 8, 36, 36, 18, 34);
+  iconChevron(s, 27, o + 26, 6, -1, C_WHITE);
+  drawCentered(s, sf, SCREEN_W / 2, capBase(sf, o + 8, 36), "Bluetooth", C_WHITE);
+  rrectX(s, 258, o + 13, 48, 26, 13, on ? C_BLUE : C_WHITE, on ? C_BLUE : C_WHITE, on ? 255 : 40, on ? 255 : 40, false, C_WHITE, 60);
+  discS(s, on ? 293 : 271, o + 26, 10, C_WHITE);
+  // состояние
+  glass(s, 12, o + 58, 296, 96, 20, 34);
+  discS(s, 48, o + 106, 24, on ? C_BLUE : MK565(70, 72, 80));
+  iconBt(s, 48, o + 106, C_WHITE);
+  std::string t1, t2;
+  switch (btState) {
+    case BT_OFF: t1 = "Bluetooth выключен"; t2 = "Для наушников и колонок"; break;
+    case BT_SCAN: t1 = "Поиск устройств…"; t2 = btTarget[0] ? std::string("Жду «") + btTarget + "»" : "Включите на наушниках сопряжение"; break;
+    case BT_LINK: t1 = "Подключение…"; t2 = btTarget; break;
+    default: t1 = btName; t2 = "Звук идёт в наушники"; break;
+  }
+  bool onBtn = btState == BT_ON;
+  int ty = onBtn ? o + 92 : o + 102;
+  drawText(s, bf, 84, ty, ellipsize(bf, t1, 210).c_str(), C_WHITE);
+  drawText(s, tiny, 84, ty + 18, ellipsize(tiny, t2, 210).c_str(), C_TXT2);
+  if (onBtn) pill(s, 84, o + 118, 26, "Отключить", sf, C_WHITE, 255, C_INK, 14);
+  // устройства
+  if (!on) {
+    glass(s, 12, o + 172, 296, 112, 20, 26);
+    const AAFont& sm = *FONTS[FN_SMALL];
+    std::vector<std::string> l = wrapText(sm, "Включите Bluetooth переключателем справа вверху и переведите наушники в режим сопряжения. Пока работает Bluetooth, Wi-Fi выключен.", 260);
+    for (size_t i = 0; i < l.size() && i < 4; i++) drawText(s, sm, 30, o + 202 + 20 * (int)i, l[i].c_str(), C_WHITE);
+    return;
+  }
+  drawText(s, bf, 14, o + 190, "Устройства рядом", C_WHITE);
+  if (btState == BT_SCAN) drawText(s, tiny, 306 - textW(tiny, "идёт поиск"), o + 189, "идёт поиск", C_TXT2);
+  int n = std::min((int)btDevCount, 5);
+  if (!n) {
+    glass(s, 12, o + 204, 296, 92, 18, 26);
+    drawCentered(s, sf, SCREEN_W / 2, o + 238, "Пока никого не видно", C_WHITE);
+    drawCentered(s, tiny, SCREEN_W / 2, o + 260, "Обычно сопряжение — долгое нажатие", C_TXT2);
+    drawCentered(s, tiny, SCREEN_W / 2, o + 276, "кнопки питания на наушниках", C_TXT2);
+  }
+  for (int i = 0; i < n; i++) {
+    int y = o + 204 + i * 54;
+    BtDev d = btDevs[i];
+    d.name[32] = 0;
+    bool cur = btState == BT_ON && !strcmp(d.name, btName);
+    bool tgt = !cur && btTarget[0] && !strcmp(d.name, btTarget);
+    if (cur) rrectX(s, 12, y, 296, 48, 16, C_BLUE, C_BLUE, 200, 200, false, C_WHITE, 60);
+    else glass(s, 12, y, 296, 48, 16, tgt ? 50 : 28);
+    drawText(s, sf, 26, y + 21, ellipsize(sf, d.name, 220).c_str(), C_WHITE);
+    const char* st = cur ? "Подключено" : tgt ? (btState == BT_LINK ? "Подключение…" : "Жду, когда появится") : "Нажмите, чтобы подключить";
+    drawText(s, tiny, 26, y + 37, st, cur ? C_WHITE : C_TXT2);
+    int bars = d.rssi > -60 ? 4 : d.rssi > -70 ? 3 : d.rssi > -80 ? 2 : 1;
+    for (int b = 0; b < 4; b++) rr(s, 272 + b * 6, y + 32 - (4 + b * 4), 4, 4 + b * 4, 1, C_WHITE, b < bars ? 230 : 60);
+  }
+}
+void renderBt() { renderRegion(0, SCREEN_H, drawBtStrip); }
+
+// ===================== Сообщение =====================
 void drawMsgStrip(Surface& s, int top) {
-  drawBar(s, top, msgTitle, true);
-  int y = BAR_H + 40;
+  const AAFont& bf = *FONTS[FN_SMALL];
+  std::vector<std::string> lines;
+  std::vector<int> gaps;
   size_t i = 0;
-  while (i <= msgText.size()) {  // абзацы через \n
+  while (i <= msgText.size()) {
     size_t j = msgText.find('\n', i);
     if (j == std::string::npos) j = msgText.size();
-    for (auto& l : wrapText(*FONTS[FN_BODY], msgText.substr(i, j - i), SCREEN_W - 40)) { drawText(s, *FONTS[FN_BODY], 20, y - top, l.c_str(), C_TEXT); y += 24; }
-    y += 10;
+    std::vector<std::string> w = wrapText(bf, msgText.substr(i, j - i), 248);
+    for (size_t k = 0; k < w.size(); k++) { lines.push_back(w[k]); gaps.push_back(k == 0 && !lines.empty() && lines.size() > 1 ? 8 : 0); }
     i = j + 1;
   }
+  int h = 96;
+  for (size_t k = 0; k < lines.size(); k++) h += 20 + gaps[k];
+  int y0 = std::max(24, (SCREEN_H - h) / 2) - top;
+  rrectX(s, 16, y0, 288, h, 24, C_BLACK, C_BLACK, 120, 120, false, C_WHITE, 0);
+  glass(s, 16, y0, 288, h, 24, 30);
+  drawText(s, *FONTS[FN_BOLD], 36, y0 + 40, ellipsize(*FONTS[FN_BOLD], msgTitle, 248).c_str(), C_WHITE);
+  int y = y0 + 68;
+  for (size_t k = 0; k < lines.size(); k++) { y += gaps[k]; drawText(s, bf, 36, y, lines[k].c_str(), C_WHITE); y += 20; }
+  drawText(s, *FONTS[FN_TINY], 36, y0 + h - 18, "Нажмите, чтобы вернуться", C_TXT3);
 }
 
 void showMessage(const std::string& title, const std::string& text) {
+  if (screen != SC_MSG) msgBack = screen == SC_COVER ? SC_PLAYER : screen;
   msgTitle = title;
   msgText = text;
   screen = SC_MSG;
@@ -1305,7 +2259,190 @@ bool uiInit() {
   if (!surfAlloc(sStrip, SCREEN_W, STRIP_H)) return false;
   ring = (int16_t*)malloc(RING_SAMPLES * 2);
   jpeg = new JPEGDEC();
-  return ring && jpeg;
+  makeBackdrop(nullptr, 0, 0);
+  return ring && jpeg && bgPx;
+}
+
+// ===================== Нажатия =====================
+void playAvi(const std::string& path);
+void wifiStart();
+void wifiStop();
+
+void openEntry(int i, bool toPlayer) {
+  const Entry& e = entries[i];
+  std::string full = joinDir(curDir, e.name);
+  if (e.kind == MK_DIR) { loadDir(full); return; }
+  if (e.kind == MK_MP4) {
+    showMessage("MP4 не поддерживается", "В файлах MP4 видео сжато кодеком H.264 — у ESP32 не хватает мощности, чтобы его показывать.\nПереведите ролик в AVI: приложение ESP32 Flasher → вкладка «Конвертер видео». Готовый файл можно сразу отправить на эту карту по Wi-Fi (значок справа вверху).");
+    return;
+  }
+  if (e.kind == MK_AVI) { playAvi(full); return; }
+  if (trackOn() && trk.path == full) { if (toPlayer) { screen = SC_PLAYER; playerDirty = true; } else togglePause(); listDirty = true; return; }
+  if (openTrack(curDir, entries, i)) {
+    heroPos = -1;
+    listDirty = true;
+    if (toPlayer) { screen = SC_PLAYER; playerDirty = true; }
+  } else showMessage("Не воспроизводится", "Файл «" + e.name + "» повреждён или в неподдерживаемом формате. WAV должен быть PCM 8 или 16 бит.");
+}
+
+void ejectTrack() {
+  closeTrack();
+  prepareTrackArt();
+  screen = SC_LIST;
+  rebuildView();
+}
+
+void seekBy(float sec) {
+  if (!trackOn() || trk.duration <= 0) return;
+  seekTrack((audioClock() + sec) / trk.duration);
+  progDirty = miniDirty = true;
+}
+
+void setVolume(int v) {
+  v = std::max(0, std::min(100, v));
+  if (v == volume) return;
+  volume = v;
+  audioHwVolume(volume);
+}
+
+void showTrackInfo() {
+  std::string t = "Файл: " + trk.name + "\nПапка: " + (trackDir.empty() ? std::string("/") : trackDir) + "\nФормат: " + fmtFormat() +
+                  "\nДлительность: " + (trk.duration > 0 ? fmtTime(trk.duration) : std::string("неизвестно")) + "\nРазмер: " + fmtSize(trk.fileSize);
+  if (!trk.info.artist.empty()) t += "\nИсполнитель: " + trk.info.artist;
+  if (!trk.info.album.empty()) t += "\nАльбом: " + trk.info.album;
+  showMessage("О треке", t);
+}
+
+void tapPlayer(int x, int y) {
+  if (y < 50) { if (x < 70) { screen = SC_LIST; listDirty = true; } return; }
+  if (y >= PROG_Y - 16 && y < PROG_Y + 14 && x >= PROG_X - 10 && x < PROG_X + PROG_W + 10) {
+    if (trk.duration > 0) { seekTrack((float)(x - PROG_X) / PROG_W); progDirty = miniDirty = true; }
+    return;
+  }
+  if (y >= TR_Y && y < TR_Y + 46) {  // транспорт
+    int i = std::max(0, std::min(5, (x - 22) * 6 / 276));
+    switch (i) {
+      case 0: if (audioClock() > 3) seekTrack(0); else if (!stepTrack(-1)) seekTrack(0); break;
+      case 1: seekBy(-10); break;
+      case 2: togglePause(); break;
+      case 3: if (!trk.paused) togglePause(); seekTrack(0); break;
+      case 4: seekBy(10); break;
+      case 5: stepTrack(1); break;
+    }
+    playerDirty = true;
+    return;
+  }
+  if (y >= TR_Y + 46 && y < TR_Y + 74) {
+    if (x < 160) repeatMode = (repeatMode + 1) % 3; else shuffleOn = !shuffleOn;
+    playerDirty = true;
+    return;
+  }
+  float ex = x - (DPAD_X + 66), ey = y - (DPAD_Y + 66);
+  if (ex * ex + ey * ey < 17 * 17) { showCover(); return; }
+  float dx = x - DPAD_X, dy = y - DPAD_Y, d2 = dx * dx + dy * dy;
+  if (d2 <= 32 * 32) { togglePause(); playerDirty = true; return; }
+  if (d2 <= (DPAD_R + 4) * (DPAD_R + 4)) {
+    if (fabsf(dx) > fabsf(dy)) seekBy(dx < 0 ? -10 : 10);
+    else { setVolume(volume + (dy < 0 ? 5 : -5)); saveVolume(); }
+    playerDirty = true;
+    return;
+  }
+  if (x >= KEY_X - 4 && x < KEY_X + 68 && y >= KEY_Y - 4) {
+    int k = (y - KEY_Y + 4) / 50;
+    if (k == 0) { screen = SC_LIST; listDirty = true; }
+    else if (k == 1) showTrackInfo();
+    else if (k == 2) ejectTrack();
+    return;
+  }
+  if (x >= VOL_X - 6 && y >= VOL_Y && y < VOL_Y + 160) {
+    setVolume((VOL_BOT - y) * 100 / (VOL_BOT - VOL_TOP));
+    saveVolume();
+    renderVolume();
+  }
+}
+
+void tapLibrary(int x, int y) {
+  if (y < 50) {
+    if (x >= 266) {
+      if (wifiOn) wifiStop();
+      else if (btState != BT_OFF) showMessage("Wi-Fi", "Пока работает Bluetooth, Wi-Fi не включить: плате не хватит памяти на оба сразу.\nВыключите Bluetooth (значок рядом) и нажмите Wi-Fi ещё раз.");
+      else wifiStart();
+      return;
+    }
+    if (x >= 224) { screen = SC_BT; renderBt(); return; }
+    if (curDir != "/") { std::string up = dirOf(curDir); if (up.size() > 1) up.pop_back(); loadDir(up.empty() ? "/" : up); }
+    return;
+  }
+  if (y < HDR_H) {
+    if (x >= 270) { shuffleOn = !shuffleOn; listDirty = true; return; }
+    int xs[3], ws[3];
+    tabGeom(xs, ws);
+    for (int k = 0; k < 3; k++)
+      if (x >= xs[k] - 2 && x < xs[k] + ws[k] + 2) { if (tab != k) { tab = k; listScroll = 0; heroPos = trackOn() ? -1 : 0; rebuildView(); } return; }
+    return;
+  }
+  if (trackOn() && y >= MINI_Y && y < MINI_Y + 60) {
+    if (x >= 250) togglePause();
+    else if (x >= 212) stepTrack(1);
+    else { screen = SC_PLAYER; playerDirty = true; }
+    listDirty = true;
+    return;
+  }
+  if (!sdReady) { loadDir(curDir); return; }
+  computeLayout();
+  if (lay.hero) {
+    int hy = HDR_H + lay.heroY - listScroll;
+    if (y >= hy && y < hy + HERO_H && x >= 12 && x < 12 + HERO_W) {
+      HeroInfo h = heroInfo();
+      HitRect pr, sc, pv, nx;
+      bool hasSec, arrows;
+      heroGeom(h, pr, sc, pv, nx, hasSec, arrows);
+      int lo = trackOn() ? -1 : 0, hi = (int)heroList.size() - 1;
+      if (arrows && hit(pv, x, y, 4)) { heroPos = heroPos <= lo ? hi : heroPos - 1; listDirty = true; return; }
+      if (arrows && hit(nx, x, y, 4)) { heroPos = heroPos >= hi ? lo : heroPos + 1; listDirty = true; return; }
+      if (hasSec && hit(sc, x, y, 4)) { screen = SC_PLAYER; playerDirty = true; return; }
+      bool prim = hit(pr, x, y, 4);
+      if (h.now) { if (prim) { togglePause(); listDirty = true; } else { screen = SC_PLAYER; playerDirty = true; } }
+      else if (h.idx >= 0) openEntry(h.idx, false);
+      return;
+    }
+  }
+  for (int vi = 0; vi < (int)view.size(); vi++) {
+    int cx, cy;
+    cardPos(vi, cx, cy);
+    if (x >= cx && x < cx + CARD_W && y >= cy && y < cy + CARD_H) {
+      bool onButton = (x - (cx + CARD_W - 26)) * (x - (cx + CARD_W - 26)) + (y - (cy + CARD_H - 26)) * (y - (cy + CARD_H - 26)) < 22 * 22;
+      openEntry(view[vi], !onButton);  // кнопка ▶ — играть здесь, карточка — открыть плеер
+      return;
+    }
+  }
+}
+
+void tapBt(int x, int y) {
+  if (y < 50) {
+    if (x < 70) { screen = SC_LIST; listDirty = true; return; }
+    if (x >= 250) { if (btState == BT_OFF) btEnable(); else btDisable(); renderBt(); }
+    return;
+  }
+  if (btState == BT_ON && y >= 114 && y < 148 && x >= 80 && x < 200) { btDisable(); renderBt(); return; }
+  if (btState != BT_OFF && y >= 204) {
+    int i = (y - 204) / 54;
+    if (i < std::min((int)btDevCount, 5) && (y - 204) % 54 < 48) {
+      char name[33];
+      memcpy(name, btDevs[i].name, 33);
+      name[32] = 0;
+      if (!(btState == BT_ON && !strcmp(name, btName))) btConnect(name);
+      renderBt();
+    }
+  }
+}
+
+void onTap(int x, int y) {
+  if (screen == SC_MSG) { if (msgBack == SC_BT) { screen = SC_BT; renderBt(); return; } screen = msgBack; listDirty = playerDirty = true; return; }
+  if (screen == SC_BT) { tapBt(x, y); return; }
+  if (screen == SC_COVER) { hideCover(); return; }
+  if (screen == SC_PLAYER) { tapPlayer(x, y); return; }
+  tapLibrary(x, y);
 }
 
 // ===================== Железо =====================
@@ -1436,15 +2573,126 @@ void es8311Init() {
   esW(0x37, 0x08);
 }
 
-void audioHwVolume(int v) { esW(0x32, v <= 0 ? 0 : v * 256 / 100 - 1); }
+volatile int btGain = 256;  // громкость для наушников: 0…256
+void audioHwVolume(int v) {
+  esW(0x32, v <= 0 ? 0 : v * 256 / 100 - 1);
+  btGain = v <= 0 ? 0 : (int)(256 * powf(10.0f, (v - 100) * 0.02f));  // 40 дБ на всю шкалу
+}
 void audioHwWrite(const int32_t* stereo, int frames) { i2s.write((uint8_t*)stereo, frames * 8); }
 void saveVolume() { prefs.begin("media", false); prefs.putInt("vol", volume); prefs.end(); }
 
 void audioTask(void*) {
   static int32_t out[256 * 2];
   for (;;) {
-    audioRender(out, 256);
+    if (btOut) memset(out, 0, sizeof out);  // звук забирают наушники, динамик молчит
+    else audioRender(out, 256);
     audioHwWrite(out, 256);
+  }
+}
+
+// ---------- Bluetooth-наушники (A2DP) ----------
+BluetoothA2DPSource a2dp;
+portMUX_TYPE btMux = portMUX_INITIALIZER_UNLOCKED;
+bool btRunning = false;
+char btSaved[33] = "";  // последние наушники — подключаемся к ним сами
+
+// Каждое найденное устройство: запоминаем для списка, «да» — только выбранному
+bool btFound(const char* ssid, esp_bd_addr_t addr, int rssi) {
+  if (!ssid || !*ssid) return false;
+  portENTER_CRITICAL(&btMux);
+  int i = 0;
+  while (i < btDevCount && strncmp(btDevs[i].name, ssid, 32)) i++;
+  if (i == btDevCount && i < 8) {
+    strncpy(btDevs[i].name, ssid, 32);
+    btDevs[i].name[32] = 0;
+    btDevCount = i + 1;
+  }
+  if (i < 8) btDevs[i].rssi = (int8_t)std::max(-127, std::min(0, rssi));
+  btDevsVer = btDevsVer + 1;
+  portEXIT_CRITICAL(&btMux);
+  bool want = btTarget[0] && !strncmp(ssid, btTarget, 32);
+  if (want) { strncpy(btName, ssid, 32); btName[32] = 0; btState = BT_LINK; }
+  return want;
+}
+
+// Наушникам нужен звук: 44,1 кГц, стерео, 16 бит — тот же поток, что шёл бы в динамик
+int32_t btFrames(Frame* fr, int32_t n) {
+  static int32_t tmp[256 * 2];
+  int32_t done = 0;
+  while (done < n) {
+    int k = std::min<int32_t>(256, n - done);
+    if (btOut) audioRender(tmp, k);
+    else memset(tmp, 0, k * 8);
+    int g = btGain;
+    for (int i = 0; i < k; i++) {
+      fr[done + i].channel1 = (int16_t)(((tmp[2 * i] >> 16) * g) >> 8);
+      fr[done + i].channel2 = (int16_t)(((tmp[2 * i + 1] >> 16) * g) >> 8);
+    }
+    done += k;
+  }
+  return n;
+}
+
+void btEnable() {
+  if (btRunning) return;
+  if (wifiOn) wifiStop();
+  portENTER_CRITICAL(&btMux);
+  btDevCount = 0;
+  btDevsVer = btDevsVer + 1;
+  portEXIT_CRITICAL(&btMux);
+  if (!btTarget[0]) strcpy(btTarget, btSaved);
+  a2dp.set_local_name("ESP32 Media");
+  a2dp.set_ssid_callback(btFound);
+  a2dp.set_data_callback_in_frames(btFrames);
+  a2dp.set_auto_reconnect(false);
+  a2dp.set_pin_code("0000", ESP_BT_PIN_TYPE_VARIABLE);  // для старых наушников без Secure Simple Pairing
+  btState = BT_SCAN;
+  a2dp.start();
+  btRunning = true;
+}
+
+void btDisable() {
+  btOut = false;
+  if (btRunning) {
+    esp_bt_gap_cancel_discovery();
+    a2dp.end();
+    btRunning = false;
+  }
+  btState = BT_OFF;
+  btName[0] = 0;
+  listDirty = playerDirty = true;
+}
+
+void btConnect(const char* name) {
+  bool restart = btRunning && (btState == BT_ON || btState == BT_LINK);
+  if (restart) btDisable();
+  strncpy(btTarget, name, 32);
+  btTarget[32] = 0;
+  if (!btRunning) btEnable();
+  else btState = BT_SCAN;
+}
+
+// Следим за подключением (вызывается в каждом цикле)
+void btPoll() {
+  if (!btRunning) return;
+  bool c = a2dp.is_connected();
+  static uint32_t linkSince = 0;
+  if (btState == BT_LINK && !c) {  // наушники не ответили — снова ищем
+    if (!linkSince) linkSince = millis();
+    else if (millis() - linkSince > 20000) { linkSince = 0; btState = BT_SCAN; }
+  } else linkSince = 0;
+  if (c && btState != BT_ON) {
+    btState = BT_ON;
+    if (!btName[0]) strncpy(btName, btTarget, 32);
+    btOut = true;
+    if (strcmp(btSaved, btName)) {
+      strncpy(btSaved, btName, 32);
+      prefs.begin("media", false); prefs.putString("btdev", btSaved); prefs.end();
+    }
+    listDirty = playerDirty = true;
+  } else if (!c && btState == BT_ON) {  // наушники выключили или унесли
+    btDisable();
+    if (screen != SC_BT) showMessage("Bluetooth", std::string("Наушники «") + btSaved + "» отключились. Звук снова идёт в динамик.");
   }
 }
 
@@ -1516,6 +2764,7 @@ void playAvi(const std::string& path) {
   bool aStarted = false;
   if (pcm) { audioStart(a.aRate, a.aCh, 0); aStarted = true; }
   uint32_t frameIdx = 0, t0 = millis(), pausedMs = 0;
+  int shownOk = 0, shownBad = 0;
   bool paused = false, exitReq = false;
   bool touchDown = false;
   uint32_t touchT = 0;
@@ -1549,11 +2798,11 @@ void playAvi(const std::string& path) {
     uint32_t next = p + 8 + len + (len & 1);
     if (c[0] == vid[0] && c[1] == vid[1] && (c[2] == 'd') && (c[3] == 'c' || c[3] == 'b')) {
       float ft = frameIdx * (a.usPerFrame / 1e6f);
-      float clock = (hasAudio && aStarted) ? audioClock() : (millis() - t0 - pausedMs) / 1000.0f;
+      float clock = (hasAudio && aStarted) ? audioClock() - (btOut ? BT_DELAY : 0) : (millis() - t0 - pausedMs) / 1000.0f;
       frameIdx++;
       if (len > 0 && ft >= clock - a.usPerFrame / 1e6f * 1.5f) {  // успеваем — показываем, иначе пропускаем кадр
         while (true) {
-          float cl = (hasAudio && aStarted) ? audioClock() : (millis() - t0 - pausedMs) / 1000.0f;
+          float cl = (hasAudio && aStarted) ? audioClock() - (btOut ? BT_DELAY : 0) : (millis() - t0 - pausedMs) / 1000.0f;
           if (cl >= ft - 0.004f || (hasAudio && ringUsed() == 0)) break;
           delay(1);
         }
@@ -1561,9 +2810,10 @@ void playAvi(const std::string& path) {
         fsSeek(f, p + 8);
         if (fsReadCb(f, frame.data(), len) == (int32_t)len && jpeg->openRAM(frame.data(), len, videoDraw)) {
           jpeg->setPixelType(RGB565_BIG_ENDIAN);
-          jpeg->decode(ox, oy, scaleFlag);
+          if (jpeg->decode(ox, oy, scaleFlag)) shownOk++; else shownBad++;
           jpeg->close();
-        }
+        } else shownBad++;
+        if (shownBad >= 8 && !shownOk) exitReq = true;  // кадры не читаются — дальше смысла нет
       }
       if (a.totalFrames && millis() - lastBar > 500) {  // полоска прогресса внизу
         lastBar = millis();
@@ -1604,6 +2854,8 @@ void playAvi(const std::string& path) {
   listDirty = true;
   TouchPt tp2;
   while (readTouch(tp2)) delay(10);
+  if (shownBad && !shownOk)
+    showMessage("Кадры не читаются", "Видео в этом файле сжато в JPEG, который плата не умеет разбирать (например, 4:4:4 или прогрессивный).\nПереведите ролик заново в приложении ESP32 Flasher → «Конвертер видео» или командой ffmpeg с параметром -pix_fmt yuvj420p.");
 }
 
 // ---------- Wi-Fi: тот же API, что у прошивки «HTML с SD-карты» ----------
@@ -1633,7 +2885,7 @@ bool badPath(const String& p) { return p.length() < 2 || p[0] != '/' || p.indexO
 void releaseIfPlaying(const String& path) {
   if (trk.type == TT_NONE) return;
   String cur = trk.path.c_str();
-  if (cur == path || cur.startsWith(path + "/")) { closeTrack(); trackIndex = -1; screen = SC_LIST; }
+  if (cur == path || cur.startsWith(path + "/")) { closeTrack(); prepareTrackArt(); screen = SC_LIST; listDirty = true; }
 }
 
 void apiInfo() {
@@ -1839,64 +3091,13 @@ void wifiStop() {
 }
 
 // ---------- Касания ----------
-bool touching = false, moved = false;
+bool touching = false, moved = false, dragVol = false;
 int16_t downX, downY, lastY;
 int32_t downScroll;
 uint32_t downT, lastMoveT;
 float vel = 0;
 int releaseCount = 0;
 int lastBoot = 1;
-
-void openEntry(int i) {
-  const Entry& e = entries[i];
-  std::string full = (curDir == "/" ? "/" : curDir + "/") + e.name;
-  if (e.kind == MK_DIR) { loadDir(full); return; }
-  if (e.kind == MK_MP4) {
-    showMessage("MP4 не поддерживается", "В файлах MP4 видео сжато кодеком H.264 — у ESP32 не хватает мощности, чтобы его показывать. Переведите ролик в AVI: приложение ESP32 Flasher → вкладка «Конвертер». Готовый файл можно сразу отправить на эту карту по Wi-Fi (значок справа вверху).");
-    return;
-  }
-  if (e.kind == MK_AVI) { playAvi(full); return; }
-  if (openTrack(curDir, entries, i)) { screen = SC_PLAYER; playerDirty = true; }
-  else showMessage("Не воспроизводится", "Файл «" + e.name + "» повреждён или в неподдерживаемом формате. WAV должен быть PCM 8 или 16 бит.");
-}
-
-void onTap(int x, int y) {
-  if (screen == SC_MSG) { screen = SC_LIST; listDirty = true; return; }
-  if (screen == SC_PLAYER) {
-    if (y < BAR_H && x < 80) { screen = SC_LIST; listDirty = true; return; }
-    if (y > PROG_Y - 20 && y < PROG_Y + 20 && trk.duration > 0) { seekTrack((x - 24) / 272.0f); return; }
-    if (y > CTRL_Y - 34 && y < CTRL_Y + 34) {
-      if (x < 120) { if (audioClock() > 3) seekTrack(0); else stepTrack(-1); }
-      else if (x < 200) togglePause();
-      else stepTrack(1);
-      playerDirty = true;
-      return;
-    }
-    if (y > VOL_Y - 22) {
-      if (x < 60) volume = std::max(0, volume - 5);
-      else if (x > 260) volume = std::min(100, volume + 5);
-      else volume = std::max(0, std::min(100, (x - 70) * 100 / 180));
-      audioHwVolume(volume);
-      saveVolume();
-      playerDirty = true;
-    }
-    return;
-  }
-  // список
-  if (y < BAR_H) {
-    if (x > SCREEN_W - 60) { if (wifiOn) wifiStop(); else wifiStart(); return; }
-    if (x < 80 && curDir != "/") { std::string up = dirOf(curDir); if (up.size() > 1) up.pop_back(); loadDir(up.empty() ? "/" : up); }
-    return;
-  }
-  if (trk.type != TT_NONE && y >= SCREEN_H - MINI_H) {
-    if (x > 250) togglePause();
-    else { screen = SC_PLAYER; playerDirty = true; }
-    return;
-  }
-  if (!sdReady) { loadDir(curDir); return; }
-  int i = (y - BAR_H + listScroll) / ROW_H;
-  if (i >= 0 && i < (int)entries.size()) openEntry(i);
-}
 
 void setup() {
   Serial.begin(115200);
@@ -1909,14 +3110,20 @@ void setup() {
   gfx->fillScreen(C_BG);
   analogWrite(PIN_BL, 230);
   if (!uiInit()) { Serial.println("Out of memory"); while (true) delay(1000); }
+  srand(esp_random());
   prefs.begin("media", true);
   volume = prefs.getInt("vol", 70);
+  shuffleOn = prefs.getBool("shuf", false);
+  repeatMode = prefs.getInt("rep", 0) % 3;
+  String bt = prefs.getString("btdev", "");
+  strncpy(btSaved, bt.c_str(), 32);
   prefs.end();
   es8311Init();
   audioHwVolume(volume);
   i2s.setPins(PIN_I2S_BCLK, PIN_I2S_LRCK, PIN_I2S_DOUT, -1, -1);
   if (!i2s.begin(I2S_MODE_STD, OUT_RATE, I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO, I2S_STD_SLOT_BOTH)) Serial.println("I2S failed");
   xTaskCreatePinnedToCore(audioTask, "audio", 4096, nullptr, 5, nullptr, 0);
+  renderIdle = trackTick;
   loadDir("/");
   renderList();
 }
@@ -1924,19 +3131,20 @@ void setup() {
 void loop() {
   uint32_t now = millis();
   trackTick();
-  if (trk.type != TT_NONE && trk.finished && ringUsed() < 3u * srcCh) {  // трек закончился — следующий
-    if (!stepTrack(1)) {  // это был последний: встаём в начало на паузе
+  if (trackOn() && trk.finished && ringUsed() < 3u * srcCh) {  // трек закончился
+    if (repeatMode == 2) { trk.finished = false; seekTrack(0); }
+    else if (!stepTrack(1)) {  // это был последний: встаём в начало на паузе
       trk.finished = false;
       trk.paused = false;
       seekTrack(0);
       trk.paused = true;
       aPause = true;
-      playerDirty = miniDirty = true;
     }
+    playerDirty = miniDirty = listDirty = true;
   }
 
   int boot = digitalRead(PIN_BOOT);
-  if (lastBoot && !boot) togglePause();
+  if (lastBoot && !boot) { togglePause(); listDirty = true; }
   lastBoot = boot;
 
   TouchPt t;
@@ -1945,12 +3153,19 @@ void loop() {
     releaseCount = 0;
     if (!touching) {
       touching = true; moved = false; vel = 0;
-      downX = t.x; downY = lastY = t.y; downScroll = listScroll; downT = lastMoveT = now;
-    } else if (screen == SC_LIST && downY >= BAR_H) {
+      downX = t.x; downY = t.y; lastY = t.y; downScroll = listScroll; downT = lastMoveT = now;
+      dragVol = screen == SC_PLAYER && t.x >= VOL_X - 6 && t.y >= VOL_Y && t.y < VOL_Y + 160;
+    } else if (dragVol) {
+      if (abs(t.y - downY) > 4) moved = true;
+      if (moved) {
+        int old = volume;
+        setVolume((VOL_BOT - t.y) * 100 / (VOL_BOT - VOL_TOP));
+        if (volume != old) renderVolume();
+      }
+    } else if (screen == SC_LIST && downY >= HDR_H && !(trackOn() && downY >= MINI_Y)) {
       if (abs(t.y - downY) > 8) moved = true;
       if (moved) {
-        int maxScroll = std::max(0, (int)entries.size() * ROW_H - listViewH());
-        int32_t ns = std::max(0, std::min(maxScroll, (int)(downScroll - (t.y - downY))));
+        int32_t ns = std::max(0, std::min(libMaxScroll(), (int)(downScroll - (t.y - downY))));
         float dt = std::max<uint32_t>(1, now - lastMoveT);
         vel = 0.6f * vel + 0.4f * (-(t.y - lastY) / dt);
         lastY = t.y;
@@ -1960,11 +3175,19 @@ void loop() {
     }
   } else if (touching && ++releaseCount >= 2) {
     touching = false;
-    if (!moved) onTap(downX, downY);
+    if (dragVol && moved) saveVolume();
+    else if (!moved) onTap(downX, downY);
     else if (now - lastMoveT > 80) vel = 0;
+    dragVol = false;
+    static bool lastShuf = false;
+    static int lastRep = 0;
+    if (lastShuf != shuffleOn || lastRep != repeatMode) {  // запоминаем режимы
+      lastShuf = shuffleOn; lastRep = repeatMode;
+      prefs.begin("media", false); prefs.putBool("shuf", shuffleOn); prefs.putInt("rep", repeatMode); prefs.end();
+    }
   }
   if (!touching && screen == SC_LIST && fabsf(vel) > 0.05f) {  // инерция
-    int maxScroll = std::max(0, (int)entries.size() * ROW_H - listViewH());
+    int maxScroll = libMaxScroll();
     listScroll = std::max(0, std::min(maxScroll, (int)(listScroll + vel * 16)));
     vel *= 0.92f;
     if (listScroll == 0 || listScroll == maxScroll) vel = 0;
@@ -1972,26 +3195,41 @@ void loop() {
   }
 
   if (wifiOn) server.handleClient();
+  btPoll();
+  static uint32_t seenBtVer = 0;
+  static uint8_t seenBtState = BT_OFF;
+  if (btState != seenBtState || (screen == SC_BT && btDevsVer != seenBtVer)) {
+    seenBtState = btState;
+    seenBtVer = btDevsVer;
+    if (screen == SC_BT) renderBt();
+    else if (screen == SC_LIST) listDirty = true;
+  }
   if (filesChanged && !touching && screen == SC_LIST) {  // приложение что-то загрузило или удалило
     filesChanged = false;
     int32_t keep = listScroll;
-    loadDir(curDir);
-    int maxScroll = std::max(0, (int)entries.size() * ROW_H - listViewH());
-    listScroll = std::min((int)keep, maxScroll);
-    if (trk.type != TT_NONE && trackDir == curDir)
+    std::string d = curDir;
+    for (auto& e : entries) thumbForget(joinDir(curDir, e.name));
+    loadDir(d);
+    listScroll = keep;
+    if (trackOn() && trackDir == curDir) {
+      trackDirEntries = entries;
       for (int i = 0; i < (int)entries.size(); i++) if (entries[i].name == trk.name) trackIndex = i;
+    }
   }
 
   static uint32_t lastUi = 0;
-  bool tickUi = now - lastUi > 300;
+  bool tickUi = now - lastUi > 500;
   if (tickUi) lastUi = now;
   if (screen == SC_LIST) {
     if (listDirty) renderList();
-    else if (trk.type != TT_NONE && (miniDirty || (tickUi && !trk.paused))) renderMini();
+    else if (trackOn() && (miniDirty || (tickUi && !trk.paused))) renderMini();
+    else if (thumbPending && !touching && fabsf(vel) <= 0.05f) loadPendingThumb();
   } else if (screen == SC_PLAYER) {
-    if (trk.type == TT_NONE) { screen = SC_LIST; listDirty = true; }
+    if (!trackOn()) { screen = SC_LIST; listDirty = true; }
     else if (playerDirty) renderPlayer();
     else if (progDirty || (tickUi && !trk.paused)) renderProgress();
+  } else if (screen == SC_COVER) {
+    if (!trackOn()) hideCover();
   }
   delay(2);
 }
