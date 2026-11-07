@@ -5436,6 +5436,7 @@ std::string wifiPage() {
   return "<html><head><title>Wi-Fi</title><style>" + std::string(DARK_CSS) + ".big{font-size:23px;color:#c4a3ff}</style></head><body>" +
          wifiInfo +
          "<p class='note'>Телефон откроет страницы в своём браузере полностью, вместе с JavaScript. Там же можно загрузить новые файлы на карту.</p>"
+         "<p class='note'>Удобнее всего — приложение ESP32 Flasher, раздел «Файлы на карте».</p>"
          "<a href='wifi-off:'><div class='row'><b class='dir'>Выключить Wi-Fi</b></div></a></body></html>";
 }
 
@@ -5722,6 +5723,83 @@ void handleAny() {
   f.close();
 }
 
+// ---------- API для приложения ESP32 Flasher (раздел «Файлы на карте») ----------
+bool filesChanged = false;
+
+String jsonEsc(const std::string& s) {
+  String r;
+  for (unsigned char c : s) {
+    if (c == '"' || c == '\\') { r += '\\'; r += (char)c; }
+    else if (c < 0x20) { char b[8]; snprintf(b, sizeof b, "\\u%04x", c); r += b; }
+    else r += (char)c;
+  }
+  return r;
+}
+
+void sendJson(int code, const String& body) {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(code, "application/json; charset=utf-8", body);
+}
+
+void apiInfo() {
+  char b[160];
+  snprintf(b, sizeof b, "{\"ok\":true,\"total\":%llu,\"used\":%llu,\"card\":%s}",
+           (unsigned long long)SD.totalBytes(), (unsigned long long)SD.usedBytes(), sdOk ? "true" : "false");
+  sendJson(200, b);
+}
+
+void apiList() {
+  String dir = server.hasArg("dir") ? server.arg("dir") : "/";
+  std::vector<DirEnt> ents;
+  if (!fsList(dir.c_str(), ents)) { sendJson(404, "{\"ok\":false,\"error\":\"Папка не найдена\"}"); return; }
+  std::sort(ents.begin(), ents.end(), [](const DirEnt& a, const DirEnt& b) { if (a.dir != b.dir) return a.dir; return lower(a.name) < lower(b.name); });
+  String body = "{\"ok\":true,\"dir\":\"" + jsonEsc(dir.c_str()) + "\",\"items\":[";
+  bool first = true;
+  for (auto& e : ents) {
+    if (e.name.empty() || e.name == "System Volume Information") continue;
+    if (!first) body += ",";
+    first = false;
+    body += "{\"n\":\"" + jsonEsc(e.name) + "\",\"d\":" + String(e.dir ? 1 : 0) + ",\"s\":" + String(e.size) + "}";
+  }
+  body += "]}";
+  sendJson(200, body);
+}
+
+bool removeTree(const String& path) {
+  File f = SD.open(path.c_str());
+  if (!f) return false;
+  if (!f.isDirectory()) { f.close(); return SD.remove(path.c_str()); }
+  std::vector<String> kids;
+  File c;
+  while ((c = f.openNextFile())) {
+    String n = c.name();
+    int sl = n.lastIndexOf('/');
+    if (sl >= 0) n = n.substring(sl + 1);
+    kids.push_back((path.endsWith("/") ? path : path + "/") + n);
+    c.close();
+  }
+  f.close();
+  for (auto& k : kids) if (!removeTree(k)) return false;
+  return SD.rmdir(path.c_str());
+}
+
+void apiDelete() {
+  String path = server.arg("path");
+  if (path.length() < 2 || path.indexOf("..") >= 0) { sendJson(400, "{\"ok\":false,\"error\":\"Неверный путь\"}"); return; }
+  bool ok = removeTree(path);
+  filesChanged = true;
+  sendJson(ok ? 200 : 500, ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Не удалось удалить\"}");
+}
+
+void apiMkdir() {
+  String path = server.arg("path");
+  if (path.length() < 2 || path.indexOf("..") >= 0) { sendJson(400, "{\"ok\":false,\"error\":\"Неверное имя\"}"); return; }
+  bool ok = SD.exists(path.c_str()) || SD.mkdir(path.c_str());
+  filesChanged = true;
+  sendJson(ok ? 200 : 500, ok ? "{\"ok\":true}" : "{\"ok\":false,\"error\":\"Не удалось создать папку\"}");
+}
+
 File uploadFile;
 void handleUpload() {
   HTTPUpload& up = server.upload();
@@ -5731,6 +5809,7 @@ void handleUpload() {
     String name = up.filename;
     name.replace("/", "_");
     uploadFile = SD.open((dir + name).c_str(), FILE_WRITE);
+    filesChanged = true;
   } else if (up.status == UPLOAD_FILE_WRITE) {
     if (uploadFile) uploadFile.write(up.buf, up.currentSize);
   } else if (up.status == UPLOAD_FILE_END || up.status == UPLOAD_FILE_ABORTED) {
@@ -5768,7 +5847,14 @@ void wifiStart() {
     wifiInfo = std::string(ssid.empty() ? "" : "<p class='note'>Не удалось подключиться к сети из wifi.txt — включена своя точка доступа.</p>") +
                "<h2>Wi-Fi включён</h2><p>1. Подключите телефон к сети <b>ESP32-HTML</b>, пароль <b>12345678</b>.</p><p>2. Откройте в браузере:</p><p class='big'>http://" + std::string(ip.c_str()) + "</p>";
   }
-  server.on("/__upload", HTTP_POST, []() { server.sendHeader("Location", server.arg("dir")); server.send(303); }, handleUpload);
+  server.on("/__upload", HTTP_POST, []() {
+    if (server.hasArg("json")) sendJson(200, "{\"ok\":true}");
+    else { server.sendHeader("Location", server.arg("dir")); server.send(303); }
+  }, handleUpload);
+  server.on("/__api/info", HTTP_GET, apiInfo);
+  server.on("/__api/list", HTTP_GET, apiList);
+  server.on("/__api/delete", HTTP_POST, apiDelete);
+  server.on("/__api/mkdir", HTTP_POST, apiMkdir);
   server.onNotFound(handleAny);
   server.begin();
   wifiOn = true;
@@ -5860,6 +5946,11 @@ void loop() {
     if (scrollY <= 0 || scrollY >= maxScroll) vel = 0;
     viewDirty = true;
     if (fabsf(vel) <= 0.05f) lastFling = 0;
+  }
+
+  if (filesChanged && !touching) {
+    filesChanged = false;
+    if (curUrl.compare(0, 4, "dir:") == 0) { int32_t keep = scrollY; openUrl(curUrl, false); scrollY = keep; }
   }
 
   if (refreshAt) {

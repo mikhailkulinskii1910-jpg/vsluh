@@ -9,7 +9,7 @@ OUT=build; rm -rf $OUT; mkdir -p $OUT/gen $OUT/classes
 "$AAPT2" compile --dir res -o $OUT/res.zip
 "$AAPT2" link -o $OUT/base.apk -I "$ANDROID_JAR" --manifest AndroidManifest.xml \
   -A assets --java $OUT/gen --min-sdk-version 21 --target-sdk-version 29 \
-  --version-code 2 --version-name 1.1 -0 bin $OUT/res.zip
+  --version-code 3 --version-name 1.2 -0 bin $OUT/res.zip
 
 find src $OUT/gen -name '*.java' > $OUT/sources.txt
 javac -source 8 -target 8 -encoding UTF-8 -nowarn -Xlint:-options \

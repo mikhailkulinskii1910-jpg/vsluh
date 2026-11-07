@@ -44,6 +44,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.5;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -106,6 +107,31 @@ select, input[type="text"] {
 .fw span { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
 .fw.added { border-color: var(--mask); }
 .sub-h { font-size: 13px; color: var(--muted); margin: 0; }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.tabs button { border: 0; background: transparent; min-height: 40px; justify-content: center; font-weight: 600; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--copper); color: var(--copper-ink); }
+.tabpane { display: flex; flex-direction: column; gap: 18px; }
+.usage { height: 8px; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.usage > div { height: 100%; background: var(--mask); width: 0; }
+.crumbs { font-family: var(--f-mono); font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.flist { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.frow { border-top: 1px solid var(--line); }
+.frow:first-child { border-top: 0; }
+.fmain { width: 100%; border: 0; border-radius: 0; background: transparent; justify-content: flex-start; text-align: left; padding: 10px 12px; min-height: 52px; gap: 12px; }
+.fmain:hover:not(:disabled) { background: var(--bg); }
+.ficon { width: 30px; height: 30px; flex: none; border-radius: 7px; display: grid; place-items: center; font: 600 10px var(--f-mono); color: var(--copper-ink); background: var(--muted); }
+.ficon.dir { background: var(--mask); }
+.ficon.html { background: var(--copper); }
+.ficon.img { background: #7b5cc4; }
+.fname { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.fname b { font-weight: 500; overflow-wrap: anywhere; }
+.fname span { font-size: 12px; color: var(--muted); font-family: var(--f-mono); }
+.factions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px 54px; align-items: center; }
+.factions .q { font-size: 13px; color: var(--err); flex-basis: 100%; }
+button.danger { border-color: var(--err); color: var(--err); }
+.empty { padding: 18px; text-align: center; color: var(--muted); font-size: 14px; }
+.inline-input { display: flex; gap: 8px; flex-wrap: wrap; }
+.inline-input input { flex: 1; min-width: 0; }
 .drop {
   border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted);
   cursor: pointer; transition: border-color .15s, background .15s;
@@ -177,6 +203,13 @@ a { color: var(--copper); }
     <h1>ESP32 <span>Web Flasher</span></h1>
     <p class="lede">Записывает прошивку в плату прямо из браузера по USB-кабелю. Arduino IDE и драйверы esptool не нужны: нужен только готовый файл <code>.bin</code>.</p>
   </header>
+
+  <div class="tabs" id="tabs" role="tablist" hidden>
+    <button role="tab" id="tabBtnFlash" aria-selected="true" aria-controls="tabFlash">Прошивка</button>
+    <button role="tab" id="tabBtnFiles" aria-selected="false" aria-controls="tabFiles">Файлы на карте</button>
+  </div>
+
+  <div class="tabpane" id="tabFlash" role="tabpanel">
 
   <section class="panel" aria-labelledby="h-env">
     <h2 id="h-env"><span class="step">00</span>Браузер</h2>
@@ -293,6 +326,50 @@ a { color: var(--copper); }
       <p style="margin:8px 0 0;max-width:64ch">Заводской <code>.bin</code> лежит в папке <code>Firmware</code> репозитория Waveshare: <a href="https://github.com/waveshareteam/ESP32-Touch-LCD-3.5" target="_blank" rel="noopener">github.com/waveshareteam/ESP32-Touch-LCD-3.5</a>. Пишется по адресу <code>0x0</code>.</p>
     </details>
   </section>
+  </div>
+
+  <div class="tabpane" id="tabFiles" role="tabpanel" hidden>
+    <section class="panel" aria-labelledby="h-wifi">
+      <h2 id="h-wifi"><span class="step">01</span>Связь с платой</h2>
+      <p class="lede" style="margin:0">Включите на плате прошивку «HTML с SD-карты» и режим Wi-Fi — значок справа вверху на её экране.</p>
+      <div class="row">
+        <button class="primary" id="btnWifi">Подключиться к плате</button>
+        <button id="btnCheck">Проверить</button>
+      </div>
+      <label class="field" for="boardHost">Адрес платы
+        <input type="text" id="boardHost" value="192.168.4.1" inputmode="url" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="pills"><span class="pill" id="wifiPill">Не подключено</span></div>
+      <div id="wifiNote" hidden></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-card">
+      <div class="console-head">
+        <h2 id="h-card"><span class="step">02</span>SD-карта</h2>
+        <button class="ghost" id="btnRefresh" disabled>Обновить</button>
+      </div>
+      <div id="cardUsage" hidden>
+        <div class="usage"><div id="usageFill"></div></div>
+        <div class="progress"><div class="label"><span id="usageText"></span></div></div>
+      </div>
+      <div class="crumbs" id="crumbs">/</div>
+      <div class="row">
+        <button class="primary" id="btnUpload" disabled>Загрузить файлы</button>
+        <button id="btnMkdir" disabled>Новая папка</button>
+        <button id="btnSite" disabled>Открыть сайт платы</button>
+      </div>
+      <div class="inline-input" id="mkdirBox" hidden>
+        <input type="text" id="mkdirName" placeholder="Имя папки" autocomplete="off">
+        <button class="primary" id="mkdirOk">Создать</button>
+        <button class="ghost" id="mkdirCancel">Отмена</button>
+      </div>
+      <div class="progress" id="upBox" hidden>
+        <div class="track"><div class="fill" id="upFill"></div></div>
+        <div class="label"><span id="upText"></span><b id="upPct">0%</b></div>
+      </div>
+      <div class="flist" id="flist"><div class="empty">Подключитесь к плате, чтобы увидеть файлы на карте.</div></div>
+    </section>
+  </div>
 </div>
 
 <script>
@@ -469,7 +546,7 @@ pako/dist/pako.esm.mjs:
     return hexOut;
   }
   const hex = (n) => "0x" + n.toString(16).toUpperCase();
-  const size = (b) => b >= MB ? (b / MB).toFixed(2) + " МБ" : b >= KB ? (b / KB).toFixed(1) + " КБ" : b + " Б";
+  const size = (b) => b >= 1024 * MB ? (b / 1024 / MB).toFixed(1) + " ГБ" : b >= MB ? (b / MB).toFixed(2) + " МБ" : b >= KB ? (b / KB).toFixed(1) + " КБ" : b + " Б";
 
   // ---------- Проверка браузера ----------
   const policy = document.permissionsPolicy || document.featurePolicy;
@@ -855,6 +932,205 @@ pako/dist/pako.esm.mjs:
       box.append(b);
     }
     $("#catalogBox").hidden = !list.length;
+  }
+
+
+  // ---------- Вкладка «Файлы на карте» (только в приложении для Android) ----------
+  const Net = window.AndroidNet;
+  if (inApp && Net) {
+    $("#tabs").hidden = false;
+    const showTab = (files) => {
+      $("#tabFlash").hidden = files;
+      $("#tabFiles").hidden = !files;
+      $("#tabBtnFlash").setAttribute("aria-selected", String(!files));
+      $("#tabBtnFiles").setAttribute("aria-selected", String(files));
+      if (files && !filesLoaded && Net.state() === "bound") refreshFiles();
+    };
+    $("#tabBtnFlash").onclick = () => showTab(false);
+    $("#tabBtnFiles").onclick = () => showTab(true);
+
+    let fDir = "/", reqSeq = 0, filesLoaded = false, openRow = null;
+    const reqs = new Map();
+    try { const h = localStorage.getItem("boardHost"); if (h) $("#boardHost").value = h; } catch {}
+    const host = () => $("#boardHost").value.trim().replace(/^https?:\/\//, "").replace(/\/+$/, "") || "192.168.4.1";
+    $("#boardHost").addEventListener("change", () => { try { localStorage.setItem("boardHost", host()); } catch {} });
+    const joinPath = (dir, name) => (dir === "/" ? "/" : dir + "/") + name;
+    const encPath = (p) => p.split("/").map(encodeURIComponent).join("/");
+
+    function setWifi(cls, text, note, noteCls) {
+      $("#wifiPill").className = "pill " + cls;
+      $("#wifiPill").textContent = text;
+      const n = $("#wifiNote");
+      if (note) { n.innerHTML = `<div class="notice ${noteCls || ""}"><p></p></div>`; n.querySelector("p").textContent = note; n.hidden = false; }
+      else n.hidden = true;
+    }
+    function setConnected(on) {
+      ["#btnRefresh", "#btnUpload", "#btnMkdir", "#btnSite"].forEach((s) => ($(s).disabled = !on));
+    }
+
+    window.__androidNet = {
+      onResponse(id, code, body) { const r = reqs.get(id); if (r) { reqs.delete(id); r({ code, body }); } },
+      onWifi(ok, msg) {
+        if (ok) { setWifi("ok", "Подключено к сети платы"); refreshFiles(); }
+        else { setWifi("err", "Нет связи", msg, "err"); setConnected(false); }
+      },
+      onUpload(i, n, name, sent, total, state, error) {
+        const box = $("#upBox");
+        if (state === "cancel") { box.hidden = true; return; }
+        box.hidden = false;
+        if (state === "error") { $("#upText").textContent = `Не удалось отправить «${name}»: ${error}`; $("#upFill").style.width = "0"; return; }
+        if (state === "done") {
+          $("#upFill").style.width = "100%"; $("#upPct").textContent = "100%";
+          $("#upText").textContent = n === 1 ? "Файл загружен" : `Загружено файлов: ${n}`;
+          refreshFiles();
+          setTimeout(() => (box.hidden = true), 2500);
+          return;
+        }
+        const frac = total > 0 ? sent / total : 0;
+        const p = (i + (state === "file" ? 1 : frac)) / n;
+        $("#upFill").style.width = (p * 100).toFixed(1) + "%";
+        $("#upPct").textContent = Math.round(p * 100) + "%";
+        $("#upText").textContent = `${i + 1} из ${n}: ${name}`;
+      },
+    };
+
+    function http(method, path) {
+      return new Promise((resolve) => {
+        const id = ++reqSeq;
+        reqs.set(id, resolve);
+        Net.request(id, method, "http://" + host() + path);
+        setTimeout(() => { if (reqs.has(id)) { reqs.delete(id); resolve({ code: 0, body: "нет ответа" }); } }, 25000);
+      });
+    }
+    async function api(method, path) {
+      const r = await http(method, path);
+      if (r.code === 0) throw new Error("Плата не отвечает (" + r.body + "). Проверьте, что режим Wi-Fi на плате включён.");
+      let j;
+      try { j = JSON.parse(r.body); }
+      catch { throw new Error(r.code === 404 ? "На плате старая версия прошивки. Обновите «HTML с SD-карты» на вкладке «Прошивка»." : "Непонятный ответ платы (код " + r.code + ")."); }
+      if (!j.ok) throw new Error(j.error || "Ошибка " + r.code);
+      return j;
+    }
+
+    const kindOf = (name) => {
+      const n = name.toLowerCase();
+      if (/\.html?$/.test(n)) return ["html", "HTML"];
+      if (/\.(jpe?g|png|gif|webp|svg)$/.test(n)) return ["img", "IMG"];
+      if (/\.txt$/.test(n)) return ["", "TXT"];
+      const ext = (n.split(".").pop() || "").slice(0, 4).toUpperCase();
+      return ["", n.includes(".") ? ext : "•"];
+    };
+    const canOpen = (name) => /\.(html?|txt|jpe?g|png|gif|webp|svg|css|js|json)$/i.test(name);
+
+    async function refreshFiles() {
+      const list = $("#flist");
+      list.innerHTML = '<div class="empty">Загружаю список…</div>';
+      try {
+        const [info, dir] = await Promise.all([api("GET", "/__api/info"), api("GET", "/__api/list?dir=" + encodeURIComponent(fDir))]);
+        filesLoaded = true;
+        setConnected(true);
+        setWifi("ok", "Плата на связи · " + host());
+        if (info.total > 0) {
+          $("#cardUsage").hidden = false;
+          $("#usageFill").style.width = (info.used / info.total * 100).toFixed(1) + "%";
+          $("#usageText").textContent = `Занято ${size(info.used)} из ${size(info.total)}, свободно ${size(info.total - info.used)}`;
+        }
+        renderList(dir.items);
+      } catch (e) {
+        list.innerHTML = '<div class="empty"></div>';
+        list.firstChild.textContent = e.message;
+        setWifi("err", "Нет связи", e.message, "err");
+      }
+    }
+
+    function renderList(items) {
+      $("#crumbs").textContent = "SD:" + fDir;
+      const list = $("#flist");
+      list.textContent = "";
+      openRow = null;
+      const add = (label, sub, iconCls, iconText, onClick) => {
+        const row = document.createElement("div");
+        row.className = "frow";
+        const b = document.createElement("button");
+        b.className = "fmain";
+        b.innerHTML = `<span class="ficon ${iconCls}"></span><span class="fname"><b></b><span></span></span>`;
+        b.querySelector(".ficon").textContent = iconText;
+        b.querySelector("b").textContent = label;
+        b.querySelector(".fname span").textContent = sub;
+        b.onclick = () => onClick(row);
+        row.append(b);
+        list.append(row);
+      };
+      if (fDir !== "/") add("Наверх", fDir.slice(0, fDir.lastIndexOf("/")) || "/", "dir", "‹", () => { fDir = fDir.slice(0, fDir.lastIndexOf("/")) || "/"; refreshFiles(); });
+      for (const it of items) {
+        const full = joinPath(fDir, it.n);
+        if (it.d) add(it.n, "папка", "dir", "DIR", (row) => { fDir = full; refreshFiles(); });
+        else {
+          const [cls, txt] = kindOf(it.n);
+          add(it.n, size(it.s), cls, txt, (row) => toggleActions(row, it, full));
+        }
+      }
+      if (!items.length) {
+        const e = document.createElement("div");
+        e.className = "empty";
+        e.textContent = "Папка пуста. Нажмите «Загрузить файлы».";
+        list.append(e);
+      }
+    }
+
+    function toggleActions(row, it, full) {
+      if (openRow && openRow !== row) openRow.querySelector(".factions")?.remove();
+      const ex = row.querySelector(".factions");
+      if (ex) { ex.remove(); openRow = null; return; }
+      openRow = row;
+      const a = document.createElement("div");
+      a.className = "factions";
+      if (canOpen(it.n)) {
+        const o = document.createElement("button");
+        o.textContent = "Открыть";
+        o.onclick = () => Net.preview("http://" + host() + encPath(full));
+        a.append(o);
+      }
+      const d = document.createElement("button");
+      d.className = "danger";
+      d.textContent = "Удалить";
+      d.onclick = () => {  // подтверждение прямо в строке
+        a.innerHTML = '<span class="q"></span>';
+        a.querySelector(".q").textContent = `Удалить «${it.n}» с карты? Это нельзя отменить.`;
+        const yes = document.createElement("button");
+        yes.className = "danger";
+        yes.textContent = "Удалить";
+        yes.onclick = async () => {
+          yes.disabled = true;
+          try { await api("POST", "/__api/delete?path=" + encodeURIComponent(full)); refreshFiles(); }
+          catch (e) { a.querySelector(".q").textContent = e.message; }
+        };
+        const no = document.createElement("button");
+        no.className = "ghost";
+        no.textContent = "Отмена";
+        no.onclick = () => { a.remove(); openRow = null; };
+        a.append(yes, no);
+      };
+      a.append(d);
+      row.append(a);
+    }
+
+    $("#btnWifi").onclick = () => { setWifi("warn", "Подключаюсь…", "Подтвердите подключение к сети ESP32-HTML в окне Android."); Net.connectBoard(); };
+    $("#btnCheck").onclick = () => {
+      if (!Net.useCurrentWifi()) { setWifi("err", "Нет Wi-Fi", "Телефон не подключён к Wi-Fi. Нажмите «Подключиться к плате».", "err"); return; }
+      refreshFiles();
+    };
+    $("#btnRefresh").onclick = refreshFiles;
+    $("#btnSite").onclick = () => Net.preview("http://" + host() + encPath(fDir === "/" ? "/" : fDir + "/"));
+    $("#btnUpload").onclick = () => Net.pickAndUpload("http://" + host() + "/__upload?json=1&dir=" + encodeURIComponent(fDir));
+    $("#btnMkdir").onclick = () => { $("#mkdirBox").hidden = false; $("#mkdirName").value = ""; $("#mkdirName").focus(); };
+    $("#mkdirCancel").onclick = () => ($("#mkdirBox").hidden = true);
+    $("#mkdirOk").onclick = async () => {
+      const name = $("#mkdirName").value.trim().replace(/[\\/:*?"<>|]/g, "_");
+      if (!name) return;
+      try { await api("POST", "/__api/mkdir?path=" + encodeURIComponent(joinPath(fDir, name))); $("#mkdirBox").hidden = true; refreshFiles(); }
+      catch (e) { setWifi("err", "Ошибка", e.message, "err"); }
+    };
   }
 
   renderEnv();

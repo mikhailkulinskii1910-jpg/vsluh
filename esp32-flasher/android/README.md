@@ -9,3 +9,7 @@
 
 Сборка без Gradle — `build.sh` (aapt2 → javac → dx → zipalign → apksigner). Перед сборкой положите в `assets/`
 файл `index.html` и папку `firmware/` из каталога выше.
+
+Вкладка «Файлы на карте»: мост `AndroidNet` (подключение к точке доступа платы через `WifiNetworkSpecifier`,
+привязка процесса к этой сети, HTTP-запросы к API платы `/__api/info|list|delete|mkdir` и загрузка `/__upload`),
+просмотр страниц с карты — `PreviewActivity`.
