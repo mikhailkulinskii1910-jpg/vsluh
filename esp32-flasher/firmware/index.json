@@ -1,4 +1,5 @@
 [
+  {"title": "Медиаплеер MP3 · WAV · AVI", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/mediaplayer_ws35.merged.bin"},
   {"title": "HTML с SD-карты", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/htmlviewer_ws35.merged.bin"},
   {"title": "Калькулятор с дробями", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/calculator_ws35.merged.bin"},
   {"title": "Фрактал Мандельброта", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/fractal_ws35.merged.bin"},

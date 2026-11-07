@@ -44,6 +44,9 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -66,6 +69,7 @@ public class MainActivity extends Activity {
     private static final String ACTION_PERMISSION = "ru.vsluh.esp32flasher.USB_PERMISSION";
     private static final int REQ_FILE = 1;
     private static final int REQ_UPLOAD = 2;
+    private static final int REQ_SAVE = 3;
     private static final String BOARD_SSID = "ESP32-HTML";
     private static final String BOARD_PASS = "12345678";
 
@@ -87,6 +91,10 @@ public class MainActivity extends Activity {
     private volatile Network boardNet;
     private ConnectivityManager.NetworkCallback wifiCallback;
     private String uploadUrl;
+
+    // Файл из конвертера: страница передаёт его кусками, дальше он уходит на плату или в память телефона
+    private File staged;
+    private OutputStream stagedOut;
 
     private static final HashMap<String, String> MIME = new HashMap<String, String>();
     static {
@@ -123,6 +131,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(false);
         s.setAllowContentAccess(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
 
         web.addJavascriptInterface(new Bridge(), "AndroidSerial");
         web.addJavascriptInterface(new NetBridge(), "AndroidNet");
@@ -151,12 +160,15 @@ public class MainActivity extends Activity {
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> cb, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback = cb;
+                boolean video = false;
+                String[] acc = params.getAcceptTypes();
+                if (acc != null) for (String a : acc) if (a != null && a.startsWith("video")) video = true;
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
-                i.setType("*/*");
-                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                i.setType(video ? "video/*" : "*/*");
+                i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE);
                 try {
-                    startActivityForResult(Intent.createChooser(i, "Файл прошивки .bin"), REQ_FILE);
+                    startActivityForResult(Intent.createChooser(i, video ? "Видео для конвертации" : "Файл прошивки .bin"), REQ_FILE);
                     return true;
                 } catch (Exception e) {
                     fileCallback = null;
@@ -198,6 +210,12 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
+        if (req == REQ_SAVE) {
+            final Uri dst = res == RESULT_OK && data != null ? data.getData() : null;
+            if (dst == null) { js("__androidNet.onSaved(false,'')"); return; }
+            new Thread(new Runnable() { public void run() { copyStaged(dst); } }, "save").start();
+            return;
+        }
         if (req == REQ_UPLOAD) {
             final ArrayList<Uri> list = new ArrayList<Uri>();
             if (res == RESULT_OK && data != null) {
@@ -408,6 +426,10 @@ public class MainActivity extends Activity {
     }
 
     private String[] nameAndSize(Uri u) {
+        if ("file".equals(u.getScheme())) {
+            File f = new File(u.getPath());
+            return new String[] { f.getName(), String.valueOf(f.length()) };
+        }
         String name = "file.bin";
         long size = -1;
         Cursor c = null;
@@ -476,7 +498,22 @@ public class MainActivity extends Activity {
         js("__androidNet.onUpload(" + count + "," + count + ",'',0,0,'done','')");
     }
 
-    /** Методы раздела «Файлы на карте». */
+    private void copyStaged(Uri dst) {
+        try {
+            InputStream in = new FileInputStream(staged);
+            OutputStream out = getContentResolver().openOutputStream(dst);
+            byte[] buf = new byte[65536];
+            int n;
+            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+            in.close();
+            out.close();
+            js("__androidNet.onSaved(true,'')");
+        } catch (Exception e) {
+            js("__androidNet.onSaved(false," + q(String.valueOf(e.getMessage())) + ")");
+        }
+    }
+
+    /** Методы раздела «Файлы на карте» и конвертера. */
     private class NetBridge {
         @JavascriptInterface
         public String state() {
@@ -565,6 +602,74 @@ public class MainActivity extends Activity {
                         startActivityForResult(Intent.createChooser(i, "Файлы для SD-карты"), REQ_UPLOAD);
                     } catch (Exception e) {
                         js("__androidNet.onUpload(0,0,'',0,0,'error'," + q("Нет приложения для выбора файлов") + ")");
+                    }
+                }
+            });
+        }
+
+        /** Начать приём файла из конвертера. Пустая строка — успех, иначе текст ошибки. */
+        @JavascriptInterface
+        public String stageBegin(String name) {
+            try {
+                if (stagedOut != null) { try { stagedOut.close(); } catch (IOException ignored) { } }
+                File dir = new File(getCacheDir(), "convert");
+                File[] old = dir.listFiles();
+                if (old != null) for (File o : old) o.delete();
+                dir.mkdirs();
+                staged = new File(dir, name.replaceAll("[\\\\/:*?\"<>|]", "_"));
+                stagedOut = new FileOutputStream(staged);
+                return "";
+            } catch (Exception e) {
+                staged = null;
+                stagedOut = null;
+                return String.valueOf(e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public String stageChunk(String b64) {
+            try {
+                stagedOut.write(Base64.decode(b64, Base64.DEFAULT));
+                return "";
+            } catch (Exception e) {
+                return String.valueOf(e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public String stageEnd() {
+            try {
+                stagedOut.close();
+                stagedOut = null;
+                return "";
+            } catch (Exception e) {
+                return String.valueOf(e.getMessage());
+            }
+        }
+
+        /** Отправить принятый файл на карту платы; ход — в __androidNet.onUpload. */
+        @JavascriptInterface
+        public void uploadStaged(final String url) {
+            if (staged == null || !staged.exists()) { js("__androidNet.onUpload(0,1,'',0,0,'error'," + q("Файл не подготовлен") + ")"); return; }
+            final ArrayList<Uri> list = new ArrayList<Uri>();
+            list.add(Uri.fromFile(staged));
+            new Thread(new Runnable() { public void run() { uploadAll(url, list); } }, "upload").start();
+        }
+
+        /** Сохранить принятый файл в память телефона через системный диалог. */
+        @JavascriptInterface
+        public void saveStaged() {
+            ui.post(new Runnable() {
+                public void run() {
+                    if (staged == null || !staged.exists()) { js("__androidNet.onSaved(false," + q("Файл не подготовлен") + ")"); return; }
+                    Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    i.addCategory(Intent.CATEGORY_OPENABLE);
+                    i.setType("video/x-msvideo");
+                    i.putExtra(Intent.EXTRA_TITLE, staged.getName());
+                    try {
+                        startActivityForResult(i, REQ_SAVE);
+                    } catch (Exception e) {
+                        js("__androidNet.onSaved(false," + q("Нет приложения для сохранения файлов") + ")");
                     }
                 }
             });

@@ -107,8 +107,8 @@ select, input[type="text"] {
 .fw span { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
 .fw.added { border-color: var(--mask); }
 .sub-h { font-size: 13px; color: var(--muted); margin: 0; }
-.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
-.tabs button { border: 0; background: transparent; min-height: 40px; justify-content: center; font-weight: 600; color: var(--muted); }
+.tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
+.tabs button { border: 0; background: transparent; min-height: 40px; justify-content: center; font-weight: 600; color: var(--muted); padding-inline: 6px; text-align: center; line-height: 1.15; }
 .tabs button[aria-selected="true"] { background: var(--copper); color: var(--copper-ink); }
 .tabpane { display: flex; flex-direction: column; gap: 18px; }
 .usage { height: 8px; border-radius: 4px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
@@ -194,6 +194,13 @@ a { color: var(--copper); }
 .addr-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 8px; }
 .addr-table td { padding: 5px 8px 5px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
 .addr-table td:first-child { font-family: var(--f-mono); white-space: nowrap; color: var(--copper); }
+.cvsrc { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.cvsrc video, #cvCanvas { width: 100%; border-radius: 6px; background: #000; display: block; }
+@media (max-width: 520px) { .cvsrc { grid-template-columns: 1fr; } .cvsrc video { max-width: 260px; } }
+.cvprev { max-width: 320px; }
+.chipinfo.c3 { display: flex; flex-wrap: wrap; }
+.chipinfo.c3 > div { flex: 1 1 140px; }
+.est { font-family: var(--f-mono); font-size: 13px; color: var(--muted); margin: 0; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -201,12 +208,13 @@ a { color: var(--copper); }
   <header>
     <div class="eyebrow">Waveshare ESP32-Touch-LCD-3.5 · ESP32-D0WD-V3 · 16 МБ flash</div>
     <h1>ESP32 <span>Web Flasher</span></h1>
-    <p class="lede">Записывает прошивку в плату прямо из браузера по USB-кабелю. Arduino IDE и драйверы esptool не нужны: нужен только готовый файл <code>.bin</code>.</p>
+    <p class="lede">Записывает прошивку в плату прямо из браузера по USB-кабелю. Arduino IDE и драйверы esptool не нужны: нужен только готовый файл <code>.bin</code>. На вкладке «Конвертер видео» ролики MP4 переводятся в формат, который играет плата.</p>
   </header>
 
-  <div class="tabs" id="tabs" role="tablist" hidden>
+  <div class="tabs" id="tabs" role="tablist">
     <button role="tab" id="tabBtnFlash" aria-selected="true" aria-controls="tabFlash">Прошивка</button>
-    <button role="tab" id="tabBtnFiles" aria-selected="false" aria-controls="tabFiles">Файлы на карте</button>
+    <button role="tab" id="tabBtnConv" aria-selected="false" aria-controls="tabConv">Конвертер видео</button>
+    <button role="tab" id="tabBtnFiles" aria-selected="false" aria-controls="tabFiles" hidden>Файлы на карте</button>
   </div>
 
   <div class="tabpane" id="tabFlash" role="tabpanel">
@@ -328,10 +336,98 @@ a { color: var(--copper); }
   </section>
   </div>
 
+
+  <div class="tabpane" id="tabConv" role="tabpanel" hidden>
+    <section class="panel" aria-labelledby="h-cv1">
+      <h2 id="h-cv1"><span class="step">01</span>Видео</h2>
+      <p class="lede" style="margin:0">Плата не может показывать MP4: видео в нём сжато кодеком H.264, на него у ESP32 не хватает мощности. Здесь ролик переводится в AVI с кадрами JPEG — такой файл играет прошивка «Медиаплеер». Всё считается на этом устройстве, видео никуда не отправляется.</p>
+      <div class="drop" id="cvDrop" tabindex="0" role="button" aria-label="Выбрать видео">
+        <strong>Выберите видео</strong> или перетащите его сюда.<br>MP4, MOV, WEBM — всё, что открывается в браузере.
+      </div>
+      <input type="file" id="cvInput" accept="video/*,.mp4,.m4v,.mov,.webm,.mkv" hidden>
+      <div class="cvsrc" id="cvSrc" hidden>
+        <video id="cvVideo" muted playsinline preload="auto"></video>
+        <dl class="chipinfo c3">
+          <div><dt>Файл</dt><dd id="cvName">—</dd></div>
+          <div><dt>Длительность</dt><dd id="cvDur">—</dd></div>
+          <div><dt>Кадр</dt><dd id="cvRes">—</dd></div>
+        </dl>
+      </div>
+      <div id="cvSrcNote" hidden></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cv2">
+      <h2 id="h-cv2"><span class="step">02</span>Настройки</h2>
+      <div class="row">
+        <label class="field" for="cvSize">Размер кадра
+          <select id="cvSize">
+            <option value="320" selected>до 320×240 — плавно</option>
+            <option value="480">до 480×320 — весь экран</option>
+            <option value="240">до 240×180 — компактно</option>
+          </select>
+        </label>
+        <label class="field" for="cvFps">Кадров в секунду
+          <select id="cvFps">
+            <option value="10">10</option>
+            <option value="12">12</option>
+            <option value="15" selected>15</option>
+            <option value="20">20</option>
+          </select>
+        </label>
+        <label class="field" for="cvQ">Качество
+          <select id="cvQ">
+            <option value="0.6">Среднее</option>
+            <option value="0.75" selected>Хорошее</option>
+            <option value="0.88">Высокое</option>
+          </select>
+        </label>
+      </div>
+      <label class="check" for="cvAudio"><input type="checkbox" id="cvAudio" checked>
+        <span>Со звуком<small>Моно, 22 050 Гц — так плата успевает и звук, и картинку.</small></span>
+      </label>
+      <label class="check" for="cvRotate" id="cvRotateBox" hidden><input type="checkbox" id="cvRotate">
+        <span>Повернуть на 90°<small>Вертикальный ролик займёт весь экран, если держать плату боком.</small></span>
+      </label>
+      <p class="est" id="cvEst">Выберите видео, чтобы увидеть размер результата.</p>
+      <p class="sub-h">Во весь экран плата успевает около 10 кадров в секунду, в 320×240 — 15–20.</p>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cv3">
+      <h2 id="h-cv3"><span class="step">03</span>Конвертация</h2>
+      <div class="row">
+        <button class="primary" id="cvGo" disabled>Конвертировать</button>
+        <button id="cvStop" hidden>Остановить</button>
+      </div>
+      <div class="progress">
+        <div class="track"><div class="fill" id="cvFill"></div></div>
+        <div class="label"><span id="cvText">Выберите видео</span><b id="cvPct">0%</b></div>
+      </div>
+      <div class="cvprev" id="cvPrevBox" hidden><canvas id="cvCanvas" width="320" height="240"></canvas></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cv4" id="cvDone" hidden>
+      <h2 id="h-cv4"><span class="step">04</span>Готовый файл</h2>
+      <dl class="chipinfo c3">
+        <div><dt>Файл</dt><dd id="cvOutName">—</dd></div>
+        <div><dt>Размер</dt><dd id="cvOutSize">—</dd></div>
+        <div><dt>Содержимое</dt><dd id="cvOutInfo">—</dd></div>
+      </dl>
+      <div class="row">
+        <button class="primary" id="cvSend" hidden>Отправить на плату</button>
+        <button id="cvSave">Сохранить файл</button>
+      </div>
+      <div class="progress" id="cvUpBox" hidden>
+        <div class="track"><div class="fill" id="cvUpFill"></div></div>
+        <div class="label"><span id="cvUpText"></span><b id="cvUpPct">0%</b></div>
+      </div>
+      <div id="cvOutNote"></div>
+    </section>
+  </div>
+
   <div class="tabpane" id="tabFiles" role="tabpanel" hidden>
     <section class="panel" aria-labelledby="h-wifi">
       <h2 id="h-wifi"><span class="step">01</span>Связь с платой</h2>
-      <p class="lede" style="margin:0">Включите на плате прошивку «HTML с SD-карты» и режим Wi-Fi — значок справа вверху на её экране.</p>
+      <p class="lede" style="margin:0">Включите на плате прошивку «Медиаплеер» или «HTML с SD-карты» и режим Wi-Fi — значок справа вверху на её экране.</p>
       <div class="row">
         <button class="primary" id="btnWifi">Подключиться к плате</button>
         <button id="btnCheck">Проверить</button>
@@ -937,17 +1033,23 @@ pako/dist/pako.esm.mjs:
 
   // ---------- Вкладка «Файлы на карте» (только в приложении для Android) ----------
   const Net = window.AndroidNet;
-  if (inApp && Net) {
-    $("#tabs").hidden = false;
-    const showTab = (files) => {
-      $("#tabFlash").hidden = files;
-      $("#tabFiles").hidden = !files;
-      $("#tabBtnFlash").setAttribute("aria-selected", String(!files));
-      $("#tabBtnFiles").setAttribute("aria-selected", String(files));
-      if (files && !filesLoaded && Net.state() === "bound") refreshFiles();
-    };
-    $("#tabBtnFlash").onclick = () => showTab(false);
-    $("#tabBtnFiles").onclick = () => showTab(true);
+  const hasNet = !!(inApp && Net);
+  const TABS = { flash: ["#tabBtnFlash", "#tabFlash"], conv: ["#tabBtnConv", "#tabConv"], files: ["#tabBtnFiles", "#tabFiles"] };
+  const tabHooks = {};
+  function showTab(name) {
+    for (const k in TABS) {
+      $(TABS[k][1]).hidden = k !== name;
+      $(TABS[k][0]).setAttribute("aria-selected", String(k === name));
+    }
+    if (tabHooks[name]) tabHooks[name]();
+    window.scrollTo(0, 0);
+  }
+  for (const k in TABS) $(TABS[k][0]).onclick = () => showTab(k);
+  let board = null;  // связь с платой по Wi-Fi (только в приложении)
+
+  if (hasNet) {
+    $("#tabBtnFiles").hidden = false;
+    tabHooks.files = () => { if (!filesLoaded && Net.state() === "bound") refreshFiles(); };
 
     let fDir = "/", reqSeq = 0, filesLoaded = false, openRow = null;
     const reqs = new Map();
@@ -970,11 +1072,13 @@ pako/dist/pako.esm.mjs:
 
     window.__androidNet = {
       onResponse(id, code, body) { const r = reqs.get(id); if (r) { reqs.delete(id); r({ code, body }); } },
+      onSaved(ok, msg) { if (window.__cvSaved) window.__cvSaved(ok, msg); },
       onWifi(ok, msg) {
         if (ok) { setWifi("ok", "Подключено к сети платы"); refreshFiles(); }
         else { setWifi("err", "Нет связи", msg, "err"); setConnected(false); }
       },
       onUpload(i, n, name, sent, total, state, error) {
+        if (window.__cvUpload && window.__cvUpload(i, n, name, sent, total, state, error)) return;
         const box = $("#upBox");
         if (state === "cancel") { box.hidden = true; return; }
         box.hidden = false;
@@ -1131,7 +1235,295 @@ pako/dist/pako.esm.mjs:
       try { await api("POST", "/__api/mkdir?path=" + encodeURIComponent(joinPath(fDir, name))); $("#mkdirBox").hidden = true; refreshFiles(); }
       catch (e) { setWifi("err", "Ошибка", e.message, "err"); }
     };
+    board = { host, api, refresh: () => { filesLoaded = false; if (!$("#tabFiles").hidden) refreshFiles(); } };
   }
+
+  // ---------- Вкладка «Конвертер видео»: MP4 → AVI (MJPEG + PCM) для прошивки «Медиаплеер» ----------
+  (function () {
+    const v = $("#cvVideo"), cvs = $("#cvCanvas"), ctx = cvs.getContext("2d");
+    let file = null, srcUrl = null, running = false, stopReq = false, result = null, staged = false, upActive = false;
+    const AUDIO_RATE = 22050, AUDIO_LEAD = 0.5;  // звук идёт в файле на полсекунды впереди кадров
+    const fmtDur = (t) => { t = Math.round(t); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(s).padStart(2, "0"); };
+    const note = (el, text, cls) => { if (!text) { el.innerHTML = ""; el.hidden = true; return; } el.innerHTML = `<div class="notice ${cls || ""}"><p></p></div>`; el.querySelector("p").textContent = text; el.hidden = false; };
+    const setProg = (p, text) => { $("#cvFill").style.width = (p * 100).toFixed(1) + "%"; $("#cvPct").textContent = Math.round(p * 100) + "%"; if (text) $("#cvText").textContent = text; };
+
+    function geometry() {
+      const box = { 240: [240, 180], 320: [320, 240], 480: [480, 320] }[$("#cvSize").value];
+      let sw = v.videoWidth, sh = v.videoHeight;
+      const rot = $("#cvRotate").checked && !$("#cvRotateBox").hidden;
+      if (rot) [sw, sh] = [sh, sw];
+      const k = Math.min(box[0] / sw, box[1] / sh, 1);
+      const w = Math.max(16, Math.round(sw * k / 2) * 2), h = Math.max(16, Math.round(sh * k / 2) * 2);
+      return { w, h, rot };
+    }
+    function estimate() {
+      if (!file || !v.duration) return;
+      const g = geometry(), fps = +$("#cvFps").value, q = +$("#cvQ").value;
+      const bpp = q < 0.7 ? 0.11 : q < 0.8 ? 0.15 : 0.24;  // байт на пиксель JPEG, по опыту
+      const bytes = v.duration * (fps * g.w * g.h * bpp + ($("#cvAudio").checked ? AUDIO_RATE * 2 : 0));
+      $("#cvEst").textContent = `Итог: ${g.w}×${g.h}, ${fps} кадр/с, ${Math.round(v.duration * fps)} кадров, примерно ${size(Math.round(bytes))}`;
+    }
+    ["#cvSize", "#cvFps", "#cvQ", "#cvAudio", "#cvRotate"].forEach((s) => $(s).addEventListener("change", estimate));
+
+    function pick(f) {
+      if (!f || running) return;
+      file = f;
+      if (srcUrl) URL.revokeObjectURL(srcUrl);
+      srcUrl = URL.createObjectURL(f);
+      $("#cvGo").disabled = true;
+      $("#cvDone").hidden = true;
+      note($("#cvSrcNote"), "");
+      setProg(0, "Открываю видео…");
+      v.onloadedmetadata = () => {
+        $("#cvSrc").hidden = false;
+        $("#cvName").textContent = f.name;
+        $("#cvDur").textContent = isFinite(v.duration) ? fmtDur(v.duration) : "—";
+        $("#cvRes").textContent = v.videoWidth ? `${v.videoWidth}×${v.videoHeight}` : "нет видео";
+        $("#cvRotateBox").hidden = !(v.videoHeight > v.videoWidth);
+        if (!v.videoWidth || !isFinite(v.duration)) {
+          note($("#cvSrcNote"), "В этом файле не нашлось видеодорожки, которую умеет показать браузер.", "err");
+          setProg(0, "Выберите другое видео");
+          return;
+        }
+        if (f.size > 400 * 1024 * 1024) note($("#cvSrcNote"), "Большой файл: звук может не извлечься из-за нехватки памяти. Тогда выключите «Со звуком» или обрежьте ролик.");
+        $("#cvGo").disabled = false;
+        setProg(0, "Готово к конвертации");
+        estimate();
+      };
+      v.onerror = () => {
+        $("#cvSrc").hidden = true;
+        note($("#cvSrcNote"), "Браузер не смог открыть это видео. Попробуйте другой файл или переведите его на компьютере (команда ffmpeg в описании репозитория).", "err");
+        setProg(0, "Не удалось открыть видео");
+      };
+      v.src = srcUrl;
+    }
+    $("#cvDrop").onclick = () => $("#cvInput").click();
+    $("#cvDrop").onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#cvInput").click(); } };
+    $("#cvInput").onchange = (e) => { pick(e.target.files[0]); e.target.value = ""; };
+    $("#cvDrop").addEventListener("dragover", (e) => { e.preventDefault(); $("#cvDrop").classList.add("over"); });
+    $("#cvDrop").addEventListener("dragleave", () => $("#cvDrop").classList.remove("over"));
+    $("#cvDrop").addEventListener("drop", (e) => { e.preventDefault(); $("#cvDrop").classList.remove("over"); pick(e.dataTransfer.files[0]); });
+
+    function seek(t) {
+      return new Promise((resolve, reject) => {
+        if (Math.abs(v.currentTime - t) < 1e-4 && v.readyState >= 2) { resolve(); return; }
+        const done = () => { clearTimeout(to); v.removeEventListener("seeked", done); resolve(); };
+        const to = setTimeout(() => { v.removeEventListener("seeked", done); v.readyState >= 2 ? resolve() : reject(new Error("видео не перематывается")); }, 8000);
+        v.addEventListener("seeked", done);
+        v.currentTime = t;
+      });
+    }
+    const toJpeg = (q) => new Promise((res, rej) => cvs.toBlob((b) => (b ? res(b) : rej(new Error("не удалось сжать кадр"))), "image/jpeg", q));
+
+    async function extractAudio(f) {
+      const buf = await f.arrayBuffer();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ac = new AC();
+      let dec;
+      try { dec = await new Promise((res, rej) => { const p = ac.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); }); }
+      finally { try { ac.close(); } catch {} }
+      const off = new OfflineAudioContext(1, Math.max(1, Math.ceil(dec.duration * AUDIO_RATE)), AUDIO_RATE);
+      const src = off.createBufferSource();
+      src.buffer = dec;
+      src.connect(off.destination);
+      src.start();
+      const out = (await off.startRendering()).getChannelData(0);
+      const pcm = new Int16Array(out.length);
+      for (let i = 0; i < out.length; i++) { const x = Math.round(out[i] * 32767); pcm[i] = x > 32767 ? 32767 : x < -32768 ? -32768 : x; }
+      return pcm;
+    }
+
+    // AVI: RIFF/hdrl/movi/idx1; кадры '00dc' (JPEG), звук '01wb' (PCM 16 бит моно)
+    function buildAvi(o) {
+      const n = o.frames.length, hasA = !!o.pcm, enc = new TextEncoder();
+      const parts = [], idx = [];
+      const hdr = (id, len) => { const b = new Uint8Array(8); b.set(enc.encode(id)); new DataView(b.buffer).setUint32(4, len, true); return b; };
+      let off = 4, maxV = 0, maxA = 0;
+      const lead = Math.round(AUDIO_LEAD * o.rate);
+      const pushAudio = (a0, a1) => {
+        a0 = Math.min(a0, o.pcm.length); a1 = Math.min(a1, o.pcm.length);
+        if (a1 <= a0) return;
+        const len = (a1 - a0) * 2;
+        parts.push(hdr("01wb", len), new Uint8Array(o.pcm.buffer, o.pcm.byteOffset + a0 * 2, len));
+        idx.push(["01wb", 0x10, off, len]);
+        off += 8 + len;
+        maxA = Math.max(maxA, len);
+      };
+      const at = (i) => lead + Math.round(i * o.rate / o.fps);
+      if (hasA) pushAudio(0, lead);
+      for (let i = 0; i < n; i++) {
+        const vs = o.frames[i].size;
+        parts.push(hdr("00dc", vs), o.frames[i]);
+        if (vs & 1) parts.push(new Uint8Array(1));
+        idx.push(["00dc", 0x10, off, vs]);
+        off += 8 + vs + (vs & 1);
+        maxV = Math.max(maxV, vs);
+        if (hasA) pushAudio(at(i), i === n - 1 ? o.pcm.length : at(i + 1));
+      }
+      const moviSize = off;
+      const ix = new DataView(new ArrayBuffer(16 * idx.length));
+      idx.forEach((e, k) => { for (let j = 0; j < 4; j++) ix.setUint8(k * 16 + j, e[0].charCodeAt(j)); ix.setUint32(k * 16 + 4, e[1], true); ix.setUint32(k * 16 + 8, e[2], true); ix.setUint32(k * 16 + 12, e[3], true); });
+
+      const strlV = 4 + 64 + 48, strlA = 4 + 64 + 26;
+      const hdrl = 4 + 64 + (8 + strlV) + (hasA ? 8 + strlA : 0);
+      const head = new DataView(new ArrayBuffer(12 + 8 + hdrl + 12));
+      let p = 0;
+      const cc = (s) => { for (let j = 0; j < 4; j++) head.setUint8(p++, s.charCodeAt(j)); };
+      const u32 = (x) => { head.setUint32(p, x >>> 0, true); p += 4; };
+      const u16 = (x) => { head.setUint16(p, x, true); p += 2; };
+      const total = 4 + (8 + hdrl) + (8 + moviSize) + (8 + ix.byteLength);
+      cc("RIFF"); u32(total); cc("AVI ");
+      cc("LIST"); u32(hdrl); cc("hdrl");
+      cc("avih"); u32(56);
+      u32(Math.round(1e6 / o.fps)); u32((maxV + (hasA ? o.rate * 2 / o.fps : 0)) * o.fps); u32(0); u32(0x10 | 0x100);
+      u32(n); u32(0); u32(hasA ? 2 : 1); u32(maxV + 8); u32(o.w); u32(o.h); u32(0); u32(0); u32(0); u32(0);
+      cc("LIST"); u32(strlV); cc("strl");
+      cc("strh"); u32(56); cc("vids"); cc("MJPG"); u32(0); u16(0); u16(0); u32(0); u32(1); u32(o.fps); u32(0); u32(n); u32(maxV); u32(0xffffffff); u32(0); u16(0); u16(0); u16(o.w); u16(o.h);
+      cc("strf"); u32(40); u32(40); u32(o.w); u32(o.h); u16(1); u16(24); cc("MJPG"); u32(o.w * o.h * 3); u32(0); u32(0); u32(0); u32(0);
+      if (hasA) {
+        cc("LIST"); u32(strlA); cc("strl");
+        cc("strh"); u32(56); cc("auds"); u32(0); u32(0); u16(0); u16(0); u32(0); u32(1); u32(o.rate); u32(0); u32(o.pcm.length); u32(maxA); u32(0xffffffff); u32(2); u16(0); u16(0); u16(0); u16(0);
+        cc("strf"); u32(18); u16(1); u16(1); u32(o.rate); u32(o.rate * 2); u16(2); u16(16); u16(0);
+      }
+      cc("LIST"); u32(moviSize); cc("movi");
+      return new Blob([head.buffer, ...parts, hdr("idx1", ix.byteLength), ix.buffer], { type: "video/x-msvideo" });
+    }
+
+    async function convert() {
+      running = true; stopReq = false; result = null; staged = false;
+      $("#cvGo").disabled = true; $("#cvStop").hidden = false; $("#cvDone").hidden = true;
+      ["#cvSize", "#cvFps", "#cvQ", "#cvAudio", "#cvRotate"].forEach((s) => ($(s).disabled = true));
+      const fps = +$("#cvFps").value, q = +$("#cvQ").value, g = geometry(), dur = v.duration;
+      const n = Math.max(1, Math.floor(dur * fps + 1e-6));
+      let pcm = null, audioNote = "";
+      try {
+        if ($("#cvAudio").checked) {
+          setProg(0, "Извлекаю звук…");
+          try { pcm = await extractAudio(file); }
+          catch (e) { audioNote = "Звуковой дорожки нет или браузер не смог её прочитать — видео будет без звука."; }
+          if (pcm && !pcm.some((x) => x !== 0)) { pcm = null; audioNote = "В ролике нет звука — файл сделан без звуковой дорожки."; }
+        }
+        cvs.width = g.w; cvs.height = g.h;
+        $("#cvPrevBox").hidden = false;
+        const frames = [];
+        const t0 = performance.now();
+        for (let i = 0; i < n; i++) {
+          if (stopReq) throw new Error("stop");
+          await seek(Math.min(i / fps, Math.max(0, dur - 0.01)));
+          ctx.fillStyle = "#000";
+          ctx.fillRect(0, 0, g.w, g.h);
+          if (g.rot) { ctx.save(); ctx.translate(g.w, 0); ctx.rotate(Math.PI / 2); ctx.drawImage(v, 0, 0, g.h, g.w); ctx.restore(); }
+          else ctx.drawImage(v, 0, 0, g.w, g.h);
+          frames.push(await toJpeg(q));
+          const el = (performance.now() - t0) / 1000, left = el / (i + 1) * (n - i - 1);
+          setProg((i + 1) / n, `Кадр ${i + 1} из ${n}` + (i > 5 ? ` · осталось ~${fmtDur(left)}` : ""));
+        }
+        setProg(1, "Собираю файл…");
+        const blob = buildAvi({ w: g.w, h: g.h, fps, frames, pcm, rate: AUDIO_RATE });
+        const name = (file.name.replace(/\.[^.]+$/, "") || "video").replace(/[\\/:*?"<>|]+/g, "_").slice(0, 60) + ".avi";
+        result = { blob, name };
+        $("#cvOutName").textContent = name;
+        $("#cvOutSize").textContent = size(blob.size);
+        $("#cvOutInfo").textContent = `${g.w}×${g.h}, ${fps} кадр/с, ${fmtDur(n / fps)}, ` + (pcm ? "со звуком" : "без звука");
+        $("#cvSend").hidden = !hasNet;
+        $("#cvUpBox").hidden = true;
+        note($("#cvOutNote"), [audioNote, hasNet
+          ? "Включите на плате прошивку «Медиаплеер» или «HTML с SD-карты» и Wi-Fi на ней, затем нажмите «Отправить на плату». Можно и просто сохранить файл и скопировать его на карту."
+          : "Скопируйте файл на microSD и вставьте её в плату с прошивкой «Медиаплеер»."].filter(Boolean).join(" "));
+        $("#cvDone").hidden = false;
+        setProg(1, "Готово: " + name);
+        $("#cvDone").scrollIntoView({ behavior: "smooth", block: "start" });
+      } catch (e) {
+        setProg(0, e.message === "stop" ? "Остановлено" : "Ошибка: " + e.message);
+      } finally {
+        running = false;
+        $("#cvGo").disabled = !file; $("#cvStop").hidden = true;
+        ["#cvSize", "#cvFps", "#cvQ", "#cvAudio", "#cvRotate"].forEach((s) => ($(s).disabled = false));
+      }
+    }
+    $("#cvGo").onclick = convert;
+    $("#cvStop").onclick = () => (stopReq = true);
+
+    // ---- выдача результата
+    const upProg = (p, text) => { $("#cvUpBox").hidden = false; $("#cvUpFill").style.width = (p * 100).toFixed(1) + "%"; $("#cvUpPct").textContent = Math.round(p * 100) + "%"; $("#cvUpText").textContent = text; };
+    async function stage() {  // в приложении файл передаётся в Android кусками по 384 КБ
+      if (staged) return;
+      const b = result.blob, CH = 384 * 1024;
+      let r = Net.stageBegin(result.name);
+      if (r) throw new Error(r);
+      for (let o = 0; o < b.size; o += CH) {
+        const u = new Uint8Array(await b.slice(o, o + CH).arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < u.length; i += 0x8000) bin += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+        r = Net.stageChunk(btoa(bin));
+        if (r) throw new Error(r);
+        upProg(Math.min(1, (o + CH) / b.size) * 0.3, "Подготовка файла…");
+      }
+      r = Net.stageEnd();
+      if (r) throw new Error(r);
+      staged = true;
+    }
+    function busyOut(b) { $("#cvSend").disabled = b; $("#cvSave").disabled = b; }
+
+    $("#cvSave").onclick = async () => {
+      if (!result) return;
+      if (!hasNet) {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(result.blob);
+        a.download = result.name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+        return;
+      }
+      busyOut(true);
+      try { await stage(); $("#cvUpBox").hidden = true; Net.saveStaged(); }
+      catch (e) { busyOut(false); note($("#cvOutNote"), "Не удалось подготовить файл: " + e.message, "err"); }
+    };
+    window.__cvSaved = (ok, msg) => {
+      busyOut(false);
+      if (ok) note($("#cvOutNote"), "Файл сохранён в память телефона.");
+      else if (msg) note($("#cvOutNote"), "Не удалось сохранить: " + msg, "err");
+    };
+
+    $("#cvSend").onclick = async () => {
+      if (!result || !board) return;
+      if (Net.state() === "none" && !Net.useCurrentWifi()) {
+        note($("#cvOutNote"), "Телефон не связан с платой. Откройте вкладку «Файлы на карте» и нажмите «Подключиться к плате», затем вернитесь сюда.", "err");
+        return;
+      }
+      busyOut(true);
+      try {
+        await stage();
+        upProg(0.3, "Проверяю связь с платой…");
+        let info;
+        try { info = await board.api("GET", "/__api/info"); }
+        catch (e) { throw new Error(e.message + " Подключиться можно на вкладке «Файлы на карте»."); }
+        if (!info.card) throw new Error("На плате не найдена SD-карта.");
+        if (info.total && info.total - info.used < result.blob.size + 65536) throw new Error("На карте не хватает места: нужно " + size(result.blob.size) + ", свободно " + size(info.total - info.used) + ".");
+        upActive = true;
+        upProg(0.3, "Отправляю на плату…");
+        Net.uploadStaged("http://" + board.host() + "/__upload?json=1&dir=" + encodeURIComponent("/"));
+      } catch (e) {
+        busyOut(false);
+        $("#cvUpBox").hidden = true;
+        note($("#cvOutNote"), e.message, "err");
+      }
+    };
+    window.__cvUpload = (i, n, name, sent, total, state, error) => {
+      if (!upActive) return false;
+      if (state === "progress") upProg(0.3 + 0.7 * (total > 0 ? sent / total : 0), `Отправляю на плату… ${size(sent)} из ${size(total)}`);
+      else if (state === "error" || state === "cancel") { upActive = false; busyOut(false); $("#cvUpBox").hidden = true; note($("#cvOutNote"), "Не удалось отправить: " + (error || "отменено"), "err"); }
+      else if (state === "done") {
+        upActive = false; busyOut(false);
+        upProg(1, "Файл на карте");
+        note($("#cvOutNote"), `«${result.name}» лежит в корне карты. На плате в «Медиаплеере» он появится в списке сразу — нажмите на него, чтобы смотреть.`);
+        board.refresh();
+      }
+      return true;
+    };
+  })();
 
   renderEnv();
   updateUI();
