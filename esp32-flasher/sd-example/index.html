@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>HTML с SD-карты</title>
+<style>
+body { background:#fdfcf8; color:#222 }
+h1 { color:#7b1fa2 }
+.tip { background:#f3e8fb; padding:10px; border-radius:10px }
+.small { color:#777; font-size:13px }
+a { color:#8e24aa }
+</style></head><body>
+<h1>HTML с SD-карты</h1>
+<p>Эта страница лежит на карте как <code>index.html</code> и открывается сама при включении платы. Прокручивайте пальцем, нажимайте на ссылки.</p>
+<div class="tip">Положите на карту свои <b>.html</b>, <b>.txt</b>, <b>.jpg</b> и <b>.png</b>. Значок <b>‹</b> вверху — назад, кнопка BOOT — список файлов.</div>
+
+<h2>Что умеет экран платы</h2>
+<ul>
+<li><b>Жирный</b>, <i>курсив</i>, <u>подчёркнутый</u>, <s>зачёркнутый</s> текст и <code>код</code></li>
+<li>Заголовки, списки, таблицы, цитаты и блоки кода</li>
+<li>Картинки JPEG и PNG, в том числе с прозрачностью</li>
+<li>CSS: цвета, фон, выравнивание, размер шрифта, отступы, скругления</li>
+<li>Ссылки между страницами и на разделы: <a href="#slides">к слайд-шоу ↓</a></li>
+<li>Кодировки UTF-8 и windows-1251: <a href="old/win.htm">старая страница</a></li>
+</ul>
+
+<h2>Картинки</h2>
+<img src="img/photo.jpg" alt="Закат">
+<p class="small" style="text-align:center">JPEG 800×450, уменьшен под ширину экрана</p>
+<p><img src="img/logo.png" width="56"> PNG с прозрачностью прямо в строке текста.</p>
+
+<h2>Таблица</h2>
+<table><tr><th>Плата</th><th>Экран</th><th>Тач</th></tr>
+<tr><td>CYD 2.4″</td><td>320×240</td><td>резистивный</td></tr>
+<tr><td>Waveshare 3.5″</td><td>480×320</td><td bgcolor="#e8f5e9">ёмкостный</td></tr></table>
+
+<blockquote>Простота — залог надёжности.</blockquote>
+<pre>&lt;meta http-equiv="refresh"
+      content="4; url=2.html"&gt;</pre>
+
+<h2 id="slides">Слайд-шоу</h2>
+<p>Тег <code>meta refresh</code> сам переключает страницы — так они «проигрываются» без касаний. Полоска под заголовком показывает время до следующего слайда.</p>
+<p><a href="slides/1.html">▸ Запустить слайд-шоу</a></p>
+<p><a href="slides/demo-js.html">Пример страницы с JavaScript</a></p>
+
+<h2>Страницы с JavaScript</h2>
+<p>На экране платы JavaScript не выполняется. Нажмите значок Wi-Fi справа вверху: плата раздаст файлы с карты, и телефон откроет их в своём браузере со всеми скриптами и анимацией. Там же можно загрузить новые файлы на карту.</p>
+<p class="small">Чтобы плата подключалась к домашней сети, положите на карту файл <code>wifi.txt</code>: в первой строке имя сети, во второй — пароль.</p>
+<hr>
+<p class="small">Конец страницы.</p>
+</body></html>

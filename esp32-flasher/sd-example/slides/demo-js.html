@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Часы на JavaScript</title></head>
+<body style="background:#111;color:#eee;font-family:sans-serif;text-align:center">
+<h1 id="t">--:--:--</h1><p>Эти часы идут только в браузере телефона (режим Wi-Fi).</p>
+<script>setInterval(()=>{document.getElementById('t').textContent=new Date().toLocaleTimeString()},1000)</script>
+</body></html>
