@@ -276,7 +276,11 @@ a { color: var(--copper); }
     <label class="check" for="optMonitor"><input type="checkbox" id="optMonitor" checked>
       <span>После записи открыть монитор порта<small>Плата перезапустится, и вы увидите её вывод Serial на 115 200.</small></span>
     </label>
-    <div class="row"><button class="primary" id="btnFlash" disabled>Прошить</button></div>
+    <div class="row">
+      <button class="primary" id="btnFlash" disabled>Прошить</button>
+      <button class="danger" id="btnErase" disabled title="Стереть всю флеш-память платы">Очистить память платы</button>
+    </div>
+    <p class="sub-h" id="eraseHint" hidden>Сотрёт всё: программу, настройки, сохранённый Wi-Fi и Bluetooth-наушники. SD-карту не трогает. Нажмите ещё раз, чтобы подтвердить.</p>
     <div class="progress">
       <div class="track"><div class="fill" id="fill"></div></div>
       <div class="label"><span id="progText">Выберите порт и добавьте файл</span><b id="progPct">0%</b></div>
@@ -863,6 +867,7 @@ pako/dist/pako.esm.mjs:
     const can = !!port && !busy;
     $("#btnFlash").disabled = !can || !files.length || errors.size > 0;
     $("#btnProbe").disabled = !can;
+    $("#btnErase").disabled = !can;
     $("#btnMon").disabled = !port || busy;
     $("#btnReset").disabled = !port || busy;
     $("#btnMon").textContent = monitorOn ? "Закрыть монитор" : "Открыть монитор";
@@ -956,6 +961,46 @@ pako/dist/pako.esm.mjs:
     await closeTransport();
     setBusy(false);
     if (ok && $("#optMonitor").checked) startMonitor(true);
+  };
+
+  // ---------- Очистка памяти платы ----------
+  let eraseArmed = null;
+  function disarmErase() {
+    clearTimeout(eraseArmed); eraseArmed = null;
+    $("#btnErase").textContent = "Очистить память платы";
+    $("#eraseHint").hidden = true;
+  }
+  $("#btnErase").onclick = async () => {
+    if (!eraseArmed) {  // первое нажатие — только предупреждение
+      $("#btnErase").textContent = "Да, стереть всё";
+      $("#eraseHint").hidden = false;
+      eraseArmed = setTimeout(disarmErase, 6000);
+      return;
+    }
+    disarmErase();
+    setBusy(true);
+    await stopMonitor();
+    let tick = null, done = [0, ""];
+    try {
+      const loader = await openLoader();
+      const mb = parseInt($("#ciFlash").textContent) || 4;
+      const est = Math.max(8, mb * 2.8) * 1000, t0 = performance.now();  // примерно 3 с на мегабайт
+      tick = setInterval(() => {
+        const el = performance.now() - t0;
+        setProgress(Math.min(0.95, el / est), `Стираю всю память (${mb} МБ)… ${Math.round(el / 1000)} с`);
+      }, 250);
+      log(`Стираю всю флеш-память (${mb} МБ). Это займёт до минуты, не отключайте плату.\n`, "sys");
+      await loader.eraseFlash();
+      clearInterval(tick); tick = null;
+      await loader.after("hard_reset");
+      const sec = ((performance.now() - t0) / 1000).toFixed(1);
+      done = [1, `Память очищена за ${sec} с`];
+      log(`Память очищена за ${sec} с. Теперь на плате нет программы — экран будет пустым, пока вы не прошьёте её снова.\n`, "ok");
+    } catch (e) { explain(e); done = [0, "Очистить память не удалось"]; }
+    if (tick) clearInterval(tick);
+    await closeTransport();
+    setBusy(false);
+    setProgress(done[0], done[1]);
   };
 
   // ---------- Монитор порта ----------
