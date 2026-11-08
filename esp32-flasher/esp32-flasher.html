@@ -129,17 +129,6 @@ select, input[type="text"] {
 .factions { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 12px 12px 54px; align-items: center; }
 .factions .q { font-size: 13px; color: var(--err); flex-basis: 100%; }
 button.danger { border-color: var(--err); color: var(--err); }
-/* Счётчики нажатий */
-button[data-count]::after {
-  content: attr(data-count); flex: none; min-width: 20px; padding: 3px 6px; margin-left: 2px; border-radius: 999px;
-  font: 600 11px/1 var(--f-mono); text-align: center; background: color-mix(in srgb, currentColor 14%, transparent);
-}
-button.fw { position: relative; }
-button.fw[data-count] { padding-right: 46px; }
-button.fw[data-count]::after { position: absolute; top: 8px; right: 8px; margin: 0; }
-.tabs button[data-count]::after { padding: 2px 5px; }
-.clicks { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 4px 0 24px; color: var(--muted); font-size: 13px; }
-.clicks b { font-family: var(--f-mono); color: var(--ink); }
 .empty { padding: 18px; text-align: center; color: var(--muted); font-size: 14px; }
 .inline-input { display: flex; gap: 8px; flex-wrap: wrap; }
 .inline-input input { flex: 1; min-width: 0; }
@@ -480,11 +469,6 @@ a { color: var(--copper); }
       </div>
       <div class="flist" id="flist"><div class="empty">Подключитесь к плате, чтобы увидеть файлы на карте.</div></div>
     </section>
-  </div>
-
-  <div class="clicks" id="clicksBar">
-    <span>Цифры на кнопках — сколько раз их нажимали в этом браузере. Всего нажатий: <b id="clicksTotal">0</b></span>
-    <button class="ghost" id="btnClicksReset" data-nocount>Сбросить счётчики</button>
   </div>
 </div>
 
@@ -1069,7 +1053,6 @@ pako/dist/pako.esm.mjs:
     for (const item of list) {
       const b = document.createElement("button");
       b.className = "fw";
-      b.dataset.cnt = "fw:" + item.file;
       b.innerHTML = "<b></b><span></span>";
       b.querySelector("b").textContent = item.title;
       b.querySelector("span").textContent = item.board;
@@ -1630,38 +1613,5 @@ pako/dist/pako.esm.mjs:
   updateUI();
   loadCatalog();
   if (!E) err("Не загрузилась библиотека esptool-js.");
-})();
-</script>
-<script>
-// Счётчики нажатий на кнопках: хранятся в этом браузере (localStorage)
-(function () {
-  const KEY = "esp32flasher.clicks";
-  let counts = {};
-  try { counts = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { counts = {}; }
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(counts)); } catch {} };
-  const keyOf = (b) => b.dataset.cnt || (b.id ? "#" + b.id : "t:" + b.textContent.trim().slice(0, 40));
-  const label = (b) => { if (!("nocount" in b.dataset)) b.dataset.count = counts[keyOf(b)] || 0; };
-  const total = () => { const el = document.getElementById("clicksTotal"); if (el) el.textContent = Object.values(counts).reduce((a, n) => a + n, 0); };
-  const labelAll = () => { document.querySelectorAll("button").forEach(label); total(); };
-  // нажатие считается до того, как кнопка сменит текст или станет неактивной
-  document.addEventListener("click", (e) => {
-    const b = e.target.closest && e.target.closest("button");
-    if (!b || b.disabled || "nocount" in b.dataset) return;
-    const k = keyOf(b);
-    counts[k] = (counts[k] || 0) + 1;
-    save();
-    document.querySelectorAll("button").forEach((x) => { if (keyOf(x) === k) label(x); });
-    total();
-  }, true);
-  document.getElementById("btnClicksReset").onclick = () => { counts = {}; save(); labelAll(); };
-  // новые кнопки (каталог, файлы на карте) получают счётчик сразу
-  new MutationObserver((ms) => {
-    for (const m of ms) for (const n of m.addedNodes) {
-      if (n.nodeType !== 1) continue;
-      if (n.tagName === "BUTTON") label(n);
-      if (n.querySelectorAll) n.querySelectorAll("button").forEach(label);
-    }
-  }).observe(document.body, { childList: true, subtree: true });
-  labelAll();
 })();
 </script>
