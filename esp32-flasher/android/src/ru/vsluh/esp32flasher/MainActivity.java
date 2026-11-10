@@ -56,6 +56,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Socket;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -475,10 +476,41 @@ public class MainActivity extends Activity {
         return null;
     }
 
+    static final String VPN_HINT = "На телефоне включён VPN, и он не пускает приложение в сеть платы. "
+            + "Выключите VPN или добавьте «ESP32 Flasher» в исключения VPN (раздельное туннелирование / «приложения без VPN»), затем нажмите «Проверить».";
+
+    static boolean vpnOn(ConnectivityManager cm) {
+        try {
+            for (Network n : cm.getAllNetworks()) {
+                NetworkCapabilities c = cm.getNetworkCapabilities(n);
+                if (c != null && c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return true;
+            }
+        } catch (Exception ignored) { }
+        return false;
+    }
+
+    /**
+     * Соединение с платой через её сеть. Если VPN запрещает привязку к сети платы (EPERM),
+     * пробуем обычное соединение: многие VPN пропускают локальные адреса 192.168.x.x мимо себя.
+     */
+    static HttpURLConnection openBoard(Network n, URL u) throws IOException {
+        if (n != null) {
+            boolean canBind = true;
+            try { Socket s = new Socket(); n.bindSocket(s); s.close(); } catch (IOException e) { canBind = false; }
+            if (canBind) return (HttpURLConnection) n.openConnection(u);
+        }
+        return (HttpURLConnection) u.openConnection();
+    }
+
+    /** Текст ошибки связи с платой; при включённом VPN — с префиксом "VPN:" и подсказкой. */
+    static String boardError(ConnectivityManager cm, Exception e) {
+        String m = String.valueOf(e.getMessage());
+        return vpnOn(cm) ? "VPN: " + VPN_HINT + " (" + m + ")" : m;
+    }
+
     private HttpURLConnection open(String url) throws IOException {
         URL u = new URL(url);
-        Network n = boardNet;
-        HttpURLConnection c = (HttpURLConnection) (n != null ? n.openConnection(u) : u.openConnection());
+        HttpURLConnection c = openBoard(boardNet, u);
         c.setConnectTimeout(5000);
         c.setReadTimeout(20000);
         c.setUseCaches(false);
@@ -651,7 +683,7 @@ public class MainActivity extends Activity {
                         String body = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
                         js("__androidNet.onResponse(" + id + "," + code + "," + q(body) + ")");
                     } catch (Exception e) {
-                        js("__androidNet.onResponse(" + id + ",0," + q(String.valueOf(e.getMessage())) + ")");
+                        js("__androidNet.onResponse(" + id + ",0," + q(boardError(cm, e)) + ")");
                     } finally {
                         if (c != null) c.disconnect();
                     }
@@ -907,6 +939,17 @@ public class MainActivity extends Activity {
                 public void run() {
                     if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
+        }
+
+        /** Настройки VPN — чтобы выключить его или добавить приложение в исключения. */
+        @JavascriptInterface
+        public void openVpnSettings() {
+            ui.post(new Runnable() {
+                public void run() {
+                    try { startActivity(new Intent(android.provider.Settings.ACTION_VPN_SETTINGS)); }
+                    catch (Exception e) { try { startActivity(new Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)); } catch (Exception ignored) { } }
                 }
             });
         }

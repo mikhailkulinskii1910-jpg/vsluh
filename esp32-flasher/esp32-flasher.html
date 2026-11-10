@@ -1241,7 +1241,18 @@ pako/dist/pako.esm.mjs:
       $("#wifiPill").className = "pill " + cls;
       $("#wifiPill").textContent = text;
       const n = $("#wifiNote");
-      if (note) { n.innerHTML = `<div class="notice ${noteCls || ""}"><p></p></div>`; n.querySelector("p").textContent = note; n.hidden = false; }
+      if (note) {
+        n.innerHTML = `<div class="notice ${noteCls || ""}"><p></p></div>`;
+        n.querySelector("p").textContent = note;
+        if (/VPN/.test(note) && window.AndroidApp && AndroidApp.openVpnSettings) {  // кнопка в настройки VPN
+          const b = document.createElement("button");
+          b.textContent = "Открыть настройки VPN";
+          b.style.marginTop = "10px";
+          b.onclick = () => AndroidApp.openVpnSettings();
+          n.querySelector(".notice").appendChild(b);
+        }
+        n.hidden = false;
+      }
       else n.hidden = true;
     }
     function setConnected(on) {
@@ -1286,6 +1297,7 @@ pako/dist/pako.esm.mjs:
     }
     async function api(method, path) {
       const r = await http(method, path);
+      if (r.code === 0 && String(r.body).startsWith("VPN:")) throw new Error(String(r.body).slice(4).trim());
       if (r.code === 0) throw new Error("Плата не отвечает (" + r.body + "). Проверьте, что режим Wi-Fi на плате включён.");
       let j;
       try { j = JSON.parse(r.body); }

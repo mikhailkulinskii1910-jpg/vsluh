@@ -204,7 +204,10 @@ public class CastActivity extends Activity {
                         ? "Нажимайте прямо на экране платы; свайп за край снимка листает страницу, двойное касание — увеличение."
                         : "Двойное касание на плате — увеличение.");
                 } catch (Exception e) {
-                    msg = "Плата не ответила (" + e.getMessage() + "). Проверьте, что на плате включён Wi-Fi (Настройки → «Wi-Fi: экран телефона»), а телефон подключён к ней.";
+                    ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+                    msg = MainActivity.vpnOn(cm)
+                        ? MainActivity.VPN_HINT + " (" + e.getMessage() + ")"
+                        : "Плата не ответила (" + e.getMessage() + "). Проверьте, что на плате включён Wi-Fi (Настройки → «Wi-Fi: экран телефона»), а телефон подключён к ней.";
                 }
                 final String m = msg;
                 ui.post(new Runnable() {
@@ -220,9 +223,7 @@ public class CastActivity extends Activity {
 
     private void post(byte[] jpg) throws Exception {
         String boundary = "----esp32cast" + System.currentTimeMillis();
-        URL u = new URL("http://" + host + "/__show");
-        Network n = MainActivity.sBoardNet;
-        HttpURLConnection c = (HttpURLConnection) (n != null ? n.openConnection(u) : u.openConnection());
+        HttpURLConnection c = MainActivity.openBoard(MainActivity.sBoardNet, new URL("http://" + host + "/__show"));
         c.setConnectTimeout(5000);
         c.setReadTimeout(15000);
         c.setDoOutput(true);
@@ -247,9 +248,7 @@ public class CastActivity extends Activity {
     private boolean remoteRecent() { return SystemClock.uptimeMillis() - lastRemote < 15000; }
 
     private HttpURLConnection boardConn(String path) throws Exception {
-        URL u = new URL("http://" + host + path);
-        Network n = MainActivity.sBoardNet;
-        HttpURLConnection c = (HttpURLConnection) (n != null ? n.openConnection(u) : u.openConnection());
+        HttpURLConnection c = MainActivity.openBoard(MainActivity.sBoardNet, new URL("http://" + host + path));
         c.setConnectTimeout(3000);
         c.setReadTimeout(4000);
         c.setUseCaches(false);
