@@ -16,14 +16,27 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
+
+    /** Обязательное разрешение: как проверить и как запросить. */
+    private class Need(
+        val title: String,
+        val granted: () -> Boolean,
+        val request: () -> Unit,
+    )
 
     private lateinit var status: TextView
     private lateinit var toggle: Button
     private lateinit var permissions: LinearLayout
     private lateinit var crashBox: LinearLayout
     private lateinit var crashText: TextView
+
+    /** Разрешения, которые уже запрашивали в этом запуске (чтобы не открывать одно и то же снова и снова). */
+    private val asked = mutableSetOf<String>()
+    /** Идёт ли по очереди запрос разрешений. */
+    private var flowActive = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -70,37 +83,90 @@ class MainActivity : Activity() {
             })
         }
 
+        val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
+        val match = LinearLayout.LayoutParams.MATCH_PARENT
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(dp(24), dp(24), dp(24), dp(24))
             addView(status)
-            addView(toggle, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(120))
-                .apply { topMargin = dp(24) })
-            addView(hint, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-                .apply { topMargin = dp(16) })
+            addView(toggle, LinearLayout.LayoutParams(match, dp(120)).apply { topMargin = dp(24) })
+            addView(hint, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(16) })
             addView(permHeader)
-            addView(permissions, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-            addView(crashBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            addView(permissions, LinearLayout.LayoutParams(match, wrap))
+            addView(crashBox, LinearLayout.LayoutParams(match, wrap))
         }
         setContentView(ScrollView(this).apply { addView(content) })
-
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
-        }
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+        // Вернулись из системного окна разрешения — переходим к следующему.
+        if (flowActive) continueFlow()
+    }
+
+    /** Обязательные разрешения в порядке запроса. */
+    private fun needs(): List<Need> {
+        val pm = getSystemService(PowerManager::class.java)
+        val nm = getSystemService(NotificationManager::class.java)
+        val pkg = "package:$packageName"
+        return buildList {
+            add(Need(
+                title = "Уведомления",
+                granted = { nm.areNotificationsEnabled() },
+                request = {
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+                    } else {
+                        openSettings(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    }
+                },
+            ))
+            add(Need(
+                title = "Поверх других приложений",
+                granted = { Settings.canDrawOverlays(this@MainActivity) },
+                request = { openSettings(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse(pkg))) },
+            ))
+            if (Build.VERSION.SDK_INT >= 34) {
+                add(Need(
+                    title = "Полноэкранные уведомления",
+                    granted = { nm.canUseFullScreenIntent() },
+                    request = {
+                        openSettings(Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", Uri.parse(pkg)))
+                    },
+                ))
+            }
+            add(Need(
+                title = "Без ограничений батареи",
+                granted = { pm.isIgnoringBatteryOptimizations(packageName) },
+                request = { openSettings(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse(pkg))) },
+            ))
+        }
+    }
+
+    /** Запрашивает следующее невыданное разрешение, которое ещё не запрашивали. */
+    private fun continueFlow() {
+        val next = needs().firstOrNull { !it.granted() && it.title !in asked }
+        if (next == null) {
+            flowActive = false
+            return
+        }
+        asked += next.title
+        next.request()
     }
 
     private fun onToggle() {
         if (isAlarmEnabled(this)) {
             setAlarmEnabled(this, false)
             stopService(Intent(this, AlarmService::class.java))
+        } else if (needs().any { !it.granted() }) {
+            // Без разрешений сигнализация работать не будет — запрашиваем их заново.
+            Toast.makeText(this, "Сначала выдайте все разрешения", Toast.LENGTH_LONG).show()
+            asked.clear()
+            flowActive = true
+            continueFlow()
         } else {
             setAlarmEnabled(this, true)
             startForegroundService(Intent(this, AlarmService::class.java))
@@ -115,26 +181,13 @@ class MainActivity : Activity() {
         toggle.text = if (on) "ВЫКЛЮЧИТЬ" else "ВКЛЮЧИТЬ"
         toggle.setBackgroundColor(if (on) Color.DKGRAY else Color.rgb(200, 0, 0))
 
-        val pm = getSystemService(PowerManager::class.java)
-        val nm = getSystemService(NotificationManager::class.java)
         val pkg = "package:$packageName"
         permissions.removeAllViews()
-        addRow("Поверх других приложений", Settings.canDrawOverlays(this)) {
-            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse(pkg))
+        for (need in needs()) {
+            addRow(need.title, need.granted()) { need.request() }
         }
-        if (Build.VERSION.SDK_INT >= 34) {
-            addRow("Полноэкранные уведомления (окно поверх блокировки)", nm.canUseFullScreenIntent()) {
-                Intent("android.settings.MANAGE_APP_USE_FULL_SCREEN_INTENT", Uri.parse(pkg))
-            }
-        }
-        addRow("Уведомления", nm.areNotificationsEnabled()) {
-            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
-        }
-        addRow("Без ограничений батареи", pm.isIgnoringBatteryOptimizations(packageName)) {
-            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse(pkg))
-        }
-        addRow("Xiaomi: «Показ всплывающих окон» и «Автозапуск» (в настройках приложения)", null) {
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(pkg))
+        addRow("Xiaomi: «Показ всплывающих окон» и «Автозапуск»", null) {
+            openSettings(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse(pkg)))
         }
 
         val crash = crashFile(this)
@@ -147,7 +200,7 @@ class MainActivity : Activity() {
     }
 
     /** ok = true/false — разрешение есть или нет; null — проверить нельзя, только открыть настройки. */
-    private fun addRow(name: String, ok: Boolean?, intent: () -> Intent) {
+    private fun addRow(name: String, ok: Boolean?, action: () -> Unit) {
         val label = TextView(this).apply {
             textSize = 15f
             text = when (ok) {
@@ -165,11 +218,12 @@ class MainActivity : Activity() {
         }
         val button = Button(this).apply {
             text = "Открыть настройки"
-            setOnClickListener { openSettings(intent()) }
+            setOnClickListener { action() }
         }
-        permissions.addView(label, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            .apply { topMargin = dp(10) })
-        permissions.addView(button, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val wrap = LinearLayout.LayoutParams.WRAP_CONTENT
+        val match = LinearLayout.LayoutParams.MATCH_PARENT
+        permissions.addView(label, LinearLayout.LayoutParams(match, wrap).apply { topMargin = dp(10) })
+        permissions.addView(button, LinearLayout.LayoutParams(match, wrap))
     }
 
     private fun openSettings(intent: Intent) {
