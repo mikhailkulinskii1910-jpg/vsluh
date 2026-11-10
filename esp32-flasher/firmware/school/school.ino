@@ -3415,7 +3415,13 @@ static inline uint16_t mix565(uint16_t a, uint16_t b, int t) {  // t: 0 → a, 2
 static inline float clamp01(float v) { return v < 0 ? 0 : (v > 1 ? 1 : v); }
 
 bool surfAlloc(Surface& s, int w, int h) {
+#ifndef HOST_SIM
+  // буферы отрисовки — во внутренней памяти: она в несколько раз быстрее PSRAM
+  s.px = (uint16_t*)heap_caps_malloc((size_t)w * h * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  if (!s.px) s.px = (uint16_t*)malloc((size_t)w * h * 2);
+#else
   s.px = (uint16_t*)malloc((size_t)w * h * 2);
+#endif
   if (!s.px) return false;
   s.cap = w * h;
   s.w = w; s.h = h;
@@ -5808,6 +5814,7 @@ void* jpgFileOpen(const char* name, int32_t* size);  // чтение JPEG пря
 void jpgFileClose(void* h);
 int32_t jpgFileRead(JPEGFILE* f, uint8_t* buf, int32_t len);
 int32_t jpgFileSeek(JPEGFILE* f, int32_t pos);
+void sdForgetFail();                  // следующая попытка открыть карту — сразу, без паузы
 bool sdFormatArmed = false;
 std::string sdMsg;
 
@@ -6115,7 +6122,7 @@ void refTap(int x, int y) {
     if (y < PAGE_TOP) {
       if (y >= 10 && y < 50 && x >= 16 && x < 304) {
         uint8_t want = x < 160 ? R_LIST : R_FILES;
-        if (want != rScr) { rScr = want; scrollY = 0; if (want == R_FILES) filesLoad(fDir); }
+        if (want != rScr) { rScr = want; scrollY = 0; if (want == R_FILES) { sdForgetFail(); filesLoad(fDir); } }
       }
       return;
     }
@@ -6145,10 +6152,11 @@ void refTap(int x, int y) {
         return;
       }
       sdFormatArmed = false;
+      sdForgetFail();
       filesLoad(fDir);
       return;
     }
-    if (fEnts.empty()) { filesLoad(fDir); return; }
+    if (fEnts.empty()) { sdForgetFail(); filesLoad(fDir); return; }
     int i = cy / 52;
     if (i < 0 || i >= (int)fEnts.size() || cy % 52 >= 46) return;
     const FileEnt& e = fEnts[i];
@@ -6269,8 +6277,9 @@ void drawSettings(Surface& s, int top) {
   }
   // о плате
   y = y0 + SP_INFO;
-  std::vector<std::string> ks2, vs;
-  boardInfo(ks2, vs);
+  static std::vector<std::string> ks2, vs;
+  static uint32_t infoT = 0;
+  if (ks2.empty() || nowMs() - infoT > 500) { ks2.clear(); vs.clear(); boardInfo(ks2, vs); infoT = nowMs(); }
   panel(s, 16, y, 288, 30 + 20 * (int)ks2.size() + 10, 16);
   drawText(s, F_SB, 30, y + 26, "О плате", C_WHITE);
   for (size_t i = 0; i < ks2.size(); i++) {
@@ -6683,7 +6692,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.3"
+#define FW_VERSION "1.4"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -6770,15 +6779,24 @@ void applyBacklight() {
 
 // ---------- SD-карта ----------
 bool sdOk = false;
+uint32_t sdFailT = 0;      // когда карта последний раз не ответила: повторяем не чаще раза в 5 с
+uint32_t sdSizeMB = 0;
+void sdForgetFail() { sdFailT = 0; }
 bool sdBegin() {
   if (sdOk && SD.cardType() != CARD_NONE) return true;
   SD.end();
+  // без карты каждая попытка занимает до секунды — не повторяем её на каждом кадре
+  if (!sdOk && sdFailT && millis() - sdFailT < 5000) return false;
   sdOk = SD.begin(PIN_SD_CS, SPI, 20000000) || (SD.end(), SD.begin(PIN_SD_CS, SPI, 4000000));  // медленнее — для капризных карт
+  sdFailT = sdOk ? 0 : (millis() | 1);
+  if (sdOk) sdSizeMB = (uint32_t)(SD.cardSize() >> 20);
   return sdOk;
 }
 bool sdFormat() {  // FatFs форматирует только карту без понятной ей файловой системы (например, exFAT)
   SD.end();
   sdOk = SD.begin(PIN_SD_CS, SPI, 4000000, "/sd", 5, true);
+  sdFailT = sdOk ? 0 : (millis() | 1);
+  if (sdOk) sdSizeMB = (uint32_t)(SD.cardSize() >> 20);
   return sdOk;
 }
 void* jpgFileOpen(const char* name, int32_t* size) {
@@ -6839,7 +6857,8 @@ void boardInfo(std::vector<std::string>& k, std::vector<std::string>& v) {
   k.push_back("Свободно ОЗУ"); snprintf(b, sizeof b, "%u КБ", (unsigned)(ESP.getFreeHeap() >> 10)); v.push_back(b);
   uint32_t up = millis() / 1000;
   k.push_back("Работает"); snprintf(b, sizeof b, "%u ч %02u мин %02u с", (unsigned)(up / 3600), (unsigned)(up / 60 % 60), (unsigned)(up % 60)); v.push_back(b);
-  k.push_back("SD-карта"); if (sdBegin()) snprintf(b, sizeof b, "%u МБ", (unsigned)(SD.cardSize() >> 20)); else snprintf(b, sizeof b, "нет"); v.push_back(b);
+  // карту здесь не опрашиваем: экран рисуется полосами, и опрос на каждой полосе тормозил настройки
+  k.push_back("SD-карта"); if (sdOk) snprintf(b, sizeof b, "%u МБ", (unsigned)sdSizeMB); else snprintf(b, sizeof b, "не найдена"); v.push_back(b);
   k.push_back("Версия прошивки"); v.push_back(FW_VERSION);
 }
 
