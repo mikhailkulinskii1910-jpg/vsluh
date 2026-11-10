@@ -715,6 +715,9 @@ pako/dist/pako.esm.mjs:
     const ok = list.find((d) => d.driver);
     el.className = "pill " + (ok ? "ok" : list.length ? "err" : "warn");
     el.textContent = ok ? "USB: " + ok.name : list.length ? "USB: " + list[0].name + " — не USB-UART" : "USB: плата не подключена";
+    let tip = $("#otgTip");  // напоминание про OTG, пока плата не найдена
+    if (!tip) { tip = document.createElement("div"); tip.id = "otgTip"; tip.className = "notice"; tip.style.marginTop = "10px"; tip.innerHTML = "<p>Перед подключением платы включите <b>OTG</b>: Настройки → «Другие способы подключения» (или «Подключение и общий доступ») → OTG. На многих телефонах он сам выключается через 10 минут.</p>"; el.parentNode.after(tip); }
+    tip.hidden = !!ok;
   }
   window.__onUsbAttach = (name, hasDriver) => {
     updateUsbPill();

@@ -3347,7 +3347,9 @@ uint8_t setTheme = 0;
 bool setSound = false;               // щелчок при нажатии
 bool setFlip = false;                // экран перевёрнут на 180°
 bool setFastSpi = false;             // экран на 80 МГц вместо 40 (вдвое быстрее вывод картинки)
-uint32_t spiConfirmUntil = 0;        // проверка быстрого экрана: до этого времени ждём «Оставить»
+uint32_t spiConfirmUntil = 0;
+int batPct = -1;                     // заряд аккумулятора (−1 — нет аккумулятора или контроллера питания)
+bool batChg = false;                 // идёт зарядка        // проверка быстрого экрана: до этого времени ждём «Оставить»
 bool setArmReset = false;            // «Сбросить настройки» нажата один раз
 
 // Игры
@@ -4822,6 +4824,13 @@ void drawTabBar(Surface& s, int top) {
     else iconGear(s, cx, cy, col);
     textC(s, F_X, (int)cx, o + 46, TAB_NAMES[i], on ? C_WHITE : C_DIM);
   }
+  if (batPct >= 0) {  // заряд аккумулятора в правом верхнем углу панели вкладок
+    float bx = 310, by = o + 10, fh = 11 * batPct / 100.0f;  // вертикальная батарейка справа от вкладок
+    uint16_t c = batChg ? MK565(90, 220, 140) : batPct <= 15 ? C_CLEAR : C_DIM;
+    rrectX(s, bx, by, 8, 15, 2, C_BLACK, C_BLACK, 0, 0, c, 255);
+    rr(s, bx + 2, by - 2, 4, 2, 1, c, 255);
+    if (fh > 0.5f) rr(s, bx + 2, by + 13 - fh, 4, fh, 1, c, 255);
+  }
 }
 void renderTabBar() { renderRegion(TAB_Y, SCREEN_H, drawTabBar); }
 
@@ -6219,8 +6228,8 @@ void setFastScreen(bool on);          // сохранить и перезапу�
 #define SP_SPI 426
 #define SP_WIFI 490
 #define SP_INFO 622
-#define SP_RESET 814
-#define SET_TOTAL 874
+#define SP_RESET 834
+#define SET_TOTAL 894
 #define SL_X 30
 #define SL_W 260
 
@@ -6868,7 +6877,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.7"
+#define FW_VERSION "1.8"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -6885,6 +6894,28 @@ void tcaWrite(uint8_t reg, uint8_t val) {
   Wire.write(reg);
   Wire.write(val);
   Wire.endTransmission();
+}
+// Контроллер питания AXP2101 (I2C 0x34): заряд аккумулятора и зарядка
+#define AXP_ADDR 0x34
+bool axpRead(uint8_t reg, uint8_t& v) {
+  Wire.beginTransmission(AXP_ADDR); Wire.write(reg);
+  if (Wire.endTransmission(false) != 0 || Wire.requestFrom((int)AXP_ADDR, 1) != 1) return false;
+  v = Wire.read(); return true;
+}
+void axpWrite(uint8_t reg, uint8_t v) { Wire.beginTransmission(AXP_ADDR); Wire.write(reg); Wire.write(v); Wire.endTransmission(); }
+bool axpOk = false;
+void batInit() {
+  uint8_t id, r;
+  axpOk = axpRead(0x03, id) && id == 0x4A;  // AXP2101
+  if (!axpOk) return;
+  if (axpRead(0x30, r)) axpWrite(0x30, r | 0x01);  // измерение напряжения батареи
+  if (axpRead(0x18, r)) axpWrite(0x18, r | 0x08);  // счётчик заряда
+}
+void batUpdate() {
+  uint8_t st1, st2, pct;
+  if (!axpOk || !axpRead(0x00, st1) || !axpRead(0x01, st2) || !axpRead(0xA4, pct)) { batPct = -1; return; }
+  batPct = (st1 & 0x08) ? std::min(100, (int)pct) : -1;  // бит 3 — аккумулятор подключён
+  batChg = ((st2 >> 5) & 3) == 1;
 }
 void resetPanelAndTouch() {
   tcaWrite(0x01, 0xFF);
@@ -7035,6 +7066,7 @@ void boardInfo(std::vector<std::string>& k, std::vector<std::string>& v) {
   k.push_back("Работает"); snprintf(b, sizeof b, "%u ч %02u мин %02u с", (unsigned)(up / 3600), (unsigned)(up / 60 % 60), (unsigned)(up % 60)); v.push_back(b);
   // карту здесь не опрашиваем: экран рисуется полосами, и опрос на каждой полосе тормозил настройки
   k.push_back("SD-карта"); if (sdOk) snprintf(b, sizeof b, "%u МБ", (unsigned)sdSizeMB); else snprintf(b, sizeof b, "не найдена"); v.push_back(b);
+  k.push_back("Аккумулятор"); if (batPct >= 0) snprintf(b, sizeof b, "%d%%%s", batPct, batChg ? " · заряжается" : ""); else snprintf(b, sizeof b, "нет"); v.push_back(b);
   k.push_back("Версия прошивки"); v.push_back(FW_VERSION);
 }
 
@@ -7241,6 +7273,7 @@ void setup() {
   gfx->fillScreen(C_BG);
   applyTheme(setTheme);
   if (!allInit()) { Serial.println("Out of memory"); while (true) delay(1000); }
+  batInit(); batUpdate();
   xTaskCreatePinnedToCore(serverTask, "http", 8192, nullptr, 1, nullptr, 0);
   prefs.begin("school", true);
   bool spiTry = prefs.getBool("spiTry", false);
@@ -7360,6 +7393,8 @@ void loop() {
   // автопереход HTML-страниц (<meta http-equiv="refresh">)
   if (curTab == TAB_REF && rScr == R_HTML && !castOn && !tDown && hv::refreshAt && hv::tick()) { htmlSync(); lastActivity = now; renderContent(); }
 
+  static uint32_t batT = 0;  // заряд — раз в 15 с; изменился — обновить значок
+  if (now - batT > 15000) { batT = now; int p = batPct; bool c = batChg; batUpdate(); if ((p != batPct || c != batChg) && !castOn && !spiConfirmUntil) renderTabBar(); }
   // мигание курсора калькулятора
   if (curTab == TAB_CALC && now - lastBlink >= 530) {
     lastBlink = now;
