@@ -225,7 +225,7 @@ a { color: var(--copper); }
   <div class="tabs" id="tabs" role="tablist">
     <button role="tab" id="tabBtnFlash" aria-selected="true" aria-controls="tabFlash">Прошивка</button>
     <button role="tab" id="tabBtnConv" aria-selected="false" aria-controls="tabConv">Конвертер видео</button>
-    <button role="tab" id="tabBtnFiles" aria-selected="false" aria-controls="tabFiles" hidden>Файлы на карте</button>
+    <button role="tab" id="tabBtnFiles" aria-selected="false" aria-controls="tabFiles" hidden>Плата по Wi-Fi</button>
   </div>
 
   <div class="tabpane" id="tabFlash" role="tabpanel">
@@ -445,7 +445,7 @@ a { color: var(--copper); }
   <div class="tabpane" id="tabFiles" role="tabpanel" hidden>
     <section class="panel" aria-labelledby="h-wifi">
       <h2 id="h-wifi"><span class="step">01</span>Связь с платой</h2>
-      <p class="lede" style="margin:0">Включите на плате прошивку «Медиаплеер» или «HTML с SD-карты» и режим Wi-Fi — значок справа вверху на её экране.</p>
+      <p class="lede" style="margin:0">Включите на плате Wi-Fi: в «Медиаплеере» и «HTML с SD-карты» — значок справа вверху, в «Школьном наборе» — Настройки → «Wi-Fi: экран телефона».</p>
       <div class="row">
         <button class="primary" id="btnWifi">Подключиться к плате</button>
         <button id="btnCheck">Проверить</button>
@@ -457,9 +457,16 @@ a { color: var(--copper); }
       <div id="wifiNote" hidden></div>
     </section>
 
-    <section class="panel" aria-labelledby="h-card">
+    <section class="panel" aria-labelledby="h-cast">
+      <h2 id="h-cast"><span class="step">02</span>Экран на плату</h2>
+      <p class="lede" style="margin:0">Откройте любой сайт во встроенном браузере и покажите нужную страницу на экране платы. Работает с прошивкой «Школьный набор». Браузер остаётся в интернете, на плату уходят только снимки страницы.</p>
+      <div class="row"><button class="primary" id="btnCast" disabled>Открыть браузер</button></div>
+      <div id="castNote" hidden></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-card" id="cardPanel">
       <div class="console-head">
-        <h2 id="h-card"><span class="step">02</span>SD-карта</h2>
+        <h2 id="h-card"><span class="step">03</span>SD-карта</h2>
         <button class="ghost" id="btnRefresh" disabled>Обновить</button>
       </div>
       <div id="cardUsage" hidden>
@@ -1278,10 +1285,19 @@ pako/dist/pako.esm.mjs:
       const list = $("#flist");
       list.innerHTML = '<div class="empty">Загружаю список…</div>';
       try {
-        const [info, dir] = await Promise.all([api("GET", "/__api/info"), api("GET", "/__api/list?dir=" + encodeURIComponent(fDir))]);
+        const info = await api("GET", "/__api/info");
         filesLoaded = true;
-        setConnected(true);
         setWifi("ok", "Плата на связи · " + host());
+        $("#btnCast").disabled = !info.screen;
+        castNoteShow(info.screen ? "" : "Эта прошивка не умеет показывать экран телефона. Нужен «Школьный набор» версии 1.1 или новее.");
+        if (info.files === false) {  // «Школьный набор»: работы с файлами нет
+          setConnected(false);
+          $("#cardPanel").hidden = true;
+          return;
+        }
+        $("#cardPanel").hidden = false;
+        setConnected(true);
+        const dir = await api("GET", "/__api/list?dir=" + encodeURIComponent(fDir));
         if (info.total > 0) {
           $("#cardUsage").hidden = false;
           $("#usageFill").style.width = (info.used / info.total * 100).toFixed(1) + "%";
@@ -1373,6 +1389,13 @@ pako/dist/pako.esm.mjs:
       refreshFiles();
     };
     $("#btnRefresh").onclick = refreshFiles;
+    function castNoteShow(t) {
+      const n = $("#castNote");
+      n.hidden = !t;
+      n.innerHTML = t ? '<div class="notice"><p></p></div>' : "";
+      if (t) n.querySelector("p").textContent = t;
+    }
+    $("#btnCast").onclick = () => { if (Net.cast) Net.cast(host()); else castNoteShow("Обновите приложение: в этой версии нет экрана на плату."); };
     $("#btnSite").onclick = () => Net.preview("http://" + host() + encPath(fDir === "/" ? "/" : fDir + "/"));
     $("#btnUpload").onclick = () => Net.pickAndUpload("http://" + host() + "/__upload?json=1&dir=" + encodeURIComponent(fDir));
     $("#btnMkdir").onclick = () => { $("#mkdirBox").hidden = false; $("#mkdirName").value = ""; $("#mkdirName").focus(); };

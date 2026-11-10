@@ -380,8 +380,12 @@ public class MainActivity extends Activity {
 
     // ---------- Сеть платы ----------
 
+    /** Сеть платы — для окна «Экран на плату». */
+    static volatile Network sBoardNet;
+
     private void bindTo(Network n) {
         boardNet = n;
+        sBoardNet = n;
         if (Build.VERSION.SDK_INT >= 23) cm.bindProcessToNetwork(n);
         else ConnectivityManager.setProcessDefaultNetwork(n);
     }
@@ -392,6 +396,7 @@ public class MainActivity extends Activity {
             wifiCallback = null;
         }
         boardNet = null;
+        sBoardNet = null;
         try {
             if (Build.VERSION.SDK_INT >= 23) cm.bindProcessToNetwork(null);
             else ConnectivityManager.setProcessDefaultNetwork(null);
@@ -673,6 +678,19 @@ public class MainActivity extends Activity {
                     } catch (Exception e) {
                         js("__androidNet.onSaved(false," + q("Нет приложения для сохранения файлов") + ")");
                     }
+                }
+            });
+        }
+
+        /** Окно «Экран на плату»: браузер, из которого страницы показываются на плате. */
+        @JavascriptInterface
+        public void cast(final String host) {
+            ui.post(new Runnable() {
+                public void run() {
+                    if (boardNet == null) { Network n = findWifi(); if (n != null) sBoardNet = n; }
+                    Intent i = new Intent(MainActivity.this, CastActivity.class);
+                    i.putExtra("host", host);
+                    startActivity(i);
                 }
             });
         }
