@@ -2,9 +2,11 @@ package ru.alarm.lock
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFormat
 import android.media.AudioManager
-import android.media.MediaPlayer
-import android.media.RingtoneManager
+import android.media.AudioTrack
+import kotlin.math.PI
+import kotlin.math.sin
 
 /** Пароль, которым отключается сигнализация. */
 const val ALARM_PASSWORD = "88006553535"
@@ -22,12 +24,17 @@ fun setAlarmEnabled(context: Context, enabled: Boolean) {
 
 fun Context.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
-/** Громкий зацикленный сигнал на максимальной громкости будильника. */
+/**
+ * Резкая сирена: частота плавно идёт вверх и вниз (600–1800 Гц, период 1 с),
+ * сигнал «срезан» по краям, поэтому звучит жёстко. Генерируется на лету, файлов не нужно.
+ */
 class AlarmSound(private val context: Context) {
-    private var player: MediaPlayer? = null
+    private var track: AudioTrack? = null
+    private var thread: Thread? = null
+    @Volatile private var playing = false
 
     fun start() {
-        if (player?.isPlaying == true) return
+        if (playing) return
         runCatching {
             val audio = context.getSystemService(AudioManager::class.java)
             audio.setStreamVolume(
@@ -35,29 +42,61 @@ class AlarmSound(private val context: Context) {
                 audio.getStreamMaxVolume(AudioManager.STREAM_ALARM),
                 0
             )
-            val uri = RingtoneManager.getActualDefaultRingtoneUri(context, RingtoneManager.TYPE_ALARM)
-                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            player = MediaPlayer().apply {
-                setAudioAttributes(
+
+            val rate = 44100
+            val minBuf = AudioTrack.getMinBufferSize(
+                rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
+            )
+            val t = AudioTrack.Builder()
+                .setAudioAttributes(
                     AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .build()
                 )
-                setDataSource(context, uri)
-                isLooping = true
-                setVolume(1f, 1f)
-                prepare()
-                start()
-            }
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setSampleRate(rate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .build()
+                )
+                .setBufferSizeInBytes(minBuf * 2)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+            track = t
+            playing = true
+            t.play()
+
+            thread = Thread {
+                val chunk = ShortArray(1024)
+                var sample = 0L
+                var phase = 0.0
+                while (playing) {
+                    for (i in chunk.indices) {
+                        // Положение внутри периода сирены: 0..1 вверх, затем вниз.
+                        val pos = (sample % rate) / rate.toDouble()
+                        val tri = if (pos < 0.5) pos * 2 else (1 - pos) * 2
+                        val freq = 600 + 1200 * tri
+                        phase += 2 * PI * freq / rate
+                        if (phase > 2 * PI) phase -= 2 * PI
+                        // Усиление с ограничением: почти квадратная волна, максимальная громкость.
+                        val v = (sin(phase) * 2.5).coerceIn(-1.0, 1.0)
+                        chunk[i] = (v * Short.MAX_VALUE).toInt().toShort()
+                        sample++
+                    }
+                    if (playing) t.write(chunk, 0, chunk.size)
+                }
+            }.apply { isDaemon = true; start() }
         }
     }
 
     fun stop() {
-        runCatching {
-            player?.stop()
-            player?.release()
-        }
-        player = null
+        playing = false
+        runCatching { track?.stop() }
+        runCatching { thread?.join(1000) }
+        runCatching { track?.release() }
+        track = null
+        thread = null
     }
 }
