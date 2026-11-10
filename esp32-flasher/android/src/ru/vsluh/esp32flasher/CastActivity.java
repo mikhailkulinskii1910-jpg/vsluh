@@ -62,6 +62,7 @@ public class CastActivity extends Activity {
     private volatile boolean remoteOk = false;
     private long lastRemote = 0;
     private int remoteTaps = 0;
+    private volatile int boxW = 0, boxH = 0;  // какой кадр просит плата (0 — старая прошивка: 480 px в ширину)
 
     @Override
     protected void onCreate(Bundle b) {
@@ -188,10 +189,15 @@ public class CastActivity extends Activity {
         c.translate(-capSX, -capSY);
         web.draw(c);
         int tw = 480, th = Math.max(1, Math.min(1440, h * tw / w));
+        if (boxW > 0 && boxH > 0) {  // ровно под экран платы: она копирует кадр без пересчёта — быстрее и чётче
+            float s = Math.min((float) boxW / w, (float) boxH / h);
+            tw = Math.max(1, Math.round(w * s));
+            th = Math.max(1, Math.round(h * s));
+        }
         Bitmap small = Bitmap.createScaledBitmap(full, tw, th, true);
         full.recycle();
         ByteArrayOutputStream bo = new ByteArrayOutputStream();
-        small.compress(Bitmap.CompressFormat.JPEG, 82, bo);
+        small.compress(Bitmap.CompressFormat.JPEG, 85, bo);
         small.recycle();
         return bo.toByteArray();
     }
@@ -289,7 +295,17 @@ public class CastActivity extends Activity {
                         c.disconnect();
                         fails = 0;
                         remoteOk = true;
-                        final JSONArray ev = new JSONObject(body).optJSONArray("ev");
+                        JSONObject resp = new JSONObject(body);
+                        JSONArray box = resp.optJSONArray("box");
+                        if (box != null && box.length() == 2) {
+                            int bw = box.optInt(0), bh = box.optInt(1);
+                            if (bw != boxW || bh != boxH) {  // плата перешла в «крупно» или обратно — нужен кадр другого размера
+                                boolean had = boxW > 0;
+                                boxW = bw; boxH = bh;
+                                if (had && frames > 0) ui.post(new Runnable() { public void run() { scheduleFollow(100); } });
+                            }
+                        }
+                        final JSONArray ev = resp.optJSONArray("ev");
                         if (ev != null && ev.length() > 0) ui.post(new Runnable() { public void run() { handleEvents(ev); } });
                     } catch (Exception e) {
                         fails++;

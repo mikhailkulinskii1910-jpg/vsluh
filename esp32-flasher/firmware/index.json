@@ -1,5 +1,5 @@
 [
-  {"title": "Школьный набор", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/school_ws35.merged.bin", "desc": "Калькулятор, шахматы, шашки и другие игры на двоих, справочник; HTML-страницы с SD-карты; экран телефона и управление телефоном с платы", "size": 1957648},
+  {"title": "Школьный набор", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/school_ws35.merged.bin", "desc": "Калькулятор, шахматы, шашки и другие игры на двоих, справочник; HTML-страницы с SD-карты; экран телефона и управление телефоном с платы", "size": 1958400},
   {"title": "Медиаплеер + Bluetooth-наушники", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/mediaplayer_ws35.merged.bin", "desc": "MP3, WAV и видео AVI с SD-карты, звук в динамик или в наушники", "size": 2169680},
   {"title": "Счётчик нажатий", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/counter_ws35.merged.bin", "desc": "Большая кнопка, число сохраняется, рекорд скорости и салют", "size": 623840},
   {"title": "HTML с SD-карты", "board": "ESP32-Touch-LCD-3.5", "file": "firmware/htmlviewer_ws35.merged.bin", "desc": "Открывает сайты и страницы с карты памяти, загрузка файлов по Wi-Fi", "size": 1542912},

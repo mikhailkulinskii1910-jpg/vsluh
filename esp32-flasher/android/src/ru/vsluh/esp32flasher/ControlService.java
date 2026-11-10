@@ -65,6 +65,8 @@ public class ControlService extends Service {
     private String host = "192.168.4.1";
     private int fw, fh;                 // размер снимка
     private int frames = 0;
+    private volatile int boxW = 0, boxH = 0;   // какой кадр просит плата (ровно под её экран)
+    private volatile boolean boxChanged = false;
 
     @Override public IBinder onBind(Intent i) { return null; }
 
@@ -154,10 +156,16 @@ public class ControlService extends Service {
             long now = SystemClock.uptimeMillis();
             if (bmp != null) {
                 long sig = signature(bmp);
+                if (boxChanged) { boxChanged = false; lastSig = 0; }
                 if (sig != lastSig || now - lastSent > 5000) {  // изменилось — отправляем; иначе раз в 5 с для связи
+                    if (boxW > 0 && boxH > 0) {  // кадр точно под экран платы: меньше передавать и декодировать, а картинка чётче
+                        float s = Math.min(1f, Math.min((float) boxW / fw, (float) boxH / fh));
+                        int tw = Math.max(1, Math.round(fw * s)), th = Math.max(1, Math.round(fh * s));
+                        if (tw != fw || th != fh) { Bitmap sm = Bitmap.createScaledBitmap(bmp, tw, th, true); bmp.recycle(); bmp = sm; }
+                    }
                     try {
                         ByteArrayOutputStream bo = new ByteArrayOutputStream();
-                        bmp.compress(Bitmap.CompressFormat.JPEG, 70, bo);
+                        bmp.compress(Bitmap.CompressFormat.JPEG, 82, bo);
                         post(bo.toByteArray());
                         lastSig = sig;
                         lastSent = SystemClock.uptimeMillis();
@@ -226,7 +234,12 @@ public class ControlService extends Service {
                 c.disconnect();
                 if (code == 404) { sState = "На плате старая прошивка: обновите «Школьный набор» до 1.5."; sleep(3000); continue; }
                 fails = 0;
-                JSONArray ev = new JSONObject(bo.toString("UTF-8")).optJSONArray("ev");
+                JSONObject resp = new JSONObject(bo.toString("UTF-8"));
+                JSONArray box = resp.optJSONArray("box");
+                if (box != null && box.length() == 2 && (box.optInt(0) != boxW || box.optInt(1) != boxH)) {
+                    boxW = box.optInt(0); boxH = box.optInt(1); boxChanged = true;
+                }
+                JSONArray ev = resp.optJSONArray("ev");
                 if (ev != null) for (int i = 0; i < ev.length(); i++) handle(ev.optJSONObject(i));
             } catch (Exception e) {
                 fails++;

@@ -4670,7 +4670,9 @@ std::string ellipsize(const AAFont& f, const std::string& t, int maxW) {
 }
 
 // ---------- Отрисовка полосами ----------
+uint32_t renderGen = 0;  // меняется при любой обычной перерисовке (для частичного обновления экрана телефона)
 void renderRegion(int y0, int y1, void (*draw)(Surface&, int)) {
+  renderGen++;
   for (int y = std::max(0, y0); y < std::min(SCREEN_H, y1); y += STRIP_H) {
     int h = std::min(STRIP_H, std::min(SCREEN_H, y1) - y);
     surfSize(sStrip, SCREEN_W, h);
@@ -6342,6 +6344,10 @@ void settingsTap(int x, int y) {
 void wifiEnable(bool on);
 bool castLinked() { return castPollT && nowMs() - castPollT < 3000; }
 
+float castFit();
+int castPanMax();
+int castScrollMax();
+
 bool castDecode(const uint8_t* data, size_t len) {
   JPEGDEC* j = new JPEGDEC();
   bool ok = false;
@@ -6364,7 +6370,13 @@ bool castDecode(const uint8_t* data, size_t len) {
   if (ok) {
     castFrame++;
     castMarkT = 0;
-    if (castW != oldW || castH != oldH) { castZoom = false; castScroll = castPanX = 0; }  // другой размер — показать целиком
+    if (castW != oldW || castH != oldH) {
+      // тот же кадр в другом разрешении (телефон прислал крупнее для «крупно»): картинка на экране та же
+      bool sameShape = oldW > 0 && oldH > 0 && fabsf((float)castW / castH - (float)oldW / oldH) < 0.02f * castW / castH;
+      if (!sameShape) { castZoom = false; castScroll = castPanX = 0; }
+      castPanX = std::min(castPanX, castPanMax());
+      castScroll = std::min(castScroll, castScrollMax());
+    }
   }
   return ok;
 }
@@ -6372,8 +6384,11 @@ bool castDecode(const uint8_t* data, size_t len) {
 // Масштаб: пикселей снимка на пиксель экрана. «Целиком» — снимок вписан в экран,
 // «крупно» (двойное касание) — примерно вдвое ближе, с прокруткой пальцем.
 float castFit() { return castPx ? std::max((float)castW / SCREEN_W, (float)castH / CAST_VH) : 1.0f; }
-float castZoomK() { float f = castFit(); return std::max(f / 2, std::min(1.0f, f)); }
-bool castCanZoom() { return castPx && castZoomK() < castFit() - 0.05f; }
+float castZoomK() { return castFit() / 2; }   // «крупно» — вдвое ближе; телефон пришлёт кадр вдвое подробнее
+bool castCanZoom() { return castPx != nullptr; }
+// Какого размера кадр нужен плате: ровно под экран, при «крупно» — вдвое больше
+int castBoxW() { return castZoom ? 2 * SCREEN_W : SCREEN_W; }
+int castBoxH() { return castZoom ? 2 * CAST_VH : CAST_VH; }
 float castScale() { return castZoom ? castZoomK() : castFit(); }
 int castContentW() { return castPx ? (int)(castW / castScale()) : 0; }
 int castContentH() { return castPx ? (int)(castH / castScale()) : 0; }
@@ -6428,6 +6443,7 @@ void drawCast(Surface& s, int top) {
     int cw = castContentW(), ch = castContentH();
     int x0 = std::max(0, offX), x1 = std::min(SCREEN_W, offX + cw);
     bool nearest = k <= 1.05f;
+    bool exact = fabsf(k - 1.0f) < 0.001f;  // кадр прислан точно под экран — просто копируем строки
     for (int py = 0; py < s.h; py++) {
       int y = top + py;
       if (y < CAST_TOP || y >= CAST_BOT) continue;
@@ -6437,6 +6453,7 @@ void drawCast(Surface& s, int top) {
       uint16_t* row = s.px + py * s.w;
       const uint16_t* r1 = castPx + iy * castW;
       const uint16_t* r2 = castPx + iy2 * castW;
+      if (exact) { int sx0 = x0 - offX; if (x1 > x0 && sx0 >= 0 && sx0 + (x1 - x0) <= castW) { memcpy(row + x0, r1 + sx0, (x1 - x0) * 2); continue; } }
       for (int x = x0; x < x1; x++) {
         int ix = std::min(castW - 1, (int)((x - offX) * k));
         if (nearest) { row[x] = r1[ix]; continue; }
@@ -6531,7 +6548,27 @@ std::string castTakeEvents() {
   std::string j = "{\"ok\":true,\"ev\":[";
   for (size_t i = 0; i < castEvents.size(); i++) j += (i ? "," : "") + castEvents[i];
   castEvents.clear();
-  return j + "]}";
+  char b[48];
+  snprintf(b, sizeof b, "],\"box\":[%d,%d]}", castBoxW(), castBoxH());
+  return j + b;
+}
+
+// Новый кадр поверх старого: на экран уходят только полосы, которые изменились
+uint32_t castHash[SCREEN_H / STRIP_H + 1];
+uint32_t castHashGen = 0xFFFFFFFFu;
+void castRenderDiff() {
+  bool full = castHashGen != renderGen;  // экран перерисовывали иначе — сравнивать не с чем
+  for (int i = 0, y = 0; y < SCREEN_H; y += STRIP_H, i++) {
+    int h = std::min(STRIP_H, SCREEN_H - y);
+    surfSize(sStrip, SCREEN_W, h);
+    surfFill(sStrip, C_BG);
+    drawCast(sStrip, y);
+    uint32_t hh = 2166136261u;
+    const uint16_t* p = sStrip.px;
+    for (int k = 0, n = SCREEN_W * h; k < n; k++) hh = (hh ^ p[k]) * 16777619u;
+    if (full || hh != castHash[i]) { pushPixels(0, y, SCREEN_W, h, sStrip.px); castHash[i] = hh; }
+  }
+  castHashGen = renderGen;
 }
 // Плата закрыла экран: телефон перестаёт присылать кадры
 void castClose() {
@@ -6766,7 +6803,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.5"
+#define FW_VERSION "1.6"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -7165,7 +7202,11 @@ void loop() {
     if (dimmed) { dimmed = false; applyBacklight(); }
     hv::evictImages(1u << 30);  // память под снимок важнее кэша картинок страницы
     bool justClosed = castClosedT && now - castClosedT < 4000;  // кадр отправили до того, как плата закрыла экран
-    if (!justClosed && castDecode(castRx.data(), castRx.size())) { castOn = true; castClosedT = 0; scrollVel = 0; renderContent(); }
+    bool wasOn = castOn && castPx;
+    if (!justClosed && castDecode(castRx.data(), castRx.size())) {
+      castOn = true; castClosedT = 0; scrollVel = 0;
+      if (wasOn) castRenderDiff(); else renderContent();
+    }
     castRx.clear();
     castRx.shrink_to_fit();
   }
