@@ -26,6 +26,7 @@ import android.os.Looper;
 import android.util.Base64;
 import android.util.Log;
 import android.view.Window;
+import android.view.WindowManager;
 import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
@@ -135,6 +136,7 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new Bridge(), "AndroidSerial");
         web.addJavascriptInterface(new NetBridge(), "AndroidNet");
+        web.addJavascriptInterface(new AppBridge(), "AndroidApp");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest req) {
@@ -792,6 +794,41 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void close() {
             closePort();
+        }
+    }
+
+    /** Сведения о приложении, экран и внешние ссылки. */
+    class AppBridge {
+        @JavascriptInterface
+        public int versionCode() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode; } catch (Exception e) { return 0; }
+        }
+
+        @JavascriptInterface
+        public String versionName() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return ""; }
+        }
+
+        /** Не гасить экран, пока идёт прошивка. */
+        @JavascriptInterface
+        public void keepScreenOn(final boolean on) {
+            ui.post(new Runnable() {
+                public void run() {
+                    if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
+        }
+
+        /** Открыть ссылку в браузере (например, новую версию приложения). */
+        @JavascriptInterface
+        public void openUrl(final String url) {
+            if (url == null || !url.startsWith("https://")) return;
+            ui.post(new Runnable() {
+                public void run() {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))); } catch (Exception ignored) { }
+                }
+            });
         }
     }
 }

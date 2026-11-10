@@ -106,6 +106,12 @@ select, input[type="text"] {
 .fw b { font-weight: 600; font-size: 15px; }
 .fw span { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
 .fw.added { border-color: var(--mask); }
+.fw i { font-style: normal; font-size: 12.5px; color: var(--muted); line-height: 1.35; }
+.fw em { font-style: normal; font-family: var(--f-mono); font-size: 11px; color: var(--mask); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { min-height: 32px; padding: 4px 12px; border-radius: 999px; font-size: 13px; }
+.chips button[aria-pressed="true"] { background: var(--copper); color: var(--copper-ink); border-color: var(--copper); }
+.update { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sub-h { font-size: 13px; color: var(--muted); margin: 0; }
 .tabs { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 4px; }
 .tabs button { border: 0; background: transparent; min-height: 40px; justify-content: center; font-weight: 600; color: var(--muted); padding-inline: 6px; text-align: center; line-height: 1.15; }
@@ -211,6 +217,11 @@ a { color: var(--copper); }
     <p class="lede">Записывает прошивку в плату прямо из браузера по USB-кабелю. Arduino IDE и драйверы esptool не нужны: нужен только готовый файл <code>.bin</code>. На вкладке «Конвертер видео» ролики MP4 переводятся в формат, который играет плата.</p>
   </header>
 
+  <div class="notice update" id="appUpdate" hidden>
+    <p id="appUpdateText"></p>
+    <button class="primary" id="btnAppUpdate">Скачать</button>
+  </div>
+
   <div class="tabs" id="tabs" role="tablist">
     <button role="tab" id="tabBtnFlash" aria-selected="true" aria-controls="tabFlash">Прошивка</button>
     <button role="tab" id="tabBtnConv" aria-selected="false" aria-controls="tabConv">Конвертер видео</button>
@@ -253,7 +264,10 @@ a { color: var(--copper); }
     <h2 id="h-files"><span class="step">02</span>Файлы прошивки</h2>
     <div id="catalogBox" hidden>
       <p class="sub-h">Готовые прошивки: нажмите, чтобы добавить</p>
+      <div class="chips" id="catFilter" role="group" aria-label="Плата"></div>
+      <p class="sub-h" id="catSource"></p>
       <div class="catalog" id="catalog"></div>
+      <p class="sub-h" id="catHistory" hidden></p>
     </div>
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Выбрать файлы .bin">
       <strong>Перетащите .bin сюда</strong> или нажмите, чтобы выбрать.<br>
@@ -893,7 +907,7 @@ pako/dist/pako.esm.mjs:
     const chip = await loader.main();
     $("#ciChip").textContent = chip;
     try { $("#ciMac").textContent = await loader.chip.readMac(loader); } catch {}
-    try { const fs = await loader.detectFlashSize(); if (fs) $("#ciFlash").textContent = fs; } catch {}
+    try { const fs = await loader.detectFlashSize(); if (fs) { $("#ciFlash").textContent = fs; guessBoard(fs); } } catch {}
     if (loader.chip.CHIP_NAME !== "ESP32") err(`Внимание: на плате ${loader.chip.CHIP_NAME}, а не ESP32.`);
     return loader;
   }
@@ -939,6 +953,7 @@ pako/dist/pako.esm.mjs:
     const before = []; sorted.reduce((s, f, i) => (before[i] = s, s + f.data.length), 0);
     const t0 = performance.now();
     let ok = false;
+    keepAwake(true);
     try {
       const loader = await openLoader();
       setProgress(0, $("#optErase").checked ? "Стираю память…" : "Записываю…");
@@ -957,7 +972,10 @@ pako/dist/pako.esm.mjs:
       const sec = ((performance.now() - t0) / 1000).toFixed(1);
       setProgress(1, `Готово за ${sec} с`);
       log(`Прошивка записана: ${size(total)} за ${sec} с.\n`, "ok");
+      const fromCat = sorted.find((f) => f.catalog);
+      if (fromCat) rememberFlash(fromCat.catalog);
     } catch (e) { explain(e); setProgress(0, "Запись не удалась"); }
+    keepAwake(false);
     await closeTransport();
     setBusy(false);
     if (ok && $("#optMonitor").checked) startMonitor(true);
@@ -979,6 +997,7 @@ pako/dist/pako.esm.mjs:
     }
     disarmErase();
     setBusy(true);
+    keepAwake(true);
     await stopMonitor();
     let tick = null, done = [0, ""];
     try {
@@ -998,6 +1017,7 @@ pako/dist/pako.esm.mjs:
       log(`Память очищена за ${sec} с. Теперь на плате нет программы — экран будет пустым, пока вы не прошьёте её снова.\n`, "ok");
     } catch (e) { explain(e); done = [0, "Очистить память не удалось"]; }
     if (tick) clearInterval(tick);
+    keepAwake(false);
     await closeTransport();
     setBusy(false);
     setProgress(done[0], done[1]);
@@ -1042,39 +1062,122 @@ pako/dist/pako.esm.mjs:
   };
 
   // ---------- Готовые прошивки (работают, когда страница открыта с GitHub Pages) ----------
-  async function loadCatalog() {
-    let list;
-    try {
-      const r = await fetch("firmware/index.json", { cache: "no-store" });
-      if (!r.ok) return;
-      list = await r.json();
-    } catch { return; }
+  // ---------- Каталог готовых прошивок ----------
+  // В приложении каталог берётся с сайта (там самые новые прошивки), без интернета — встроенный.
+  const SITE = "https://mikhailkulinskii1910-jpg.github.io/vsluh/esp32-flasher/";
+  const App = window.AndroidApp;
+  let catalog = [], catBase = "", catFilter = "", filterTouched = false;
+  const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
+                  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+  function keepAwake(on) { try { if (App && App.keepScreenOn) App.keepScreenOn(!!on); } catch {} }
+  const shortBoard = (b) => /3\.5/.test(b) ? "3,5″" : /2\.4|2432/.test(b) ? "2,4″" : b;
+  const whenText = (t) => new Date(t).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+
+  async function fetchJson(url, ms) {
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);
+    try { const r = await fetch(url, { cache: "no-store", signal: ctl.signal }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); }
+    finally { clearTimeout(timer); }
+  }
+
+  function rememberFlash(item) {
+    const h = store.get("esp32flasher.history", []).filter((x) => x.file !== item.file);
+    h.unshift({ title: item.title, board: item.board, file: item.file, t: Date.now() });
+    store.set("esp32flasher.history", h.slice(0, 5));
+    renderCatalog();
+  }
+
+  function guessBoard(fs) {  // 16 МБ — Waveshare 3,5″, 4 МБ — CYD 2,4″
+    if (filterTouched || !catalog.length) return;
+    const mb = parseInt(fs);
+    const want = mb >= 16 ? catalog.find((x) => /3\.5/.test(x.board)) : mb <= 4 ? catalog.find((x) => /2\.4|2432/.test(x.board)) : null;
+    if (want && want.board !== catFilter) {
+      catFilter = want.board;
+      sys(`Похоже, это плата ${want.board} (флеш ${fs}) — в каталоге показаны её прошивки.`);
+      renderCatalog();
+    }
+  }
+
+  function renderCatalog() {
+    const boards = [...new Set(catalog.map((x) => x.board))];
+    const fbox = $("#catFilter");
+    fbox.innerHTML = "";
+    if (boards.length > 1) {
+      for (const b of ["", ...boards]) {
+        const c = document.createElement("button");
+        c.textContent = b ? shortBoard(b) : "Все платы";
+        c.title = b || "Показать прошивки для всех плат";
+        c.setAttribute("aria-pressed", String(catFilter === b));
+        c.onclick = () => { catFilter = b; filterTouched = true; store.set("esp32flasher.board", b); renderCatalog(); };
+        fbox.append(c);
+      }
+    }
+    const hist = store.get("esp32flasher.history", []);
     const box = $("#catalog");
-    for (const item of list) {
+    box.innerHTML = "";
+    for (const item of catalog) {
+      if (catFilter && item.board !== catFilter) continue;
       const b = document.createElement("button");
       b.className = "fw";
-      b.innerHTML = "<b></b><span></span>";
+      b.innerHTML = "<b></b><i></i><span></span><em></em>";
       b.querySelector("b").textContent = item.title;
-      b.querySelector("span").textContent = item.board;
+      b.querySelector("i").textContent = item.desc || "";
+      b.querySelector("span").textContent = item.board + (item.size ? " · " + size(item.size) : "");
+      const last = hist.find((x) => x.file === item.file);
+      b.querySelector("em").textContent = last ? "Прошита " + whenText(last.t) : "";
+      if (files.some((f) => f.catalog && f.catalog.file === item.file)) b.classList.add("added");
       b.onclick = async () => {
         b.disabled = true;
         try {
-          const r = await fetch(item.file);
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          const buf = await r.arrayBuffer();
+          let buf = null;
+          for (const base of catBase ? [catBase, ""] : [""]) {  // с сайта, а если не вышло — встроенная копия
+            try { const r = await fetch(base + item.file); if (r.ok) { buf = await r.arrayBuffer(); break; } } catch {}
+          }
+          if (!buf) throw new Error("файл недоступен");
           files = files.filter((f) => f.kind !== "merged");  // полная прошивка может быть только одна
           await addFiles([new File([buf], item.file.split("/").pop())]);
+          const added = files.find((f) => f.name === item.file.split("/").pop());
+          if (added) added.catalog = item;
           sys(`Добавлена прошивка «${item.title}» (${item.board}).`);
-          box.querySelectorAll(".fw").forEach((x) => x.classList.remove("added"));
-          b.classList.add("added");
+          renderCatalog();
         } catch (e) { err(`Не удалось скачать «${item.title}»: ${e.message}`); }
         b.disabled = false;
       };
       box.append(b);
     }
-    $("#catalogBox").hidden = !list.length;
+    const hb = $("#catHistory");
+    hb.hidden = !hist.length;
+    if (hist.length) hb.textContent = "Недавно прошивали: " + hist.slice(0, 3).map((x) => `${x.title} (${whenText(x.t)})`).join(", ");
   }
 
+  async function loadCatalog() {
+    catalog = []; catBase = "";
+    if (inApp) {
+      try { catalog = await fetchJson(SITE + "firmware/index.json", 6000); catBase = SITE; } catch {}
+    }
+    if (!catalog.length) {
+      try { catalog = await fetchJson("firmware/index.json", 6000); } catch { catalog = []; }
+    }
+    $("#catSource").textContent = !inApp ? "" : catBase ? "Каталог загружен с сайта — здесь самые новые прошивки." : "Нет интернета — показан каталог, встроенный в приложение.";
+    $("#catSource").hidden = !inApp;
+    const saved = store.get("esp32flasher.board", null);
+    if (saved !== null && (saved === "" || catalog.some((x) => x.board === saved))) { catFilter = saved; filterTouched = true; }
+    renderCatalog();
+    $("#catalogBox").hidden = !catalog.length;
+  }
+
+  // Новая версия приложения на сайте
+  async function checkAppUpdate() {
+    if (!inApp || !App || !App.versionCode) return;
+    try {
+      const info = await fetchJson(SITE + "app.json", 6000);
+      const mine = App.versionCode();
+      if (info && info.versionCode > mine) {
+        $("#appUpdateText").textContent = `Вышла версия приложения ${info.versionName} (у вас ${App.versionName()}). ${info.notes || ""}`;
+        $("#btnAppUpdate").onclick = () => App.openUrl(SITE + (info.apk || "ESP32-Flasher.apk"));
+        $("#appUpdate").hidden = false;
+      }
+    } catch {}
+  }
 
   // ---------- Вкладка «Файлы на карте» (только в приложении для Android) ----------
   const Net = window.AndroidNet;
@@ -1612,6 +1715,7 @@ pako/dist/pako.esm.mjs:
   renderEnv();
   updateUI();
   loadCatalog();
+  checkAppUpdate();
   if (!E) err("Не загрузилась библиотека esptool-js.");
 })();
 </script>
