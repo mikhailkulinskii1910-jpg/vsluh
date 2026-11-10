@@ -11,8 +11,11 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.InputDevice;
+import android.view.MotionEvent;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -26,6 +29,9 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -37,6 +43,8 @@ import java.net.URLEncoder;
  * «Экран на плату»: обычный браузер, из которого видимую часть страницы можно отправить
  * на экран платы (прошивка «Школьный набор», Wi-Fi включён в её настройках).
  * Сам браузер ходит в интернет как обычно; на плату по её Wi-Fi уходят только снимки.
+ * Обратно плата присылает касания (GET /__events): браузер нажимает в той же точке страницы
+ * и отправляет новый снимок, так что страницей можно управлять прямо с экрана платы.
  */
 public class CastActivity extends Activity {
     private WebView web;
@@ -48,6 +56,12 @@ public class CastActivity extends Activity {
     private volatile boolean sending = false, pending = false;
     private int frames = 0;
     private final Runnable followSend = new Runnable() { public void run() { send(); } };
+    // какую часть страницы показывает последний снимок (для пересчёта касаний с платы)
+    private int capW = 0, capH = 0, capSX = 0, capSY = 0;
+    private volatile int pollGen = 0;    // номер опроса: при уходе с экрана старый поток сам завершится
+    private volatile boolean remoteOk = false;
+    private long lastRemote = 0;
+    private int remoteTaps = 0;
 
     @Override
     protected void onCreate(Bundle b) {
@@ -92,12 +106,12 @@ public class CastActivity extends Activity {
             @Override public void onPageFinished(WebView v, String u) {
                 url.setText(u);
                 getPreferences(MODE_PRIVATE).edit().putString("last", u).apply();
-                if (follow.isChecked()) scheduleFollow(900);
+                if (follow.isChecked() || remoteRecent()) scheduleFollow(900);
             }
         });
         if (Build.VERSION.SDK_INT >= 23) {
             web.setOnScrollChangeListener(new View.OnScrollChangeListener() {
-                public void onScrollChange(View v, int x, int y, int ox, int oy) { if (follow.isChecked()) scheduleFollow(600); }
+                public void onScrollChange(View v, int x, int y, int ox, int oy) { if (follow.isChecked() || remoteRecent()) scheduleFollow(600); }
             });
         }
         root.addView(web, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1));
@@ -123,7 +137,7 @@ public class CastActivity extends Activity {
         status = new TextView(this);
         status.setTextColor(Color.rgb(160, 160, 180));
         status.setTextSize(13);
-        status.setText("Плата: " + host + ". Найдите страницу и нажмите «Показать на плате». «Следить» — обновлять плату при прокрутке.");
+        status.setText("Плата: " + host + ". Найдите страницу и нажмите «Показать на плате». «Следить» — обновлять плату при прокрутке. Нажатия на экране платы тоже работают.");
         bottom.addView(status);
         root.addView(bottom);
         setContentView(root);
@@ -161,7 +175,8 @@ public class CastActivity extends Activity {
         if (w <= 0 || h <= 0) return null;
         Bitmap full = Bitmap.createBitmap(w, h, Bitmap.Config.RGB_565);
         Canvas c = new Canvas(full);
-        c.translate(-web.getScrollX(), -web.getScrollY());
+        capW = w; capH = h; capSX = web.getScrollX(); capSY = web.getScrollY();
+        c.translate(-capSX, -capSY);
         web.draw(c);
         int tw = 480, th = Math.max(1, Math.min(1440, h * tw / w));
         Bitmap small = Bitmap.createScaledBitmap(full, tw, th, true);
@@ -185,7 +200,9 @@ public class CastActivity extends Activity {
                 try {
                     post(jpg);
                     frames++;
-                    msg = "На плате: кадр " + frames + " (" + (jpg.length / 1024) + " КБ). Двойное касание на плате — увеличение.";
+                    msg = "На плате: кадр " + frames + " (" + (jpg.length / 1024) + " КБ). " + (remoteOk
+                        ? "Нажимайте прямо на экране платы; свайп за край снимка листает страницу, двойное касание — увеличение."
+                        : "Двойное касание на плате — увеличение.");
                 } catch (Exception e) {
                     msg = "Плата не ответила (" + e.getMessage() + "). Проверьте, что на плате включён Wi-Fi (Настройки → «Wi-Fi: экран телефона»), а телефон подключён к ней.";
                 }
@@ -226,18 +243,112 @@ public class CastActivity extends Activity {
         if (code != 200) throw new Exception("HTTP " + code);
     }
 
+    // ---------- Касания с платы ----------
+    private boolean remoteRecent() { return SystemClock.uptimeMillis() - lastRemote < 15000; }
+
+    private HttpURLConnection boardConn(String path) throws Exception {
+        URL u = new URL("http://" + host + path);
+        Network n = MainActivity.sBoardNet;
+        HttpURLConnection c = (HttpURLConnection) (n != null ? n.openConnection(u) : u.openConnection());
+        c.setConnectTimeout(3000);
+        c.setReadTimeout(4000);
+        c.setUseCaches(false);
+        return c;
+    }
+
+    private static String readAll(InputStream in) throws Exception {
+        ByteArrayOutputStream bo = new ByteArrayOutputStream();
+        byte[] b = new byte[2048];
+        int k;
+        while ((k = in.read(b)) > 0) bo.write(b, 0, k);
+        in.close();
+        return bo.toString("UTF-8");
+    }
+
+    // Опрос платы: раз в 0,3 с забираем накопившиеся касания
+    private void startPolling() {
+        final int gen = ++pollGen;
+        new Thread(new Runnable() {
+            public void run() {
+                int fails = 0;
+                while (gen == pollGen) {
+                    long wait = 300;
+                    try {
+                        HttpURLConnection c = boardConn("/__events");
+                        int code = c.getResponseCode();
+                        if (code == 404) { c.disconnect(); break; }  // старая прошивка: касаний не присылает
+                        String body = readAll(code < 400 ? c.getInputStream() : c.getErrorStream());
+                        c.disconnect();
+                        fails = 0;
+                        remoteOk = true;
+                        final JSONArray ev = new JSONObject(body).optJSONArray("ev");
+                        if (ev != null && ev.length() > 0) ui.post(new Runnable() { public void run() { handleEvents(ev); } });
+                    } catch (Exception e) {
+                        fails++;
+                        wait = Math.min(4000, 600L * fails);  // платы не видно — спрашиваем реже
+                    }
+                    try { Thread.sleep(wait); } catch (InterruptedException ie) { break; }
+                }
+            }
+        }, "board-events").start();
+    }
+
+    private void handleEvents(JSONArray ev) {
+        for (int i = 0; i < ev.length(); i++) {
+            JSONObject o = ev.optJSONObject(i);
+            if (o == null) continue;
+            String t = o.optString("t");
+            lastRemote = SystemClock.uptimeMillis();
+            if ("tap".equals(t)) remoteTap((float) o.optDouble("x", -1), (float) o.optDouble("y", -1));
+            else if ("scroll".equals(t)) remoteScroll(o.optInt("d", 1));
+        }
+    }
+
+    // Касание в долях снимка → точка в окне браузера; если страница с тех пор прокрутилась, учитываем сдвиг
+    private void remoteTap(float fx, float fy) {
+        if (capW <= 0 || fx < 0 || fy < 0 || fx > 1 || fy > 1) return;
+        final float x = fx * capW + capSX - web.getScrollX();
+        final float y = fy * capH + capSY - web.getScrollY();
+        if (x < 0 || y < 0 || x >= web.getWidth() || y >= web.getHeight()) return;
+        final long t0 = SystemClock.uptimeMillis();
+        MotionEvent down = MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, x, y, 0);
+        down.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+        web.dispatchTouchEvent(down);
+        down.recycle();
+        ui.postDelayed(new Runnable() {
+            public void run() {
+                MotionEvent up = MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y, 0);
+                up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+                web.dispatchTouchEvent(up);
+                up.recycle();
+            }
+        }, 70);
+        remoteTaps++;
+        status.setText("Нажатие с платы (" + remoteTaps + ") — обновляю снимок…");
+        scheduleFollow(800);  // страница успеет отреагировать; при переходе снимок придёт ещё раз после загрузки
+    }
+
+    // Листание: на 85 % высоты окна вниз или вверх
+    private void remoteScroll(int dir) {
+        web.evaluateJavascript("window.scrollBy(0," + (dir > 0 ? "" : "-") + "Math.round(window.innerHeight*0.85))", null);
+        status.setText(dir > 0 ? "С платы: листаю вниз…" : "С платы: листаю вверх…");
+        scheduleFollow(500);
+    }
+
     // Пока открыт браузер, процесс не привязан к сети платы — сайты грузятся через интернет
     @Override
     protected void onResume() {
         super.onResume();
         ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         try { if (Build.VERSION.SDK_INT >= 23) cm.bindProcessToNetwork(null); } catch (Exception ignored) { }
+        startPolling();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         ui.removeCallbacks(followSend);
+        pollGen++;
         ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         try { if (Build.VERSION.SDK_INT >= 23 && MainActivity.sBoardNet != null) cm.bindProcessToNetwork(MainActivity.sBoardNet); } catch (Exception ignored) { }
     }

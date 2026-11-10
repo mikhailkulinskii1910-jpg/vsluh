@@ -7,19 +7,24 @@
     • Игры для двоих — шахматы (все правила), русские шашки, крестики-нолики, «4 в ряд»
     • Справочник — формулы по алгебре, геометрии, тригонометрии, физике, химии,
       таблица умножения, подсказки по русскому языку; «Мои файлы» открывают
-      свои TXT, HTML и JPG с SD-карты
+      свои TXT, HTML, JPG и PNG с SD-карты. HTML показывается как в браузере:
+      стили, картинки, таблицы, ссылки между страницами (без JavaScript)
     • Настройки — яркость, затемнение, цвет оформления, щелчок, поворот экрана, Wi-Fi, сведения о плате
   Экран телефона: включите Wi-Fi в настройках, и приложение ESP32 Flasher сможет показывать
   на плате открытые в нём страницы (вкладка «Плата по Wi-Fi» → «Экран на плату»).
+  Нажатия на экране платы передаются обратно в браузер телефона, свайп за край
+  снимка листает страницу на телефоне, двойное касание — увеличение.
 
   Кнопки на плате: BOOT — «=» в калькуляторе, в других вкладках «назад»;
   PWR — формат результата калькулятора.
 
   Arduino IDE: плата "ESP32 Dev Module", PSRAM "Enabled",
   Partition Scheme "Huge APP (3MB No OTA/1MB SPIFFS)".
-  Библиотеки: "GFX Library for Arduino", "JPEGDEC".
+  Библиотеки: "GFX Library for Arduino", "JPEGDEC", "PNGdec".
+  Рядом со скетчем должны лежать htmlengine.h и hv_fonts.h (движок HTML-страниц).
   Шрифты Inter (SIL OFL 1.1) и DejaVu Sans (свободная лицензия) встроены в скетч.
 */
+#include "htmlengine.h"
 
 #ifndef HOST_SIM
 #include <Arduino_GFX_Library.h>
@@ -3310,7 +3315,7 @@ static const uint8_t LAYOUT[6][5] = {
 // ===================== Общая прошивка: типы и состояние =====================
 enum TabId : uint8_t { TAB_CALC, TAB_GAMES, TAB_REF, TAB_SET, TAB_COUNT };
 enum GameScr : uint8_t { G_MENU, G_CHESS, G_CHECKERS, G_TTT, G_C4 };
-enum RefScr : uint8_t { R_LIST, R_PAGE, R_FILES, R_TEXT, R_IMAGE };
+enum RefScr : uint8_t { R_LIST, R_PAGE, R_FILES, R_TEXT, R_IMAGE, R_HTML };
 enum LineKind : uint8_t { L_TEXT, L_H1, L_H2, L_FORMULA, L_BULLET, L_SPACE, L_MULT, L_NOTE };
 
 struct CMove { int8_t from, to, promo; uint8_t flags; };          // flags: 1 — взятие, 2 — на проходе, 4 — рокировка
@@ -3385,6 +3390,15 @@ int castW = 0, castH = 0, castScroll = 0, castPanX = 0, castFrame = 0;
 bool castZoom = false;
 std::vector<uint8_t> castRx;         // принимаемый JPEG
 volatile bool castReady = false;
+// обратная связь: касания на плате уходят в браузер телефона (приложение забирает их запросом /__events)
+std::vector<std::string> castEvents;
+uint32_t castPollT = 0;              // когда телефон последний раз спрашивал события
+bool castTapPend = false;            // одиночное касание ждёт, не будет ли второго (двойное — увеличение)
+uint32_t castTapPendT = 0;
+int castTapX = 0, castTapY = 0;
+float castMarkSX = 0, castMarkSY = 0;  // кружок на месте нажатия (координаты снимка)
+uint32_t castMarkT = 0;
+bool castResetScroll = true;
 
 void pushPixels(int x, int y, int w, int h, const uint16_t* px);  // вывод на экран (своя на плате и в симуляторе)
 
@@ -5797,13 +5811,14 @@ int32_t jpgFileSeek(JPEGFILE* f, int32_t pos);
 bool sdFormatArmed = false;
 std::string sdMsg;
 
-int kindOf(const FileEnt& e) {  // 0 — папка, 1 — текст, 2 — HTML, 3 — картинка, −1 — прочее
+int kindOf(const FileEnt& e) {  // 0 — папка, 1 — текст, 2 — HTML, 3 — картинка JPEG, 4 — PNG, −1 — прочее
   if (e.dir) return 0;
   std::string n = lowerAscii(e.name);
   auto ends = [&](const char* x) { size_t l = strlen(x); return n.size() >= l && n.compare(n.size() - l, l, x) == 0; };
   if (ends(".txt") || ends(".md")) return 1;
   if (ends(".htm") || ends(".html")) return 2;
   if (ends(".jpg") || ends(".jpeg")) return 3;
+  if (ends(".png")) return 4;
   return -1;
 }
 
@@ -5986,7 +6001,7 @@ void drawFiles(Surface& s, int top) {
   if (fEnts.empty()) {
     rrectX(s, 16, y0, 288, 150, 16, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
     textC(s, F_SB, 160, y0 + 34, "Здесь нет подходящих файлов", C_WHITE);
-    const char* hint = "Положите на карту свои файлы TXT, HTML или картинки JPG — например, сохранённые страницы, конспекты или фото задач. Нажмите сюда, чтобы обновить список.";
+    const char* hint = "Положите на карту свои файлы TXT, HTML или картинки JPG и PNG — например, сохранённые страницы, конспекты или фото задач. Нажмите сюда, чтобы обновить список.";
     auto w = wrapText(F_X, hint, 260);
     for (size_t k = 0; k < w.size(); k++) textC(s, F_X, 160, y0 + 62 + 16 * (int)k, w[k], C_DIM);
     return;
@@ -5997,10 +6012,10 @@ void drawFiles(Surface& s, int top) {
     const FileEnt& e = fEnts[i];
     rrectX(s, x, y, 288, 46, 12, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
     int k = kindOf(e);
-    uint16_t ic = k == 0 ? C_GOLD : k == 3 ? MK565(110, 200, 255) : C_ACCENT;
-    if (k == 0) iconFolder(s, 36, y + 23, ic); else if (k == 3) iconImage(s, 36, y + 23, ic); else iconDoc(s, 36, y + 23, ic);
+    uint16_t ic = k == 0 ? C_GOLD : k >= 3 ? MK565(110, 200, 255) : C_ACCENT;
+    if (k == 0) iconFolder(s, 36, y + 23, ic); else if (k >= 3) iconImage(s, 36, y + 23, ic); else iconDoc(s, 36, y + 23, ic);
     drawText(s, F_SB, 58, y + 21, ellipsize(F_SB, e.name, 230).c_str(), C_WHITE);
-    drawText(s, F_X, 58, y + 37, e.dir ? "папка" : (fmtBytes(e.size) + (k == 2 ? " · страница" : k == 3 ? " · картинка" : " · текст")).c_str(), C_DIM);
+    drawText(s, F_X, 58, y + 37, e.dir ? "папка" : (fmtBytes(e.size) + (k == 2 ? " · страница" : k >= 3 ? " · картинка" : " · текст")).c_str(), C_DIM);
   }
 }
 
@@ -6013,9 +6028,14 @@ void drawRef(Surface& s, int top) {
     if (top < PAGE_TOP) { fillRectS(s, 0, o, SCREEN_W, PAGE_TOP - 4, C_BG); drawSegTop(s, o); }
     return;
   }
-  // страница справочника, текст или картинка
+  // страница справочника, текст, картинка или HTML
   s.cy0 = std::max(0, 56 - top);
-  if (rScr == R_IMAGE) {
+  if (rScr == R_HTML) {
+    hv::Surface hs;
+    hs.px = s.px; hs.w = s.w; hs.h = s.h;
+    hs.cx0 = 0; hs.cx1 = s.w; hs.cy0 = s.cy0; hs.cy1 = s.h;
+    if (hs.cy0 < hs.cy1) hv::drawStrip(hs, top - 56 + scrollY);
+  } else if (rScr == R_IMAGE) {
     int y = o + 60 - scrollY;
     if (imgPx)
       for (int py = std::max(s.cy0, y); py < std::min(s.h, y + imgH); py++)
@@ -6024,14 +6044,14 @@ void drawRef(Surface& s, int top) {
   s.cy0 = 0;
   if (top < 56) {
     fillRectS(s, 0, o, SCREEN_W, 56, C_BG);
-    drawHeader(s, o, rScr == R_PAGE ? "Назад" : "Файлы", "");
+    drawHeader(s, o, rScr == R_PAGE || (rScr == R_HTML && !hv::history.empty()) ? "Назад" : "Файлы", "");
     textC(s, F_SB, 186, capBase(F_SB, o + 12, 32), ellipsize(F_SB, rTitle, 200), C_WHITE);
     fillRectS(s, 0, o + 55, SCREEN_W, 1, C_BORDER);
   }
   // полоса прокрутки
   if (scrollMax > 0) {
     int vh = TAB_Y - 60, bh = std::max(30, vh * vh / (vh + scrollMax)), by = 60 + (vh - bh) * scrollY / scrollMax;
-    rr(s, SCREEN_W - 5, o + by, 3, bh, 1.5f, C_DIM, 140);
+    rr(s, SCREEN_W - 5, o + by, 3, bh, 1.5f, rScr == R_HTML && hv::doc.bg > 0x8410 ? MK565(120, 120, 130) : C_DIM, 140);
   }
 }
 
@@ -6041,9 +6061,25 @@ void refSetScrollMax() {
   if (rScr == R_LIST) h = REF_N * ROW_H;
   else if (rScr == R_FILES) h = (fDir != "/" ? 48 : 0) + std::max(160, (int)fEnts.size() * 52);
   else if (rScr == R_IMAGE) h = imgH + 20;
+  else if (rScr == R_HTML) { h = hv::doc.height; vh = TAB_Y - 56; }
   else h = linesHeight();
   scrollMax = std::max(0, h - vh);
   scrollY = std::max(0, std::min(scrollY, scrollMax));
+}
+
+// HTML и PNG открывает движок страниц (стили, картинки, ссылки)
+void htmlSync() {  // после перехода по ссылке: заголовок и прокрутка из движка
+  rTitle = hv::doc.title.empty() ? hv::fileName(hv::curUrl) : hv::doc.title;
+  if (hv::curUrl.compare(0, 4, "dir:") == 0 && hv::doc.title.empty()) rTitle = hv::curUrl.substr(4);
+  scrollY = hv::scrollY;
+  refSetScrollMax();
+  hv::scrollY = scrollY;
+}
+void openHtmlFile(const std::string& path) {
+  if (!hv::init()) { parseMarkup("## Не хватило памяти\nЗакройте другие файлы и попробуйте ещё раз."); rTitle = "Ошибка"; rScr = R_TEXT; scrollY = 0; return; }
+  hv::openFile(path);
+  rScr = R_HTML;
+  htmlSync();
 }
 
 void openTextFile(const FileEnt& e) {
@@ -6126,14 +6162,24 @@ void refTap(int x, int y) {
       else { parseMarkup("## Картинка не открылась\n" + err); rScr = R_TEXT; scrollY = 0; }
       return;
     }
+    if (k == 2 || k == 4) { openHtmlFile((fDir == "/" ? "/" : fDir + "/") + e.name); return; }
     openTextFile(e);
     return;
   }
-  if (y < 56 && x < 110) refBack();
+  if (y < 56 && x < 110) { refBack(); return; }
+  if (rScr == R_HTML && y >= 56) {
+    hv::scrollY = scrollY;
+    if (hv::tapAt(x, y - 56 + scrollY)) htmlSync();
+  }
 }
 
 void refBack() {
   if (rScr == R_PAGE) { rScr = R_LIST; scrollY = listScrollSave; }
+  else if (rScr == R_HTML) {
+    if (hv::goBack()) { htmlSync(); return; }
+    hv::close();
+    rScr = R_FILES; scrollY = listScrollSave;
+  }
   else if (rScr == R_TEXT || rScr == R_IMAGE) { free(imgPx); imgPx = nullptr; rScr = R_FILES; scrollY = listScrollSave; rLines.clear(); }
 }
 
@@ -6278,10 +6324,12 @@ void settingsTap(int x, int y) {
 // на всю ширину, прокрутка пальцем, двойное касание — увеличение.
 #define CAST_TOP 44
 void wifiEnable(bool on);
+bool castLinked() { return castPollT && nowMs() - castPollT < 3000; }
 
 bool castDecode(const uint8_t* data, size_t len) {
   JPEGDEC* j = new JPEGDEC();
   bool ok = false;
+  int oldW = castW, oldH = castH;
   if (j->openRAM((uint8_t*)data, (int)len, jpegToBuf)) {
     int W = j->getWidth(), H = j->getHeight(), s = 1;
     while (s < 8 && (W / s > 640 || (long)(W / s) * (H / s) > 720000L)) s *= 2;
@@ -6297,10 +6345,18 @@ bool castDecode(const uint8_t* data, size_t len) {
     j->close();
   }
   delete j;
-  if (ok) { castFrame++; castScroll = 0; castPanX = std::min(castPanX, std::max(0, castW - SCREEN_W)); }
+  if (ok) {
+    castFrame++;
+    castMarkT = 0;
+    // после нажатия страница присылается заново — прокрутку на плате сохраняем; после листания — в начало
+    if (castResetScroll || castW != oldW || castH != oldH) castScroll = 0;
+    castResetScroll = false;
+    castPanX = std::min(castPanX, std::max(0, castW - SCREEN_W));
+  }
   return ok;
 }
 
+int castOffX() { return castZoom ? -castPanX : (castW < SCREEN_W ? (SCREEN_W - castW) / 2 : 0); }
 float castScale() { return castZoom || castW <= SCREEN_W ? 1.0f : (float)castW / SCREEN_W; }  // пикселей снимка на пиксель экрана
 int castContentH() { return castPx ? (int)(castH / castScale()) : 0; }
 int castScrollMax() { return std::max(0, castContentH() - (TAB_Y - CAST_TOP)); }
@@ -6311,7 +6367,7 @@ void drawCast(Surface& s, int top) {
   int y0 = std::max(0, CAST_TOP - top);
   if (castPx) {
     float k = castScale();
-    int offX = castZoom ? -castPanX : (castW < SCREEN_W ? (SCREEN_W - castW) / 2 : 0);
+    int offX = castOffX();
     int outW = castZoom ? SCREEN_W : std::min(SCREEN_W, (int)(castW / k));
     for (int py = y0; py < s.h; py++) {
       int cy = top + py - CAST_TOP + castScroll;
@@ -6338,6 +6394,11 @@ void drawCast(Surface& s, int top) {
       int vh = TAB_Y - CAST_TOP, bh = std::max(30, vh * vh / (vh + sm)), by = CAST_TOP + (vh - bh) * castScroll / sm;
       rr(s, SCREEN_W - 5, o + by, 3, bh, 1.5f, C_DIM, 160);
     }
+    if (castMarkT) {  // кружок там, где нажали: нажатие ушло на телефон
+      float mx = castMarkSX / k + offX, my = castMarkSY / k - castScroll + CAST_TOP + o;
+      ringS(s, mx, my, 16, 3, C_ACCENT);
+      discA(s, mx, my, 5, C_ACCENT, 200);
+    }
   } else {
     int y = o + 110;
     rrectX(s, 16, y, 288, 200, 18, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
@@ -6352,6 +6413,7 @@ void drawCast(Surface& s, int top) {
     iconChevronL(s, 18, o + 22, 6, C_ACCENT);
     drawText(s, F_SB, 28, capBase(F_SB, o + 6, 32), "Закрыть", C_ACCENT);
     textC(s, F_SB, 172, capBase(F_SB, o + 6, 32), "Экран телефона", C_WHITE);
+    if (castLinked()) discA(s, 172 - textW(F_SB, "Экран телефона") / 2 - 10, o + 22, 4, MK565(90, 220, 140), 255);  // телефон забирает нажатия
     if (castPx) {
       std::string z = castZoom ? "×" + std::string(castW > SCREEN_W ? (castW >= 600 ? "2" : "1,5") : "1") : "весь";
       textR(s, F_X, 306, capBase(F_X, o + 6, 32), z, C_DIM);
@@ -6374,6 +6436,46 @@ void castToggleZoom(int x, int y) {
     castZoom = false;
     castScroll = std::max(0, std::min(castScrollMax(), (int)(sy / k) - (y - CAST_TOP)));
   }
+}
+
+// ---------- Нажатия на плате → браузер телефона ----------
+void castQueue(const std::string& ev) {
+  if (castEvents.size() >= 20) castEvents.erase(castEvents.begin());
+  castEvents.push_back(ev);
+}
+// Касание в точке экрана: координаты пересчитываются в доли снимка (0..1), телефон нажмёт там же
+bool castSendTap(int x, int y) {
+  if (!castPx) return false;
+  float k = castScale();
+  float sx = (x - castOffX()) * k, sy = (y - CAST_TOP + castScroll) * k;
+  if (sx < 0 || sy < 0 || sx >= castW || sy >= castH) return false;
+  char b[96];
+  snprintf(b, sizeof b, "{\"t\":\"tap\",\"x\":%.4f,\"y\":%.4f,\"f\":%d}", sx / castW, sy / castH, castFrame);
+  castQueue(b);
+  castMarkSX = sx; castMarkSY = sy; castMarkT = nowMs() | 1;
+  return true;
+}
+// Листание страницы на телефоне: dir = 1 — вниз, −1 — вверх
+void castSendScroll(int dir) {
+  char b[48];
+  snprintf(b, sizeof b, "{\"t\":\"scroll\",\"d\":%d}", dir);
+  castQueue(b);
+  castResetScroll = true;
+}
+std::string castTakeEvents() {
+  std::string j = "{\"ok\":true,\"ev\":[";
+  for (size_t i = 0; i < castEvents.size(); i++) j += (i ? "," : "") + castEvents[i];
+  castEvents.clear();
+  return j + "]}";
+}
+// Вызывается из loop: отправляет одиночное касание, гасит кружок. true — нужно перерисовать
+bool castTick(uint32_t now) {
+  if (castTapPend && now - castTapPendT >= 400) {
+    castTapPend = false;
+    if (castSendTap(castTapX, castTapY)) return true;
+  }
+  if (castMarkT && now - castMarkT > 2500) { castMarkT = 0; return true; }
+  return false;
 }
 
 // ===================== Вкладки: отрисовка и нажатия =====================
@@ -6402,7 +6504,7 @@ void switchTab(int t) {
   if (castOn) { castOn = false; curTab = t; scrollY = tabScroll[t]; renderEverything(); return; }
   if (t == curTab) {  // повторное нажатие — в начало вкладки
     if (t == TAB_GAMES && gScr != G_MENU) { gScr = G_MENU; renderContent(); }
-    else if (t == TAB_REF && (rScr == R_PAGE || rScr == R_TEXT || rScr == R_IMAGE)) { refBack(); renderContent(); }
+    else if (t == TAB_REF && (rScr == R_PAGE || rScr == R_TEXT || rScr == R_IMAGE || rScr == R_HTML)) { refBack(); renderContent(); }
     else if (scrollY) { scrollY = 0; scrollVel = 0; renderContent(); }
     return;
   }
@@ -6418,7 +6520,7 @@ void switchTab(int t) {
 void goBack() {
   if (castOn) { castOn = false; renderContent(); return; }
   if (curTab == TAB_GAMES && gScr != G_MENU) { gScr = G_MENU; renderContent(); }
-  else if (curTab == TAB_REF && (rScr == R_PAGE || rScr == R_TEXT || rScr == R_IMAGE)) { refBack(); renderContent(); }
+  else if (curTab == TAB_REF && (rScr == R_PAGE || rScr == R_TEXT || rScr == R_IMAGE || rScr == R_HTML)) { refBack(); renderContent(); }
   else switchTab((curTab + 1) % TAB_COUNT);
 }
 
@@ -6453,13 +6555,13 @@ void pressAction(int hit) {
 
 // ---------- Общий разбор касаний ----------
 bool tDown = false, tMoved = false, tSlider = false, tInTabs = false;
-int tX0, tY0, tScroll0, tPan0, tLastY;
+int tX0, tY0, tScroll0, tPan0, tLastY, tLastX;
 uint32_t tLastT, lastTapT = 0;
 int lastTapX = -100, lastTapY = -100;
 
 void touchDown(int x, int y) {
   tDown = true; tMoved = false; tSlider = false;
-  tX0 = x; tY0 = y; tScroll0 = scrollY; tLastY = y; tLastT = nowMs();
+  tX0 = x; tY0 = y; tScroll0 = scrollY; tLastY = y; tLastX = x; tLastT = nowMs();
   scrollVel = 0;
   tInTabs = y >= TAB_Y;
   beepClick();
@@ -6478,7 +6580,7 @@ void touchMove(int x, int y) {
     int ns = std::max(0, std::min(castScrollMax(), tScroll0 - (y - tY0))), np = std::max(0, std::min(castPanMax(), tPan0 - (x - tX0)));
     float dt = (float)std::max<uint32_t>(1, now - tLastT);
     scrollVel = 0.6f * scrollVel + 0.4f * (-(y - tLastY) / dt);
-    tLastY = y; tLastT = now;
+    tLastY = y; tLastX = x; tLastT = now;
     if (ns != castScroll || np != castPanX) { castScroll = ns; castPanX = np; renderRegion(CAST_TOP, TAB_Y, drawTab); }
     return;
   }
@@ -6507,14 +6609,27 @@ void touchUp(int x, int y) {
     return;
   }
   if (castOn) {
-    if (tMoved) { if (nowMs() - tLastT > 80) scrollVel = 0; return; }
-    if (tY0 < CAST_TOP) { if (tX0 < 120) { castOn = false; renderContent(); } return; }
+    if (tMoved) {
+      if (nowMs() - tLastT > 80) scrollVel = 0;
+      // свайп за край снимка листает саму страницу на телефоне
+      int dy = tLastY - tY0;
+      if (abs(dy) > 70 && abs(dy) > abs(tLastX - tX0) && castLinked()) {
+        if (dy < 0 && tScroll0 >= castScrollMax()) { castSendScroll(1); scrollVel = 0; }
+        else if (dy > 0 && tScroll0 <= 0) { castSendScroll(-1); scrollVel = 0; }
+      }
+      return;
+    }
+    if (tY0 < CAST_TOP) { if (tX0 < 120) { castOn = false; castTapPend = false; renderContent(); } return; }
     uint32_t now = nowMs();
     if (now - lastTapT < 400 && abs(tX0 - lastTapX) < 40 && abs(tY0 - lastTapY) < 40) {  // двойное касание
+      castTapPend = false;
       castToggleZoom(tX0, tY0);
       lastTapT = 0;
       renderContent();
-    } else { lastTapT = now; lastTapX = tX0; lastTapY = tY0; }
+    } else {
+      lastTapT = now; lastTapX = tX0; lastTapY = tY0;
+      castTapPend = true; castTapPendT = now; castTapX = tX0; castTapY = tY0;  // нажатие на телефоне — если не будет второго касания
+    }
     return;
   }
   if (curTab == TAB_CALC) { if (downIdx >= 0) renderKey(keys[downIdx], false); downIdx = -1000; return; }
@@ -6568,7 +6683,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.2"
+#define FW_VERSION "1.3"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -6736,7 +6851,7 @@ void sendJson(int code, const char* body) {
   server.sendHeader("Cache-Control", "no-store");
   server.send(code, "application/json; charset=utf-8", body);
 }
-void apiInfo() { sendJson(200, "{\"ok\":true,\"app\":\"school\",\"screen\":true,\"files\":false,\"card\":false,\"total\":0,\"used\":0}"); }
+void apiInfo() { sendJson(200, "{\"ok\":true,\"app\":\"school\",\"screen\":true,\"events\":true,\"files\":false,\"card\":false,\"total\":0,\"used\":0}"); }
 void handleShowUpload() {
   HTTPUpload& up = server.upload();
   if (up.status == UPLOAD_FILE_START) { castRx.clear(); castRx.reserve(200000); }
@@ -6780,6 +6895,13 @@ void wifiEnable(bool on) {
   }
   if (!serverStarted) {
     server.on("/__api/info", HTTP_GET, apiInfo);
+    server.on("/__events", HTTP_GET, []() {
+      bool was = castLinked();
+      castPollT = millis();
+      std::string j = castTakeEvents();
+      sendJson(200, j.c_str());
+      if (!was && castOn && !tDown) renderRegion(0, CAST_TOP, drawTab);  // зелёная точка: телефон на связи
+    });
     server.on("/__show", HTTP_POST, []() { sendJson(200, "{\"ok\":true}"); }, handleShowUpload);
     server.onNotFound([]() { sendJson(404, "{\"ok\":false,\"error\":\"Эта прошивка принимает только картинки для экрана\"}"); });
     serverStarted = true;
@@ -6847,6 +6969,8 @@ void setup() {
   gfx->fillScreen(C_BG);
   applyTheme(setTheme);
   if (!allInit()) { Serial.println("Out of memory"); while (true) delay(1000); }
+  hv::hasPsram = psramFound();
+  hv::imgCacheLimit = hv::hasPsram ? 400 * 1024 : 60 * 1024;
   loadState();
   renderEverything();
   applyBacklight();
@@ -6895,10 +7019,20 @@ void loop() {
     castReady = false;
     lastActivity = now;
     if (dimmed) { dimmed = false; applyBacklight(); }
+    hv::evictImages(1u << 30);  // память под снимок важнее кэша картинок страницы
     if (castDecode(castRx.data(), castRx.size())) { castOn = true; scrollVel = 0; renderContent(); }
     castRx.clear();
     castRx.shrink_to_fit();
   }
+
+  if (castOn && !tDown && castTick(now)) renderRegion(CAST_TOP, TAB_Y, drawTab);
+  {  // телефон перестал забирать нажатия — убрать зелёную точку
+    static bool linkedShown = false;
+    bool l = castOn && castLinked();
+    if (l != linkedShown) { linkedShown = l; if (castOn && !tDown) renderRegion(0, CAST_TOP, drawTab); }
+  }
+  // автопереход HTML-страниц (<meta http-equiv="refresh">)
+  if (curTab == TAB_REF && rScr == R_HTML && !castOn && !tDown && hv::refreshAt && hv::tick()) { htmlSync(); lastActivity = now; renderContent(); }
 
   // мигание курсора калькулятора
   if (curTab == TAB_CALC && now - lastBlink >= 530) {
