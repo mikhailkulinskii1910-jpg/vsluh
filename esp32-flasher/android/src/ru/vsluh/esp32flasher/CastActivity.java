@@ -179,7 +179,17 @@ public class CastActivity extends Activity {
     }
 
     // Снимок видимой части страницы: 480 px в ширину, JPEG
-    private byte[] capture() {
+    private FrameSender sender;
+    // Пока со страницей работают с платы (или включено «Следить»), обновляем плату постоянно:
+    // уходят только изменившиеся строки, так что видны и набор текста, и анимации
+    private final Runnable live = new Runnable() {
+        public void run() {
+            if (follow.isChecked() || remoteRecent()) { if (!sending && frames > 0) send(); }
+            ui.postDelayed(this, 400);
+        }
+    };
+
+    private Bitmap capture() {
         int w = web.getWidth(), h = web.getHeight();
         if (w <= 0 || h <= 0) return null;
         h = Math.min(h, Math.round(w * 436f / 320f));  // верх окна в пропорциях экрана платы: снимок займёт его целиком
@@ -196,26 +206,24 @@ public class CastActivity extends Activity {
         }
         Bitmap small = Bitmap.createScaledBitmap(full, tw, th, true);
         full.recycle();
-        ByteArrayOutputStream bo = new ByteArrayOutputStream();
-        small.compress(Bitmap.CompressFormat.JPEG, 85, bo);
-        small.recycle();
-        return bo.toByteArray();
+        return small;
     }
 
     private void send() {
         if (sending) { pending = true; return; }
-        final byte[] jpg;
-        try { jpg = capture(); } catch (Throwable t) { status.setText("Не удалось снять страницу: " + t.getMessage()); return; }
-        if (jpg == null) return;
+        final Bitmap bmp;
+        try { bmp = capture(); } catch (Throwable t) { status.setText("Не удалось снять страницу: " + t.getMessage()); return; }
+        if (bmp == null) return;
+        if (sender == null) sender = new FrameSender(host, "web");
         sending = true;
-        status.setText("Отправляю на плату…");
         new Thread(new Runnable() {
             public void run() {
                 String msg;
                 try {
-                    post(jpg);
+                    if (!sender.send(bmp, 85)) { bmp.recycle(); ui.post(new Runnable() { public void run() { sending = false; if (pending) { pending = false; scheduleFollow(150); } } }); return; }
+                    bmp.recycle();
                     frames++;
-                    msg = "На плате: кадр " + frames + " (" + (jpg.length / 1024) + " КБ). " + (remoteOk
+                    msg = "На плате: кадр " + frames + " (" + (sender.lastBytes / 1024) + " КБ" + (sender.lastWasBand ? ", только изменения" : "") + "). " + (remoteOk
                         ? "Нажимайте прямо на экране платы; свайп листает страницу, «−/+» — масштаб, двойное касание — крупно на плате."
                         : "Двойное касание на плате — увеличение.");
                 } catch (Exception e) {
@@ -296,12 +304,14 @@ public class CastActivity extends Activity {
                         fails = 0;
                         remoteOk = true;
                         JSONObject resp = new JSONObject(body);
+                        if (sender != null) sender.onEvents(resp);
                         JSONArray box = resp.optJSONArray("box");
                         if (box != null && box.length() == 2) {
                             int bw = box.optInt(0), bh = box.optInt(1);
                             if (bw != boxW || bh != boxH) {  // плата перешла в «крупно» или обратно — нужен кадр другого размера
                                 boolean had = boxW > 0;
                                 boxW = bw; boxH = bh;
+                                if (sender != null) sender.needFull = true;
                                 if (had && frames > 0) ui.post(new Runnable() { public void run() { scheduleFollow(100); } });
                             }
                         }
@@ -411,12 +421,15 @@ public class CastActivity extends Activity {
         ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         try { if (Build.VERSION.SDK_INT >= 23) cm.bindProcessToNetwork(null); } catch (Exception ignored) { }
         startPolling();
+        ui.removeCallbacks(live);
+        ui.postDelayed(live, 400);
     }
 
     @Override
     protected void onPause() {
         super.onPause();
         ui.removeCallbacks(followSend);
+        ui.removeCallbacks(live);
         pollGen++;
         ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
         try { if (Build.VERSION.SDK_INT >= 23 && MainActivity.sBoardNet != null) cm.bindProcessToNetwork(MainActivity.sBoardNet); } catch (Exception ignored) { }

@@ -39,6 +39,7 @@
 #endif
 #include <JPEGDEC.h>
 #include <math.h>
+#include <mutex>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -3345,6 +3346,8 @@ uint8_t setDim = 2;                  // затемнение: 0 — никогд
 uint8_t setTheme = 0;
 bool setSound = false;               // щелчок при нажатии
 bool setFlip = false;                // экран перевёрнут на 180°
+bool setFastSpi = false;             // экран на 80 МГц вместо 40 (вдвое быстрее вывод картинки)
+uint32_t spiConfirmUntil = 0;        // проверка быстрого экрана: до этого времени ждём «Оставить»
 bool setArmReset = false;            // «Сбросить настройки» нажата один раз
 
 // Игры
@@ -3389,8 +3392,13 @@ bool castOn = false;                 // показываем картинку с
 uint16_t* castPx = nullptr;
 int castW = 0, castH = 0, castScroll = 0, castPanX = 0, castFrame = 0;
 bool castZoom = false;
-std::vector<uint8_t> castRx;         // принимаемый JPEG
+// Кадры принимает отдельная задача на втором ядре: пока плата показывает один кадр, следующий уже едет по Wi-Fi
+std::vector<uint8_t> castRx;         // принимаемый JPEG (только задача приёма)
+std::vector<uint8_t> castReadyBuf;   // принятый и ждущий показа
+int castRxY = -1, castReadyY = -1;   // ≥ 0 — это полоса кадра с такой строки, −1 — кадр целиком
 volatile bool castReady = false;
+volatile bool castNeedFull = false;  // полосу не к чему приложить — попросить у телефона кадр целиком
+std::mutex castMx;
 // обратная связь: касания на плате уходят в браузер телефона (приложение забирает их запросом /__events)
 std::vector<std::string> castEvents;
 uint32_t castPollT = 0;              // когда телефон последний раз спрашивал события
@@ -6199,6 +6207,7 @@ void refBack() {
 void boardInfo(std::vector<std::string>& keys, std::vector<std::string>& vals);
 void resetAllSettings();
 void wifiEnable(bool on);
+void setFastScreen(bool on);          // сохранить и перезапустить плату
 
 #define SET_TOP 64
 // Верх каждой панели в координатах содержимого (до прокрутки)
@@ -6207,10 +6216,11 @@ void wifiEnable(bool on);
 #define SP_THEME 192
 #define SP_SOUND 298
 #define SP_FLIP 362
-#define SP_WIFI 426
-#define SP_INFO 558
-#define SP_RESET 750
-#define SET_TOTAL 810
+#define SP_SPI 426
+#define SP_WIFI 490
+#define SP_INFO 622
+#define SP_RESET 814
+#define SET_TOTAL 874
 #define SL_X 30
 #define SL_W 260
 
@@ -6269,6 +6279,12 @@ void drawSettings(Surface& s, int top) {
   drawText(s, F_SB, 30, y + 24, "Перевернуть экран", C_WHITE);
   drawText(s, F_X, 30, y + 41, "если разъём USB мешает снизу", C_DIM);
   drawToggle(s, 240, y + 13, setFlip);
+  // скорость экрана
+  y = y0 + SP_SPI;
+  panel(s, 16, y, 288, 56, 16);
+  drawText(s, F_SB, 30, y + 24, "Быстрый экран", C_WHITE);
+  drawText(s, F_X, 30, y + 41, "80 МГц, с перезапуском платы", C_DIM);
+  drawToggle(s, 240, y + 13, setFastSpi);
   // Wi-Fi
   y = y0 + SP_WIFI;
   panel(s, 16, y, 288, 120, 16);
@@ -6325,11 +6341,36 @@ void settingsTap(int x, int y) {
   }
   if (cy >= SP_SOUND && cy < SP_SOUND + 56) { setSound = !setSound; saveSettings(); beepClick(); return; }
   if (cy >= SP_FLIP && cy < SP_FLIP + 56) { setFlip = !setFlip; saveSettings(); return; }
+  if (cy >= SP_SPI && cy < SP_SPI + 56) { setFastScreen(!setFastSpi); return; }
   if (cy >= SP_WIFI && cy < SP_WIFI + 120) { wifiEnable(!wifiOn); return; }
   if (cy >= SP_RESET && cy < SP_RESET + 44) {
     if (armed) resetAllSettings();
     else setArmReset = true;
   }
+}
+
+// Проверка быстрого экрана после перезапуска: если картинка испорчена, «Оставить» не нажмут —
+// через 12 секунд плата сама вернёт обычную скорость
+void drawSpiConfirm(Surface& s, int top) {
+  int o = -top;
+  fillRectS(s, 0, o, SCREEN_W, SCREEN_H, C_BG);
+  int y = o + 120;
+  rrectX(s, 16, y, 288, 230, 18, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
+  textC(s, F_SB, 160, y + 36, "Быстрый экран включён", C_WHITE);
+  auto w = wrapText(F_X, "Картинка чёткая, без полос и мусора? Тогда нажмите «Оставить». Иначе ничего не трогайте — плата сама вернёт обычную скорость.", 256);
+  for (size_t i = 0; i < w.size() && i < 5; i++) textC(s, F_X, 160, y + 62 + 16 * (int)i, w[i], C_DIM);
+  int left = spiConfirmUntil > nowMs() ? (int)((spiConfirmUntil - nowMs() + 999) / 1000) : 0;
+  rr(s, 30, y + 150, 124, 48, 14, C_EQ, 255);
+  textC(s, F_SB, 92, capBase(F_SB, y + 150, 48), "Оставить", C_WHITE);
+  rrectX(s, 166, y + 150, 124, 48, 14, C_KEY, C_KEY, 255, 255, C_BORDER, 255);
+  textC(s, F_SB, 228, capBase(F_SB, y + 150, 48), "Вернуть (" + std::to_string(left) + ")", C_ACCENT);
+}
+// 1 — «Оставить», 2 — «Вернуть», 0 — мимо
+int spiConfirmHit(int x, int y) {
+  if (y < 270 || y >= 318) return 0;
+  if (x >= 30 && x < 154) return 1;
+  if (x >= 166 && x < 290) return 2;
+  return 0;
 }
 
 // ===================== Экран телефона на плате =====================
@@ -6378,6 +6419,26 @@ bool castDecode(const uint8_t* data, size_t len) {
       castScroll = std::min(castScroll, castScrollMax());
     }
   }
+  return ok;
+}
+
+// Полоса кадра (телефон шлёт только изменившиеся строки): раскодировать прямо в нужное место снимка
+bool castDecodeBand(const uint8_t* data, size_t len, int y) {
+  if (!castPx) { castNeedFull = true; return false; }
+  JPEGDEC* j = new JPEGDEC();
+  bool ok = false;
+  if (j->openRAM((uint8_t*)data, (int)len, jpegToBuf)) {
+    int W = j->getWidth(), H = j->getHeight();
+    if (W == castW && y >= 0 && y + H <= castH) {
+      gJ.px = castPx + (size_t)y * castW; gJ.w = W; gJ.h = H;
+      j->setPixelType(RGB565_LITTLE_ENDIAN);
+      ok = j->decode(0, 0, 0) != 0;
+    }
+    j->close();
+  }
+  delete j;
+  if (!ok) castNeedFull = true;
+  else { castFrame++; castMarkT = 0; }
   return ok;
 }
 
@@ -6509,6 +6570,7 @@ void castToggleZoom(int x, int y) {
 
 // ---------- Нажатия на плате → телефон ----------
 void castQueue(const std::string& ev) {
+  std::lock_guard<std::mutex> lk(castMx);
   if (castEvents.size() >= 24) castEvents.erase(castEvents.begin());
   castEvents.push_back(ev);
 }
@@ -6545,7 +6607,10 @@ void castSendScroll(int dir) {
   castQueue(b);
 }
 std::string castTakeEvents() {
-  std::string j = "{\"ok\":true,\"ev\":[";
+  std::lock_guard<std::mutex> lk(castMx);
+  std::string j = "{\"ok\":true,\"bands\":1,";
+  if (castNeedFull) { castNeedFull = false; j += "\"full\":true,"; }
+  j += "\"ev\":[";
   for (size_t i = 0; i < castEvents.size(); i++) j += (i ? "," : "") + castEvents[i];
   castEvents.clear();
   char b[48];
@@ -6803,7 +6868,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.6"
+#define FW_VERSION "1.7"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -7004,10 +7069,11 @@ void wifiInfoUpdate() {
 void apiWifi() {
   homeSsid = server.arg("ssid"); homeSsid.trim();
   homePass = server.arg("pass");
-  prefs.begin("school", false);
-  prefs.putString("wssid", homeSsid);
-  prefs.putString("wpass", homePass);
-  prefs.end();
+  Preferences p;  // свой объект: задача приёма работает параллельно с основной
+  p.begin("school", false);
+  p.putString("wssid", homeSsid);
+  p.putString("wpass", homePass);
+  p.end();
   std::string j = "{\"ok\":true,\"home\":" + jsonStr(homeSsid) + "}";
   sendJson(200, j.c_str());
   wifiApplyAt = millis() + 300;  // ответить успеем до переключения
@@ -7025,13 +7091,41 @@ void wifiApplyHome() {
 }
 void handleShowUpload() {
   HTTPUpload& up = server.upload();
-  if (up.status == UPLOAD_FILE_START) { castRx.clear(); castRx.reserve(200000); if (server.hasArg("mode")) castMode = server.arg("mode") == "ctl" ? 1 : 0; }
-  else if (up.status == UPLOAD_FILE_WRITE) { if (castRx.size() + up.currentSize <= 900000) castRx.insert(castRx.end(), up.buf, up.buf + up.currentSize); }
-  else if (up.status == UPLOAD_FILE_END) castReady = !castRx.empty();
+  if (up.status == UPLOAD_FILE_START) {
+    castRx.clear();
+    castRxY = server.hasArg("y") ? server.arg("y").toInt() : -1;
+    if (server.hasArg("mode")) castMode = server.arg("mode") == "ctl" ? 1 : 0;
+  } else if (up.status == UPLOAD_FILE_WRITE) { if (castRx.size() + up.currentSize <= 900000) castRx.insert(castRx.end(), up.buf, up.buf + up.currentSize); }
+}
+// Кадр принят целиком: ждём, пока плата покажет предыдущий (до 1,5 с), и только потом отвечаем —
+// телефон шлёт следующий кадр ровно тогда, когда плата готова, ни один кадр не теряется
+void handleShowDone() {
+  uint32_t t0 = millis();
+  while (castReady && millis() - t0 < 1500) delay(2);
+  {
+    std::lock_guard<std::mutex> lk(castMx);
+    if (castReady && castRxY >= 0) castNeedFull = true;  // предыдущий так и не показали — полоса легла бы не на тот кадр
+    castReadyBuf.swap(castRx);
+    castReadyY = castRxY;
+    castReady = !castReadyBuf.empty();
+  }
+  sendJson(200, "{\"ok\":true}");
+}
+// Задача приёма по Wi-Fi на ядре 0 (ядро 1 занято экраном и касаниями)
+volatile bool serverRun = false, serverBusy = false;
+void serverTask(void*) {
+  for (;;) {
+    serverBusy = true;
+    if (serverRun) server.handleClient();
+    serverBusy = false;
+    vTaskDelay(1);
+  }
 }
 void wifiEnable(bool on) {
   if (on == wifiOn) return;
   if (!on) {
+    serverRun = false;
+    while (serverBusy) delay(1);
     server.stop();
     if (mdnsUp) { MDNS.end(); mdnsUp = false; }
     staUp = false;
@@ -7067,13 +7161,14 @@ void wifiEnable(bool on) {
       if (server.hasArg("mode")) castMode = server.arg("mode") == "ctl" ? 1 : 0;
       std::string j = castTakeEvents();
       sendJson(200, j.c_str());
-      if (!was && castOn && !tDown) renderRegion(0, CAST_TOP, drawTab);  // зелёная точка: телефон на связи
+      (void)was;  // зелёную точку дорисует loop: рисовать из задачи приёма нельзя
     });
-    server.on("/__show", HTTP_POST, []() { sendJson(200, "{\"ok\":true}"); }, handleShowUpload);
+    server.on("/__show", HTTP_POST, handleShowDone, handleShowUpload);
     server.onNotFound([]() { sendJson(404, "{\"ok\":false,\"error\":\"Эта прошивка принимает только картинки для экрана\"}"); });
     serverStarted = true;
   }
   server.begin();
+  serverRun = true;
   renderContent();
 }
 
@@ -7093,6 +7188,7 @@ void loadState() {
   prefs.end();
 }
 bool lastFlip = false;
+int lastTx = 0, lastTy = 0;
 void saveSettings() {
   prefs.begin("school", false);
   prefs.putUChar("br", setBright);
@@ -7111,8 +7207,17 @@ void loadSettings() {
   setTheme = prefs.getUChar("th", 0) % 6;
   setSound = prefs.getBool("snd", false);
   setFlip = prefs.getBool("flip", false);
+  setFastSpi = prefs.getBool("spi80", false);
   prefs.end();
   lastFlip = setFlip;
+}
+void setFastScreen(bool on) {
+  prefs.begin("school", false);
+  prefs.putBool("spi80", on);
+  prefs.putBool("spiTry", on);  // после перезапуска — проверка с откатом
+  prefs.end();
+  delay(100);
+  ESP.restart();
 }
 void resetAllSettings() {
   setBright = 80; setDim = 2; setTheme = 0; setSound = false; setFlip = false;
@@ -7130,12 +7235,17 @@ void setup() {
   Wire.setClock(400000);
   resetPanelAndTouch();
   SPI.begin(18, 19, 23);
-  if (!gfx->begin(40000000)) Serial.println("gfx->begin() failed!");
   loadSettings();
+  if (!gfx->begin(setFastSpi ? 80000000 : 40000000)) Serial.println("gfx->begin() failed!");
   gfx->setRotation(setFlip ? 2 : 0);
   gfx->fillScreen(C_BG);
   applyTheme(setTheme);
   if (!allInit()) { Serial.println("Out of memory"); while (true) delay(1000); }
+  xTaskCreatePinnedToCore(serverTask, "http", 8192, nullptr, 1, nullptr, 0);
+  prefs.begin("school", true);
+  bool spiTry = prefs.getBool("spiTry", false);
+  prefs.end();
+  if (spiTry && setFastSpi) spiConfirmUntil = millis() + 12000;
   hv::hasPsram = psramFound();
   hv::imgCacheLimit = hv::hasPsram ? 400 * 1024 : 60 * 1024;
   loadState();
@@ -7159,6 +7269,26 @@ void loop() {
   lastBoot = boot;
   lastPwr = pwr;
 
+  if (spiConfirmUntil) {  // проверка быстрого экрана
+    static uint32_t lastDraw = 0;
+    static bool was = false;
+    TouchPt ct;
+    bool d = readTouch(ct);
+    int hit = was && !d ? spiConfirmHit(lastTx, lastTy) : 0;
+    if (d) { lastTx = ct.x; lastTy = ct.y; }
+    was = d;
+    if (hit == 1) {
+      prefs.begin("school", false); prefs.putBool("spiTry", false); prefs.end();
+      spiConfirmUntil = 0;
+      renderEverything();
+    } else if (hit == 2 || (int32_t)(now - spiConfirmUntil) >= 0) {
+      prefs.begin("school", false); prefs.putBool("spi80", false); prefs.putBool("spiTry", false); prefs.end();
+      delay(100);
+      ESP.restart();
+    } else if (now - lastDraw > 500) { lastDraw = now; renderRegion(0, SCREEN_H, drawSpiConfirm); }
+    delay(10);
+    return;
+  }
   // касания
   static int releaseCount = 0;
   static bool wake = false;
@@ -7182,7 +7312,6 @@ void loop() {
   }
   scrollTick();
   if (wifiOn) {
-    server.handleClient();
     if (wifiApplyAt && (int32_t)(now - wifiApplyAt) >= 0) { wifiApplyAt = 0; wifiApplyHome(); if (curTab == TAB_SET && !castOn) renderContent(); }
     static uint32_t staCheck = 0;
     if (homeSsid.length() && now - staCheck > 500) {
@@ -7197,18 +7326,29 @@ void loop() {
     }
   }
   if (castReady && !tDown) {  // пришла картинка с телефона
-    castReady = false;
+    static std::vector<uint8_t> buf;
+    int by;
+    {
+      std::lock_guard<std::mutex> lk(castMx);
+      buf.swap(castReadyBuf);
+      by = castReadyY;
+      castReady = false;
+    }
     lastActivity = now;
     if (dimmed) { dimmed = false; applyBacklight(); }
-    hv::evictImages(1u << 30);  // память под снимок важнее кэша картинок страницы
     bool justClosed = castClosedT && now - castClosedT < 4000;  // кадр отправили до того, как плата закрыла экран
     bool wasOn = castOn && castPx;
-    if (!justClosed && castDecode(castRx.data(), castRx.size())) {
-      castOn = true; castClosedT = 0; scrollVel = 0;
-      if (wasOn) castRenderDiff(); else renderContent();
+    if (!justClosed) {
+      if (by >= 0) { if (wasOn && castDecodeBand(buf.data(), buf.size(), by)) castRenderDiff(); }
+      else {
+        hv::evictImages(1u << 30);  // память под снимок важнее кэша картинок страницы
+        if (castDecode(buf.data(), buf.size())) {
+          castOn = true; castClosedT = 0; scrollVel = 0;
+          if (wasOn) castRenderDiff(); else renderContent();
+        }
+      }
     }
-    castRx.clear();
-    castRx.shrink_to_fit();
+    if (buf.capacity() > 300000) { buf.clear(); buf.shrink_to_fit(); }
   }
 
   if (castOn && !tDown && castTick(now)) renderRegion(CAST_TOP, CAST_BOT, drawTab);
@@ -7229,6 +7369,6 @@ void loop() {
   // затемнение при простое
   static const uint32_t DIM_MS[4] = { 0, 30000, 60000, 300000 };
   if (!dimmed && setDim && now - lastActivity > DIM_MS[setDim]) { dimmed = true; applyBacklight(); }
-  delay(8);
+  delay(castOn ? 2 : 8);  // во время показа экрана телефона — чаще
 }
 #endif

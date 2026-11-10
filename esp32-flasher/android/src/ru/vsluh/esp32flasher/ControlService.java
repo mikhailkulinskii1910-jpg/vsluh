@@ -65,6 +65,7 @@ public class ControlService extends Service {
     private String host = "192.168.4.1";
     private int fw, fh;                 // размер снимка
     private int frames = 0;
+    private FrameSender sender;
     private volatile int boxW = 0, boxH = 0;   // какой кадр просит плата (ровно под её экран)
     private volatile boolean boxChanged = false;
 
@@ -100,6 +101,7 @@ public class ControlService extends Service {
         vd = proj.createVirtualDisplay("esp32-board", fw, fh, Math.max(120, dm.densityDpi * fw / sw),
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader.getSurface(), null, h);
         sState = "Экран телефона показывается на плате.";
+        sender = new FrameSender(host, "ctl");
         new Thread(new Runnable() { public void run() { captureLoop(); } }, "control-send").start();
         new Thread(new Runnable() { public void run() { pollLoop(); } }, "control-events").start();
         return START_NOT_STICKY;
@@ -133,7 +135,7 @@ public class ControlService extends Service {
 
     // ---------- Снимки экрана → плата ----------
     private void captureLoop() {
-        long lastSig = 0, lastSent = 0;
+        long lastSent = 0;
         int fails = 0;
         while (running) {
             Bitmap bmp = null;
@@ -155,32 +157,28 @@ public class ControlService extends Service {
             }
             long now = SystemClock.uptimeMillis();
             if (bmp != null) {
-                long sig = signature(bmp);
-                if (boxChanged) { boxChanged = false; lastSig = 0; }
-                if (sig != lastSig || now - lastSent > 5000) {  // изменилось — отправляем; иначе раз в 5 с для связи
-                    if (boxW > 0 && boxH > 0) {  // кадр точно под экран платы: меньше передавать и декодировать, а картинка чётче
-                        float s = Math.min(1f, Math.min((float) boxW / fw, (float) boxH / fh));
-                        int tw = Math.max(1, Math.round(fw * s)), th = Math.max(1, Math.round(fh * s));
-                        if (tw != fw || th != fh) { Bitmap sm = Bitmap.createScaledBitmap(bmp, tw, th, true); bmp.recycle(); bmp = sm; }
-                    }
-                    try {
-                        ByteArrayOutputStream bo = new ByteArrayOutputStream();
-                        bmp.compress(Bitmap.CompressFormat.JPEG, 82, bo);
-                        post(bo.toByteArray());
-                        lastSig = sig;
+                if (boxChanged) { boxChanged = false; sender.needFull = true; }
+                if (now - lastSent > 5000) sender.needFull = true;  // раз в 5 с — целиком, для надёжности
+                if (boxW > 0 && boxH > 0) {  // кадр точно под экран платы: меньше передавать и декодировать, а картинка чётче
+                    float s = Math.min(1f, Math.min((float) boxW / fw, (float) boxH / fh));
+                    int tw = Math.max(1, Math.round(fw * s)), th = Math.max(1, Math.round(fh * s));
+                    if (tw != fw || th != fh) { Bitmap sm = Bitmap.createScaledBitmap(bmp, tw, th, true); bmp.recycle(); bmp = sm; }
+                }
+                try {
+                    if (sender.send(bmp, 82)) {  // только изменившиеся строки; плата отвечает, когда готова к следующему
                         lastSent = SystemClock.uptimeMillis();
                         frames++;
-                        fails = 0;
-                        sState = "Экран телефона на плате: кадр " + frames + ".";
-                    } catch (Exception e) {
-                        fails++;
-                        sState = MainActivity.sCm != null && MainActivity.vpnOn(MainActivity.sCm)
-                                ? MainActivity.VPN_HINT : "Плата не отвечает (" + e.getMessage() + ").";
+                        sState = "Экран телефона на плате: кадр " + frames + " (" + (sender.lastBytes / 1024) + " КБ" + (sender.lastWasBand ? ", только изменения" : "") + ").";
                     }
+                    fails = 0;
+                } catch (Exception e) {
+                    fails++;
+                    sState = MainActivity.sCm != null && MainActivity.vpnOn(MainActivity.sCm)
+                            ? MainActivity.VPN_HINT : "Плата не отвечает (" + e.getMessage() + ").";
                 }
                 bmp.recycle();
             }
-            sleep(fails > 0 ? Math.min(3000, 500L * fails) : 120);
+            sleep(fails > 0 ? Math.min(3000, 500L * fails) : 40);
         }
     }
 
@@ -235,6 +233,7 @@ public class ControlService extends Service {
                 if (code == 404) { sState = "На плате старая прошивка: обновите «Школьный набор» до 1.5."; sleep(3000); continue; }
                 fails = 0;
                 JSONObject resp = new JSONObject(bo.toString("UTF-8"));
+                if (sender != null) sender.onEvents(resp);
                 JSONArray box = resp.optJSONArray("box");
                 if (box != null && box.length() == 2 && (box.optInt(0) != boxW || box.optInt(1) != boxH)) {
                     boxW = box.optInt(0); boxH = box.optInt(1); boxChanged = true;
