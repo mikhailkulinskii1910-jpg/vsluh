@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 
@@ -30,7 +31,12 @@ class AlarmService : Service() {
         super.onCreate()
         createChannels()
         // Обязательный постоянный значок «работает в фоне».
-        startForeground(NOTIF_SERVICE, serviceNotification())
+        // На Android 14+ тип службы обязателен (объявлен в манифесте).
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(NOTIF_SERVICE, serviceNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(NOTIF_SERVICE, serviceNotification())
+        }
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
