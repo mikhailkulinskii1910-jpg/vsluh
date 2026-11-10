@@ -35,6 +35,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <ESPmDNS.h>
 #endif
 #include <JPEGDEC.h>
 #include <math.h>
@@ -3398,7 +3399,8 @@ uint32_t castTapPendT = 0;
 int castTapX = 0, castTapY = 0;
 float castMarkSX = 0, castMarkSY = 0;  // кружок на месте нажатия (координаты снимка)
 uint32_t castMarkT = 0;
-bool castResetScroll = true;
+int castMode = 0;                    // 0 — страница из браузера приложения, 1 — весь экран телефона
+uint32_t castClosedT = 0;            // плата закрыла экран: опоздавшие кадры не открывают его снова
 
 void pushPixels(int x, int y, int w, int h, const uint16_t* px);  // вывод на экран (своя на плате и в симуляторе)
 
@@ -6204,9 +6206,9 @@ void wifiEnable(bool on);
 #define SP_SOUND 298
 #define SP_FLIP 362
 #define SP_WIFI 426
-#define SP_INFO 538
-#define SP_RESET 730
-#define SET_TOTAL 790
+#define SP_INFO 558
+#define SP_RESET 750
+#define SET_TOTAL 810
 #define SL_X 30
 #define SL_W 260
 
@@ -6267,13 +6269,13 @@ void drawSettings(Surface& s, int top) {
   drawToggle(s, 240, y + 13, setFlip);
   // Wi-Fi
   y = y0 + SP_WIFI;
-  panel(s, 16, y, 288, 100, 16);
+  panel(s, 16, y, 288, 120, 16);
   drawText(s, F_SB, 30, y + 24, "Wi-Fi: экран телефона", C_WHITE);
   drawToggle(s, 240, y + 11, wifiOn);
   {
     std::string t = wifiOn ? wifiInfo : "Включите, чтобы показывать на плате страницы из приложения ESP32 Flasher.";
     auto w = wrapText(F_X, t, 256);
-    for (size_t i = 0; i < w.size() && i < 4; i++) drawText(s, F_X, 30, y + 48 + 15 * (int)i, w[i].c_str(), wifiOn ? C_DIGIT : C_DIM);
+    for (size_t i = 0; i < w.size() && i < 5; i++) drawText(s, F_X, 30, y + 48 + 15 * (int)i, w[i].c_str(), wifiOn ? C_DIGIT : C_DIM);
   }
   // о плате
   y = y0 + SP_INFO;
@@ -6321,7 +6323,7 @@ void settingsTap(int x, int y) {
   }
   if (cy >= SP_SOUND && cy < SP_SOUND + 56) { setSound = !setSound; saveSettings(); beepClick(); return; }
   if (cy >= SP_FLIP && cy < SP_FLIP + 56) { setFlip = !setFlip; saveSettings(); return; }
-  if (cy >= SP_WIFI && cy < SP_WIFI + 100) { wifiEnable(!wifiOn); return; }
+  if (cy >= SP_WIFI && cy < SP_WIFI + 120) { wifiEnable(!wifiOn); return; }
   if (cy >= SP_RESET && cy < SP_RESET + 44) {
     if (armed) resetAllSettings();
     else setArmReset = true;
@@ -6329,9 +6331,14 @@ void settingsTap(int x, int y) {
 }
 
 // ===================== Экран телефона на плате =====================
-// Приложение ESP32 Flasher присылает снимок страницы (JPEG) по Wi-Fi; плата показывает его
-// на всю ширину, прокрутка пальцем, двойное касание — увеличение.
+// Приложение ESP32 Flasher присылает снимок (JPEG) по Wi-Fi: страницу из своего браузера
+// (режим «Экран на плату») или весь экран телефона (режим «Управление телефоном»).
+// Плата показывает его на весь экран, а касания, свайпы и кнопки отправляет обратно:
+// приложение забирает их запросом /__events и повторяет на телефоне.
 #define CAST_TOP 44
+#define CAST_BOT SCREEN_H
+#define CAST_VH (CAST_BOT - CAST_TOP)
+#define CAST_BTN_X0 176          // три кнопки в заголовке: 176..320, по 48 px
 void wifiEnable(bool on);
 bool castLinked() { return castPollT && nowMs() - castPollT < 3000; }
 
@@ -6357,54 +6364,95 @@ bool castDecode(const uint8_t* data, size_t len) {
   if (ok) {
     castFrame++;
     castMarkT = 0;
-    // после нажатия страница присылается заново — прокрутку на плате сохраняем; после листания — в начало
-    if (castResetScroll || castW != oldW || castH != oldH) castScroll = 0;
-    castResetScroll = false;
-    castPanX = std::min(castPanX, std::max(0, castW - SCREEN_W));
+    if (castW != oldW || castH != oldH) { castZoom = false; castScroll = castPanX = 0; }  // другой размер — показать целиком
   }
   return ok;
 }
 
-int castOffX() { return castZoom ? -castPanX : (castW < SCREEN_W ? (SCREEN_W - castW) / 2 : 0); }
-float castScale() { return castZoom || castW <= SCREEN_W ? 1.0f : (float)castW / SCREEN_W; }  // пикселей снимка на пиксель экрана
+// Масштаб: пикселей снимка на пиксель экрана. «Целиком» — снимок вписан в экран,
+// «крупно» (двойное касание) — примерно вдвое ближе, с прокруткой пальцем.
+float castFit() { return castPx ? std::max((float)castW / SCREEN_W, (float)castH / CAST_VH) : 1.0f; }
+float castZoomK() { float f = castFit(); return std::max(f / 2, std::min(1.0f, f)); }
+bool castCanZoom() { return castPx && castZoomK() < castFit() - 0.05f; }
+float castScale() { return castZoom ? castZoomK() : castFit(); }
+int castContentW() { return castPx ? (int)(castW / castScale()) : 0; }
 int castContentH() { return castPx ? (int)(castH / castScale()) : 0; }
-int castScrollMax() { return std::max(0, castContentH() - (TAB_Y - CAST_TOP)); }
-int castPanMax() { return castZoom ? std::max(0, castW - SCREEN_W) : 0; }
+int castScrollMax() { return std::max(0, castContentH() - CAST_VH); }
+int castPanMax() { return std::max(0, castContentW() - SCREEN_W); }
+int castOffX() { int cw = castContentW(); return cw < SCREEN_W ? (SCREEN_W - cw) / 2 : -castPanX; }
+int castOffY() { int ch = castContentH(); return ch < CAST_VH ? (CAST_VH - ch) / 2 : -castScroll; }  // от CAST_TOP
+
+// Точка экрана → доли снимка (0..1); false — мимо снимка
+bool castToFrac(int x, int y, float& fx, float& fy) {
+  if (!castPx) return false;
+  float k = castScale();
+  float sx = (x - castOffX()) * k, sy = (y - CAST_TOP - castOffY()) * k;
+  if (sx < 0 || sy < 0 || sx >= castW || sy >= castH) return false;
+  fx = sx / castW; fy = sy / castH;
+  return true;
+}
+
+// Кнопки заголовка: в браузере — «−», «+», «назад»; при управлении телефоном — «назад», «домой», «недавние»
+static const char* const CAST_KEYS_WEB[3] = { "zout", "zin", "back" };
+static const char* const CAST_KEYS_CTL[3] = { "back", "home", "recents" };
+
+void drawCastButton(Surface& s, int i, int o) {
+  float cx = CAST_BTN_X0 + 24 + i * 48, cy = o + 22;
+  rr(s, cx - 20, cy - 15, 40, 30, 10, C_KEY, 255);
+  uint16_t c = C_WHITE;
+  const char* k = castMode ? CAST_KEYS_CTL[i] : CAST_KEYS_WEB[i];
+  if (!strcmp(k, "zout") || !strcmp(k, "zin")) {
+    capsuleS(s, cx - 7, cy, cx + 7, cy, 1.4f, c);
+    if (k[1] == 'i') capsuleS(s, cx, cy - 7, cx, cy + 7, 1.4f, c);
+  } else if (!strcmp(k, "back")) {
+    if (castMode) {  // треугольник «назад» Android
+      capsuleS(s, cx + 5, cy - 7, cx - 6, cy, 1.4f, c);
+      capsuleS(s, cx - 6, cy, cx + 5, cy + 7, 1.4f, c);
+      capsuleS(s, cx + 5, cy - 7, cx + 5, cy + 7, 1.4f, c);
+    } else iconChevronL(s, cx, cy, 6, c);
+  } else if (!strcmp(k, "home")) {
+    ringS(s, cx, cy, 7, 2.6f, c);
+  } else {  // недавние
+    capsuleS(s, cx - 6, cy - 6, cx + 6, cy - 6, 1.3f, c);
+    capsuleS(s, cx - 6, cy + 6, cx + 6, cy + 6, 1.3f, c);
+    capsuleS(s, cx - 6, cy - 6, cx - 6, cy + 6, 1.3f, c);
+    capsuleS(s, cx + 6, cy - 6, cx + 6, cy + 6, 1.3f, c);
+  }
+}
 
 void drawCast(Surface& s, int top) {
   int o = -top;
-  int y0 = std::max(0, CAST_TOP - top);
   if (castPx) {
     float k = castScale();
-    int offX = castOffX();
-    int outW = castZoom ? SCREEN_W : std::min(SCREEN_W, (int)(castW / k));
-    for (int py = y0; py < s.h; py++) {
-      int cy = top + py - CAST_TOP + castScroll;
+    int offX = castOffX(), offY = castOffY();
+    int cw = castContentW(), ch = castContentH();
+    int x0 = std::max(0, offX), x1 = std::min(SCREEN_W, offX + cw);
+    bool nearest = k <= 1.05f;
+    for (int py = 0; py < s.h; py++) {
+      int y = top + py;
+      if (y < CAST_TOP || y >= CAST_BOT) continue;
+      int cy = y - CAST_TOP - offY;
+      if (cy < 0 || cy >= ch) continue;
+      int iy = std::min(castH - 1, (int)(cy * k)), iy2 = std::min(castH - 1, iy + 1);
       uint16_t* row = s.px + py * s.w;
-      if (k == 1.0f) {
-        if (cy >= castH) continue;
-        const uint16_t* src = castPx + cy * castW;
-        for (int x = 0; x < SCREEN_W; x++) { int sx = x - offX; if (sx >= 0 && sx < castW) row[x] = src[sx]; }
-      } else {  // уменьшение: среднее по 2×2 соседям
-        float sy = cy * k;
-        int iy = (int)sy;
-        if (iy >= castH) continue;
-        int iy2 = std::min(castH - 1, iy + 1);
-        for (int x = 0; x < outW; x++) {
-          int ix = (int)(x * k), ix2 = std::min(castW - 1, ix + 1);
-          uint16_t a = castPx[iy * castW + ix], b = castPx[iy * castW + ix2], c = castPx[iy2 * castW + ix], d = castPx[iy2 * castW + ix2];
-          uint32_t R = (a >> 11) + (b >> 11) + (c >> 11) + (d >> 11), G = ((a >> 5) & 63) + ((b >> 5) & 63) + ((c >> 5) & 63) + ((d >> 5) & 63), B = (a & 31) + (b & 31) + (c & 31) + (d & 31);
-          row[x + offX] = (uint16_t)(((R >> 2) << 11) | ((G >> 2) << 5) | (B >> 2));
-        }
+      const uint16_t* r1 = castPx + iy * castW;
+      const uint16_t* r2 = castPx + iy2 * castW;
+      for (int x = x0; x < x1; x++) {
+        int ix = std::min(castW - 1, (int)((x - offX) * k));
+        if (nearest) { row[x] = r1[ix]; continue; }
+        int ix2 = std::min(castW - 1, ix + 1);  // уменьшение: среднее по 2×2 соседям
+        uint16_t a = r1[ix], b = r1[ix2], c = r2[ix], d = r2[ix2];
+        uint32_t R = (a >> 11) + (b >> 11) + (c >> 11) + (d >> 11), G = ((a >> 5) & 63) + ((b >> 5) & 63) + ((c >> 5) & 63) + ((d >> 5) & 63), B = (a & 31) + (b & 31) + (c & 31) + (d & 31);
+        row[x] = (uint16_t)(((R >> 2) << 11) | ((G >> 2) << 5) | (B >> 2));
       }
     }
-    int sm = castScrollMax();  // полоса прокрутки
+    int sm = castScrollMax();  // полоса прокрутки в режиме «крупно»
     if (sm > 0) {
-      int vh = TAB_Y - CAST_TOP, bh = std::max(30, vh * vh / (vh + sm)), by = CAST_TOP + (vh - bh) * castScroll / sm;
+      int vh = CAST_VH, bh = std::max(30, vh * vh / (vh + sm)), by = CAST_TOP + (vh - bh) * castScroll / sm;
       rr(s, SCREEN_W - 5, o + by, 3, bh, 1.5f, C_DIM, 160);
     }
     if (castMarkT) {  // кружок там, где нажали: нажатие ушло на телефон
-      float mx = castMarkSX / k + offX, my = castMarkSY / k - castScroll + CAST_TOP + o;
+      float mx = castMarkSX / k + offX, my = castMarkSY / k + offY + CAST_TOP + o;
       ringS(s, mx, my, 16, 3, C_ACCENT);
       discA(s, mx, my, 5, C_ACCENT, 200);
     }
@@ -6412,7 +6460,7 @@ void drawCast(Surface& s, int top) {
     int y = o + 110;
     rrectX(s, 16, y, 288, 200, 18, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
     textC(s, F_SB, 160, y + 36, "Ждём картинку с телефона", C_WHITE);
-    std::string hint = wifiOn ? "В приложении ESP32 Flasher откройте «Плата по Wi-Fi» → «Экран на плату», найдите нужную страницу и нажмите «Показать на плате». " + wifiInfo
+    std::string hint = wifiOn ? "В приложении ESP32 Flasher откройте «Плата по Wi-Fi» → «Экран на плату» или «Управление телефоном». " + wifiInfo
                               : "Сначала включите Wi-Fi: Настройки → «Wi-Fi: экран телефона».";
     auto w = wrapText(F_X, hint, 256);
     for (size_t i = 0; i < w.size() && i < 9; i++) textC(s, F_X, 160, y + 64 + 16 * (int)i, w[i], C_DIM);
@@ -6421,61 +6469,87 @@ void drawCast(Surface& s, int top) {
     fillRectS(s, 0, o, SCREEN_W, CAST_TOP, C_BG);
     iconChevronL(s, 18, o + 22, 6, C_ACCENT);
     drawText(s, F_SB, 28, capBase(F_SB, o + 6, 32), "Закрыть", C_ACCENT);
-    textC(s, F_SB, 172, capBase(F_SB, o + 6, 32), "Экран телефона", C_WHITE);
-    if (castLinked()) discA(s, 172 - textW(F_SB, "Экран телефона") / 2 - 10, o + 22, 4, MK565(90, 220, 140), 255);  // телефон забирает нажатия
-    if (castPx) {
-      std::string z = castZoom ? "×" + std::string(castW > SCREEN_W ? (castW >= 600 ? "2" : "1,5") : "1") : "весь";
-      textR(s, F_X, 306, capBase(F_X, o + 6, 32), z, C_DIM);
+    if (castLinked() && castPx) {
+      discA(s, 110, o + 22, 4, MK565(90, 220, 140), 255);  // телефон на связи и забирает нажатия
+      for (int i = 0; i < 3; i++) drawCastButton(s, i, o);
+    } else {
+      textC(s, F_SB, 196, capBase(F_SB, o + 6, 32), "Экран телефона", C_WHITE);
     }
     fillRectS(s, 0, o + CAST_TOP - 1, SCREEN_W, 1, C_BORDER);
   }
 }
 
-// Двойное касание: увеличить место под пальцем или вернуть на всю ширину
+// Двойное касание: приблизить место под пальцем или вернуть «целиком»
 void castToggleZoom(int x, int y) {
-  if (!castPx || castW <= SCREEN_W) return;
-  float k = (float)castW / SCREEN_W;
-  if (!castZoom) {
-    int sx = (int)(x * k), sy = (int)((y - CAST_TOP + castScroll) * k);
-    castZoom = true;
-    castPanX = std::max(0, std::min(castPanMax(), sx - SCREEN_W / 2));
-    castScroll = std::max(0, std::min(castScrollMax(), sy - (y - CAST_TOP)));
-  } else {
-    int sy = castScroll + (y - CAST_TOP);
-    castZoom = false;
-    castScroll = std::max(0, std::min(castScrollMax(), (int)(sy / k) - (y - CAST_TOP)));
-  }
+  if (!castCanZoom() && !castZoom) return;
+  float k1 = castScale();
+  float sx = (x - castOffX()) * k1, sy = (y - CAST_TOP - castOffY()) * k1;  // точка снимка под пальцем
+  castZoom = !castZoom;
+  float k2 = castScale();
+  castPanX = std::max(0, std::min(castPanMax(), (int)(sx / k2) - x));
+  castScroll = std::max(0, std::min(castScrollMax(), (int)(sy / k2) - (y - CAST_TOP)));
 }
 
-// ---------- Нажатия на плате → браузер телефона ----------
+// ---------- Нажатия на плате → телефон ----------
 void castQueue(const std::string& ev) {
-  if (castEvents.size() >= 20) castEvents.erase(castEvents.begin());
+  if (castEvents.size() >= 24) castEvents.erase(castEvents.begin());
   castEvents.push_back(ev);
 }
-// Касание в точке экрана: координаты пересчитываются в доли снимка (0..1), телефон нажмёт там же
 bool castSendTap(int x, int y) {
-  if (!castPx) return false;
-  float k = castScale();
-  float sx = (x - castOffX()) * k, sy = (y - CAST_TOP + castScroll) * k;
-  if (sx < 0 || sy < 0 || sx >= castW || sy >= castH) return false;
+  float fx, fy;
+  if (!castToFrac(x, y, fx, fy)) return false;
   char b[96];
-  snprintf(b, sizeof b, "{\"t\":\"tap\",\"x\":%.4f,\"y\":%.4f,\"f\":%d}", sx / castW, sy / castH, castFrame);
+  snprintf(b, sizeof b, "{\"t\":\"tap\",\"x\":%.4f,\"y\":%.4f,\"f\":%d}", fx, fy, castFrame);
   castQueue(b);
-  castMarkSX = sx; castMarkSY = sy; castMarkT = nowMs() | 1;
+  castMarkSX = fx * castW; castMarkSY = fy * castH; castMarkT = nowMs() | 1;
   return true;
 }
-// Листание страницы на телефоне: dir = 1 — вниз, −1 — вверх
+// Свайп: телефон проведёт пальцем по тем же точкам (листание любой страницы в обе стороны)
+bool castSendDrag(int x0, int y0, int x1, int y1) {
+  float a, b, c, d;
+  if (!castToFrac(x0, y0, a, b)) return false;
+  float k = castScale();  // конец может уйти за край снимка — ограничиваем
+  float ex = std::max(0.0f, std::min(castW - 1.0f, (x1 - castOffX()) * k)), ey = std::max(0.0f, std::min(castH - 1.0f, (y1 - CAST_TOP - castOffY()) * k));
+  c = ex / castW; d = ey / castH;
+  char s[128];
+  snprintf(s, sizeof s, "{\"t\":\"drag\",\"x0\":%.4f,\"y0\":%.4f,\"x1\":%.4f,\"y1\":%.4f}", a, b, c, d);
+  castQueue(s);
+  return true;
+}
+void castSendKey(const char* k) {
+  char b[48];
+  snprintf(b, sizeof b, "{\"t\":\"key\",\"k\":\"%s\"}", k);
+  castQueue(b);
+}
+// Оставлено для совместимости с приложением 2.0: листание страницы
 void castSendScroll(int dir) {
   char b[48];
   snprintf(b, sizeof b, "{\"t\":\"scroll\",\"d\":%d}", dir);
   castQueue(b);
-  castResetScroll = true;
 }
 std::string castTakeEvents() {
   std::string j = "{\"ok\":true,\"ev\":[";
   for (size_t i = 0; i < castEvents.size(); i++) j += (i ? "," : "") + castEvents[i];
   castEvents.clear();
   return j + "]}";
+}
+// Плата закрыла экран: телефон перестаёт присылать кадры
+void castClose() {
+  castOn = false;
+  castTapPend = false;
+  castZoom = false;
+  castClosedT = nowMs() | 1;
+  if (castLinked()) castQueue("{\"t\":\"close\"}");
+}
+// Касание заголовка; true — обработано
+bool castHeaderTap(int x) {
+  if (x < 120) { castClose(); return true; }
+  if (x >= CAST_BTN_X0 && castLinked() && castPx) {
+    int i = std::min(2, (x - CAST_BTN_X0) / 48);
+    castSendKey(castMode ? CAST_KEYS_CTL[i] : CAST_KEYS_WEB[i]);
+    return true;
+  }
+  return false;
 }
 // Вызывается из loop: отправляет одиночное касание, гасит кружок. true — нужно перерисовать
 bool castTick(uint32_t now) {
@@ -6505,12 +6579,12 @@ void updateScrollMax() {
 void renderContent() {
   if (curTab == TAB_CALC && !castOn) { calcRenderAll(); return; }
   updateScrollMax();
-  renderRegion(0, TAB_Y, drawTab);
+  renderRegion(0, castOn ? SCREEN_H : TAB_Y, drawTab);  // экран телефона — на весь экран, без вкладок
 }
-void renderEverything() { renderContent(); renderTabBar(); }
+void renderEverything() { renderContent(); if (!castOn) renderTabBar(); }
 
 void switchTab(int t) {
-  if (castOn) { castOn = false; curTab = t; scrollY = tabScroll[t]; renderEverything(); return; }
+  if (castOn) { castClose(); curTab = t; scrollY = tabScroll[t]; renderEverything(); return; }
   if (t == curTab) {  // повторное нажатие — в начало вкладки
     if (t == TAB_GAMES && gScr != G_MENU) { gScr = G_MENU; renderContent(); }
     else if (t == TAB_REF && (rScr == R_PAGE || rScr == R_TEXT || rScr == R_IMAGE || rScr == R_HTML)) { refBack(); renderContent(); }
@@ -6527,7 +6601,7 @@ void switchTab(int t) {
 
 // «Назад» физической кнопкой
 void goBack() {
-  if (castOn) { castOn = false; renderContent(); return; }
+  if (castOn) { castClose(); renderEverything(); return; }
   if (curTab == TAB_GAMES && gScr != G_MENU) { gScr = G_MENU; renderContent(); }
   else if (curTab == TAB_REF && (rScr == R_PAGE || rScr == R_TEXT || rScr == R_IMAGE || rScr == R_HTML)) { refBack(); renderContent(); }
   else switchTab((curTab + 1) % TAB_COUNT);
@@ -6572,7 +6646,7 @@ void touchDown(int x, int y) {
   tDown = true; tMoved = false; tSlider = false;
   tX0 = x; tY0 = y; tScroll0 = scrollY; tLastY = y; tLastX = x; tLastT = nowMs();
   scrollVel = 0;
-  tInTabs = y >= TAB_Y;
+  tInTabs = y >= TAB_Y && !castOn;
   beepClick();
   if (tInTabs) return;
   if (castOn) { tScroll0 = castScroll; tPan0 = castPanX; return; }
@@ -6590,7 +6664,7 @@ void touchMove(int x, int y) {
     float dt = (float)std::max<uint32_t>(1, now - tLastT);
     scrollVel = 0.6f * scrollVel + 0.4f * (-(y - tLastY) / dt);
     tLastY = y; tLastX = x; tLastT = now;
-    if (ns != castScroll || np != castPanX) { castScroll = ns; castPanX = np; renderRegion(CAST_TOP, TAB_Y, drawTab); }
+    if (castZoom && (ns != castScroll || np != castPanX)) { castScroll = ns; castPanX = np; renderRegion(CAST_TOP, CAST_BOT, drawTab); }
     return;
   }
   if (curTab == TAB_CALC) return;
@@ -6620,16 +6694,16 @@ void touchUp(int x, int y) {
   if (castOn) {
     if (tMoved) {
       if (nowMs() - tLastT > 80) scrollVel = 0;
-      // свайп за край снимка листает саму страницу на телефоне
-      int dy = tLastY - tY0;
-      if (abs(dy) > 70 && abs(dy) > abs(tLastX - tX0) && castLinked()) {
-        if (dy < 0 && tScroll0 >= castScrollMax()) { castSendScroll(1); scrollVel = 0; }
-        else if (dy > 0 && tScroll0 <= 0) { castSendScroll(-1); scrollVel = 0; }
-      }
+      // «целиком»: свайп уходит на телефон как движение пальца; «крупно» — сдвигает картинку на плате
+      if (!castZoom) { scrollVel = 0; if (castLinked() && tY0 >= CAST_TOP) castSendDrag(tX0, tY0, tLastX, tLastY); }
       return;
     }
-    if (tY0 < CAST_TOP) { if (tX0 < 120) { castOn = false; castTapPend = false; renderContent(); } return; }
+    if (tY0 < CAST_TOP) { if (castHeaderTap(tX0) && !castOn) renderEverything(); return; }
     uint32_t now = nowMs();
+    if (!castCanZoom() && !castZoom) {  // увеличивать нечего — нажатие уходит сразу
+      if (castSendTap(tX0, tY0)) renderRegion(CAST_TOP, CAST_BOT, drawTab);
+      return;
+    }
     if (now - lastTapT < 400 && abs(tX0 - lastTapX) < 40 && abs(tY0 - lastTapY) < 40) {  // двойное касание
       castTapPend = false;
       castToggleZoom(tX0, tY0);
@@ -6657,7 +6731,7 @@ bool scrollTick() {
     int ns = std::max(0, std::min(castScrollMax(), (int)(castScroll + scrollVel * 16)));
     scrollVel *= 0.92f;
     if (ns == 0 || ns == castScrollMax()) scrollVel = 0;
-    if (ns != castScroll) { castScroll = ns; renderRegion(CAST_TOP, TAB_Y, drawTab); return true; }
+    if (ns != castScroll) { castScroll = ns; renderRegion(CAST_TOP, CAST_BOT, drawTab); return true; }
     return false;
   }
   if (curTab == TAB_CALC) return false;
@@ -6692,7 +6766,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.4"
+#define FW_VERSION "1.5"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -6870,10 +6944,51 @@ void sendJson(int code, const char* body) {
   server.sendHeader("Cache-Control", "no-store");
   server.send(code, "application/json; charset=utf-8", body);
 }
-void apiInfo() { sendJson(200, "{\"ok\":true,\"app\":\"school\",\"screen\":true,\"events\":true,\"files\":false,\"card\":false,\"total\":0,\"used\":0}"); }
+String homeSsid, homePass;          // домашняя сеть (сохраняется в памяти платы или /wifi.txt)
+bool staUp = false, mdnsUp = false;
+uint32_t wifiApplyAt = 0;
+std::string jsonStr(const String& s) {
+  std::string r = "\"";
+  for (size_t i = 0; i < s.length(); i++) { char c = s[i]; if (c == '"' || c == '\\') r += '\\'; if ((uint8_t)c >= 0x20) r += c; }
+  return r + "\"";
+}
+void apiInfo() {
+  std::string j = "{\"ok\":true,\"app\":\"school\",\"screen\":true,\"events\":true,\"control\":true,\"wifiset\":true,\"view\":[320,436],\"files\":false,\"card\":false,\"total\":0,\"used\":0,\"home\":" +
+                  jsonStr(homeSsid) + ",\"sta\":" + jsonStr(staUp ? WiFi.localIP().toString() : String("")) + ",\"version\":\"" FW_VERSION "\"}";
+  sendJson(200, j.c_str());
+}
+void wifiInfoUpdate() {
+  std::string ap = "Сеть платы ESP32-HTML, пароль 12345678, адрес 192.168.4.1.";
+  if (!homeSsid.length()) wifiInfo = ap + " В приложении нажмите «Подключиться к плате».";
+  else if (staUp) wifiInfo = std::string("Домашняя сеть «") + homeSsid.c_str() + "»: адрес " + WiFi.localIP().toString().c_str() + " (school.local). " + ap;
+  else wifiInfo = std::string("Подключаюсь к домашней сети «") + homeSsid.c_str() + "»… " + ap;
+}
+// Домашняя сеть из приложения: POST /__wifi?ssid=…&pass=… (пустое имя — забыть сеть)
+void apiWifi() {
+  homeSsid = server.arg("ssid"); homeSsid.trim();
+  homePass = server.arg("pass");
+  prefs.begin("school", false);
+  prefs.putString("wssid", homeSsid);
+  prefs.putString("wpass", homePass);
+  prefs.end();
+  std::string j = "{\"ok\":true,\"home\":" + jsonStr(homeSsid) + "}";
+  sendJson(200, j.c_str());
+  wifiApplyAt = millis() + 300;  // ответить успеем до переключения
+}
+void wifiApplyHome() {
+  staUp = false;
+  if (homeSsid.length()) {
+    WiFi.mode(WIFI_AP_STA);  // точка доступа платы остаётся: к плате можно подключиться в любом случае
+    WiFi.begin(homeSsid.c_str(), homePass.c_str());
+  } else {
+    WiFi.disconnect(false);
+    WiFi.mode(WIFI_AP);
+  }
+  wifiInfoUpdate();
+}
 void handleShowUpload() {
   HTTPUpload& up = server.upload();
-  if (up.status == UPLOAD_FILE_START) { castRx.clear(); castRx.reserve(200000); }
+  if (up.status == UPLOAD_FILE_START) { castRx.clear(); castRx.reserve(200000); if (server.hasArg("mode")) castMode = server.arg("mode") == "ctl" ? 1 : 0; }
   else if (up.status == UPLOAD_FILE_WRITE) { if (castRx.size() + up.currentSize <= 900000) castRx.insert(castRx.end(), up.buf, up.buf + up.currentSize); }
   else if (up.status == UPLOAD_FILE_END) castReady = !castRx.empty();
 }
@@ -6881,6 +6996,8 @@ void wifiEnable(bool on) {
   if (on == wifiOn) return;
   if (!on) {
     server.stop();
+    if (mdnsUp) { MDNS.end(); mdnsUp = false; }
+    staUp = false;
     WiFi.softAPdisconnect(true);
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
@@ -6892,31 +7009,25 @@ void wifiEnable(bool on) {
   wifiOn = true;
   wifiInfo = "Включаю…";
   renderContent();
-  String ssid, pass;
-  if (sdBegin()) {
-    File cfg = SD.open("/wifi.txt");  // своя сеть: первая строка — имя, вторая — пароль
-    if (cfg) { ssid = cfg.readStringUntil('\n'); ssid.trim(); pass = cfg.readStringUntil('\n'); pass.trim(); cfg.close(); }
+  prefs.begin("school", true);
+  homeSsid = prefs.getString("wssid", "");
+  homePass = prefs.getString("wpass", "");
+  prefs.end();
+  if (!homeSsid.length() && sdBegin()) {
+    File cfg = SD.open("/wifi.txt");  // или своя сеть с карты: первая строка — имя, вторая — пароль
+    if (cfg) { homeSsid = cfg.readStringUntil('\n'); homeSsid.trim(); homePass = cfg.readStringUntil('\n'); homePass.trim(); cfg.close(); }
   }
-  bool sta = false;
-  if (ssid.length()) {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), pass.c_str());
-    uint32_t t0 = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t0 < 12000) delay(200);
-    sta = WiFi.status() == WL_CONNECTED;
-  }
-  if (sta) {
-    wifiInfo = std::string("Плата в сети ") + ssid.c_str() + ", адрес " + WiFi.localIP().toString().c_str() + ". Телефон должен быть в той же сети; впишите этот адрес в приложении и нажмите «Проверить».";
-  } else {
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP("ESP32-HTML", "12345678");
-    wifiInfo = std::string(ssid.length() ? "Сеть из wifi.txt не ответила. " : "") + "Сеть платы ESP32-HTML, пароль 12345678. В приложении нажмите «Подключиться к плате».";
-  }
+  WiFi.mode(homeSsid.length() ? WIFI_AP_STA : WIFI_AP);
+  WiFi.softAP("ESP32-HTML", "12345678");
+  WiFi.setSleep(false);  // без энергосбережения Wi-Fi: нажатия и кадры доходят без задержек
+  wifiApplyHome();
   if (!serverStarted) {
     server.on("/__api/info", HTTP_GET, apiInfo);
+    server.on("/__wifi", HTTP_POST, apiWifi);
     server.on("/__events", HTTP_GET, []() {
       bool was = castLinked();
       castPollT = millis();
+      if (server.hasArg("mode")) castMode = server.arg("mode") == "ctl" ? 1 : 0;
       std::string j = castTakeEvents();
       sendJson(200, j.c_str());
       if (!was && castOn && !tDown) renderRegion(0, CAST_TOP, drawTab);  // зелёная точка: телефон на связи
@@ -7033,18 +7144,33 @@ void loop() {
     if (tDown) touchUp(tX0, tY0);
   }
   scrollTick();
-  if (wifiOn) server.handleClient();
+  if (wifiOn) {
+    server.handleClient();
+    if (wifiApplyAt && (int32_t)(now - wifiApplyAt) >= 0) { wifiApplyAt = 0; wifiApplyHome(); if (curTab == TAB_SET && !castOn) renderContent(); }
+    static uint32_t staCheck = 0;
+    if (homeSsid.length() && now - staCheck > 500) {
+      staCheck = now;
+      bool up = WiFi.status() == WL_CONNECTED;
+      if (up != staUp) {
+        staUp = up;
+        if (up && !mdnsUp && MDNS.begin("school")) { MDNS.addService("http", "tcp", 80); mdnsUp = true; }
+        wifiInfoUpdate();
+        if ((curTab == TAB_SET || (castOn && !castPx)) && !tDown) renderContent();
+      }
+    }
+  }
   if (castReady && !tDown) {  // пришла картинка с телефона
     castReady = false;
     lastActivity = now;
     if (dimmed) { dimmed = false; applyBacklight(); }
     hv::evictImages(1u << 30);  // память под снимок важнее кэша картинок страницы
-    if (castDecode(castRx.data(), castRx.size())) { castOn = true; scrollVel = 0; renderContent(); }
+    bool justClosed = castClosedT && now - castClosedT < 4000;  // кадр отправили до того, как плата закрыла экран
+    if (!justClosed && castDecode(castRx.data(), castRx.size())) { castOn = true; castClosedT = 0; scrollVel = 0; renderContent(); }
     castRx.clear();
     castRx.shrink_to_fit();
   }
 
-  if (castOn && !tDown && castTick(now)) renderRegion(CAST_TOP, TAB_Y, drawTab);
+  if (castOn && !tDown && castTick(now)) renderRegion(CAST_TOP, CAST_BOT, drawTab);
   {  // телефон перестал забирать нажатия — убрать зелёную точку
     static bool linkedShown = false;
     bool l = castOn && castLinked();

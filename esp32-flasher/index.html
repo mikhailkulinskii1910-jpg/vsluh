@@ -88,7 +88,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .drop:focus-vis
 .ghost { background: transparent; }
 
 label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-select, input[type="text"] {
+select, input[type="text"], input[type="password"] {
   font: 15px var(--f-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line);
   border-radius: 6px; padding: 8px 10px; min-height: 40px;
 }
@@ -459,14 +459,41 @@ a { color: var(--copper); }
 
     <section class="panel" aria-labelledby="h-cast">
       <h2 id="h-cast"><span class="step">02</span>Экран на плату</h2>
-      <p class="lede" style="margin:0">Откройте любой сайт во встроенном браузере и покажите нужную страницу на экране платы. Работает с прошивкой «Школьный набор». Нажатия на экране платы передаются обратно в браузер: можно переходить по ссылкам и нажимать кнопки прямо с платы, а свайп за край снимка листает страницу. Браузер остаётся в интернете, на плату уходят только снимки страницы.</p>
+      <p class="lede" style="margin:0">Откройте любой сайт во встроенном браузере и покажите нужную страницу на экране платы. Работает с прошивкой «Школьный набор». Нажатия на экране платы передаются обратно в браузер: можно переходить по ссылкам и нажимать кнопки прямо с платы, свайп листает страницу в любую сторону, кнопки «−» и «+» в углу платы меняют масштаб. Браузер остаётся в интернете, на плату уходят только снимки страницы.</p>
       <div class="row"><button class="primary" id="btnCast" disabled>Открыть браузер</button></div>
       <div id="castNote" hidden></div>
     </section>
 
+    <section class="panel" aria-labelledby="h-ctl" id="ctlPanel" hidden>
+      <h2 id="h-ctl"><span class="step">03</span>Управление телефоном</h2>
+      <p class="lede" style="margin:0">Весь экран телефона — на плате: любое приложение, а не только браузер. На экране платы можно нажимать и листать, в углу — кнопки «Назад», «Домой» и «Недавние». Нужен «Школьный набор» 1.5 или новее. Android спросит разрешение на показ экрана; чтобы работали нажатия, один раз включите спецвозможность «ESP32 Flasher: нажатия с платы».</p>
+      <div class="row">
+        <button class="primary" id="btnCtlStart">Начать управление</button>
+        <button id="btnCtlStop" hidden>Остановить</button>
+      </div>
+      <div id="ctlNote"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-home">
+      <h2 id="h-home"><span class="step">04</span>Домашняя сеть и VPN</h2>
+      <p class="lede" style="margin:0">Если сайты открываются только через VPN, сеть платы и VPN мешают друг другу. Подключите плату к своему роутеру: тогда телефон дотянется до неё через обычный Wi-Fi, а VPN продолжит работать. В настройках VPN-приложения включите «Обход локальной сети» (Bypass LAN, «не пускать локальные адреса через VPN») — обычно он уже включён.</p>
+      <label class="field" for="homeSsid">Имя домашней сети (Wi-Fi 2,4 ГГц)
+        <input type="text" id="homeSsid" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field" for="homePass">Пароль
+        <input type="password" id="homePass" autocomplete="off">
+      </label>
+      <div class="row">
+        <button class="primary" id="btnHomeSet">Подключить плату к сети</button>
+        <button id="btnHomeFind">Найти плату в сети</button>
+        <button class="ghost" id="btnHomeForget">Забыть сеть</button>
+      </div>
+      <div id="homeNote"></div>
+    </section>
+
     <section class="panel" aria-labelledby="h-card" id="cardPanel">
       <div class="console-head">
-        <h2 id="h-card"><span class="step">03</span>SD-карта</h2>
+        <h2 id="h-card"><span class="step">05</span>SD-карта</h2>
         <button class="ghost" id="btnRefresh" disabled>Обновить</button>
       </div>
       <div id="cardUsage" hidden>
@@ -1262,6 +1289,20 @@ pako/dist/pako.esm.mjs:
     window.__androidNet = {
       onResponse(id, code, body) { const r = reqs.get(id); if (r) { reqs.delete(id); r({ code, body }); } },
       onSaved(ok, msg) { if (window.__cvSaved) window.__cvSaved(ok, msg); },
+      onScan(json, err) {
+        let list = [];
+        try { list = JSON.parse(json); } catch {}
+        const school = list.filter((b) => b.app === "school");
+        const pick = school[0] || list[0];
+        if (pick) {
+          useHost(pick.ip);
+          noteIn("#homeNote", "Плата найдена: " + pick.ip + (list.length > 1 ? " (всего найдено " + list.length + ")" : "") + ". Адрес вписан в раздел 01.");
+          refreshFiles();
+        } else {
+          noteIn("#homeNote", err || "Плата в этой сети не найдена. Проверьте, что телефон и плата в одной сети Wi-Fi, а на плате включён Wi-Fi и написан её адрес (Настройки → «Wi-Fi: экран телефона»). Адрес можно вписать в раздел 01 вручную.", "err",
+            err && App && App.openVpnSettings ? [["Открыть настройки VPN", () => App.openVpnSettings()]] : []);
+        }
+      },
       onWifi(ok, msg) {
         if (ok) { setWifi("ok", "Подключено к сети платы"); refreshFiles(); }
         else { setWifi("err", "Нет связи", msg, "err"); setConnected(false); }
@@ -1419,7 +1460,9 @@ pako/dist/pako.esm.mjs:
     }
 
     $("#btnWifi").onclick = () => { setWifi("warn", "Подключаюсь…", "Подтвердите подключение к сети ESP32-HTML в окне Android."); Net.connectBoard(); };
+    const isAp = (h) => /^192\.168\.4\./.test(h);
     $("#btnCheck").onclick = () => {
+      if (!isAp(host())) { Net.disconnect(); refreshFiles(); return; }  // плата в домашней сети: обычный Wi-Fi телефона
       if (!Net.useCurrentWifi()) { setWifi("err", "Нет Wi-Fi", "Телефон не подключён к Wi-Fi. Нажмите «Подключиться к плате».", "err"); return; }
       refreshFiles();
     };
@@ -1431,6 +1474,97 @@ pako/dist/pako.esm.mjs:
       if (t) n.querySelector("p").textContent = t;
     }
     $("#btnCast").onclick = () => { if (Net.cast) Net.cast(host()); else castNoteShow("Обновите приложение: в этой версии нет экрана на плату."); };
+    // ---- Управление телефоном ----
+    function noteIn(sel, text, cls, buttons) {
+      const n = $(sel);
+      n.textContent = "";
+      if (!text) return;
+      const d = document.createElement("div");
+      d.className = "notice " + (cls || "");
+      const p = document.createElement("p");
+      p.textContent = text;
+      d.appendChild(p);
+      for (const [label, fn] of buttons || []) {
+        const b = document.createElement("button");
+        b.textContent = label;
+        b.style.margin = "10px 8px 0 0";
+        b.onclick = fn;
+        d.appendChild(b);
+      }
+      n.appendChild(d);
+    }
+    function ctlRefresh(err) {
+      if (!App || !App.controlState) return;
+      $("#ctlPanel").hidden = false;
+      let st = {};
+      try { st = JSON.parse(App.controlState()); } catch {}
+      $("#btnCtlStart").hidden = !!st.running;
+      $("#btnCtlStop").hidden = !st.running;
+      if (err) { noteIn("#ctlNote", err, "err"); return; }
+      if (st.gestures === false) { noteIn("#ctlNote", "Экран будет показываться, но нажимать с платы на этой версии Android (ниже 7) нельзя."); return; }
+      if (!st.a11y) {
+        noteIn("#ctlNote", "Чтобы нажатия с платы работали, включите в спецвозможностях «ESP32 Flasher: нажатия с платы». Если переключатель серый (Android 13 и новее): откройте «О приложении» → ⋮ (вверху справа) → «Разрешить ограниченные настройки», затем включите снова.", "",
+          [["Спецвозможности", () => App.openA11ySettings()], ["О приложении", () => App.openAppSettings()]]);
+        if (st.running && st.state) $("#ctlNote").querySelector("p").textContent = st.state + " " + $("#ctlNote").querySelector("p").textContent;
+        return;
+      }
+      noteIn("#ctlNote", st.running ? (st.state || "Экран телефона показывается на плате.") + " Нажимайте и листайте прямо на экране платы." : "Нажатия с платы включены. Можно начинать.", st.running ? "" : "");
+    }
+    window.__onControl = (err) => ctlRefresh(err);
+    $("#btnCtlStart").onclick = () => {
+      if (!filesLoaded) { noteIn("#ctlNote", "Сначала подключитесь к плате (раздел 01) и нажмите «Проверить».", "err"); return; }
+      App.startControl(host());
+    };
+    $("#btnCtlStop").onclick = () => { App.stopControl(); setTimeout(() => ctlRefresh(), 600); };
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) ctlRefresh(); });
+    setInterval(() => { if (!$("#tabFiles").hidden && !document.hidden) ctlRefresh(); }, 3000);
+    ctlRefresh();
+
+    // ---- Домашняя сеть ----
+    try { $("#homeSsid").value = localStorage.getItem("homeSsid") || ""; } catch {}
+    function useHost(ip) {
+      $("#boardHost").value = ip;
+      try { localStorage.setItem("boardHost", ip); } catch {}
+    }
+    $("#btnHomeSet").onclick = async () => {
+      const ssid = $("#homeSsid").value.trim(), pass = $("#homePass").value;
+      if (!ssid) { noteIn("#homeNote", "Впишите имя домашней сети.", "err"); return; }
+      try { localStorage.setItem("homeSsid", ssid); } catch {}
+      if (!isAp(host())) { noteIn("#homeNote", "Сначала подключитесь к сети платы: раздел 01 → «Подключиться к плате» (адрес 192.168.4.1).", "err"); return; }
+      noteIn("#homeNote", "Передаю плате имя и пароль сети…");
+      try {
+        const info0 = await api("GET", "/__api/info");
+        if (!info0.wifiset) { noteIn("#homeNote", "Эта прошивка не умеет подключаться к домашней сети. Обновите «Школьный набор» до 1.5.", "err"); return; }
+        await api("POST", "/__wifi?ssid=" + encodeURIComponent(ssid) + "&pass=" + encodeURIComponent(pass));
+      } catch (e) { noteIn("#homeNote", e.message, "err"); return; }
+      noteIn("#homeNote", "Плата подключается к сети «" + ssid + "»… Это занимает до 20 секунд.");
+      for (let i = 0; i < 14; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        try {
+          const info = await api("GET", "/__api/info");
+          if (info.sta) {
+            useHost(info.sta);
+            Net.disconnect();
+            noteIn("#homeNote", "Готово: плата в сети «" + ssid + "», адрес " + info.sta + ". Телефон должен быть в той же сети Wi-Fi. Адрес вписан в раздел 01.");
+            setTimeout(refreshFiles, 1500);
+            return;
+          }
+        } catch {}
+      }
+      noteIn("#homeNote", "Адрес платы пока не пришёл: связь с её сетью могла прерваться при переключении. Подключите телефон к домашнему Wi-Fi и нажмите «Найти плату в сети». Адрес также написан на плате: Настройки → «Wi-Fi: экран телефона». Если плата пишет «Подключаюсь…» долго — проверьте пароль (и что сеть 2,4 ГГц).", "");
+    };
+    $("#btnHomeFind").onclick = () => {
+      if (!Net.scan) { noteIn("#homeNote", "Обновите приложение.", "err"); return; }
+      noteIn("#homeNote", "Ищу плату в сети Wi-Fi телефона… (до 20 секунд)");
+      Net.scan();
+    };
+    $("#btnHomeForget").onclick = async () => {
+      try {
+        await api("POST", "/__wifi?ssid=");
+        noteIn("#homeNote", "Плата забыла домашнюю сеть. Остаётся её собственная сеть ESP32-HTML (адрес 192.168.4.1).");
+      } catch (e) { noteIn("#homeNote", e.message, "err"); }
+    };
+
     $("#btnSite").onclick = () => Net.preview("http://" + host() + encPath(fDir === "/" ? "/" : fDir + "/"));
     $("#btnUpload").onclick = () => Net.pickAndUpload("http://" + host() + "/__upload?json=1&dir=" + encodeURIComponent(fDir));
     $("#btnMkdir").onclick = () => { $("#mkdirBox").hidden = false; $("#mkdirName").value = ""; $("#mkdirName").focus(); };

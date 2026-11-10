@@ -76,6 +76,8 @@ public class MainActivity extends Activity {
     private static final int REQ_FILE = 1;
     private static final int REQ_UPLOAD = 2;
     private static final int REQ_SAVE = 3;
+    private static final int REQ_CAPTURE = 4;
+    private String controlHost = "192.168.4.1";
     private static final String BOARD_SSID = "ESP32-HTML";
     private static final String BOARD_PASS = "12345678";
 
@@ -121,6 +123,7 @@ public class MainActivity extends Activity {
         super.onCreate(state);
         usb = (UsbManager) getSystemService(Context.USB_SERVICE);
         cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        sCm = cm;
 
         Window w = getWindow();
         if (Build.VERSION.SDK_INT >= 21) w.setStatusBarColor(isNight() ? 0xFF0E161D : 0xFFEDF1F3);
@@ -219,6 +222,17 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
+        if (req == REQ_CAPTURE) {  // разрешение на показ экрана → служба управления телефоном
+            if (res == RESULT_OK && data != null) {
+                Intent svc = new Intent(this, ControlService.class);
+                svc.putExtra("code", res);
+                svc.putExtra("data", data);
+                svc.putExtra("host", controlHost);
+                if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc); else startService(svc);
+            }
+            ui.postDelayed(new Runnable() { public void run() { js("window.__onControl && __onControl()"); } }, 800);
+            return;
+        }
         if (req == REQ_SAVE) {
             final Uri dst = res == RESULT_OK && data != null ? data.getData() : null;
             if (dst == null) { js("__androidNet.onSaved(false,'')"); return; }
@@ -493,7 +507,14 @@ public class MainActivity extends Activity {
      * Соединение с платой через её сеть. Если VPN запрещает привязку к сети платы (EPERM),
      * пробуем обычное соединение: многие VPN пропускают локальные адреса 192.168.x.x мимо себя.
      */
+    static ConnectivityManager sCm;
+
+    /** Адрес точки доступа платы (192.168.4.x); остальные — плата в домашней сети. */
+    static boolean isApHost(String h) { return h != null && h.startsWith("192.168.4."); }
+
     static HttpURLConnection openBoard(Network n, URL u) throws IOException {
+        // плата в домашней сети: обычный путь системы (VPN с обходом локальной сети его пропускает)
+        if (!isApHost(u.getHost())) n = null;
         if (n != null) {
             boolean canBind = true;
             try { Socket s = new Socket(); n.bindSocket(s); s.close(); } catch (IOException e) { canBind = false; }
@@ -515,6 +536,57 @@ public class MainActivity extends Activity {
         c.setReadTimeout(20000);
         c.setUseCaches(false);
         return c;
+    }
+
+    private void scanSubnet() {
+        String prefix = null;
+        try {
+            for (Network n : cm.getAllNetworks()) {
+                NetworkCapabilities c = cm.getNetworkCapabilities(n);
+                if (c == null || !c.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) continue;
+                android.net.LinkProperties lp = cm.getLinkProperties(n);
+                if (lp == null) continue;
+                for (android.net.LinkAddress la : lp.getLinkAddresses()) {
+                    java.net.InetAddress a = la.getAddress();
+                    if (a instanceof java.net.Inet4Address) {
+                        String ip = a.getHostAddress();
+                        if (isApHost(ip)) continue;  // сеть самой платы не сканируем
+                        prefix = ip.substring(0, ip.lastIndexOf('.') + 1);
+                    }
+                }
+            }
+        } catch (Exception ignored) { }
+        if (prefix == null) { js("__androidNet.onScan('[]'," + q("Телефон не подключён к домашнему Wi-Fi.") + ")"); return; }
+        final String pre = prefix;
+        final JSONArray found = new JSONArray();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(48);
+        for (int i = 1; i < 255; i++) {
+            final String ip = pre + i;
+            pool.execute(new Runnable() {
+                public void run() {
+                    HttpURLConnection c = null;
+                    try {
+                        c = (HttpURLConnection) new URL("http://" + ip + "/__api/info").openConnection();
+                        c.setConnectTimeout(900);
+                        c.setReadTimeout(1500);
+                        if (c.getResponseCode() == 200) {
+                            JSONObject o = new JSONObject(readAll(c.getInputStream()));
+                            if (o.optBoolean("ok")) {
+                                JSONObject r = new JSONObject();
+                                r.put("ip", ip);
+                                r.put("app", o.optString("app"));
+                                synchronized (found) { found.put(r); }
+                            }
+                        }
+                    } catch (Exception ignored) {
+                    } finally { if (c != null) c.disconnect(); }
+                }
+            });
+        }
+        pool.shutdown();
+        try { pool.awaitTermination(20, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+        String err = found.length() == 0 && vpnOn(cm) ? VPN_HINT : "";
+        js("__androidNet.onScan(" + q(found.toString()) + "," + q(err) + ")");
     }
 
     private static String readAll(InputStream in) throws IOException {
@@ -777,6 +849,13 @@ public class MainActivity extends Activity {
             });
         }
 
+        /** Найти плату в домашней сети: опрос всех адресов x.y.z.1–254 подсети Wi-Fi телефона. */
+        @JavascriptInterface
+        public void scan() {
+            releaseBoardNet();  // сеть платы больше не нужна: ищем через обычный Wi-Fi
+            new Thread(new Runnable() { public void run() { scanSubnet(); } }, "scan").start();
+        }
+
         /** Окно «Экран на плату»: браузер, из которого страницы показываются на плате. */
         @JavascriptInterface
         public void cast(final String host) {
@@ -939,6 +1018,62 @@ public class MainActivity extends Activity {
                 public void run() {
                     if (on) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
                     else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                }
+            });
+        }
+
+        /** Состояние управления телефоном. */
+        @JavascriptInterface
+        public String controlState() {
+            try {
+                JSONObject o = new JSONObject();
+                o.put("running", ControlService.sInst != null);
+                o.put("a11y", ControlA11y.sInst != null);
+                o.put("gestures", Build.VERSION.SDK_INT >= 24);
+                o.put("state", ControlService.sState);
+                return o.toString();
+            } catch (Exception e) { return "{}"; }
+        }
+
+        /** Начать управление: Android спросит разрешение на показ экрана. */
+        @JavascriptInterface
+        public void startControl(final String host) {
+            ui.post(new Runnable() {
+                public void run() {
+                    controlHost = host;
+                    try {
+                        android.media.projection.MediaProjectionManager mpm = (android.media.projection.MediaProjectionManager) getSystemService(Context.MEDIA_PROJECTION_SERVICE);
+                        startActivityForResult(mpm.createScreenCaptureIntent(), REQ_CAPTURE);
+                    } catch (Exception e) { js("window.__onControl && __onControl(" + q("Android не дал показать экран: " + e.getMessage()) + ")"); }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void stopControl() {
+            ui.post(new Runnable() {
+                public void run() {
+                    Intent i = new Intent(MainActivity.this, ControlService.class);
+                    i.setAction(ControlService.ACTION_STOP);
+                    try { startService(i); } catch (Exception ignored) { }
+                }
+            });
+        }
+
+        /** Спецвозможности: включить «ESP32 Flasher: нажатия с платы». */
+        @JavascriptInterface
+        public void openA11ySettings() {
+            ui.post(new Runnable() {
+                public void run() { try { startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)); } catch (Exception ignored) { } }
+            });
+        }
+
+        /** Сведения о приложении (там «Разрешить ограниченные настройки» на Android 13+). */
+        @JavascriptInterface
+        public void openAppSettings() {
+            ui.post(new Runnable() {
+                public void run() {
+                    try { startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))); } catch (Exception ignored) { }
                 }
             });
         }

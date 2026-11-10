@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="ru.vsluh.esp32flasher"
-    android:versionCode="13"
-    android:versionName="2.2">
+    android:versionCode="14"
+    android:versionName="2.3">
 
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="29" />
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-feature android:name="android.hardware.wifi" android:required="false" />
+    <!-- «Управление телефоном»: показ экрана на плате -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
     <application
         android:label="ESP32 Flasher"
@@ -48,5 +50,21 @@
             android:exported="false"
             android:theme="@android:style/Theme.Material"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|uiMode" />
+        <service
+            android:name=".ControlService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+        <service
+            android:name=".ControlA11y"
+            android:label="ESP32 Flasher: нажатия с платы"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/control_a11y" />
+        </service>
     </application>
 </manifest>
