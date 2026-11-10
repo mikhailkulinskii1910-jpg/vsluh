@@ -40,6 +40,10 @@ import android.webkit.WebViewClient;
 import com.hoho.android.usbserial.driver.UsbSerialDriver;
 import com.hoho.android.usbserial.driver.UsbSerialPort;
 import com.hoho.android.usbserial.driver.UsbSerialProber;
+import com.hoho.android.usbserial.driver.CdcAcmSerialDriver;
+import com.hoho.android.usbserial.driver.Ch34xSerialDriver;
+import com.hoho.android.usbserial.driver.Cp21xxSerialDriver;
+import com.hoho.android.usbserial.driver.FtdiSerialDriver;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -188,7 +192,9 @@ public class MainActivity extends Activity {
         IntentFilter f = new IntentFilter();
         f.addAction(ACTION_PERMISSION);
         f.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
+        f.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
         registerReceiver(usbReceiver, f);
+        takeAttached(getIntent());
 
         web.loadUrl("https://" + HOST + "/index.html?theme=" + (isNight() ? "dark" : "light"));
     }
@@ -303,12 +309,49 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Драйвер для устройства: сначала по таблице библиотеки, затем по производителю (новые модели чипов). */
+    private UsbSerialDriver driverFor(UsbDevice d) {
+        UsbSerialDriver drv = UsbSerialProber.getDefaultProber().probeDevice(d);
+        if (drv != null) return drv;
+        int vid = d.getVendorId();
+        try {
+            if (CdcAcmSerialDriver.probe(d)) return new CdcAcmSerialDriver(d);  // CH343, CH9102, встроенный USB ESP32-S3
+            if (vid == 0x1A86) return new Ch34xSerialDriver(d);                  // другие CH34x
+            if (vid == 0x10C4) return new Cp21xxSerialDriver(d);
+            if (vid == 0x0403) return new FtdiSerialDriver(d);
+            if (vid == 0x303A) return new CdcAcmSerialDriver(d);
+        } catch (Exception ignored) { }
+        return null;
+    }
+
     private UsbSerialDriver findDriver(UsbDevice only) {
-        List<UsbSerialDriver> list = UsbSerialProber.getDefaultProber().findAllDrivers(usb);
-        for (UsbSerialDriver d : list) {
-            if (only == null || d.getDevice().getDeviceId() == only.getDeviceId()) return d;
+        for (UsbDevice d : usb.getDeviceList().values()) {
+            if (only != null && d.getDeviceId() != only.getDeviceId()) continue;
+            UsbSerialDriver drv = driverFor(d);
+            if (drv != null) return drv;
         }
         return null;
+    }
+
+    private static String chipName(int vid, int pid) {
+        if (vid == 0x1A86) {
+            if (pid == 0x7523 || pid == 0x7522) return "CH340";
+            if (pid == 0x5523) return "CH341";
+            if (pid == 0x55D3) return "CH343";
+            if (pid == 0x55D4) return "CH9102";
+            return "WCH";
+        }
+        if (vid == 0x10C4) return "CP210x";
+        if (vid == 0x0403) return "FTDI";
+        if (vid == 0x303A) return "ESP32 USB";
+        if (vid == 0x067B) return "PL2303";
+        return "";
+    }
+
+    private String describe(UsbDevice d) {
+        String n = chipName(d.getVendorId(), d.getProductId());
+        if (n.isEmpty() && d.getProductName() != null) n = d.getProductName();
+        return (n.isEmpty() ? "устройство" : n) + String.format(" (%04x:%04x)", d.getVendorId(), d.getProductId());
     }
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
@@ -324,6 +367,8 @@ public class MainActivity extends Activity {
                 } else {
                     js("__androidSerial.onRequest(false," + q("Нет разрешения на доступ к USB. Нажмите «Найти плату» и разрешите доступ.") + ")");
                 }
+            } else if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(action)) {
+                if (d != null) js("__androidSerial.onAttach(" + q(describe(d)) + "," + (driverFor(d) != null) + ")");
             } else if (UsbManager.ACTION_USB_DEVICE_DETACHED.equals(action)) {
                 if (d != null && device != null && d.getDeviceId() == device.getDeviceId()) {
                     closePort();
@@ -333,6 +378,24 @@ public class MainActivity extends Activity {
             }
         }
     };
+
+    /** Приложение открыто подключением платы: Android уже дал доступ к ней. */
+    private void takeAttached(Intent intent) {
+        if (intent == null || !UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(intent.getAction())) return;
+        final UsbDevice d = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+        if (d == null) return;
+        if (usb.hasPermission(d) && driverFor(d) != null) device = d;
+        ui.postDelayed(new Runnable() {
+            public void run() { js("__androidSerial.onAttach(" + q(describe(d)) + "," + (driverFor(d) != null) + ")"); }
+        }, 1500);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        takeAttached(intent);
+    }
 
     private void closePort() {
         synchronized (lock) {
@@ -718,7 +781,9 @@ public class MainActivity extends Activity {
                     JSONObject o = new JSONObject();
                     o.put("usbVendorId", d.getVendorId());
                     o.put("usbProductId", d.getProductId());
-                    o.put("name", d.getProductName() == null ? "" : d.getProductName());
+                    o.put("name", describe(d));
+                    o.put("driver", driverFor(d) != null);
+                    o.put("permission", usb.hasPermission(d));
                     arr.put(o);
                 }
             } catch (Exception ignored) { }
@@ -729,9 +794,17 @@ public class MainActivity extends Activity {
         public void request() {
             UsbSerialDriver drv = findDriver(null);
             if (drv == null) {
-                String msg = usb.getDeviceList().isEmpty()
-                        ? "Плата не найдена. Подключите её через OTG-переходник и проверьте, что кабель передаёт данные."
-                        : "USB-устройство подключено, но это не USB-UART. Нужна плата ESP32 с чипом CH340, CH343, CP210x или FTDI.";
+                String msg;
+                if (usb.getDeviceList().isEmpty()) {
+                    msg = "Телефон не видит плату по USB. Проверьте: 1) кабель передаёт данные (многие кабели только заряжают — попробуйте другой); "
+                        + "2) включено «OTG-соединение» в настройках телефона (у Xiaomi, Redmi, POCO, Realme, OPPO, Vivo, Honor оно выключается само через 10 минут); "
+                        + "3) переходник OTG вставлен в телефон, а плата — в переходник. Когда плата подключится, приложение предложит открыть её само.";
+                } else {
+                    StringBuilder sb = new StringBuilder("USB-устройство подключено, но драйвер к нему не подошёл: ");
+                    for (UsbDevice d : usb.getDeviceList().values()) sb.append(describe(d)).append("; ");
+                    sb.append("Нужна плата ESP32 с чипом CH340, CH343, CH9102, CP210x или FTDI. Напишите эти цифры разработчику.");
+                    msg = sb.toString();
+                }
                 js("__androidSerial.onRequest(false," + q(msg) + ")");
                 return;
             }

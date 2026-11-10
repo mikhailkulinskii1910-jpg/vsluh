@@ -572,12 +572,14 @@ a { color: var(--copper); }
       else p.reject(err(payload, "NoDeviceError"));
     },
     onData: function (b64) { if (current) current._data(b64); },
+    onAttach: function (name, hasDriver) { if (window.__onUsbAttach) window.__onUsbAttach(name, hasDriver); },
     onError: function (msg) { if (current) current._fail(msg); },
     onDisconnect: function () {
       var p = current;
       if (!p) return;
       p._fail("Плата отключена");
       p._open = false;
+      if (window.__onUsbAttach) window.__onUsbAttach(null, false);
       (listeners.disconnect || []).forEach(function (f) { try { f({ target: p }); } catch (e) {} });
     }
   };
@@ -677,13 +679,34 @@ pako/dist/pako.esm.mjs:
   const isAndroid = /Android/i.test(navigator.userAgent);
   const serialOk = inApp || (hasSerial && allows("serial")), usbOk = !inApp && hasUsb && allows("usb");
 
+  // Что сейчас подключено по USB (только в приложении)
+  function updateUsbPill() {
+    const el = $("#usbPill");
+    if (!el || !window.AndroidSerial || !AndroidSerial.devices) return;
+    let list = [];
+    try { list = JSON.parse(AndroidSerial.devices()); } catch {}
+    const ok = list.find((d) => d.driver);
+    el.className = "pill " + (ok ? "ok" : list.length ? "err" : "warn");
+    el.textContent = ok ? "USB: " + ok.name : list.length ? "USB: " + list[0].name + " — не USB-UART" : "USB: плата не подключена";
+  }
+  window.__onUsbAttach = (name, hasDriver) => {
+    updateUsbPill();
+    if (!name) return;
+    if (!hasDriver) { err(`Подключено ${name}, но это не похоже на USB-UART платы ESP32.`); return; }
+    sys(`Подключена плата: ${name}.`);
+    if (!port && !busy) $("#btnSerial").click();  // сразу спросить доступ
+  };
+
   function renderEnv() {
     const pills = $("#envPills");
     const pill = (cls, text) => { const s = document.createElement("span"); s.className = "pill " + cls; s.textContent = text; pills.append(s); };
     if (inApp) {
       pill("ok", "Приложение для Android");
-      pill("ok", "USB: CH340, CH343, CP210x, FTDI");
+      const usbPill = document.createElement("span");
+      usbPill.id = "usbPill";
+      pills.append(usbPill);
       $("#btnSerial").textContent = "Найти плату";
+      updateUsbPill();
       return;
     }
     pill(serialOk ? "ok" : hasSerial ? "err" : "warn", "Web Serial: " + (serialOk ? "доступен" : hasSerial ? "заблокирован в этом окне" : "нет в браузере"));
