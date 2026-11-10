@@ -1028,7 +1028,8 @@ public class MainActivity extends Activity {
             try {
                 JSONObject o = new JSONObject();
                 o.put("running", ControlService.sInst != null);
-                o.put("a11y", ControlA11y.sInst != null);
+                o.put("a11y", ControlService.touchEnabled(MainActivity.this));
+                o.put("touch", ControlService.touchInstalled(MainActivity.this));
                 o.put("gestures", Build.VERSION.SDK_INT >= 24);
                 o.put("state", ControlService.sState);
                 return o.toString();
@@ -1060,7 +1061,7 @@ public class MainActivity extends Activity {
             });
         }
 
-        /** Спецвозможности: включить «ESP32 Flasher: нажатия с платы». */
+        /** Спецвозможности: включить «ESP32 Flasher: нажатия». */
         @JavascriptInterface
         public void openA11ySettings() {
             ui.post(new Runnable() {

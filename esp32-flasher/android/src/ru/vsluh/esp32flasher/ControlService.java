@@ -36,7 +36,8 @@ import java.nio.ByteBuffer;
 
 /**
  * «Управление телефоном»: весь экран телефона уходит на экран платы (снимки JPEG по Wi-Fi),
- * а касания, свайпы и кнопки с платы повторяет спецвозможность ControlA11y.
+ * а касания, свайпы и кнопки с платы выполняет отдельное дополнение «ESP32 Flasher: нажатия»
+ * (спецвозможность в своём приложении: основному приложению она не нужна).
  * Работает, пока висит уведомление; остановить — из уведомления, приложения или кнопкой «Закрыть» на плате.
  */
 public class ControlService extends Service {
@@ -44,6 +45,17 @@ public class ControlService extends Service {
     static final String CHANNEL = "control";
     static volatile ControlService sInst;
     static volatile String sState = "";
+    static final String TOUCH_PKG = "ru.vsluh.esp32touch";
+    static final String TOUCH_ACTION = "ru.vsluh.esp32touch.GESTURE";
+    static final String CONTROL_PERM = "ru.vsluh.esp32flasher.permission.CONTROL";
+
+    static boolean touchInstalled(Context c) {
+        try { c.getPackageManager().getPackageInfo(TOUCH_PKG, 0); return true; } catch (Exception e) { return false; }
+    }
+    static boolean touchEnabled(Context c) {
+        String s = android.provider.Settings.Secure.getString(c.getContentResolver(), android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return s != null && s.contains(TOUCH_PKG + "/");
+    }
 
     private MediaProjection proj;
     private VirtualDisplay vd;
@@ -236,26 +248,32 @@ public class ControlService extends Service {
         if (o == null) return;
         String t = o.optString("t");
         if ("close".equals(t)) { stopSelf(); return; }
-        ControlA11y a = ControlA11y.sInst;
-        if (a == null) { sState = "Нажатия с платы не работают: включите «ESP32 Flasher: нажатия с платы» в спецвозможностях."; return; }
+        if (!touchEnabled(this)) {
+            sState = touchInstalled(this)
+                ? "Нажатия с платы не работают: включите «ESP32 Flasher: нажатия» в спецвозможностях."
+                : "Экран показывается, а для нажатий с платы установите дополнение ESP32-Touch.apk.";
+            return;
+        }
+        Intent g = new Intent(TOUCH_ACTION).setPackage(TOUCH_PKG);
         if ("tap".equals(t)) {
             float[] p = toScreen(o.optDouble("x"), o.optDouble("y"));
-            a.tap(p[0], p[1]);
+            g.putExtra("t", "tap").putExtra("x0", p[0]).putExtra("y0", p[1]);
         } else if ("drag".equals(t)) {
             float[] p0 = toScreen(o.optDouble("x0"), o.optDouble("y0")), p1 = toScreen(o.optDouble("x1"), o.optDouble("y1"));
-            a.drag(p0[0], p0[1], p1[0], p1[1], 300);
+            g.putExtra("t", "drag").putExtra("x0", p0[0]).putExtra("y0", p0[1]).putExtra("x1", p1[0]).putExtra("y1", p1[1]).putExtra("ms", 300L);
         } else if ("key".equals(t)) {
             String k = o.optString("k");
-            if ("zin".equals(k) || "zout".equals(k)) {
-                DisplayMetrics dm = realMetrics();
-                a.pinch(dm.widthPixels / 2f, dm.heightPixels / 2f, dm.widthPixels / 3f, "zin".equals(k));
-            } else a.key(k);
+            DisplayMetrics dm = realMetrics();
+            if ("zin".equals(k) || "zout".equals(k))
+                g.putExtra("t", "pinch").putExtra("x0", dm.widthPixels / 2f).putExtra("y0", dm.heightPixels / 2f).putExtra("x1", dm.widthPixels / 3f).putExtra("in", "zin".equals(k));
+            else g.putExtra("t", "key").putExtra("k", k);
         } else if ("scroll".equals(t)) {
             DisplayMetrics dm = realMetrics();
             int d = o.optInt("d", 1);
-            float y0 = dm.heightPixels * (d > 0 ? 0.7f : 0.3f), y1 = dm.heightPixels * (d > 0 ? 0.3f : 0.7f);
-            a.drag(dm.widthPixels / 2f, y0, dm.widthPixels / 2f, y1, 300);
-        }
+            g.putExtra("t", "drag").putExtra("x0", dm.widthPixels / 2f).putExtra("y0", dm.heightPixels * (d > 0 ? 0.7f : 0.3f))
+             .putExtra("x1", dm.widthPixels / 2f).putExtra("y1", dm.heightPixels * (d > 0 ? 0.3f : 0.7f)).putExtra("ms", 300L);
+        } else return;
+        sendBroadcast(g);  // дополнение принимает команды только от приложения с той же подписью
     }
 
     private static void sleep(long ms) { try { Thread.sleep(ms); } catch (InterruptedException ignored) { } }
