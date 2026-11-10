@@ -5789,6 +5789,13 @@ void refBack();
 bool sdList(const std::string& dir, std::vector<FileEnt>& out);
 std::string sdReadFile(const std::string& path, size_t maxBytes);
 bool sdReadBytes(const std::string& path, std::vector<uint8_t>& buf, size_t maxBytes);
+bool sdFormat();                      // FAT32 (только если карта не читается)
+void* jpgFileOpen(const char* name, int32_t* size);  // чтение JPEG прямо с карты
+void jpgFileClose(void* h);
+int32_t jpgFileRead(JPEGFILE* f, uint8_t* buf, int32_t len);
+int32_t jpgFileSeek(JPEGFILE* f, int32_t pos);
+bool sdFormatArmed = false;
+std::string sdMsg;
 
 int kindOf(const FileEnt& e) {  // 0 — папка, 1 — текст, 2 — HTML, 3 — картинка, −1 — прочее
   if (e.dir) return 0;
@@ -5833,11 +5840,10 @@ int jpegToBuf(JPEGDRAW* d) {
 // Картинка на всю ширину экрана: декодируем с уменьшением, затем сглаженно ужимаем до 320 px
 bool openImage(const std::string& path, std::string& err) {
   free(imgPx); imgPx = nullptr; imgW = imgH = 0;
-  std::vector<uint8_t> buf;
-  if (!sdReadBytes(path, buf, 3 * 1024 * 1024)) { err = "Не удалось прочитать файл"; return false; }
   JPEGDEC* j = new JPEGDEC();
   bool ok = false;
-  if (j->openRAM(buf.data(), buf.size(), jpegToBuf)) {
+  if (j->open(path.c_str(), jpgFileOpen, jpgFileClose, jpgFileRead, jpgFileSeek, jpegToBuf)) {  // большие фото с телефона не влезут в память целиком
+    int orient = j->getOrientation();
     int W = j->getWidth(), H = j->getHeight(), s = 1;
     while (s < 8 && (W / (s * 2) >= SCREEN_W || (long)(W / s) * (H / s) > 700000L)) s *= 2;
     int w = W / s, h = H / s;
@@ -5846,6 +5852,22 @@ bool openImage(const std::string& path, std::string& err) {
       gJ.px = tmp; gJ.w = w; gJ.h = h;
       j->setPixelType(RGB565_LITTLE_ENDIAN);
       if (j->decode(0, 0, s == 2 ? JPEG_SCALE_HALF : s == 4 ? JPEG_SCALE_QUARTER : s == 8 ? JPEG_SCALE_EIGHTH : 0)) {
+        if (orient == 3 || orient == 6 || orient == 8) {  // фото снято боком: поворачиваем по метке EXIF
+          uint16_t* rot = (uint16_t*)malloc((size_t)w * h * 2);
+          if (rot) {
+            int nw = orient == 3 ? w : h, nh = orient == 3 ? h : w;
+            for (int y = 0; y < h; y++)
+              for (int x = 0; x < w; x++) {
+                int nx, ny;
+                if (orient == 3) { nx = w - 1 - x; ny = h - 1 - y; }
+                else if (orient == 6) { nx = h - 1 - y; ny = x; }
+                else { nx = y; ny = w - 1 - x; }
+                rot[ny * nw + nx] = tmp[y * w + x];
+              }
+            free(tmp);
+            tmp = rot; w = nw; h = nh;
+          }
+        }
         int ow = std::min(w, (int)SCREEN_W), oh = (int)((long)h * ow / w);
         imgPx = (uint16_t*)malloc((size_t)ow * oh * 2);
         if (imgPx) {
@@ -5860,11 +5882,11 @@ bool openImage(const std::string& path, std::string& err) {
             }
           imgW = ow; imgH = oh; ok = true;
         } else err = "Картинка слишком большая";
-      } else err = "Этот JPEG не поддерживается (возможно, прогрессивный)";
+      } else err = "Этот JPEG не поддерживается (возможно, прогрессивный). Пересохраните картинку как обычный JPEG.";
       free(tmp);
     } else err = "Картинка слишком большая";
     j->close();
-  } else err = "Это не JPEG";
+  } else err = "Файл не читается как JPEG. Если это скриншот, он, скорее всего, в формате PNG — сохраните его как JPG.";
   delete j;
   return ok;
 }
@@ -5950,10 +5972,21 @@ void drawFiles(Surface& s, int top) {
     drawText(s, F_SB, 44, y0 + 25, ellipsize(F_SB, fDir, 240).c_str(), C_ACCENT);
     y0 += 48;
   }
-  if (!fSdOk || fEnts.empty()) {
+  if (!fSdOk) {
+    rrectX(s, 16, y0, 288, 248, 16, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
+    textC(s, F_SB, 160, y0 + 30, "Карта не читается", C_WHITE);
+    std::string hint = sdMsg.empty() ? "Плата понимает только карты в формате FAT32. Карты на 64 ГБ и больше (SDXC) продаются в формате exFAT — их нужно переформатировать. Ещё проверьте, что карта вставлена до щелчка." : sdMsg;
+    auto w = wrapText(F_X, hint, 260);
+    for (size_t k = 0; k < w.size() && k < 7; k++) textC(s, F_X, 160, y0 + 54 + 16 * (int)k, w[k], C_DIM);
+    rrectX(s, 30, y0 + 120 + 52, 260, 40, 12, sdFormatArmed ? MK565(90, 20, 36) : C_KEY, sdFormatArmed ? MK565(90, 20, 36) : C_KEY, 255, 255, sdFormatArmed ? C_CLEAR : C_BORDER, 255);
+    textC(s, F_SB, 160, capBase(F_SB, y0 + 172, 40), sdFormatArmed ? "Точно? Все файлы удалятся" : "Отформатировать в FAT32", sdFormatArmed ? C_CLEAR : C_ACCENT);
+    textC(s, F_X, 160, y0 + 228, "или нажмите сюда, чтобы проверить ещё раз", C_DIM);
+    return;
+  }
+  if (fEnts.empty()) {
     rrectX(s, 16, y0, 288, 150, 16, C_PANEL, C_PANEL, 255, 255, C_BORDER, 255);
-    textC(s, F_SB, 160, y0 + 34, fSdOk ? "Здесь нет подходящих файлов" : "SD-карта не найдена", C_WHITE);
-    const char* hint = "Положите на карту свои файлы TXT, HTML или картинки JPG — например, сохранённые страницы, конспекты или фото задач. Вставьте карту и нажмите сюда.";
+    textC(s, F_SB, 160, y0 + 34, "Здесь нет подходящих файлов", C_WHITE);
+    const char* hint = "Положите на карту свои файлы TXT, HTML или картинки JPG — например, сохранённые страницы, конспекты или фото задач. Нажмите сюда, чтобы обновить список.";
     auto w = wrapText(F_X, hint, 260);
     for (size_t k = 0; k < w.size(); k++) textC(s, F_X, 160, y0 + 62 + 16 * (int)k, w[k], C_DIM);
     return;
@@ -6032,6 +6065,8 @@ void openTextFile(const FileEnt& e) {
     }
     t = r;
   }
+  if (kindOf(e) == 2 && t.size() < 80 && sdReadFile(path, 200000).find("<script") != std::string::npos)
+    t = "## Это страница-программа\nВ файле почти нет текста: это игра или приложение на JavaScript (например, «Своя игра»). Плата показывает только текст и картинки, программы на ней не запускаются.\n- Откройте файл на телефоне или компьютере в браузере.\n- Чтобы видеть его и на плате, откройте файл в приложении ESP32 Flasher → «Экран на плату».";
   if (t.size() < 2) t = "! Файл пустой.";
   rTitle = e.name;
   parseMarkup(t);
@@ -6065,7 +6100,19 @@ void refTap(int x, int y) {
       if (cy < 44) { size_t sl = fDir.rfind('/'); filesLoad(sl == 0 ? "/" : fDir.substr(0, sl)); return; }
       cy -= 48;
     }
-    if (!fSdOk || fEnts.empty()) { filesLoad(fDir); return; }
+    if (!fSdOk) {
+      if (cy >= 172 && cy < 212 && x >= 30 && x < 290) {  // кнопка форматирования: два нажатия
+        if (!sdFormatArmed) { sdFormatArmed = true; return; }
+        sdFormatArmed = false;
+        sdMsg = sdFormat() ? "" : "Не получилось: плата не видит карту. Вставьте её до щелчка или отформатируйте в FAT32 на компьютере.";
+        filesLoad("/");
+        return;
+      }
+      sdFormatArmed = false;
+      filesLoad(fDir);
+      return;
+    }
+    if (fEnts.empty()) { filesLoad(fDir); return; }
     int i = cy / 52;
     if (i < 0 || i >= (int)fEnts.size() || cy % 52 >= 46) return;
     const FileEnt& e = fEnts[i];
@@ -6521,7 +6568,7 @@ bool allInit() {
 #define TCA9554_ADDR 0x20
 #define FT6336_ADDR 0x38
 #define ES8311_ADDR 0x18
-#define FW_VERSION "1.1"
+#define FW_VERSION "1.2"
 
 Arduino_DataBus* bus = new Arduino_HWSPI(27 /* DC */, 5 /* CS */, 18 /* SCK */, 23 /* MOSI */, 19 /* MISO */, &SPI, true);
 Arduino_GFX* gfx = new Arduino_ST7796(bus, GFX_NOT_DEFINED, 0, true);
@@ -6607,7 +6654,28 @@ void applyBacklight() {
 }
 
 // ---------- SD-карта ----------
-bool sdBegin() { static bool ok = false; if (!ok) ok = SD.begin(PIN_SD_CS, SPI, 20000000); return ok; }
+bool sdOk = false;
+bool sdBegin() {
+  if (sdOk && SD.cardType() != CARD_NONE) return true;
+  SD.end();
+  sdOk = SD.begin(PIN_SD_CS, SPI, 20000000) || (SD.end(), SD.begin(PIN_SD_CS, SPI, 4000000));  // медленнее — для капризных карт
+  return sdOk;
+}
+bool sdFormat() {  // FatFs форматирует только карту без понятной ей файловой системы (например, exFAT)
+  SD.end();
+  sdOk = SD.begin(PIN_SD_CS, SPI, 4000000, "/sd", 5, true);
+  return sdOk;
+}
+void* jpgFileOpen(const char* name, int32_t* size) {
+  if (!sdBegin()) return nullptr;
+  File* f = new File(SD.open(name));
+  if (!*f) { delete f; return nullptr; }
+  *size = f->size();
+  return f;
+}
+void jpgFileClose(void* h) { File* f = (File*)h; if (f) { f->close(); delete f; } }
+int32_t jpgFileRead(JPEGFILE* jf, uint8_t* buf, int32_t len) { File* f = (File*)jf->fHandle; int32_t n = f->read(buf, len); jf->iPos = f->position(); return n; }
+int32_t jpgFileSeek(JPEGFILE* jf, int32_t pos) { File* f = (File*)jf->fHandle; f->seek(pos); jf->iPos = pos; return pos; }
 bool sdList(const std::string& dir, std::vector<FileEnt>& out) {
   if (!sdBegin()) return false;
   File d = SD.open(dir.c_str());
