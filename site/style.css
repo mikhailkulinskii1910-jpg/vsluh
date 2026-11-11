@@ -67,6 +67,55 @@ kbd {
 .sites strong { display: block; color: var(--accent); font-size: 1.1rem; }
 .sites span { color: var(--muted); font-size: 0.95rem; }
 
+.sites li { position: relative; }
+.sites li a { padding-right: 110px; }
+.sites .remove {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.sites .remove:hover { color: #a4262c; border-color: #a4262c; }
+
+.add {
+  margin-top: 24px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  display: grid;
+  gap: 12px;
+}
+.add h2 { font-size: 1.1rem; margin: 0; }
+.add label { display: grid; gap: 4px; font-size: 0.95rem; color: var(--muted); }
+.add input {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+.add button[type="submit"] {
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.add .error { margin: 0; color: #a4262c; font-size: 0.9rem; }
+.add .error[hidden] { display: none; }
+.add .hint { margin: 0; color: var(--muted); font-size: 0.85rem; }
+
 .back {
   display: inline-block;
   margin-bottom: 12px;
