@@ -13,7 +13,7 @@
   </header>
 
   <main class="wrap">
-    <ul class="sites">
+    <ul class="sites" id="sites">
       <li>
         <a href="sites/garden.html">
           <strong>Сад</strong>
@@ -27,6 +27,90 @@
         </a>
       </li>
     </ul>
+
+    <form class="add" id="add-form" autocomplete="off">
+      <h2>Добавить ссылку</h2>
+      <label>
+        Адрес
+        <input type="url" id="add-url" name="url" placeholder="https://example.com" required>
+      </label>
+      <label>
+        Название
+        <input type="text" id="add-title" name="title" placeholder="Например, Мой блог" required maxlength="80">
+      </label>
+      <button type="submit">Добавить</button>
+      <p class="error" id="add-error" hidden>Укажите адрес, который начинается с https:// или http://</p>
+      <p class="hint">Ссылки сохраняются в этом браузере и не видны на других устройствах.</p>
+    </form>
   </main>
+
+  <script>
+    (function () {
+      var KEY = 'site-hub-links';
+      var list = document.getElementById('sites');
+      var form = document.getElementById('add-form');
+      var urlInput = document.getElementById('add-url');
+      var titleInput = document.getElementById('add-title');
+      var error = document.getElementById('add-error');
+
+      function load() {
+        try { return JSON.parse(localStorage.getItem(KEY)) || []; }
+        catch (e) { return []; }
+      }
+      function save(items) {
+        try { localStorage.setItem(KEY, JSON.stringify(items)); }
+        catch (e) { alert('Не удалось сохранить ссылку'); }
+      }
+
+      function render() {
+        list.querySelectorAll('li[data-added]').forEach(function (li) { li.remove(); });
+        load().forEach(function (item, i) {
+          var li = document.createElement('li');
+          li.dataset.added = '1';
+          var a = document.createElement('a');
+          a.href = item.url;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          var strong = document.createElement('strong');
+          strong.textContent = item.title;
+          var span = document.createElement('span');
+          span.textContent = item.url;
+          a.appendChild(strong);
+          a.appendChild(span);
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'remove';
+          del.textContent = 'Удалить';
+          del.addEventListener('click', function () {
+            var items = load();
+            items.splice(i, 1);
+            save(items);
+            render();
+          });
+          li.appendChild(a);
+          li.appendChild(del);
+          list.appendChild(li);
+        });
+      }
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var url = urlInput.value.trim();
+        var title = titleInput.value.trim();
+        if (!/^https?:\/\//i.test(url) || !title) {
+          error.hidden = false;
+          return;
+        }
+        error.hidden = true;
+        var items = load();
+        items.push({ url: url, title: title });
+        save(items);
+        form.reset();
+        render();
+      });
+
+      render();
+    })();
+  </script>
 </body>
 </html>
