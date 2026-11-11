@@ -451,8 +451,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ochre-hi);outli
 /* ---------- переход: облака вместо штор ---------- */
 #curtain .half{background:linear-gradient(180deg,#86aecb 0%,#cfe0eb 55%,#eef5f9 100%);box-shadow:none;overflow:visible;transition:transform 1.1s cubic-bezier(.7,0,.25,1)}
 #curtain .half::after{display:none}
-#curtain .l{transform:translateX(-155%)}
-#curtain .r{transform:translateX(155%)}
+#curtain .half{transition:transform 3.4s cubic-bezier(.33,.08,.3,1)}
+#curtain.closed .half{transition:transform 1s cubic-bezier(.7,0,.25,1)}
+#curtain .l{transform:translateX(-165%) scale(1.18);transform-origin:100% 50%}
+#curtain .r{transform:translateX(165%) scale(1.18);transform-origin:0 50%}
 #curtain.closed .l,#curtain.closed .r{transform:none}
 #curtain .valance{display:none}
 #curtain .half svg{position:absolute;top:0;height:100%;width:calc(100% + 190px);overflow:visible}
