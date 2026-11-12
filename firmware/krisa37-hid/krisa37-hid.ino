@@ -14,25 +14,62 @@
  *   0x07 TEXT    [0x07, UTF-8...]        — латиница по раскладке US, кириллица — клавиши ЙЦУКЕН
  * Сброс привязки: удерживать BOOT 3 секунды.
  * Светодиод (RGB на GPIO48): синий мигает — ждёт телефон, зелёный — подключён, красный — чужой телефон.
+ * Защита от перезагрузок по кругу: если плата 3 раза подряд упала (просадка питания, сбой), Bluetooth
+ * не включается, а светодиод мигает: жёлтым — просадка питания, фиолетовым — сбой программы.
+ * Сборка с -DKRISA_DIAG — диагностическая: без USB-мыши, вместо неё журнал в последовательный порт (115200).
  */
+#ifndef KRISA_DIAG
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 #include "USBHIDMouse.h"
+#endif
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include "esp_system.h"
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <Preferences.h>
 #include "types.h"
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
 #define LED_PIN 48
 #define BOOT_PIN 0
 
+#ifndef KRISA_DIAG
 USBHIDKeyboard Keyboard;
 USBHIDMouse Mouse;
+#define LOG(...)
+#else
+/* Диагностика: вместо USB-клавиатуры и мыши — строки в журнал. */
+#define LOG(...) Serial.printf(__VA_ARGS__)
+#define MOUSE_LEFT 1
+#define MOUSE_RIGHT 2
+#define MOUSE_MIDDLE 4
+typedef struct { uint8_t modifiers; uint8_t reserved; uint8_t keys[6]; } KeyReport;
+struct DiagKeyboard {
+  void begin() {}
+  void sendReport(KeyReport *r) { if (r->keys[0] || r->modifiers) LOG("key mods=%02x code=%02x\n", r->modifiers, r->keys[0]); }
+} Keyboard;
+struct DiagMouse {
+  uint8_t b = 0;
+  void begin() {}
+  void move(int8_t x, int8_t y, int8_t w = 0, int8_t p = 0) { LOG("move %d %d %d %d\n", x, y, w, p); }
+  void press(uint8_t m) { b |= m; LOG("press %d\n", m); }
+  void release(uint8_t m) { b &= ~m; LOG("release %d\n", m); }
+  bool isPressed(uint8_t m) { return b & m; }
+  void click(uint8_t m) { LOG("click %d\n", m); }
+} Mouse;
+#endif
+
+/* Счётчик падений подряд — переживает перезагрузку, обнуляется при отключении питания. */
+RTC_NOINIT_ATTR uint32_t crashes;
+RTC_NOINIT_ATTR uint32_t crashMagic;
+bool safeMode = false;
+bool brownout = false;
 Preferences prefs;
 
 BLECharacteristic *info;
@@ -45,7 +82,13 @@ bool hasToken = false;
 /* Команды из BLE-потока передаём в loop() через очередь: USB трогаем только из одного места. */
 QueueHandle_t queue;
 
-void led(uint8_t r, uint8_t g, uint8_t b) { rgbLedWrite(LED_PIN, r, g, b); }
+uint32_t ledNow = 0xFFFFFFFF;
+void led(uint8_t r, uint8_t g, uint8_t b) {
+  uint32_t c = (r << 16) | (g << 8) | b;
+  if (c == ledNow) return;                      // светодиод трогаем только при смене цвета
+  ledNow = c;
+  rgbLedWrite(LED_PIN, r, g, b);
+}
 
 void publishInfo() {
   if (!info) return;
@@ -201,20 +244,43 @@ void handle(const Packet &p) {
 }
 
 void setup() {
+  // Слабый USB-порт или длинный кабель: при включении радио напряжение проседает, и детектор
+  // просадки перезагружает плату по кругу. Отключаем его — остальное плата переносит.
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  esp_reset_reason_t why = esp_reset_reason();
+  if (crashMagic != 0x6b726973) { crashMagic = 0x6b726973; crashes = 0; }
+  bool crash = why == ESP_RST_PANIC || why == ESP_RST_INT_WDT || why == ESP_RST_TASK_WDT || why == ESP_RST_WDT || why == ESP_RST_BROWNOUT;
+  crashes = crash ? crashes + 1 : 0;
+  brownout = why == ESP_RST_BROWNOUT;
+  safeMode = crashes >= 3;
+
+#ifdef KRISA_DIAG
+  Serial.begin(115200);
+  delay(1500);
+  LOG("\n\nkrisa37-hid %s DIAG, reset reason %d, crashes %u%s\n", VERSION, (int)why, crashes, safeMode ? " -> SAFE MODE" : "");
+#endif
   pinMode(BOOT_PIN, INPUT_PULLUP);
   led(0, 0, 40);
   prefs.begin("krisa37", false);
   hasToken = prefs.getBytes("token", token, 8) == 8;
+  LOG("token %s\n", hasToken ? "saved" : "none");
 
+#ifndef KRISA_DIAG
   USB.productName("krisa37 HID");
   USB.manufacturerName("krisa37");
   Keyboard.begin();
   Mouse.begin();
   USB.begin();
+#endif
+  LOG("usb ok\n");
 
   queue = xQueueCreate(64, sizeof(Packet));
+  if (safeMode) return;                         // падали подряд — без Bluetooth, только индикация
 
+  delay(600);                                   // даём USB подняться до того, как радио возьмёт ток
+  LOG("ble init\n");
   BLEDevice::init("krisa37 HID");
+  BLEDevice::setPower(ESP_PWR_LVL_N0);          // поменьше мощность — поменьше ток; на 5–10 м хватает
   BLEServer *server = BLEDevice::createServer();
   server->setCallbacks(new ServerCb());
   BLEService *svc = server->createService(SERVICE_UUID);
@@ -229,16 +295,30 @@ void setup() {
   adv->addServiceUUID(SERVICE_UUID);
   adv->setScanResponse(true);
   BLEDevice::startAdvertising();
+  LOG("ble ok, advertising\n");
 }
 
 uint32_t bootDown = 0;
 
 void loop() {
+  uint32_t t = millis();
+  if (safeMode) {                               // мигаем причиной: жёлтый — питание, фиолетовый — сбой
+    bool on = (t / 400) % 2;
+    if (brownout) led(on ? 50 : 0, on ? 35 : 0, 0); else led(on ? 40 : 0, 0, on ? 40 : 0);
+    delay(20);
+    return;
+  }
+  if (t > 10000) crashes = 0;                   // проработали 10 с — значит, не падаем
+
   Packet p;
-  while (xQueueReceive(queue, &p, 0) == pdTRUE) handle(p);
+  while (xQueueReceive(queue, &p, 0) == pdTRUE) { LOG("rx %02x len %d\n", p.data[0], p.len); handle(p); }
 
   // доска включила/выключила USB — сообщаем телефону
+#ifndef KRISA_DIAG
   bool ready = (bool)USB;
+#else
+  bool ready = true;
+#endif
   if (ready != usbReady) { usbReady = ready; publishInfo(); }
 
   // удерживать BOOT 3 с — забыть привязанный телефон
@@ -253,7 +333,6 @@ void loop() {
   } else bootDown = 0;
 
   // светодиод
-  uint32_t t = millis();
   if (!connected) led(0, 0, (t / 500) % 2 ? 40 : 0);
   else if (auth == AUTH_DENIED) led(60, 0, 0);
   else led(0, 40, 0);
