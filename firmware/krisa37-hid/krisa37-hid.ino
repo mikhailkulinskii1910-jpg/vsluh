@@ -22,6 +22,7 @@
 #include <BLEServer.h>
 #include <BLE2902.h>
 #include <Preferences.h>
+#include "types.h"
 
 #define VERSION "1.0"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
@@ -37,13 +38,11 @@ Preferences prefs;
 BLECharacteristic *info;
 volatile bool connected = false;
 volatile bool usbReady = false;
-enum Auth { NEED, OK, DENIED };
-volatile Auth auth = NEED;
+volatile AuthState auth = AUTH_NEED;
 uint8_t token[8];
 bool hasToken = false;
 
 /* Команды из BLE-потока передаём в loop() через очередь: USB трогаем только из одного места. */
-struct Packet { uint8_t len; uint8_t data[24]; };
 QueueHandle_t queue;
 
 void led(uint8_t r, uint8_t g, uint8_t b) { rgbLedWrite(LED_PIN, r, g, b); }
@@ -51,15 +50,15 @@ void led(uint8_t r, uint8_t g, uint8_t b) { rgbLedWrite(LED_PIN, r, g, b); }
 void publishInfo() {
   if (!info) return;
   String s = String("krisa37-hid ") + VERSION + " usb=" + (usbReady ? "1" : "0") + " auth=" +
-             (auth == OK ? "ok" : auth == DENIED ? "denied" : "need");
+             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need");
   info->setValue(s.c_str());
   if (connected) info->notify();
 }
 
 class ServerCb : public BLEServerCallbacks {
-  void onConnect(BLEServer *s) override { connected = true; auth = NEED; }
+  void onConnect(BLEServer *s) override { connected = true; auth = AUTH_NEED; }
   void onDisconnect(BLEServer *s) override {
-    connected = false; auth = NEED;
+    connected = false; auth = AUTH_NEED;
     BLEDevice::startAdvertising();
   }
 };
@@ -77,7 +76,6 @@ class RxCb : public BLECharacteristicCallbacks {
 
 /* ---------- текст: символ → клавиша ---------- */
 
-struct KeyStroke { uint8_t mods, key; };
 const uint8_t SHIFT = 0x02;
 
 // US-раскладка для печатных ASCII 0x20..0x7E
@@ -168,11 +166,11 @@ void handle(const Packet &p) {
       prefs.putBytes("token", token, 8);
       hasToken = true;
     }
-    auth = memcmp(token, p.data + 1, 8) == 0 ? OK : DENIED;
+    auth = memcmp(token, p.data + 1, 8) == 0 ? AUTH_OK : AUTH_DENIED;
     publishInfo();
     return;
   }
-  if (auth != OK) return;                       // без привязки команды не выполняем
+  if (auth != AUTH_OK) return;                       // без привязки команды не выполняем
   switch (t) {
     case 0x01:
       if (p.len >= 5) Mouse.move((int8_t)p.data[1], (int8_t)p.data[2], (int8_t)p.data[3], (int8_t)p.data[4]);
@@ -247,7 +245,7 @@ void loop() {
   if (digitalRead(BOOT_PIN) == LOW) {
     if (!bootDown) bootDown = millis();
     else if (millis() - bootDown > 3000) {
-      prefs.remove("token"); hasToken = false; auth = NEED; publishInfo();
+      prefs.remove("token"); hasToken = false; auth = AUTH_NEED; publishInfo();
       for (int i = 0; i < 3; i++) { led(60, 60, 60); delay(150); led(0, 0, 0); delay(150); }
       bootDown = 0;
       while (digitalRead(BOOT_PIN) == LOW) delay(10);
@@ -257,7 +255,7 @@ void loop() {
   // светодиод
   uint32_t t = millis();
   if (!connected) led(0, 0, (t / 500) % 2 ? 40 : 0);
-  else if (auth == DENIED) led(60, 0, 0);
+  else if (auth == AUTH_DENIED) led(60, 0, 0);
   else led(0, 40, 0);
 
   delay(2);
