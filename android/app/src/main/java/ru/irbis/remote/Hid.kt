@@ -191,9 +191,13 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray) { info(value) }
     }
 
-    /** «krisa37-hid 1.0 usb=1 auth=ok» */
+    /** Донгл на ESP32-C3: к доске он подключается по Bluetooth, а не по USB. */
+    var c3 = false; private set
+
+    /** «krisa37-hid 1.0 usb=1 auth=ok» (у ESP32-C3 — «krisa37-hid-c3 …», usb=1 — доска подключена по Bluetooth) */
     private fun info(v: ByteArray?) {
         val s = v?.toString(Charsets.UTF_8) ?: return
+        c3 = "hid-c3" in s
         set(when {
             "auth=denied" in s -> State.DENIED
             "auth=ok" in s && "usb=0" in s -> State.USB_OFF

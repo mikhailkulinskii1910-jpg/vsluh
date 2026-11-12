@@ -2381,7 +2381,7 @@ function hidToken() {
   return t.match(/../g).map(h => parseInt(h, 16));
 }
 const hidStatusText = () => HID.state === 'search' ? 'поиск…' : HID.state !== 'on' ? 'не подключён'
-  : HID.auth === 'denied' ? 'донгл привязан к другому телефону — удерживайте BOOT 3 с' : !HID.usb ? 'подключён · доска не видит USB' : 'подключён';
+  : HID.auth === 'denied' ? 'донгл привязан к другому телефону — удерживайте BOOT 3 с' : !HID.usb ? (HID.c3 ? 'подключён · подключите «krisa37 HID» в Bluetooth доски' : 'подключён · доска не видит USB') : 'подключён';
 function hidRender() {
   const tp = $('touch');
   tp.querySelector('.hst').textContent = hidStatusText();
@@ -2395,6 +2395,7 @@ function hidParse(v) {
   const u = /usb=(\d)/.exec(s), a = /auth=(\w+)/.exec(s);
   if (u) HID.usb = u[1] === '1';
   if (a) HID.auth = a[1];
+  HID.c3 = s.includes('hid-c3');   // донгл ESP32-C3: к доске он подключается по Bluetooth, не по USB
   hidRender();
 }
 /** Отправить пакет: по очереди (GATT не умеет параллельно), без ответа. */
@@ -2943,7 +2944,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.32', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.33', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

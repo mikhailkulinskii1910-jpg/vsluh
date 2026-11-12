@@ -167,7 +167,7 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         } else if text.contains("usb=0") {
             denied = false
             ready = rx != nil
-            status = "подключён · доска не видит USB"
+            status = text.contains("hid-c3") ? "подключён · подключите «krisa37 HID» в Bluetooth доски" : "подключён · доска не видит USB"
         } else {
             denied = false
             ready = rx != nil
