@@ -34,9 +34,15 @@ jobs:
           arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default" \
             --export-binaries --output-dir out-diag diag/krisa37-hid-diag
           cp out-diag/krisa37-hid-diag.ino.merged.bin krisa37-hid-diag.bin
+      - name: Build ESP32-C3 variant (Bluetooth keyboard/mouse)
+        run: |
+          arduino-cli compile --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default" \
+            --export-binaries --output-dir out-c3 firmware/krisa37-hid-c3
+          cp out-c3/krisa37-hid-c3.ino.merged.bin krisa37-hid-c3.bin
       - uses: actions/upload-artifact@v4
         with:
           name: krisa37-hid
           path: |
             krisa37-hid.bin
             krisa37-hid-diag.bin
+            krisa37-hid-c3.bin
