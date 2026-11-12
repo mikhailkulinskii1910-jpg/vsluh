@@ -1,0 +1,31 @@
+name: ESP32 krisa37 HID
+
+on:
+  push:
+    paths: ["firmware/**", ".github/workflows/esp32.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install arduino-cli and ESP32 core
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$HOME/bin sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+          $HOME/bin/arduino-cli config init
+          $HOME/bin/arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          $HOME/bin/arduino-cli core update-index
+          $HOME/bin/arduino-cli core install esp32:esp32@3.0.7
+      - name: Build (ESP32-S3 SuperMini, USB-OTG TinyUSB, 4 MB)
+        run: |
+          arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default,FlashSize=4M,PartitionScheme=default" \
+            --export-binaries --output-dir out firmware/krisa37-hid
+          ls -la out
+          cp out/krisa37-hid.ino.merged.bin krisa37-hid.bin
+      - uses: actions/upload-artifact@v4
+        with:
+          name: krisa37-hid
+          path: krisa37-hid.bin
