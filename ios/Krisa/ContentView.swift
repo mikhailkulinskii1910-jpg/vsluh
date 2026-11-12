@@ -29,6 +29,8 @@ struct ContentView: View {
     @AppStorage("acState") private var acState = ""
     /// Сценарии (JSON) и номер текущего — для подзаголовка.
     @AppStorage("scripts") private var scriptsJSON = ""
+    /// Донгл krisa37 HID — для подзаголовка вкладки «Тачпад».
+    @ObservedObject private var hid = HidLink.shared
     @AppStorage("scriptCur") private var scriptCur = 0
     // цвет «Терминала» и палитра «Тепловизора» (сами значения Term/Heat держат в статических полях)
     @AppStorage("termColor") private var termColor = 0xEDEDED
@@ -102,6 +104,8 @@ struct ContentView: View {
                     AcPanel(model: model).padding(.top, 12)
                 } else if tab == "scripts" {
                     ScriptPanel(model: model).padding(.top, 12)
+                } else if tab == "touchpad" {
+                    TouchpadPanel(model: model).padding(.top, 12)
                 } else {
                     boardsArea.padding(.top, 12)
                 }
@@ -537,6 +541,9 @@ extension ContentView {
             let m: Int = AcState.decode(acState).model
             return "кондиционер :: Haier :: " + Haier.models[m]
         }
+        if tab == "touchpad" {
+            return "тачпад :: krisa37 HID :: " + hid.status
+        }
         if tab == "scripts" {
             let list: [KScript] = ScriptStore.load(scriptsJSON)
             let i: Int = min(max(scriptCur, 0), list.count - 1)
@@ -565,7 +572,7 @@ extension ContentView {
     typealias TabSpec = (id: String, title: String, weight: CGFloat)
 
     private static let tabs1: [TabSpec] = [("boards", "Доски", 7.5), ("proj", "Проекторы", 11.5), ("ac", "Кондиционеры", 14.5)]
-    private static let tabs2: [TabSpec] = [("scripts", "Сценарии", 10.5), ("color", "Цвет", 6.5)]
+    private static let tabs2: [TabSpec] = [("scripts", "Сценарии", 10.5), ("touchpad", "Тачпад", 8.5), ("color", "Цвет", 6.5)]
 
     private func tabRow(_ tabs: [TabSpec], width: CGFloat) -> some View {
         HStack(spacing: 8) {
