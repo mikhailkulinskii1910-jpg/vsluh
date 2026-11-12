@@ -1295,7 +1295,7 @@ class MainActivity : Activity() {
         HidLink.State.SCANNING -> "поиск…"
         HidLink.State.CONNECTING -> "подключение…"
         HidLink.State.READY -> "подключён"
-        HidLink.State.USB_OFF -> "подключён · доска не видит USB"
+        HidLink.State.USB_OFF -> if (hid?.c3 == true) "подключён · подключите «krisa37 HID» в Bluetooth доски" else "подключён · доска не видит USB"
         HidLink.State.DENIED -> "донгл привязан к другому телефону — удерживайте BOOT 3 с"
     }
 
