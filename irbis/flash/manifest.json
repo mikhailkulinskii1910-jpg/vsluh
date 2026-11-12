@@ -6,6 +6,10 @@
     {
       "chipFamily": "ESP32-S3",
       "parts": [{ "path": "krisa37-hid.bin", "offset": 0 }]
+    },
+    {
+      "chipFamily": "ESP32-C3",
+      "parts": [{ "path": "krisa37-hid-c3.bin", "offset": 0 }]
     }
   ]
 }
