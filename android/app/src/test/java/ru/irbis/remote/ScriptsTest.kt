@@ -49,4 +49,12 @@ class ScriptsTest {
         org.junit.Assert.assertEquals(13, Scripts.DEVICES[0].keys.size)
         Scripts.irbisFound = emptyList()
     }
+
+    @Test
+    fun hidTextChunks() {
+        val t = "Привет, world! Тест 123 ёж\n"
+        val parts = HidLink.chunks(t)
+        org.junit.Assert.assertTrue(parts.all { it.size <= 18 })
+        org.junit.Assert.assertEquals(t, parts.joinToString("") { it.toString(Charsets.UTF_8) })   // ни один символ не разрезан
+    }
 }

@@ -130,6 +130,7 @@ class MainActivity : Activity() {
         usbIr?.let { ir -> io.execute { ir.close() } }
         io.shutdown()
         RunService.onStop = null; RunService.stop(this)
+        hid?.disconnect(quiet = true)
         super.onDestroy()
     }
 
@@ -331,9 +332,10 @@ class MainActivity : Activity() {
         tabRoulette = ruTab("Рулетка", TAB_ROULETTE)
         tabColor = ruTab("Цвет", TAB_COLOR)
         tabScripts = ruTab("Сценарии", TAB_SCRIPTS)
+        tabTouch = ruTab("Тачпад", TAB_TOUCH)
         // два ряда вкладок: устройства сверху, «Сценарии», «Рулетка» и «Цвет» — во втором; ширина — по длине подписи
         val tabs2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; isBaselineAligned = false }
-        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc), tabs2 to listOf(tabScripts, tabRoulette, tabColor!!))) {
+        for ((row, list) in listOf(tabs to listOf(tabBoards, tabProj, tabAc), tabs2 to listOf(tabScripts, tabTouch, tabRoulette, tabColor!!))) {
             list.forEachIndexed { i, t ->
                 row.addView(t, LinearLayout.LayoutParams(0, dp(40), t.text.length + 2.5f).apply { if (i > 0) leftMargin = dp(4) })
             }
@@ -347,6 +349,8 @@ class MainActivity : Activity() {
         root.addView(acPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         scriptPanel = buildScriptPanel()
         root.addView(scriptPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        touchPanel = buildTouchPanel()
+        root.addView(touchPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         projPanel = buildProjPanel()
         root.addView(projPanel, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         mocPanel = buildMocPanel()
@@ -466,12 +470,16 @@ class MainActivity : Activity() {
         acPanel.visibility = if (tab == TAB_AC) View.VISIBLE else View.GONE
         styleTab(tabScripts, tab == TAB_SCRIPTS)
         scriptPanel.visibility = if (tab == TAB_SCRIPTS) View.VISIBLE else View.GONE
+        styleTab(tabTouch, tab == TAB_TOUCH)
+        touchPanel.visibility = if (tab == TAB_TOUCH) View.VISIBLE else View.GONE
+        if (tab == TAB_TOUCH) hidAutoConnect()
         mocPanel.visibility = if (tab == TAB_ROULETTE) View.VISIBLE else View.GONE
         colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
         subtitle.text = when (tab) {
             TAB_BOARDS -> boardSubtitle()
             TAB_AC -> acSubtitle()
             TAB_SCRIPTS -> "сценарий :: ${scripts.getOrNull(scriptIdx)?.name ?: "—"}"
+            TAB_TOUCH -> "тачпад :: krisa37 HID :: " + hidStatusText(hid?.state ?: HidLink.State.OFF)
             TAB_ROULETTE -> "рулетка :: подбор :: NEC"
             TAB_PROJ -> PROJECTORS[projIdx].let { "проектор :: ${it.brand} :: ${projSource(it)}" }
             TAB_COLOR -> if (Term.thermal) "thermal :: palette" else if (Term.blueprint) "blueprint :: оттенок" else if (Term.prism) "призма :: стекло и свет" else "terminal :: phosphor color"
@@ -1254,6 +1262,170 @@ class MainActivity : Activity() {
         }
     }
 
+    /* ---------- Вкладка «Тачпад»: мышь и клавиатура через донгл krisa37 HID ---------- */
+
+    private var hid: HidLink? = null
+    private lateinit var tabTouch: TextView
+    private lateinit var touchPanel: View
+    private lateinit var hidStatus: TextView
+    private lateinit var hidBtn: TextView
+    private lateinit var hidLangBtn: TextView
+    private var hidSens = 1f
+    private var hidLang = 0
+    private var hidWantConnect = false
+    /** Комбинации смены раскладки: подпись, модификаторы, клавиша. */
+    private val HID_LANG = listOf(
+        Triple("Alt+Shift", HidLink.ALT or HidLink.SHIFT, 0), Triple("Win+Space", HidLink.WIN, 0x2C),
+        Triple("Ctrl+Shift", HidLink.CTRL or HidLink.SHIFT, 0), Triple("Ctrl+Space", HidLink.CTRL, 0x2C))
+
+    /** 8 случайных байт — по ним донгл узнаёт «свой» телефон (первый подключившийся). */
+    private fun hidToken(): ByteArray {
+        val prefs = getPreferences(MODE_PRIVATE)
+        prefs.getString("hid_token", null)?.takeIf { it.length == 16 }?.let { h -> return ByteArray(8) { h.substring(it * 2, it * 2 + 2).toInt(16).toByte() } }
+        val t = ByteArray(8).also { java.security.SecureRandom().nextBytes(it) }
+        prefs.edit().putString("hid_token", t.joinToString("") { "%02x".format(it) }).apply()
+        return t
+    }
+
+    private fun hidLink(): HidLink = hid ?: HidLink(this, hidToken()) { s, msg -> hidRender(s, msg) }
+        .also { it.address = getPreferences(MODE_PRIVATE).getString("hid_addr", null); hid = it }
+
+    private fun hidStatusText(s: HidLink.State) = when (s) {
+        HidLink.State.OFF -> "не подключён"
+        HidLink.State.SCANNING -> "поиск…"
+        HidLink.State.CONNECTING -> "подключение…"
+        HidLink.State.READY -> "подключён"
+        HidLink.State.USB_OFF -> "подключён · доска не видит USB"
+        HidLink.State.DENIED -> "донгл привязан к другому телефону — удерживайте BOOT 3 с"
+    }
+
+    private fun hidRender(s: HidLink.State, msg: String?) {
+        if (!::hidStatus.isInitialized) return
+        hidStatus.text = hidStatusText(s)
+        val on = s != HidLink.State.OFF
+        hidBtn.text = btnLabel(if (on) "[ отключить ]" else "[ подключить ]"); styleTab(hidBtn, on)
+        if (s == HidLink.State.READY || s == HidLink.State.USB_OFF) {
+            hid?.address?.let { getPreferences(MODE_PRIVATE).edit().putString("hid_addr", it).apply() }
+            if (s == HidLink.State.READY) say("> донгл krisa37 HID подключён", ok = true)
+        }
+        if (s == HidLink.State.DENIED) say("Донгл привязан к другому телефону — удерживайте на нём BOOT 3 секунды", err = true)
+        msg?.let { say("> $it", err = s == HidLink.State.OFF) }
+        if (::touchPanel.isInitialized && touchPanel.visibility == View.VISIBLE) subtitle.text = "тачпад :: krisa37 HID :: " + hidStatusText(s)
+    }
+
+    private fun hidPerms(): Array<String> = if (Build.VERSION.SDK_INT >= 31)
+        arrayOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT)
+        else arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION)
+
+    private fun hidHasPerms() = hidPerms().all { checkSelfPermission(it) == android.content.pm.PackageManager.PERMISSION_GRANTED }
+
+    private fun hidConnect() {
+        if (!hidHasPerms()) { hidWantConnect = true; requestPermissions(hidPerms(), REQ_BT); return }
+        val l = hidLink()
+        if (!l.bluetoothOn) {
+            say("> включите Bluetooth и нажмите «подключить» ещё раз")
+            runCatching { @Suppress("DEPRECATION") startActivity(Intent(android.bluetooth.BluetoothAdapter.ACTION_REQUEST_ENABLE)) }
+            return
+        }
+        l.connect()
+    }
+
+    /** Открыли вкладку: если донгл уже знаком и разрешения есть — подключаемся сами. */
+    private fun hidAutoConnect() {
+        if (hid?.state?.let { it != HidLink.State.OFF } == true) return
+        if (getPreferences(MODE_PRIVATE).getString("hid_addr", null) == null || !hidHasPerms()) return
+        if (hidLink().bluetoothOn) hidLink().connect()
+    }
+
+    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, res: IntArray) {
+        super.onRequestPermissionsResult(code, perms, res)
+        if (code == REQ_BT && hidWantConnect) {
+            hidWantConnect = false
+            if (hidHasPerms()) hidConnect() else say("Без доступа к Bluetooth тачпад не работает", err = true)
+        }
+    }
+
+    /** Команда донглу; не подключены — подсказка в журнал. */
+    private fun hidSend(cmd: HidLink.() -> Boolean) {
+        val l = hid
+        if (l == null || !l.cmd()) say("> донгл не подключён — [ подключить ]", err = true)
+    }
+
+    private fun buildTouchPanel(): View {
+        val prefs = getPreferences(MODE_PRIVATE)
+        hidSens = prefs.getFloat("hid_sens", 1f); hidLang = prefs.getInt("hid_lang", 0).coerceIn(0, HID_LANG.size - 1)
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
+        fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(h), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+        // статус и «подключить»
+        hidStatus = text("не подключён", 14f, Term.FG).apply { typeface = Term.ru; gravity = Gravity.CENTER_VERTICAL }
+        hidBtn = small("[ подключить ]") { if (hid?.state?.let { it != HidLink.State.OFF } == true) hid?.disconnect() else hidConnect() }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(hidStatus, LinearLayout.LayoutParams(0, dp(48), 1.2f))
+            addView(hidBtn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
+        })
+        // поле-тачпад
+        val pad = TouchpadView(this, { hidSens }, {
+            hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
+                ?: null.also { if (hid?.state != HidLink.State.SCANNING) say("> донгл не подключён — [ подключить ]", err = true) }
+        })
+        p.addView(pad, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(text("один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(4), 0, 0) })
+        p.addView(row(48, small("[ Л ]") { hidSend { click(1) } }, small("[ С ]") { hidSend { click(4) } }, small("[ П ]") { hidSend { click(2) } }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // чувствительность
+        val sens = GradientSlider(this, intArrayOf(Term.shade(Term.FG, 0.35f), Term.FG), ((hidSens - 0.3f) / 2.7f).coerceIn(0f, 1f), 0.26f, Term.FG) { v, final ->
+            hidSens = 0.3f + 2.7f * v
+            if (final) prefs.edit().putFloat("hid_sens", hidSens).apply()
+        }
+        p.addView(sliderBox(sens, "медленнее", "быстрее"), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // печать
+        val input = android.widget.EditText(this).apply {
+            hint = "⌨ печатать…"; setTextColor(Term.FG); setHintTextColor(Term.DIM); typeface = Term.ru
+            background = Term.boxBg(this@MainActivity); setPadding(dp(12), 0, dp(12), 0); setSingleLine()
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEND
+        }
+        fun sendText(enter: Boolean) {
+            val t = input.text.toString() + if (enter) "\n" else ""
+            if (t.isEmpty()) return
+            hidSend { text(t) }; input.setText("")
+        }
+        input.setOnEditorActionListener { _, _, _ -> sendText(enter = true); true }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(input, LinearLayout.LayoutParams(0, dp(48), 2f))
+            addView(small("[ отправить ]") { sendText(enter = false) }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        // раскладка
+        hidLangBtn = small("") { hidLang = (hidLang + 1) % HID_LANG.size; prefs.edit().putInt("hid_lang", hidLang).apply(); hidLangBtn.text = btnLabel("[ ${HID_LANG[hidLang].first} ▾ ]") }
+        hidLangBtn.text = btnLabel("[ ${HID_LANG[hidLang].first} ▾ ]")
+        p.addView(row(48, small("[ РУС/ENG ]") { val (_, m, k) = HID_LANG[hidLang]; hidSend { key(m, k) } }, hidLangBtn),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        // быстрые клавиши
+        val C = HidLink.CTRL; val S = HidLink.SHIFT; val A = HidLink.ALT; val W = HidLink.WIN
+        val keys = listOf(
+            Triple("Esc", 0, 0x29), Triple("Tab", 0, 0x2B), Triple("Enter", 0, 0x28), Triple("⌫", 0, 0x2A),
+            Triple("Win", W, 0), Triple("Alt+Tab", A, 0x2B), Triple("Alt+F4", A, 0x3D), Triple("Del", 0, 0x4C),
+            Triple("Ctrl+C", C, 0x06), Triple("Ctrl+V", C, 0x19), Triple("Ctrl+Z", C, 0x1D), Triple("Ctrl+A", C, 0x04),
+            Triple("←", 0, 0x50), Triple("→", 0, 0x4F), Triple("↑", 0, 0x52), Triple("↓", 0, 0x51),
+            Triple("F5", 0, 0x3E), Triple("Shift+F5", S, 0x3E), Triple("PgUp", 0, 0x4B), Triple("PgDn", 0, 0x4E),
+            Triple("Home", 0, 0x4A), Triple("End", 0, 0x4D), Triple("Win+D", W, 0x07), Triple("Ctrl+S", C, 0x16))
+        keys.chunked(4).forEach { r ->
+            p.addView(row(46, *r.map { (l, m, k) -> small(l) { hidSend { key(m, k) } }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f) } }.toTypedArray()),
+                LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
+        p.addView(text("Как прошить донгл →", 15f, Term.FG).apply {
+            typeface = Term.ru; paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG; setPadding(dp(4), dp(14), 0, dp(4))
+            setOnClickListener { openExternal(android.net.Uri.parse(FLASH_URL)) }
+        })
+        return p
+    }
+
     /** Номера пультов коротко: «#1803 +3». */
     private fun projSource(p: Projector) = p.source.split(", ").let { if (it.size > 1) "${it[0]} +${it.size - 1}" else it[0] }
 
@@ -1920,6 +2092,9 @@ class MainActivity : Activity() {
         private const val TAB_ROULETTE = "roulette"
         private const val TAB_COLOR = "color"
         private const val TAB_PROJ = "proj"
+        private const val TAB_TOUCH = "touch"
+        private const val REQ_BT = 38
+        private const val FLASH_URL = "https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/"
         private const val PREF_PROJ = "proj_brand"
         private const val ACTION_PERMISSION = "ru.irbis.remote.USB_PERMISSION"
     }
