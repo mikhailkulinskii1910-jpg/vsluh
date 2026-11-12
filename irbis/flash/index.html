@@ -66,6 +66,19 @@
   </div>
 
   <div class="card">
+    <h2>Зависло на «Preparing installation»?</h2>
+    <ol>
+      <li>Подождите 2 минуты — если выбрано «Erase device», стирание памяти идёт долго.</li>
+      <li>Не помогло — закройте окно и отключите плату. <b>Зажмите <kbd>BOOT</kbd></b>, вставьте кабель (или нажмите и отпустите <kbd>RST</kbd>), <b>отпустите <kbd>BOOT</kbd></b>. Красный огонёк питания горит — это нормально.</li>
+      <li>Снова «⚡ Прошить донгл» → тот же порт → «Install». Галочку «Erase device» лучше <b>снять</b>.</li>
+      <li>После «Installation complete» нажмите <kbd>RST</kbd> — цветной светодиод замигает синим.</li>
+    </ol>
+    <p><b>Запасной способ</b> (видно, что происходит): скачайте <a href="krisa37-hid.bin" download>krisa37-hid.bin</a>, откройте <a href="https://espressif.github.io/esptool-js/" target="_blank" rel="noopener">esptool-js</a> (тоже Chrome/Edge), плату — в режим BOOT, как выше.
+      Baudrate <code>115200</code> → «Connect» → выберите порт → Flash Address <code>0x0</code>, файл <code>krisa37-hid.bin</code> → «Program». Когда допишет — <kbd>RST</kbd>.</p>
+    <p class="note">Если и там ошибка — пришлите снимок окна «Console» из esptool-js.</p>
+  </div>
+
+  <div class="card">
     <h2>2. Вставить в доску</h2>
     <p>Вставьте донгл в USB-порт доски или OPS-компьютера (при необходимости — через переходник USB-A → USB-C). Доска увидит его как обычные клавиатуру и мышь «krisa37 HID» — драйверы не нужны.</p>
   </div>
