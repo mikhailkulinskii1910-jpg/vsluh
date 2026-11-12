@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Прошивка донгла krisa37 HID</title>
+<meta name="description" content="Прошить ESP32-S3 SuperMini в донгл «мышь и клавиатура» для krisa37™ прямо из браузера.">
+<link rel="icon" href="../favicon.png">
+<script type="module" src="https://unpkg.com/esp-web-tools@10.1.0/dist/web/install-button.js?module"></script>
+<style>
+  @font-face { font-family: VT323; src: url(../vt323.ttf); }
+  :root {
+    --bg: #050806; --panel: #0b120d; --fg: #7dff9a; --dim: #4c8a5b; --line: #1f3b27; --ink: #04140a; --warn: #ffcc66;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) { --bg: #f3f7f2; --panel: #ffffff; --fg: #0d5a26; --dim: #4f7a5c; --line: #c8dccd; --ink: #ffffff; --warn: #8a5a00; }
+  }
+  :root[data-theme="light"] { --bg: #f3f7f2; --panel: #ffffff; --fg: #0d5a26; --dim: #4f7a5c; --line: #c8dccd; --ink: #ffffff; --warn: #8a5a00; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-family: VT323, ui-monospace, monospace; font-size: 44px; line-height: 1; margin: 8px 0 4px; letter-spacing: 1px; }
+  .sub { color: var(--dim); margin: 0 0 24px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 14px 0; }
+  .card h2 { font-family: VT323, ui-monospace, monospace; font-size: 26px; margin: 0 0 8px; font-weight: normal; }
+  ol, ul { margin: 6px 0; padding-left: 22px; }
+  li { margin: 4px 0; }
+  code, kbd { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; }
+  .install { text-align: center; padding: 22px 16px; }
+  esp-web-install-button button[slot="activate"], .btn {
+    font: inherit; font-size: 18px; cursor: pointer; background: var(--fg); color: var(--ink);
+    border: 0; border-radius: 8px; padding: 12px 26px;
+  }
+  .note { color: var(--dim); font-size: 14px; }
+  .warn { color: var(--warn); }
+  .leds { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; }
+  .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+  a { color: var(--fg); }
+  footer { color: var(--dim); font-size: 14px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<main>
+  <p class="note"><a href="../">← krisa37™</a> · <a href="../guide/">гид</a></p>
+  <h1>krisa37 HID</h1>
+  <p class="sub">Прошивка ESP32-S3 SuperMini в донгл «мышь и клавиатура» для доски. Телефон с krisa37™ управляет им по Bluetooth — вкладка «Тачпад».</p>
+
+  <div class="card install">
+    <esp-web-install-button manifest="manifest.json">
+      <button slot="activate">⚡ Прошить донгл</button>
+      <span slot="unsupported" class="warn">Этот браузер не умеет прошивать по USB. Откройте страницу на компьютере в <b>Chrome</b> или <b>Edge</b>.</span>
+      <span slot="not-allowed" class="warn">Прошивка доступна только по https — откройте страницу по ссылке с сайта.</span>
+    </esp-web-install-button>
+    <p class="note">Нужен компьютер с Chrome или Edge (Windows, macOS, Linux). С телефона прошить нельзя.</p>
+  </div>
+
+  <div class="card">
+    <h2>1. Прошить (один раз)</h2>
+    <ol>
+      <li>Подключите ESP32-S3 SuperMini к компьютеру кабелем USB-C (кабель должен передавать данные, не только зарядку).</li>
+      <li>Нажмите «⚡ Прошить донгл», выберите порт платы (<code>USB JTAG/serial debug unit</code> или <code>ESP32-S3</code>) и «Установить».</li>
+      <li>Через минуту появится «Готово». Отключите плату.</li>
+    </ol>
+    <p class="note"><b>Порт не появляется</b> или плату уже прошивали: зажмите на плате <kbd>BOOT</kbd>, нажмите и отпустите <kbd>RST</kbd>, отпустите <kbd>BOOT</kbd> — плата перейдёт в режим прошивки. Затем снова «Прошить». После прошивки нажмите <kbd>RST</kbd>.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Вставить в доску</h2>
+    <p>Вставьте донгл в USB-порт доски или OPS-компьютера (при необходимости — через переходник USB-A → USB-C). Доска увидит его как обычные клавиатуру и мышь «krisa37 HID» — драйверы не нужны.</p>
+  </div>
+
+  <div class="card">
+    <h2>3. Подключить телефон</h2>
+    <ol>
+      <li>В krisa37™ откройте вкладку <b>«Тачпад»</b> → «подключить» и выберите «krisa37 HID».</li>
+      <li>Первый подключившийся телефон <b>привязывает</b> донгл — с других телефонов управлять им нельзя.</li>
+      <li>Чтобы привязать другой телефон, удерживайте на донгле <kbd>BOOT</kbd> 3 секунды (светодиод трижды мигнёт белым).</li>
+    </ol>
+    <div class="leds">
+      <span class="dot" style="background:#2a6bff"></span><span>синий мигает — ждёт телефон</span>
+      <span class="dot" style="background:#22c55e"></span><span>зелёный — телефон подключён</span>
+      <span class="dot" style="background:#ef4444"></span><span>красный — подключился чужой телефон (донгл привязан к другому)</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Русский текст</h2>
+    <p>Донгл нажимает клавиши, как настоящая клавиатура. Чтобы печатать по-русски, на доске должна быть включена русская раскладка — переключите её кнопкой «РУС/ENG» во вкладке «Тачпад» (комбинацию можно выбрать: Alt+Shift, Win+Space, Ctrl+Shift, Ctrl+Space).</p>
+  </div>
+
+  <footer>Прошивка: ESP32-S3, USB-HID (TinyUSB) + Bluetooth LE. Исходный код — <a href="https://github.com/mikhailkulinskii1910-jpg/vsluh/tree/main/firmware/krisa37-hid">firmware/krisa37-hid</a>.</footer>
+</main>
+</body>
+</html>
