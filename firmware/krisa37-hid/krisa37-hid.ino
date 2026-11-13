@@ -38,7 +38,7 @@
 #include <Preferences.h>
 #include "types.h"
 
-#define VERSION "1.3"
+#define VERSION "1.4"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -325,9 +325,9 @@ void handle(const Packet &p) {
 }
 
 void setup() {
-  // Слабый USB-порт или длинный кабель: при включении радио напряжение проседает, и детектор
-  // просадки перезагружает плату по кругу. Отключаем его — остальное плата переносит.
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
+  // Первым делом — строка в UART0 (разъём COM): если плата падает дальше, будет видно, где.
+  Serial0.begin(115200);
+  Serial0.printf("\n[krisa37] setup %s\n", VERSION);
   esp_reset_reason_t why = esp_reset_reason();
   if (crashMagic != 0x6b726973) { crashMagic = 0x6b726973; crashes = 0; }
   bool crash = why == ESP_RST_PANIC || why == ESP_RST_INT_WDT || why == ESP_RST_TASK_WDT || why == ESP_RST_WDT || why == ESP_RST_BROWNOUT;
@@ -335,7 +335,6 @@ void setup() {
   brownout = why == ESP_RST_BROWNOUT;
   safeMode = crashes >= 3;
 
-  Serial0.begin(115200);
 #ifdef KRISA_DIAG
   Serial.begin(115200);
   delay(1500);
