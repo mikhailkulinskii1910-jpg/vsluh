@@ -22,6 +22,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var ready = false
     /// Залипшие модификаторы (1 Ctrl, 2 Shift, 4 Alt, 8 Win), зажатые кнопками над быстрыми клавишами.
     @Published var stickyMods: UInt8 = 0
+    /// Светодиод донгла по INFO: "rgb" (S3, цветной), "mono" (C3, синий) или "" — пока неизвестно.
+    @Published var ledKind: String = ""
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -69,6 +71,7 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
 
     private func reset(_ s: String) {
         stickyMods = 0
+        ledKind = ""
         rx = nil
         info = nil
         connected = false
@@ -158,12 +161,20 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
             let auth: [UInt8] = [0x10] + token
             p.writeValue(Data(auth), for: r, type: .withResponse)
             ready = true
+            // сохранённый цвет светодиода — сразу после привязки, если не «авто»
+            let led: LedState = LedState.load(UserDefaults.standard.string(forKey: "hid_led") ?? "")
+            if led.mode != 0 { send(led.packet) }
         }
         if let i = info { p.readValue(for: i) }
     }
 
     func peripheral(_ p: CBPeripheral, didUpdateValueFor ch: CBCharacteristic, error: Error?) {
         guard ch.uuid == HidLink.infoUUID, let d = ch.value, let text = String(data: d, encoding: .utf8) else { return }
+        if text.contains("led=rgb") {
+            ledKind = "rgb"
+        } else if text.contains("led=mono") {
+            ledKind = "mono"
+        }
         if text.contains("auth=denied") {
             denied = true
             ready = false
@@ -455,6 +466,8 @@ struct TouchpadPanel: View {
     @AppStorage("hidLayout") private var layout = 0
     @State private var typed = ""
     @State private var liveSens: Double?
+    /// Подвкладка: 0 — тачпад, 1 — светодиод.
+    @AppStorage("hidSub") private var sub = 0
     @Environment(\.scenePhase) private var scenePhase
     /// «Мои сочетания» (JSON [{"n":имя,"m":mods,"k":keycode}]).
     @AppStorage("hid_combos") private var combosJSON = ""
@@ -487,6 +500,41 @@ struct TouchpadPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             statusRow
+            subTabs
+            if sub == 1 {
+                LedPanel(model: model)
+            } else {
+                touchArea
+            }
+        }
+        .onAppear { link.autoConnect() }
+        .onDisappear { link.releaseAll() }            // ушли с вкладки — всё отпустить
+        .onChange(of: scenePhase) { p in
+            if p == .background { link.releaseAll() }  // приложение свернули
+        }
+        .sheet(item: $renaming) { r in renameSheet(r.index) }
+        .confirmationDialog(comboTitle, isPresented: comboMenuShown, titleVisibility: .visible) { comboActions }
+    }
+
+    /// Подвкладки «тачпад» | «светодиод» (выбор запоминается).
+    private var subTabs: some View {
+        HStack(spacing: 6) {
+            subChip(0, "тачпад")
+            subChip(1, "светодиод")
+        }
+    }
+
+    private func subChip(_ i: Int, _ title: String) -> some View {
+        Button {
+            if sub == 0 && i != 0 { link.releaseAll() }
+            sub = i
+        } label: {
+            TabLabel(title: title, on: sub == i, height: 36, ruSize: 13, forceRu: true)
+        }
+    }
+
+    private var touchArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
             pad
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -501,13 +549,6 @@ struct TouchpadPanel: View {
                 .padding(.bottom, 16)
             }
         }
-        .onAppear { link.autoConnect() }
-        .onDisappear { link.releaseAll() }            // ушли с вкладки — всё отпустить
-        .onChange(of: scenePhase) { p in
-            if p == .background { link.releaseAll() }  // приложение свернули
-        }
-        .sheet(item: $renaming) { r in renameSheet(r.index) }
-        .confirmationDialog(comboTitle, isPresented: comboMenuShown, titleVisibility: .visible) { comboActions }
     }
 
     /// В «Призме» и «Чертеже» подписи кнопок без квадратных скобок.
@@ -922,5 +963,189 @@ struct ComboSheet: View {
     private func submit() {
         let n: String = name.trimmingCharacters(in: .whitespaces)
         ok(HidCombo(n: n.isEmpty ? preview : n, m: mods, k: key))
+    }
+}
+
+/// Светодиод донгла: режим (0 авто, 1 цвет, 2 дыхание, 3 радуга, 4 выкл), цвет и яркость. Хранится в "hid_led".
+struct LedState {
+    var mode: Int = 0
+    var r: Int = 0x00
+    var g: Int = 0x40
+    var b: Int = 0xFF
+    var bright: Int = 40
+
+    static func load(_ s: String) -> LedState {
+        var st = LedState()
+        let v: [Int] = s.components(separatedBy: ",").compactMap { x in Int(x) }
+        if v.count < 5 { return st }
+        st.mode = min(max(v[0], 0), 4)
+        st.r = min(max(v[1], 0), 255)
+        st.g = min(max(v[2], 0), 255)
+        st.b = min(max(v[3], 0), 255)
+        st.bright = min(max(v[4], 0), 255)
+        return st
+    }
+
+    func encode() -> String {
+        let parts: [String] = [String(mode), String(r), String(g), String(b), String(bright)]
+        return parts.joined(separator: ",")
+    }
+
+    var hex: UInt32 { (UInt32(r) << 16) | (UInt32(g) << 8) | UInt32(b) }
+
+    mutating func setHex(_ h: UInt32) {
+        r = Int((h >> 16) & 0xFF)
+        g = Int((h >> 8) & 0xFF)
+        b = Int(h & 0xFF)
+    }
+
+    /// Пакет 0x08 LED [0x08, mode, r, g, b, bright].
+    var packet: [UInt8] { [0x08, UInt8(mode), UInt8(r), UInt8(g), UInt8(b), UInt8(bright)] }
+}
+
+/// Подвкладка «светодиод»: режим, цвет (для цветного светодиода) и яркость.
+struct LedPanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+    @AppStorage("hid_led") private var stored = ""
+    /// Состояние, пока тянут ползунок (сохраняется при отпускании).
+    @State private var live: LedState?
+    @State private var lastSent = Date.distantPast
+
+    private static let swatches: [UInt32] = [0xFF0000, 0xFF6000, 0xFFC800, 0x80FF00, 0x00FF40, 0x00FFC0,
+                                             0x00C0FF, 0x0040FF, 0x8000FF, 0xFF00C0, 0xFFFFFF, 0xFFB070]
+    private static let rainbow: [Color] = (0...12).map { i in Color(hex: hsvToHex(Double(i) * 30, 1, 1)) }
+
+    private var st: LedState { live ?? LedState.load(stored) }
+    private var mono: Bool { link.ledKind == "mono" }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                modeRow
+                preview
+                if !mono { palette }
+                if link.ledKind == "rgb" { hueSlider }
+                brightSlider
+                Text("Нужна прошивка донгла 1.3 (ESP32-C3 — 1.2). На ESP32-C3 светодиод синий — меняется яркость и режим.")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private var modeRow: some View {
+        let titles: [String] = ["авто", "цвет", "дыхание", mono ? "мигает" : "радуга", "выкл"]
+        return HStack(spacing: 6) {
+            ForEach(0..<5, id: \.self) { i in modeButton(i, titles[i]) }
+        }
+    }
+
+    private func modeButton(_ i: Int, _ title: String) -> some View {
+        Button {
+            var s: LedState = st
+            s.mode = i
+            commit(s)
+        } label: {
+            TabLabel(title: title, on: st.mode == i, height: 42, ruSize: 12, forceRu: true)
+        }
+    }
+
+    /// Текущий цвет × яркость (для одноцветного — синий).
+    private var preview: some View {
+        let s: LedState = st
+        let base: UInt32 = mono ? 0x0040FF : s.hex
+        let k: Double = 0.15 + 0.85 * Double(s.bright) / 255
+        let rr: Double = Double((base >> 16) & 0xFF) / 255 * k
+        let gg: Double = Double((base >> 8) & 0xFF) / 255 * k
+        let bb: Double = Double(base & 0xFF) / 255 * k
+        let c = Color(.sRGB, red: rr, green: gg, blue: bb, opacity: 1)
+        let pct: Int = Int((Double(s.bright) / 255 * 100).rounded())
+        return HStack(spacing: 14) {
+            Circle().fill(c).frame(width: 64, height: 64)
+                .overlay(Circle().stroke(Term.line, lineWidth: 1))
+                .shadow(color: c.opacity(s.mode == 4 ? 0 : 0.8), radius: 12)
+            Text("яркость " + String(pct) + "%").font(Term.ru(14)).foregroundColor(Term.dim)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var palette: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
+            ForEach(0..<LedPanel.swatches.count, id: \.self) { i in swatch(LedPanel.swatches[i]) }
+        }
+    }
+
+    private func swatch(_ h: UInt32) -> some View {
+        let on: Bool = st.hex == h && st.mode != 0 && st.mode != 4
+        return Button {
+            var s: LedState = st
+            s.setHex(h)
+            if s.mode == 0 || s.mode == 4 { s.mode = 1 }   // касание образца — режим «цвет»
+            commit(s)
+        } label: {
+            RoundedRectangle(cornerRadius: 6).fill(Color(hex: h)).frame(height: 40)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(on ? Term.fg : Term.line, lineWidth: on ? 3 : 1))
+        }
+    }
+
+    private var hueSlider: some View {
+        let h: Double = hueOf(st.hex) / 360
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("оттенок").font(Term.ru(13)).foregroundColor(Term.dim)
+            TrackSlider(value: h, mark: 0, markColor: Color(hex: 0xFF0000), track: LedPanel.rainbow,
+                        leftText: "", rightText: "",
+                        onDrag: { v in hue(v, final: false) }, onDone: { v in hue(v, final: true) })
+        }
+    }
+
+    private var brightSlider: some View {
+        let s: LedState = st
+        let top: Color = Color(hex: mono ? 0x0040FF : s.hex)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("яркость").font(Term.ru(13)).foregroundColor(Term.dim)
+            TrackSlider(value: Double(s.bright) / 255, mark: 40.0 / 255.0, markColor: top, track: [Color.black, top],
+                        leftText: "0%", rightText: "100%",
+                        onDrag: { v in bright(v, final: false) }, onDone: { v in bright(v, final: true) })
+        }
+    }
+
+    private func hue(_ v: Double, final: Bool) {
+        var s: LedState = st
+        s.setHex(hsvToHex(v * 360, 1, 1))
+        if s.mode == 0 || s.mode == 4 { s.mode = 1 }
+        apply(s, final: final)
+    }
+
+    private func bright(_ v: Double, final: Bool) {
+        var s: LedState = st
+        s.bright = Int((v * 255).rounded())
+        apply(s, final: final)
+    }
+
+    /// Во время движения ползунка — не чаще раза в 60 мс, при отпускании — финальный пакет и сохранение.
+    private func apply(_ s: LedState, final: Bool) {
+        if final {
+            live = nil
+            commit(s)
+            return
+        }
+        live = s
+        if Date().timeIntervalSince(lastSent) >= 0.06 {
+            lastSent = Date()
+            _ = link.send(s.packet)
+        }
+    }
+
+    /// Сохранить и отправить; без подключения — подсказка, цвет применится при подключении.
+    private func commit(_ s: LedState) {
+        stored = s.encode()
+        lastSent = Date()
+        if !link.send(s.packet) {
+            let msg: String = "> донгл не подключён — цвет применится при подключении"
+            if model.status != msg { model.say(msg) }
+        }
     }
 }
