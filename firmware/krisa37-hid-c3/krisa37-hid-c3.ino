@@ -149,6 +149,24 @@ void typeUtf8(const uint8_t *s, size_t n) {
   }
 }
 
+uint8_t ledMode = 0, ledBright = 255;
+uint32_t ledSaveAt = 0;
+int ledLevel = -1;
+
+/* Яркость 0…255 (светодиод горит при LOW, поэтому ШИМ инвертируем). */
+void ledPwm(int v) { if (v == ledLevel) return; ledLevel = v; analogWrite(LED_PIN, 255 - v); }
+void led(bool on) { ledPwm(on ? ledBright : 0); }
+
+bool userLed(uint32_t t) {
+  switch (ledMode) {
+    case 1: ledPwm(ledBright); return true;
+    case 2: { uint16_t ph = (t / 8) % 512; uint16_t k = ph < 256 ? ph : 511 - ph; ledPwm(ledBright * (10 + k * 245 / 255) / 255); return true; }
+    case 3: ledPwm((t / 300) % 2 ? ledBright : 0); return true;
+    case 4: ledPwm(0); return true;
+  }
+  return false;
+}
+
 void handle(const Packet &p) {
   uint8_t t = p.data[0];
   if (t == 0x10) {
@@ -192,23 +210,6 @@ void handle(const Packet &p) {
   }
 }
 
-uint8_t ledMode = 0, ledBright = 255;
-uint32_t ledSaveAt = 0;
-int ledLevel = -1;
-
-/* Яркость 0…255 (светодиод горит при LOW, поэтому ШИМ инвертируем). */
-void ledPwm(int v) { if (v == ledLevel) return; ledLevel = v; analogWrite(LED_PIN, 255 - v); }
-void led(bool on) { ledPwm(on ? ledBright : 0); }
-
-bool userLed(uint32_t t) {
-  switch (ledMode) {
-    case 1: ledPwm(ledBright); return true;
-    case 2: { uint16_t ph = (t / 8) % 512; uint16_t k = ph < 256 ? ph : 511 - ph; ledPwm(ledBright * (10 + k * 245 / 255) / 255); return true; }
-    case 3: ledPwm((t / 300) % 2 ? ledBright : 0); return true;
-    case 4: ledPwm(0); return true;
-  }
-  return false;
-}
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);    // слабое питание при включении радио — не перезагружаться
