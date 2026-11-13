@@ -236,6 +236,11 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     fun click(mask: Int, count: Int = 1) = send(byteArrayOf(0x03, mask.toByte(), count.toByte()))
     fun buttons(mask: Int) = send(byteArrayOf(0x02, mask.toByte()))
     fun key(mods: Int, code: Int) = send(byteArrayOf(0x04, mods.toByte(), code.toByte()))
+    /** Зажать (держится до [keyUp]); code 0 — только модификаторы. Нужна прошивка 1.2 (C3 — 1.1). */
+    fun keyDown(mods: Int, code: Int) = send(byteArrayOf(0x05, mods.toByte(), code.toByte()))
+    fun keyUp(mods: Int, code: Int) = send(byteArrayOf(0x06, mods.toByte(), code.toByte()))
+    /** Отпустить всё зажатое (клавиши и кнопки мыши). */
+    fun releaseAll() = send(byteArrayOf(0x06))
     fun text(t: String): Boolean { var ok = true; chunks(t).forEach { ok = send(byteArrayOf(0x07) + it) && ok }; return ok }
 }
 
