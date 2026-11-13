@@ -20,6 +20,10 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var connected = false
     /// Можно слать команды: соединение есть, RX найдена, привязка не отклонена.
     @Published var ready = false
+    /// Залипшие модификаторы (1 Ctrl, 2 Shift, 4 Alt, 8 Win), зажатые кнопками над быстрыми клавишами.
+    @Published var stickyMods: UInt8 = 0
+    /// Светодиод донгла по INFO: "rgb" (S3, цветной), "mono" (C3, синий) или "" — пока неизвестно.
+    @Published var ledKind: String = ""
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -58,6 +62,7 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     }
 
     func disconnect() {
+        releaseAll()                    // всё зажатое — отпустить, пока связь ещё есть
         wantConnect = false
         central?.stopScan()
         if let p = peripheral { central?.cancelPeripheralConnection(p) }
@@ -65,6 +70,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     }
 
     private func reset(_ s: String) {
+        stickyMods = 0
+        ledKind = ""
         rx = nil
         info = nil
         connected = false
@@ -154,12 +161,20 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
             let auth: [UInt8] = [0x10] + token
             p.writeValue(Data(auth), for: r, type: .withResponse)
             ready = true
+            // сохранённый цвет светодиода — сразу после привязки, если не «авто»
+            let led: LedState = LedState.load(UserDefaults.standard.string(forKey: "hid_led") ?? "")
+            if led.mode != 0 { send(led.packet) }
         }
         if let i = info { p.readValue(for: i) }
     }
 
     func peripheral(_ p: CBPeripheral, didUpdateValueFor ch: CBCharacteristic, error: Error?) {
         guard ch.uuid == HidLink.infoUUID, let d = ch.value, let text = String(data: d, encoding: .utf8) else { return }
+        if text.contains("led=rgb") {
+            ledKind = "rgb"
+        } else if text.contains("led=mono") {
+            ledKind = "mono"
+        }
         if text.contains("auth=denied") {
             denied = true
             ready = false
@@ -214,6 +229,28 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @discardableResult func buttons(_ mask: UInt8) -> Bool { send([0x02, mask]) }
     @discardableResult func click(_ mask: UInt8, count: UInt8 = 1) -> Bool { send([0x03, mask, count]) }
     @discardableResult func key(_ mods: UInt8, _ code: UInt8) -> Bool { send([0x04, mods, code]) }
+    /// Зажать (держится до KEYUP; keycode 0 — только модификаторы).
+    @discardableResult func keyDown(_ mods: UInt8, _ code: UInt8) -> Bool { send([0x05, mods, code]) }
+    /// Отпустить то же сочетание.
+    @discardableResult func keyUp(_ mods: UInt8, _ code: UInt8) -> Bool { send([0x06, mods, code]) }
+
+    /// Отпустить всё ([0x06]: клавиши и кнопки мыши) и снять залипшие модификаторы.
+    func releaseAll() {
+        if ready { send([0x06]) }
+        stickyMods = 0
+    }
+
+    /// Залипающий модификатор: касание — зажать, ещё касание — отпустить.
+    @discardableResult func toggleSticky(_ mod: UInt8) -> Bool {
+        if stickyMods & mod != 0 {
+            let ok: Bool = keyUp(mod, 0)
+            stickyMods &= ~mod
+            return ok
+        }
+        if !keyDown(mod, 0) { return false }
+        stickyMods |= mod
+        return true
+    }
 
     /// Напечатать текст: куски ≤ 18 байт по границам символов.
     @discardableResult func text(_ s: String) -> Bool {
@@ -429,6 +466,15 @@ struct TouchpadPanel: View {
     @AppStorage("hidLayout") private var layout = 0
     @State private var typed = ""
     @State private var liveSens: Double?
+    /// Подвкладка: 0 — тачпад, 1 — светодиод.
+    @AppStorage("hidSub") private var sub = 0
+    @Environment(\.scenePhase) private var scenePhase
+    /// «Мои сочетания» (JSON [{"n":имя,"m":mods,"k":keycode}]).
+    @AppStorage("hid_combos") private var combosJSON = ""
+    @State private var editing = false
+    @State private var building = false
+    @State private var comboMenu: Int?
+    @State private var renaming: ComboIndex?
 
     private static let keys: [HidKey] = [
         HidKey("Esc", 0, 0x29), HidKey("Tab", 0, 0x2B), HidKey("Enter", 0, 0x28), HidKey("⌫", 0, 0x2A),
@@ -454,19 +500,55 @@ struct TouchpadPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             statusRow
+            subTabs
+            if sub == 1 {
+                LedPanel(model: model)
+            } else {
+                touchArea
+            }
+        }
+        .onAppear { link.autoConnect() }
+        .onDisappear { link.releaseAll() }            // ушли с вкладки — всё отпустить
+        .onChange(of: scenePhase) { p in
+            if p == .background { link.releaseAll() }  // приложение свернули
+        }
+        .sheet(item: $renaming) { r in renameSheet(r.index) }
+        .confirmationDialog(comboTitle, isPresented: comboMenuShown, titleVisibility: .visible) { comboActions }
+    }
+
+    /// Подвкладки «тачпад» | «светодиод» (выбор запоминается).
+    private var subTabs: some View {
+        HStack(spacing: 6) {
+            subChip(0, "тачпад")
+            subChip(1, "светодиод")
+        }
+    }
+
+    private func subChip(_ i: Int, _ title: String) -> some View {
+        Button {
+            if sub == 0 && i != 0 { link.releaseAll() }
+            sub = i
+        } label: {
+            TabLabel(title: title, on: sub == i, height: 36, ruSize: 13, forceRu: true)
+        }
+    }
+
+    private var touchArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
             pad
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 8) {
                     clickRow
                     sensSlider
                     typeRow
+                    stickyRow
                     keyGrid
+                    combosSection
                     flashLink
                 }
                 .padding(.bottom, 16)
             }
         }
-        .onAppear { link.autoConnect() }
     }
 
     /// В «Призме» и «Чертеже» подписи кнопок без квадратных скобок.
@@ -598,10 +680,112 @@ struct TouchpadPanel: View {
         }
     }
 
+    /// Быстрая клавиша «как настоящая»: палец на кнопке — зажата, убран — отпущена.
     private func keyButton(_ k: HidKey) -> some View {
-        Button { run(link.key(k.mods, k.code)) } label: {
-            TabLabel(title: k.title, on: false, height: 42, ruSize: 12, forceRu: true)
+        HoldKeyButton(title: k.title, mods: k.mods, code: k.code, notConnected: { notConnected() })
+    }
+
+    // MARK: залипающие модификаторы
+
+    private static let stickies: [HidKey] = [HidKey("Ctrl", 0x01, 0), HidKey("Shift", 0x02, 0), HidKey("Alt", 0x04, 0), HidKey("Win", 0x08, 0)]
+
+    private var stickyRow: some View {
+        HStack(spacing: 6) {
+            ForEach(0..<TouchpadPanel.stickies.count, id: \.self) { i in stickyButton(TouchpadPanel.stickies[i]) }
+            Button { link.releaseAll() } label: {
+                TabLabel(title: "отпустить всё", on: false, height: 42, ruSize: 11, forceRu: true)
+            }
+            .frame(width: 92)
         }
+    }
+
+    private func stickyButton(_ k: HidKey) -> some View {
+        let on: Bool = link.stickyMods & k.mods != 0
+        return Button { run(link.toggleSticky(k.mods)) } label: {
+            TabLabel(title: k.title, on: on, height: 42, ruSize: 13, forceRu: true)
+        }
+    }
+
+    // MARK: мои сочетания
+
+    private var combos: [HidCombo] { HidCombo.decode(combosJSON) }
+
+    private func saveCombos(_ list: [HidCombo]) { combosJSON = HidCombo.encode(list) }
+
+    private var combosSection: some View {
+        let list: [HidCombo] = combos
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("мои сочетания").font(Term.ru(14)).foregroundColor(Term.dim).padding(.top, 6)
+            if !list.isEmpty {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6),
+                                    GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
+                    ForEach(0..<list.count, id: \.self) { i in comboButton(i, list[i]) }
+                }
+            }
+            HStack(spacing: 6) {
+                button("[ + сочетание ]", on: false, height: 42) { building = true }
+                if !list.isEmpty {
+                    button(editing ? "[ готово ]" : "[ изменить ]", on: editing, height: 42) { editing.toggle() }
+                }
+            }
+        }
+        .sheet(isPresented: $building) {
+            ComboSheet { c in addCombo(c) } cancel: { building = false }
+        }
+    }
+
+    private func comboButton(_ i: Int, _ c: HidCombo) -> some View {
+        var edit: (() -> Void)? = nil
+        if editing { edit = { comboMenu = i } }
+        return HoldKeyButton(title: c.n, mods: UInt8(c.m & 0xFF), code: UInt8(c.k & 0xFF),
+                             notConnected: { notConnected() }, tapOverride: edit)
+    }
+
+    private func addCombo(_ c: HidCombo) {
+        building = false
+        var list: [HidCombo] = combos
+        list.append(c)
+        saveCombos(list)
+    }
+
+    private var comboTitle: String {
+        let list: [HidCombo] = combos
+        if let i = comboMenu, i < list.count { return list[i].n }
+        return ""
+    }
+
+    private var comboMenuShown: Binding<Bool> {
+        Binding(get: { comboMenu != nil }, set: { v in if !v { comboMenu = nil } })
+    }
+
+    @ViewBuilder private var comboActions: some View {
+        if let i = comboMenu {
+            Button("Переименовать") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { renaming = ComboIndex(index: i) }
+            }
+            Button("Удалить", role: .destructive) { deleteCombo(i) }
+        }
+        Button("Отмена", role: .cancel) {}
+    }
+
+    private func deleteCombo(_ i: Int) {
+        var list: [HidCombo] = combos
+        if i < list.count { list.remove(at: i) }
+        saveCombos(list)
+        if list.isEmpty { editing = false }
+    }
+
+    private func renameSheet(_ i: Int) -> some View {
+        let list: [HidCombo] = combos
+        let name: String = i < list.count ? list[i].n : ""
+        return AskSheet(title: "Имя сочетания", value: name, numeric: false) { t in
+            renaming = nil
+            var l: [HidCombo] = combos
+            if i < l.count {
+                l[i].n = t
+                saveCombos(l)
+            }
+        } cancel: { renaming = nil }
     }
 
     @ViewBuilder private var flashLink: some View {
@@ -610,6 +794,358 @@ struct TouchpadPanel: View {
                 Text("Как прошить донгл →").font(Term.ru(14)).foregroundColor(Term.fg).underline()
             }
             .padding(.top, 4)
+        }
+    }
+}
+
+/// Номер сочетания для окна переименования.
+struct ComboIndex: Identifiable {
+    let index: Int
+    var id: Int { index }
+}
+
+/// Своё сочетание: имя, модификаторы, HID-код (0 — только модификаторы).
+struct HidCombo: Codable {
+    var n: String
+    var m: Int
+    var k: Int
+
+    static func decode(_ json: String) -> [HidCombo] {
+        guard let d = json.data(using: .utf8), let arr = try? JSONDecoder().decode([HidCombo].self, from: d) else { return [] }
+        return arr
+    }
+
+    static func encode(_ list: [HidCombo]) -> String {
+        guard let d = try? JSONEncoder().encode(list) else { return "[]" }
+        return String(data: d, encoding: .utf8) ?? "[]"
+    }
+
+    /// Имя по умолчанию: «Ctrl+Shift+Esc».
+    static func defaultName(_ mods: Int, _ key: Int) -> String {
+        var parts: [String] = []
+        if mods & 0x01 != 0 { parts.append("Ctrl") }
+        if mods & 0x02 != 0 { parts.append("Shift") }
+        if mods & 0x04 != 0 { parts.append("Alt") }
+        if mods & 0x08 != 0 { parts.append("Win") }
+        if key != 0, let k = ComboSheet.keys.first(where: { x in Int(x.code) == key }) { parts.append(k.title) }
+        return parts.isEmpty ? "—" : parts.joined(separator: "+")
+    }
+}
+
+/// Кнопка-клавиша с зажатием: касание — KEYDOWN, палец убран (или ушёл с кнопки, или началась прокрутка) — KEYUP.
+/// Очень быстрый тап, не показавший нажатие, шлёт обычное нажатие KEY. В режиме правки касание вызывает tapOverride.
+struct HoldKeyButton: View {
+    let title: String
+    let mods: UInt8
+    let code: UInt8
+    var height: CGFloat = 42
+    let notConnected: () -> Void
+    var tapOverride: (() -> Void)? = nil
+
+    @State private var pressed = false
+    @State private var sawPress = false
+
+    var body: some View {
+        Button(action: tapped) {
+            TabLabel(title: title, on: pressed, height: height, ruSize: 12, forceRu: true)
+        }
+        .buttonStyle(PressReport(onPress: { p in press(p) }))
+    }
+
+    private func press(_ p: Bool) {
+        if tapOverride != nil { return }
+        if p {
+            sawPress = true
+            if !pressed {
+                if HidLink.shared.keyDown(mods, code) {
+                    pressed = true
+                } else {
+                    notConnected()
+                }
+            }
+        } else if pressed {
+            pressed = false
+            HidLink.shared.keyUp(mods, code)
+        }
+    }
+
+    private func tapped() {
+        if let t = tapOverride {
+            t()
+            return
+        }
+        if !sawPress && !HidLink.shared.key(mods, code) { notConnected() }
+        sawPress = false
+    }
+}
+
+/// Конструктор сочетания: Ctrl / Shift / Alt / Win, клавиша из списка и необязательное имя.
+struct ComboSheet: View {
+    let ok: (HidCombo) -> Void
+    let cancel: () -> Void
+
+    @State private var mods = 0
+    @State private var key = 0
+    @State private var name = ""
+
+    static let keys: [HidKey] = ComboSheet.makeKeys()
+
+    private static func makeKeys() -> [HidKey] {
+        var out: [HidKey] = []
+        let letters: [String] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".map { c in String(c) }
+        for i in 0..<letters.count { out.append(HidKey(letters[i], 0, UInt8(0x04 + i))) }
+        out.append(HidKey("0", 0, 0x27))
+        for i in 1...9 { out.append(HidKey(String(i), 0, UInt8(0x1E + i - 1))) }
+        for i in 1...12 { out.append(HidKey("F" + String(i), 0, UInt8(0x3A + i - 1))) }
+        let named: [HidKey] = [
+            HidKey("Esc", 0, 0x29), HidKey("Tab", 0, 0x2B), HidKey("Enter", 0, 0x28), HidKey("Space", 0, 0x2C),
+            HidKey("⌫", 0, 0x2A), HidKey("Del", 0, 0x4C), HidKey("Insert", 0, 0x49), HidKey("Home", 0, 0x4A),
+            HidKey("End", 0, 0x4D), HidKey("PgUp", 0, 0x4B), HidKey("PgDn", 0, 0x4E), HidKey("←", 0, 0x50),
+            HidKey("→", 0, 0x4F), HidKey("↑", 0, 0x52), HidKey("↓", 0, 0x51), HidKey("PrtSc", 0, 0x46),
+            HidKey("Pause", 0, 0x48), HidKey("CapsLock", 0, 0x39), HidKey("-", 0, 0x2D), HidKey("=", 0, 0x2E),
+            HidKey("[", 0, 0x2F), HidKey("]", 0, 0x30), HidKey(";", 0, 0x33), HidKey("'", 0, 0x34),
+            HidKey(",", 0, 0x36), HidKey(".", 0, 0x37), HidKey("/", 0, 0x38), HidKey("`", 0, 0x35),
+        ]
+        out.append(contentsOf: named)
+        out.append(HidKey("нет — только модификаторы", 0, 0))
+        return out
+    }
+
+    private static let modList: [HidKey] = [HidKey("Ctrl", 0x01, 0), HidKey("Shift", 0x02, 0), HidKey("Alt", 0x04, 0), HidKey("Win", 0x08, 0)]
+
+    private var preview: String { HidCombo.defaultName(mods, key) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Сочетание").font(Term.ru(18)).foregroundColor(Term.fg)
+                Spacer()
+                Button("Отмена") { cancel() }.font(Term.ru(15)).foregroundColor(Term.fg)
+            }
+            HStack(spacing: 6) {
+                ForEach(0..<ComboSheet.modList.count, id: \.self) { i in modButton(ComboSheet.modList[i]) }
+            }
+            Text("клавиша").font(Term.ru(13)).foregroundColor(Term.dim)
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6),
+                                    GridItem(.flexible(), spacing: 6), GridItem(.flexible(), spacing: 6)], spacing: 6) {
+                    ForEach(0..<ComboSheet.keys.count, id: \.self) { i in keyChoice(ComboSheet.keys[i]) }
+                }
+            }
+            TextField(preview, text: $name)
+                .font(Term.ru(16)).foregroundColor(Term.fg)
+                .disableAutocorrection(true)
+                .padding(10)
+                .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+            Button { submit() } label: {
+                TabLabel(title: "OK — " + preview, on: true, height: 46, ruSize: 15, forceRu: true)
+            }
+        }
+        .padding(20)
+        .modifier(ThemedSheet())
+    }
+
+    private func modButton(_ m: HidKey) -> some View {
+        let bit: Int = Int(m.mods)
+        let on: Bool = mods & bit != 0
+        return Button { mods ^= bit } label: {
+            TabLabel(title: m.title, on: on, height: 42, ruSize: 13, forceRu: true)
+        }
+    }
+
+    private func keyChoice(_ k: HidKey) -> some View {
+        let on: Bool = key == Int(k.code)
+        return Button { key = Int(k.code) } label: {
+            TabLabel(title: k.title, on: on, height: 40, ruSize: 12, forceRu: true)
+        }
+    }
+
+    private func submit() {
+        let n: String = name.trimmingCharacters(in: .whitespaces)
+        ok(HidCombo(n: n.isEmpty ? preview : n, m: mods, k: key))
+    }
+}
+
+/// Светодиод донгла: режим (0 авто, 1 цвет, 2 дыхание, 3 радуга, 4 выкл), цвет и яркость. Хранится в "hid_led".
+struct LedState {
+    var mode: Int = 0
+    var r: Int = 0x00
+    var g: Int = 0x40
+    var b: Int = 0xFF
+    var bright: Int = 40
+
+    static func load(_ s: String) -> LedState {
+        var st = LedState()
+        let v: [Int] = s.components(separatedBy: ",").compactMap { x in Int(x) }
+        if v.count < 5 { return st }
+        st.mode = min(max(v[0], 0), 4)
+        st.r = min(max(v[1], 0), 255)
+        st.g = min(max(v[2], 0), 255)
+        st.b = min(max(v[3], 0), 255)
+        st.bright = min(max(v[4], 0), 255)
+        return st
+    }
+
+    func encode() -> String {
+        let parts: [String] = [String(mode), String(r), String(g), String(b), String(bright)]
+        return parts.joined(separator: ",")
+    }
+
+    var hex: UInt32 { (UInt32(r) << 16) | (UInt32(g) << 8) | UInt32(b) }
+
+    mutating func setHex(_ h: UInt32) {
+        r = Int((h >> 16) & 0xFF)
+        g = Int((h >> 8) & 0xFF)
+        b = Int(h & 0xFF)
+    }
+
+    /// Пакет 0x08 LED [0x08, mode, r, g, b, bright].
+    var packet: [UInt8] { [0x08, UInt8(mode), UInt8(r), UInt8(g), UInt8(b), UInt8(bright)] }
+}
+
+/// Подвкладка «светодиод»: режим, цвет (для цветного светодиода) и яркость.
+struct LedPanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+    @AppStorage("hid_led") private var stored = ""
+    /// Состояние, пока тянут ползунок (сохраняется при отпускании).
+    @State private var live: LedState?
+    @State private var lastSent = Date.distantPast
+
+    private static let swatches: [UInt32] = [0xFF0000, 0xFF6000, 0xFFC800, 0x80FF00, 0x00FF40, 0x00FFC0,
+                                             0x00C0FF, 0x0040FF, 0x8000FF, 0xFF00C0, 0xFFFFFF, 0xFFB070]
+    private static let rainbow: [Color] = (0...12).map { i in Color(hex: hsvToHex(Double(i) * 30, 1, 1)) }
+
+    private var st: LedState { live ?? LedState.load(stored) }
+    private var mono: Bool { link.ledKind == "mono" }
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 10) {
+                modeRow
+                preview
+                if !mono { palette }
+                if link.ledKind == "rgb" { hueSlider }
+                brightSlider
+                Text("Нужна прошивка донгла 1.3 (ESP32-C3 — 1.2). На ESP32-C3 светодиод синий — меняется яркость и режим.")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private var modeRow: some View {
+        let titles: [String] = ["авто", "цвет", "дыхание", mono ? "мигает" : "радуга", "выкл"]
+        return HStack(spacing: 6) {
+            ForEach(0..<5, id: \.self) { i in modeButton(i, titles[i]) }
+        }
+    }
+
+    private func modeButton(_ i: Int, _ title: String) -> some View {
+        Button {
+            var s: LedState = st
+            s.mode = i
+            commit(s)
+        } label: {
+            TabLabel(title: title, on: st.mode == i, height: 42, ruSize: 12, forceRu: true)
+        }
+    }
+
+    /// Текущий цвет × яркость (для одноцветного — синий).
+    private var preview: some View {
+        let s: LedState = st
+        let base: UInt32 = mono ? 0x0040FF : s.hex
+        let k: Double = 0.15 + 0.85 * Double(s.bright) / 255
+        let rr: Double = Double((base >> 16) & 0xFF) / 255 * k
+        let gg: Double = Double((base >> 8) & 0xFF) / 255 * k
+        let bb: Double = Double(base & 0xFF) / 255 * k
+        let c = Color(.sRGB, red: rr, green: gg, blue: bb, opacity: 1)
+        let pct: Int = Int((Double(s.bright) / 255 * 100).rounded())
+        return HStack(spacing: 14) {
+            Circle().fill(c).frame(width: 64, height: 64)
+                .overlay(Circle().stroke(Term.line, lineWidth: 1))
+                .shadow(color: c.opacity(s.mode == 4 ? 0 : 0.8), radius: 12)
+            Text("яркость " + String(pct) + "%").font(Term.ru(14)).foregroundColor(Term.dim)
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var palette: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
+            ForEach(0..<LedPanel.swatches.count, id: \.self) { i in swatch(LedPanel.swatches[i]) }
+        }
+    }
+
+    private func swatch(_ h: UInt32) -> some View {
+        let on: Bool = st.hex == h && st.mode != 0 && st.mode != 4
+        return Button {
+            var s: LedState = st
+            s.setHex(h)
+            if s.mode == 0 || s.mode == 4 { s.mode = 1 }   // касание образца — режим «цвет»
+            commit(s)
+        } label: {
+            RoundedRectangle(cornerRadius: 6).fill(Color(hex: h)).frame(height: 40)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(on ? Term.fg : Term.line, lineWidth: on ? 3 : 1))
+        }
+    }
+
+    private var hueSlider: some View {
+        let h: Double = hueOf(st.hex) / 360
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("оттенок").font(Term.ru(13)).foregroundColor(Term.dim)
+            TrackSlider(value: h, mark: 0, markColor: Color(hex: 0xFF0000), track: LedPanel.rainbow,
+                        leftText: "", rightText: "",
+                        onDrag: { v in hue(v, final: false) }, onDone: { v in hue(v, final: true) })
+        }
+    }
+
+    private var brightSlider: some View {
+        let s: LedState = st
+        let top: Color = Color(hex: mono ? 0x0040FF : s.hex)
+        return VStack(alignment: .leading, spacing: 0) {
+            Text("яркость").font(Term.ru(13)).foregroundColor(Term.dim)
+            TrackSlider(value: Double(s.bright) / 255, mark: 40.0 / 255.0, markColor: top, track: [Color.black, top],
+                        leftText: "0%", rightText: "100%",
+                        onDrag: { v in bright(v, final: false) }, onDone: { v in bright(v, final: true) })
+        }
+    }
+
+    private func hue(_ v: Double, final: Bool) {
+        var s: LedState = st
+        s.setHex(hsvToHex(v * 360, 1, 1))
+        if s.mode == 0 || s.mode == 4 { s.mode = 1 }
+        apply(s, final: final)
+    }
+
+    private func bright(_ v: Double, final: Bool) {
+        var s: LedState = st
+        s.bright = Int((v * 255).rounded())
+        apply(s, final: final)
+    }
+
+    /// Во время движения ползунка — не чаще раза в 60 мс, при отпускании — финальный пакет и сохранение.
+    private func apply(_ s: LedState, final: Bool) {
+        if final {
+            live = nil
+            commit(s)
+            return
+        }
+        live = s
+        if Date().timeIntervalSince(lastSent) >= 0.06 {
+            lastSent = Date()
+            _ = link.send(s.packet)
+        }
+    }
+
+    /// Сохранить и отправить; без подключения — подсказка, цвет применится при подключении.
+    private func commit(_ s: LedState) {
+        stored = s.encode()
+        lastSent = Date()
+        if !link.send(s.packet) {
+            let msg: String = "> донгл не подключён — цвет применится при подключении"
+            if model.status != msg { model.say(msg) }
         }
     }
 }

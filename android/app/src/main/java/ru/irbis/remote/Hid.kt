@@ -191,6 +191,9 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
         override fun onCharacteristicChanged(g: BluetoothGatt, ch: BluetoothGattCharacteristic, value: ByteArray) { info(value) }
     }
 
+    /** Светодиод донгла: true — один синий (C3), false — цветной (S3), null — прошивка старая или ещё не ответила. */
+    var ledMono: Boolean? = null; private set
+
     /** Донгл на ESP32-C3: к доске он подключается по Bluetooth, а не по USB. */
     var c3 = false; private set
 
@@ -198,6 +201,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     private fun info(v: ByteArray?) {
         val s = v?.toString(Charsets.UTF_8) ?: return
         c3 = "hid-c3" in s
+        if ("led=mono" in s) ledMono = true else if ("led=rgb" in s) ledMono = false
         set(when {
             "auth=denied" in s -> State.DENIED
             "auth=ok" in s && "usb=0" in s -> State.USB_OFF
@@ -236,6 +240,15 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     fun click(mask: Int, count: Int = 1) = send(byteArrayOf(0x03, mask.toByte(), count.toByte()))
     fun buttons(mask: Int) = send(byteArrayOf(0x02, mask.toByte()))
     fun key(mods: Int, code: Int) = send(byteArrayOf(0x04, mods.toByte(), code.toByte()))
+    /** Зажать (держится до [keyUp]); code 0 — только модификаторы. Нужна прошивка 1.2 (C3 — 1.1). */
+    fun keyDown(mods: Int, code: Int) = send(byteArrayOf(0x05, mods.toByte(), code.toByte()))
+    fun keyUp(mods: Int, code: Int) = send(byteArrayOf(0x06, mods.toByte(), code.toByte()))
+    /** Светодиод: mode 0 авто, 1 цвет, 2 дыхание, 3 радуга, 4 выкл. Нужна прошивка 1.3 (C3 — 1.2). */
+    fun led(mode: Int, r: Int, g: Int, b: Int, bright: Int) =
+        send(byteArrayOf(0x08, mode.toByte(), r.toByte(), g.toByte(), b.toByte(), bright.toByte()))
+
+    /** Отпустить всё зажатое (клавиши и кнопки мыши). */
+    fun releaseAll() = send(byteArrayOf(0x06))
     fun text(t: String): Boolean { var ok = true; chunks(t).forEach { ok = send(byteArrayOf(0x07) + it) && ok }; return ok }
 }
 

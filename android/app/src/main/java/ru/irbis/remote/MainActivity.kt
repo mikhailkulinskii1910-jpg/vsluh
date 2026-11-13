@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Color
+import android.os.SystemClock
 import android.graphics.drawable.GradientDrawable
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
@@ -135,6 +136,11 @@ class MainActivity : Activity() {
     }
 
     /* ---------- USB ---------- */
+
+    override fun onPause() {
+        super.onPause()
+        if (stickyMods != 0) hidReleaseAll()      // свернули приложение — ничего не оставляем зажатым
+    }
 
     override fun onResume() {
         super.onResume()
@@ -472,7 +478,7 @@ class MainActivity : Activity() {
         scriptPanel.visibility = if (tab == TAB_SCRIPTS) View.VISIBLE else View.GONE
         styleTab(tabTouch, tab == TAB_TOUCH)
         touchPanel.visibility = if (tab == TAB_TOUCH) View.VISIBLE else View.GONE
-        if (tab == TAB_TOUCH) hidAutoConnect()
+        if (tab == TAB_TOUCH) hidAutoConnect() else if (::touchPanel.isInitialized && stickyMods != 0) hidReleaseAll()
         mocPanel.visibility = if (tab == TAB_ROULETTE) View.VISIBLE else View.GONE
         colorPanel?.visibility = if (tab == TAB_COLOR) View.VISIBLE else View.GONE
         subtitle.text = when (tab) {
@@ -1303,6 +1309,13 @@ class MainActivity : Activity() {
         if (!::hidStatus.isInitialized) return
         hidStatus.text = hidStatusText(s)
         val on = s != HidLink.State.OFF
+        if (!on && stickyMods != 0) { stickyMods = 0; stickyBtns.forEach { (b, _) -> styleTab(b, false) } }   // донгл всё отпустил сам
+        if (!on) ledSentThisLink = false
+        if ((s == HidLink.State.READY || s == HidLink.State.USB_OFF) && !ledSentThisLink) {
+            ledSentThisLink = true
+            if (ledMode != 0) ledSendNow()        // свой цвет — сразу после привязки
+        }
+        ledRender()
         hidBtn.text = btnLabel(if (on) "[ отключить ]" else "[ подключить ]"); styleTab(hidBtn, on)
         if (s == HidLink.State.READY || s == HidLink.State.USB_OFF) {
             hid?.address?.let { getPreferences(MODE_PRIVATE).edit().putString("hid_addr", it).apply() }
@@ -1354,6 +1367,8 @@ class MainActivity : Activity() {
     private fun buildTouchPanel(): View {
         val prefs = getPreferences(MODE_PRIVATE)
         hidSens = prefs.getFloat("hid_sens", 1f); hidLang = prefs.getInt("hid_lang", 0).coerceIn(0, HID_LANG.size - 1)
+        loadCombos()
+        val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 13f else 15f) }
         fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
@@ -1362,12 +1377,21 @@ class MainActivity : Activity() {
         }
         // статус и «подключить»
         hidStatus = text("не подключён", 14f, Term.FG).apply { typeface = Term.ru; gravity = Gravity.CENTER_VERTICAL }
-        hidBtn = small("[ подключить ]") { if (hid?.state?.let { it != HidLink.State.OFF } == true) hid?.disconnect() else hidConnect() }
-        p.addView(LinearLayout(this).apply {
+        hidBtn = small("[ подключить ]") { if (hid?.state?.let { it != HidLink.State.OFF } == true) { hidReleaseAll(); hid?.disconnect() } else hidConnect() }
+        outer.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(hidStatus, LinearLayout.LayoutParams(0, dp(48), 1.2f))
             addView(hidBtn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
         })
+        // подвкладки «тачпад» | «светодиод»
+        val ledPage = buildLedPage()
+        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, 1)
+        fun showSub(i: Int) { p.visibility = if (i == 0) View.VISIBLE else View.GONE; ledPage.visibility = if (i == 1) View.VISIBLE else View.GONE }
+        outer.addView(chipRow(listOf("тачпад", "светодиод"), sub) { i, _ -> showSub(i); prefs.edit().putInt("touch_sub", i).apply() },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        outer.addView(p, LinearLayout.LayoutParams(-1, -2))
+        outer.addView(ledPage, LinearLayout.LayoutParams(-1, -2))
+        showSub(sub)
         // поле-тачпад
         val pad = TouchpadView(this, { hidSens }, {
             hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
@@ -1415,15 +1439,286 @@ class MainActivity : Activity() {
             Triple("←", 0, 0x50), Triple("→", 0, 0x4F), Triple("↑", 0, 0x52), Triple("↓", 0, 0x51),
             Triple("F5", 0, 0x3E), Triple("Shift+F5", S, 0x3E), Triple("PgUp", 0, 0x4B), Triple("PgDn", 0, 0x4E),
             Triple("Home", 0, 0x4A), Triple("End", 0, 0x4D), Triple("Win+D", W, 0x07), Triple("Ctrl+S", C, 0x16))
+        // залипающие модификаторы: касание — зажать, ещё касание — отпустить; «отпустить всё» — сброс
+        stickyBtns.clear()
+        val sticky = listOf("Ctrl" to C, "Shift" to S, "Alt" to A, "Win" to W).map { (l, m) ->
+            small(l) { toggleSticky(m) }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f); stickyBtns += this to m }
+        }
+        val relAll = small("отпустить") { hidReleaseAll(); say("> всё отпущено") }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11f else 12f) }
+        p.addView(text("зажать (касание — зажать, ещё раз — отпустить):", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(10), 0, 0) })
+        p.addView(row(46, *(sticky + relAll).toTypedArray()), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        p.addView(text("клавиши (держите палец — клавиша зажата):", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(10), 0, 0) })
         keys.chunked(4).forEach { r ->
-            p.addView(row(46, *r.map { (l, m, k) -> small(l) { hidSend { key(m, k) } }.apply { setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f) } }.toTypedArray()),
+            p.addView(row(46, *r.map { (l, m, k) -> holdButton(l, m, k) }.toTypedArray()),
                 LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         }
+        // свои сочетания
+        p.addView(text("мои сочетания", 14f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(14), 0, 0) })
+        combosBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        p.addView(combosBox, LinearLayout.LayoutParams(-1, -2))
+        renderCombos()
         p.addView(text("Как прошить донгл →", 15f, Term.FG).apply {
             typeface = Term.ru; paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG; setPadding(dp(4), dp(14), 0, dp(4))
             setOnClickListener { openExternal(android.net.Uri.parse(FLASH_URL)) }
         })
+        return outer
+    }
+
+    /* ---------- «Тачпад» → «светодиод»: цвет светодиода на донгле ---------- */
+
+    private var ledMode = 0
+    private var ledHue = 210f
+    private var ledColor = Color.rgb(0, 120, 255)
+    private var ledBright = 40
+    private var ledLastSent = 0L
+    private var ledSentThisLink = false
+    private val ledModeBtns = ArrayList<TextView>()
+    private val ledRgbOnly = ArrayList<View>()
+    private lateinit var ledPreview: View
+    private lateinit var ledBrightSlider: GradientSlider
+    private val ledRunnable = Runnable { ledSendNow() }
+
+    private val LED_SWATCHES = intArrayOf(0xFF0000, 0xFF6000, 0xFFC800, 0x80FF00, 0x00FF40, 0x00FFC0,
+        0x00C0FF, 0x0040FF, 0x8000FF, 0xFF00C0, 0xFFFFFF, 0xFFB070).map { it or 0xFF000000.toInt() }
+
+    private fun ledLoad() {
+        val v = getPreferences(MODE_PRIVATE).getString("hid_led", null)?.split(",")?.mapNotNull { it.toIntOrNull() } ?: return
+        if (v.size >= 5) { ledMode = v[0].coerceIn(0, 4); ledColor = Color.rgb(v[1], v[2], v[3]); ledBright = v[4].coerceIn(0, 255) }
+        if (v.size >= 6) ledHue = v[5].toFloat()
+    }
+
+    private fun ledSave() = getPreferences(MODE_PRIVATE).edit().putString("hid_led",
+        "$ledMode,${Color.red(ledColor)},${Color.green(ledColor)},${Color.blue(ledColor)},$ledBright,${ledHue.toInt()}").apply()
+
+    /** Отправить донглу; во время движения ползунка — не чаще раза в 60 мс. */
+    private fun ledApply(final: Boolean) {
+        ledSave(); ledRender()
+        ui.removeCallbacks(ledRunnable)
+        val wait = 60 - (SystemClock.uptimeMillis() - ledLastSent)
+        if (final || wait <= 0) ledSendNow() else ui.postDelayed(ledRunnable, wait)
+        if (final && hid?.let { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF } != true)
+            say("> донгл не подключён — цвет применится при подключении")
+    }
+
+    private fun ledSendNow() {
+        ledLastSent = SystemClock.uptimeMillis()
+        hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
+            ?.led(ledMode, Color.red(ledColor), Color.green(ledColor), Color.blue(ledColor), ledBright)
+    }
+
+    /** Цвет предпросмотра: выбранный × яркость (на C3 — синий). */
+    private fun ledShown(): Int {
+        if (ledMode == 4) return Color.BLACK
+        val c = if (hid?.ledMono == true) Color.rgb(0, 90, 255) else if (ledMode == 3) Color.HSVToColor(floatArrayOf(ledHue, 1f, 1f)) else ledColor
+        val k = 0.15f + 0.85f * ledBright / 255f
+        return Color.rgb((Color.red(c) * k).toInt(), (Color.green(c) * k).toInt(), (Color.blue(c) * k).toInt())
+    }
+
+    private fun ledRender() {
+        if (!::ledPreview.isInitialized) return
+        val mono = hid?.ledMono == true
+        ledModeBtns.forEachIndexed { i, b -> styleTab(b, i == ledMode); if (i == 3) b.text = btnLabel(if (mono) "мигает" else "радуга") }
+        ledRgbOnly.forEach { it.visibility = if (mono) View.GONE else View.VISIBLE }
+        (ledPreview.background as android.graphics.drawable.GradientDrawable).setColor(if (ledMode == 0) Term.FAINT else ledShown())
+        ledBrightSlider.setTrack(intArrayOf(Color.BLACK, if (mono) Color.rgb(0, 90, 255) else ledColor))
+    }
+
+    private fun buildLedPage(): View {
+        ledLoad()
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f) }
+        // режимы
+        ledModeBtns.clear()
+        val modes = listOf("авто", "цвет", "дыхание", "радуга", "выкл").mapIndexed { i, l ->
+            small(l) { ledMode = i; ledApply(true) }.also { ledModeBtns += it }
+        }
+        p.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            modes.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (i > 0) leftMargin = dp(5) }) }
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        p.addView(text("авто — светодиод показывает статус: синий мигает — ждёт телефон, зелёный — подключён", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(4), 0, 0) })
+        // предпросмотр
+        ledPreview = View(this).apply {
+            background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setStroke(dp(1), Term.LINE) }
+        }
+        p.addView(ledPreview, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(10) })
+        // палитра 2×6
+        LED_SWATCHES.chunked(6).forEach { r ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            r.forEachIndexed { i, c ->
+                row.addView(View(this).apply {
+                    background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(c); setStroke(dp(1), Term.LINE) }
+                    setOnClickListener {
+                        glitch(it); ledColor = c; val hsv = FloatArray(3); Color.colorToHSV(c, hsv); ledHue = hsv[0]
+                        if (ledMode == 0 || ledMode == 4 || ledMode == 3) ledMode = 1
+                        ledApply(true)
+                    }
+                }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { if (i > 0) leftMargin = dp(6) })
+            }
+            ledRgbOnly += row
+            p.addView(row, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
+        // оттенок
+        val rainbow = IntArray(7) { Color.HSVToColor(floatArrayOf(it * 60f, 1f, 1f)) }
+        val hue = GradientSlider(this, rainbow, ledHue / 360f, null, rainbow[0]) { v, final ->
+            ledHue = v * 360f; ledColor = Color.HSVToColor(floatArrayOf(ledHue, 1f, 1f))
+            if (ledMode == 0 || ledMode == 4 || ledMode == 3) ledMode = 1
+            ledApply(final)
+        }
+        val hueBox = sliderBox(hue, "оттенок", "")
+        ledRgbOnly += hueBox
+        p.addView(hueBox, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        // яркость
+        ledBrightSlider = GradientSlider(this, intArrayOf(Color.BLACK, ledColor), ledBright / 255f, 40 / 255f, ledColor) { v, final ->
+            ledBright = (v * 255).toInt().coerceIn(0, 255)
+            if (ledMode == 0 || ledMode == 4) ledMode = 1
+            ledApply(final)
+        }
+        p.addView(sliderBox(ledBrightSlider, "тусклее", "ярче"), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        p.addView(text("Нужна прошивка донгла 1.3 (ESP32-C3 — 1.2). На ESP32-C3 светодиод синий — меняются яркость и режим.", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(10), 0, 0) })
+        ledRender()
         return p
+    }
+
+    /* ---------- Тачпад: зажатие клавиш, залипающие модификаторы, свои сочетания ---------- */
+
+    private var stickyMods = 0
+    private val stickyBtns = ArrayList<Pair<TextView, Int>>()
+    private lateinit var combosBox: LinearLayout
+    private var combosEdit = false
+    private class Combo(var name: String, val mods: Int, val code: Int)
+    private var combos = ArrayList<Combo>()
+
+    /** Клавиша, которая держится, пока на ней палец: касание — KEYDOWN, отпустили — KEYUP. */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun holdButton(label: String, mods: Int, code: Int) = mocButton(label) {}.apply {
+        typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f)
+        isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+        var down = false
+        setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    down = true; styleTab(this, true); glitch(v); v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    hidSend { keyDown(mods, code) }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (down) {
+                    down = false; styleTab(this, false)
+                    hid?.keyUp(mods, code)
+                    if (e.actionMasked == MotionEvent.ACTION_UP) v.performClick()
+                }
+            }
+            true
+        }
+    }
+
+    private fun toggleSticky(m: Int) {
+        val on = stickyMods and m == 0
+        hidSend { if (on) keyDown(m, 0) else keyUp(m, 0) }
+        stickyMods = if (on) stickyMods or m else stickyMods and m.inv()
+        stickyBtns.forEach { (b, bm) -> styleTab(b, stickyMods and bm != 0) }
+    }
+
+    /** Отпустить всё на донгле и снять подсветку залипших модификаторов. */
+    private fun hidReleaseAll() {
+        hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }?.releaseAll()
+        stickyMods = 0
+        stickyBtns.forEach { (b, _) -> styleTab(b, false) }
+    }
+
+    private fun comboLabel(mods: Int, code: Int): String {
+        val parts = ArrayList<String>()
+        if (mods and HidLink.CTRL != 0) parts += "Ctrl"; if (mods and HidLink.SHIFT != 0) parts += "Shift"
+        if (mods and HidLink.ALT != 0) parts += "Alt"; if (mods and HidLink.WIN != 0) parts += "Win"
+        HID_KEYS.firstOrNull { it.second == code && code != 0 }?.let { parts += it.first }
+        return parts.joinToString("+").ifEmpty { "—" }
+    }
+
+    /** Клавиши для конструктора сочетаний: подпись → HID-код. */
+    private val HID_KEYS: List<Pair<String, Int>> by lazy {
+        ('A'..'Z').mapIndexed { i, ch -> ch.toString() to 0x04 + i } +
+            (1..9).map { it.toString() to 0x1D + it } + listOf("0" to 0x27) +
+            (1..12).map { "F$it" to 0x39 + it } +
+            listOf("Esc" to 0x29, "Tab" to 0x2B, "Enter" to 0x28, "Space" to 0x2C, "⌫" to 0x2A, "Del" to 0x4C, "Insert" to 0x49,
+                "Home" to 0x4A, "End" to 0x4D, "PgUp" to 0x4B, "PgDn" to 0x4E, "←" to 0x50, "→" to 0x4F, "↑" to 0x52, "↓" to 0x51,
+                "PrtSc" to 0x46, "Pause" to 0x48, "CapsLock" to 0x39, "-" to 0x2D, "=" to 0x2E, "[" to 0x2F, "]" to 0x30,
+                ";" to 0x33, "'" to 0x34, "," to 0x36, "." to 0x37, "/" to 0x38, "`" to 0x35)
+    }
+
+    private fun loadCombos() {
+        combos = ArrayList()
+        runCatching {
+            val a = org.json.JSONArray(getPreferences(MODE_PRIVATE).getString("hid_combos", "[]"))
+            for (i in 0 until a.length()) a.getJSONObject(i).let { combos += Combo(it.getString("n"), it.getInt("m"), it.getInt("k")) }
+        }
+    }
+
+    private fun saveCombos() {
+        val a = org.json.JSONArray()
+        combos.forEach { a.put(org.json.JSONObject().put("n", it.name).put("m", it.mods).put("k", it.code)) }
+        getPreferences(MODE_PRIVATE).edit().putString("hid_combos", a.toString()).apply()
+        renderCombos()
+    }
+
+    private fun renderCombos() {
+        if (!::combosBox.isInitialized) return
+        combosBox.removeAllViews()
+        val views = combos.map { c ->
+            if (combosEdit) mocButton(c.name) { comboMenu(c) }.apply {
+                typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f); styleTab(this, true)
+                isSingleLine = true; ellipsize = android.text.TextUtils.TruncateAt.END
+            } else holdButton(c.name, c.mods, c.code)
+        } + mocButton(btnLabel("[ + сочетание ]")) { comboBuilder() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11f else 12f) } +
+            (if (combos.isNotEmpty()) listOf(mocButton(btnLabel(if (combosEdit) "[ готово ]" else "[ изменить ]")) { combosEdit = !combosEdit; renderCombos() }
+                .apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 11f else 12f) }) else emptyList())
+        views.chunked(4).forEach { r ->
+            combosBox.addView(LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                r.forEachIndexed { i, v -> addView(v, LinearLayout.LayoutParams(0, dp(46), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+                repeat(4 - r.size) { addView(View(this@MainActivity), LinearLayout.LayoutParams(0, dp(46), 1f).apply { leftMargin = dp(6) }) }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        }
+    }
+
+    private fun comboMenu(c: Combo) {
+        AlertDialog.Builder(this).setTitle(c.name).setItems(arrayOf("Переименовать", "Удалить")) { _, w ->
+            if (w == 0) askText("Имя сочетания", c.name) { n -> c.name = n; saveCombos() }
+            else { combos.remove(c); if (combos.isEmpty()) combosEdit = false; saveCombos() }
+        }.showThemed()
+    }
+
+    /** Конструктор: модификаторы переключателями, клавиша из списка, имя — по желанию. */
+    private fun comboBuilder() {
+        var mods = 0; var code = 0
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
+        val rows = ArrayList<() -> Unit>()
+        fun line(label: () -> String, click: () -> Unit) = TextView(this).apply {
+            typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); setPadding(0, dp(10), 0, dp(10))
+            val upd = { text = label() }; rows += upd; upd()
+            setOnClickListener { click(); rows.forEach { it() } }
+        }
+        val preview = TextView(this).apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f); setPadding(0, 0, 0, dp(6)) }
+        rows += { preview.text = "сочетание: " + comboLabel(mods, code) }
+        box.addView(preview)
+        for ((l, m) in listOf("Ctrl" to HidLink.CTRL, "Shift" to HidLink.SHIFT, "Alt" to HidLink.ALT, "Win" to HidLink.WIN))
+            box.addView(line({ (if (mods and m != 0) "☑ " else "☐ ") + l }) { mods = mods xor m })
+        lateinit var keyLine: TextView
+        keyLine = line({ "клавиша: " + (HID_KEYS.firstOrNull { it.second == code && code != 0 }?.first ?: "нет (только модификаторы)") + "  ▾" }) {
+            val names = listOf("нет (только модификаторы)") + HID_KEYS.map { it.first }
+            AlertDialog.Builder(this).setTitle("Клавиша").setItems(names.toTypedArray()) { _, w ->
+                code = if (w == 0) 0 else HID_KEYS[w - 1].second; rows.forEach { it() }
+            }.showThemed()
+        }
+        box.addView(keyLine)
+        val name = android.widget.EditText(this).apply { hint = "имя (необязательно)"; setSingleLine() }
+        box.addView(name)
+        rows.forEach { it() }
+        AlertDialog.Builder(this).setTitle("Новое сочетание").setView(box).setNegativeButton("Отмена", null)
+            .setPositiveButton("Сохранить") { _, _ ->
+                if (mods == 0 && code == 0) return@setPositiveButton say("Выберите клавишу или модификатор", err = true)
+                combos += Combo(name.text.toString().trim().ifEmpty { comboLabel(mods, code) }, mods, code); saveCombos()
+            }.showThemed()
     }
 
     /** Номера пультов коротко: «#1803 +3». */

@@ -447,7 +447,31 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 [data-theme=prism] .hidp .hin{border-radius:14px}
 .hidp .htxt .gear.tab.acb{flex:0 0 34%}
 .hidp .hkeys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
-.hidp .hkeys .gear.tab.acb{height:42px;padding:0 2px;font-size:13px;white-space:nowrap}
+.hidp .hkeys .gear.tab.acb{height:42px;padding:0 2px;font-size:13px;white-space:nowrap;touch-action:manipulation}
+.hidp .hmods{margin-top:10px}
+.hidp .hmods .gear.tab.acb{height:42px;font-size:13px;padding:0 2px}
+.hidp .hmods .gear.tab.acb.rel{flex:1.6}
+.hidp .hcombos{margin-top:4px}
+.hidp .hcombos .gear.tab.acb{overflow:hidden;text-overflow:ellipsis}
+.hidp .hcombos .gear.tab.acb.wide2{grid-column:span 2}
+.hidp .hcombos .gear.tab.acb.edit{outline:1px dashed var(--fg);outline-offset:-4px}
+.mdl .hcb .srow{display:flex;gap:6px}
+.mdl .hcb .srow .gear.tab.acb{flex:1;text-align:center;padding:0}
+.mdl .hsel{height:42px;font:15px var(--ru);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:0;padding:0 8px}
+[data-theme=prism] .mdl .hsel{border-radius:12px}
+.hidp .hsub{margin:10px 0 0}
+.hidp .hpad[hidden],.hidp .hled[hidden]{display:none}
+.hidp .lmodes{margin-top:10px}
+.hidp .lmodes .gear.tab.acb{padding:0 2px;font-size:13px}
+.hidp .lprev{display:flex;align-items:center;gap:14px;margin-top:14px;padding:12px;border:1px solid var(--line);background:color-mix(in srgb,var(--bg) 70%,transparent)}
+[data-theme=prism] .hidp .lprev{border-radius:16px}
+.hidp .lprev i{flex:none;width:56px;height:56px;border-radius:50%;border:2px solid var(--line)}
+.hidp .lprev span{font:14px var(--ru);color:var(--fg)}
+.hidp .lpal{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-top:12px}
+.hidp .lsw{height:40px;border:1px solid var(--line);border-radius:6px;cursor:pointer}
+.hidp .lsw.on{outline:3px solid var(--fg);outline-offset:2px}
+.hidp .lhue .bps,.hidp .lbr .bps{margin-top:24px}
+.hidp .lhint{font-size:12px}
 .hidp .hflash{display:block;margin:14px 2px 0;font:14px var(--ru);color:var(--fg)}
 [data-theme=prism] .hidp .gear.tab.acb,[data-theme=blueprint] .hidp .gear.tab.acb{font-size:12px}
 [data-theme=thermal] .hidp .hst,[data-theme=thermal] .hidp .xl{text-shadow:0 0 3px #000,0 0 6px #000}
@@ -1479,6 +1503,8 @@ function syncTabs() {
   else if (tab === 'scripts') document.querySelector('.id').textContent = 'сценарий :: ' + scripts[scriptIdx].name;
   else if (tab === 'touch') { document.querySelector('.id').textContent = 'тачпад :: krisa37 HID :: ' + hidStatusText(); hidAuto(); }
   else if (tab !== 'color') document.querySelector('.id').textContent = REMOTES[remote].id;
+  if (tab !== 'touch' && window.hidLastTab === 'touch') hidReleaseAll();   // ушли с «Тачпада» — отпустить зажатое
+  window.hidLastTab = tab;
 }
 /* Меню «доп.»: на экране только основные кнопки (main), остальные — во второй сетке под кнопкой «доп.».
    По умолчанию свёрнуто; смена марки или подвкладки сворачивает. Нумерация сквозная. */
@@ -2368,8 +2394,11 @@ window.irxReady = true;
    INFO (read + notify): «krisa37-hid <версия> usb=<0|1> auth=<ok|need|denied>». */
 const HID = {
   SVC: '6b7e0001-3a1f-4c7e-9d2a-6b72697361a0', RX: '6b7e0002-3a1f-4c7e-9d2a-6b72697361a0', INFO: '6b7e0003-3a1f-4c7e-9d2a-6b72697361a0',
-  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false,
+  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '',
+  ledSt: { mode: 0, r: 0, g: 64, b: 255, bright: 40 },   // светодиод донгла: режим, цвет, яркость (хранится)
 };
+try { const v = JSON.parse(localStorage.getItem('krisa-hid-led') || 'null'); if (v) for (const k in HID.ledSt) if (Number.isFinite(v[k])) HID.ledSt[k] = Math.max(0, Math.min(k === 'mode' ? 4 : 255, v[k] | 0)); } catch {}
+const hidLedPacket = () => { const L = HID.ledSt; return [0x08, L.mode, L.r, L.g, L.b, L.bright]; };
 /** Токен привязки: 8 случайных байт, создаётся один раз. */
 function hidToken() {
   let t = null;
@@ -2396,6 +2425,8 @@ function hidParse(v) {
   if (u) HID.usb = u[1] === '1';
   if (a) HID.auth = a[1];
   HID.c3 = s.includes('hid-c3');   // донгл ESP32-C3: к доске он подключается по Bluetooth, не по USB
+  const l = /led=(rgb|mono)/.exec(s), led = l ? l[1] : HID.led;   // цветной светодиод (S3) или один синий (C3)
+  if (led !== HID.led) { HID.led = led; window.ledRender && ledRender(); }
   hidRender();
 }
 /** Отправить пакет: по очереди (GATT не умеет параллельно), без ответа. */
@@ -2408,7 +2439,7 @@ function hidSend(bytes) {
 }
 async function hidAttach(dev) {
   HID.dev = dev; HID.state = 'search'; hidRender();
-  if (!dev._krisa) { dev._krisa = 1; dev.addEventListener('gattserverdisconnected', () => { HID.state = 'off'; HID.rx = HID.info = null; hidRender(); }); }
+  if (!dev._krisa) { dev._krisa = 1; dev.addEventListener('gattserverdisconnected', () => { HID.state = 'off'; HID.rx = HID.info = null; HID.sticky = 0; hidStickyRender(); hidRender(); }); }
   const srv = await dev.gatt.connect(), svc = await srv.getPrimaryService(HID.SVC);
   HID.rx = await svc.getCharacteristic(HID.RX); HID.info = await svc.getCharacteristic(HID.INFO);
   // порядок: notify у INFO → AUTH (с ответом) → прочитать INFO
@@ -2418,6 +2449,7 @@ async function hidAttach(dev) {
   await (HID.rx.writeValueWithResponse ? HID.rx.writeValueWithResponse(auth) : HID.rx.writeValue(auth));
   HID.state = 'on';
   hidParse(await HID.info.readValue());
+  if (HID.ledSt.mode !== 0) hidSend(hidLedPacket());   // светодиод: выбранный цвет/режим — после AUTH при каждом подключении
   try { localStorage.setItem('krisa-hid-dev', dev.id); } catch {}
   status('> донгл krisa37 HID подключён');
 }
@@ -2428,7 +2460,15 @@ async function hidConnect() {
     await hidAttach(dev);
   } catch (e) { HID.state = 'off'; hidRender(); if (e.name !== 'NotFoundError') status('Bluetooth: ' + (e.message || e), 'err'); }
 }
-function hidDisconnect() { try { HID.dev && HID.dev.gatt.disconnect(); } catch {} HID.state = 'off'; HID.rx = HID.info = null; hidRender(); }
+/** Отпустить всё ([0x06]) и снять подсветку залипших модификаторов — при отключении, уходе с вкладки и сворачивании. */
+function hidReleaseAll() {
+  if (HID.state === 'on' && HID.rx) hidSend([0x06]);
+  HID.sticky = 0; hidStickyRender();
+  document.querySelectorAll('#touch .hkeys .on').forEach(b => b.classList.remove('on'));
+}
+function hidStickyRender() { document.querySelectorAll('#touch .hmods button[data-m]').forEach(b => b.classList.toggle('on', !!(HID.sticky & +b.dataset.m))); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') hidReleaseAll(); });
+function hidDisconnect() { hidReleaseAll(); const q = HID.q; HID.state = 'off'; q.finally(() => { try { HID.dev && HID.dev.gatt.disconnect(); } catch {} }); HID.rx = HID.info = null; hidRender(); }
 /** При открытии вкладки — переподключиться к последнему донглу, если разрешение уже есть. */
 async function hidAuto() {
   if (HID.tried || HID.state !== 'off' || !navigator.bluetooth?.getDevices) return;
@@ -2464,11 +2504,11 @@ function hidText(text) {
 
 (function buildTouch() {
   const box = $('touch');
-  box.innerHTML = '<div class="hrow"><span class="hst"></span><button class="gear tab acb hcon"></button></div>'
+  box.innerHTML = '<div class="hrow"><span class="hst"></span><button class="gear tab acb hcon"></button></div><div class="brands hsub"></div><div class="hpad">'
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="hkeys"></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -2499,8 +2539,97 @@ function hidText(text) {
   const KEYS4 = [['Esc', 0, 0x29], ['Tab', 0, 0x2B], ['Enter', 0, 0x28], ['⌫', 0, 0x2A], ['Win', 8, 0], ['Alt+Tab', 4, 0x2B], ['Alt+F4', 4, 0x3D], ['Del', 0, 0x4C],
     ['Ctrl+C', 1, 0x06], ['Ctrl+V', 1, 0x19], ['Ctrl+Z', 1, 0x1D], ['Ctrl+A', 1, 0x04], ['←', 0, 0x50], ['→', 0, 0x4F], ['↑', 0, 0x52], ['↓', 0, 0x51],
     ['F5', 0, 0x3E], ['Shift+F5', 2, 0x3E], ['PgUp', 0, 0x4B], ['PgDn', 0, 0x4E], ['Home', 0, 0x4A], ['End', 0, 0x4D], ['Win+D', 8, 0x07], ['Ctrl+S', 1, 0x16]];
+  /* Быстрые клавиши «как настоящие» (1.34): палец на кнопке — KEYDOWN [0x05, mods, code], убран / ушёл с кнопки / отмена — KEYUP [0x06, mods, code].
+     Короткое нажатие = обычное нажатие, удержание = клавиша зажата (стрелки и ⌫ повторяет система). Кнопка подсвечена, пока зажата. */
+  const holdKey = (b, get) => {
+    let held = null;
+    const up = () => { if (!held) return; hidSend([0x06, held[0], held[1]]); held = null; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => {
+      if (e.button > 0 || !get()) return;
+      b.releasePointerCapture?.(e.pointerId);   // чтобы уход пальца с кнопки давал pointerleave
+      const [m, c] = get();
+      if (hidSend([0x05, m, c])) { held = [m, c]; b.classList.add('on'); }
+    });
+    ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach(n => b.addEventListener(n, up));
+    b.addEventListener('click', e => { if (e.detail === 0 && get()) { const [m, c] = get(); hidKey(m, c); } });   // с клавиатуры — обычное нажатие
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  };
   const kg = box.querySelector('.hkeys');
-  KEYS4.forEach(([l, m, c]) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; b.addEventListener('click', () => hidKey(m, c)); kg.appendChild(b); });
+  KEYS4.forEach(([l, m, c]) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; holdKey(b, () => [m, c]); kg.appendChild(b); });
+
+  /* «Залипающие» модификаторы: касание — зажать [0x05, mod, 0] и подсветить, ещё касание — отпустить [0x06, mod, 0].
+     Пока зажаты, клики, колесо и другие клавиши дают сочетания (Shift+клик, Ctrl+колесо, Win+стрелки). «отпустить всё» — [0x06]. */
+  const sticky = box.querySelector('.hmods');
+  [['Ctrl', 1], ['Shift', 2], ['Alt', 4], ['Win', 8]].forEach(([l, m]) => {
+    const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; b.dataset.m = m;
+    b.addEventListener('click', () => {
+      if (HID.sticky & m) { if (hidSend([0x06, m, 0])) HID.sticky &= ~m; }
+      else if (hidSend([0x05, m, 0])) HID.sticky |= m;
+      hidStickyRender();
+    });
+    sticky.appendChild(b);
+  });
+  sBtn(sticky, '[ отпустить всё ]', () => { if (hidSend([0x06])) { HID.sticky = 0; hidStickyRender(); } }).classList.add('rel');
+
+  /* «Мои сочетания»: сетка 4 колонки, работают как быстрые клавиши (зажатие — пока палец на кнопке).
+     «изменить» — режим правки: касание сочетания открывает «Переименовать / Удалить». Хранение: [{n, m, k}]. */
+  const HKEYS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((ch, i) => [ch, 0x04 + i])
+    .concat([...'1234567890'].map((ch, i) => [ch, 0x1E + i]))
+    .concat(Array.from({ length: 12 }, (_, i) => ['F' + (i + 1), 0x3A + i]))
+    .concat([['Esc', 0x29], ['Tab', 0x2B], ['Enter', 0x28], ['Space', 0x2C], ['⌫', 0x2A], ['Del', 0x4C], ['Insert', 0x49], ['Home', 0x4A], ['End', 0x4D],
+      ['PgUp', 0x4B], ['PgDn', 0x4E], ['←', 0x50], ['→', 0x4F], ['↑', 0x52], ['↓', 0x51], ['PrtSc', 0x46], ['Pause', 0x48], ['CapsLock', 0x39],
+      ['-', 0x2D], ['=', 0x2E], ['[', 0x2F], [']', 0x30], [';', 0x33], ["'", 0x34], [',', 0x36], ['.', 0x37], ['/', 0x38], ['`', 0x35], ['нет — только модификаторы', 0]]);
+  const MODN = [['Ctrl', 1], ['Shift', 2], ['Alt', 4], ['Win', 8]];
+  const comboName = (m, k) => MODN.filter(([, b]) => m & b).map(([n]) => n).concat(k ? [(HKEYS.find(x => x[1] === k) || ['?'])[0]] : []).join('+') || '—';
+  let combos = [], editing = false;
+  try { combos = (JSON.parse(localStorage.getItem('krisa-hid-combos') || '[]') || []).filter(c => c && typeof c.n === 'string' && c.m >= 0 && c.k >= 0); } catch {}
+  const saveCombos = () => { try { localStorage.setItem('krisa-hid-combos', JSON.stringify(combos)); } catch {} renderCombos(); };
+  const cg = box.querySelector('.hcombos');
+  function renderCombos() {
+    cg.textContent = '';
+    combos.forEach(c => {
+      const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = c.n;
+      b.classList.toggle('edit', editing);
+      holdKey(b, () => editing ? null : [c.m, c.k]);
+      b.addEventListener('click', () => {
+        if (!editing) return;
+        modal({ title: c.n, items: ['Переименовать', 'Удалить'], pick: a => {
+          if (a === 0) modal({ title: 'Имя сочетания', input: c.n, ok: n => { c.n = n; saveCombos(); } });
+          else { combos.splice(combos.indexOf(c), 1); saveCombos(); }
+        } });
+      });
+      cg.appendChild(b);
+    });
+    const add = document.createElement('button'); add.className = 'gear tab acb'; add.textContent = btnLabel('[ + сочетание ]');
+    add.classList.add('wide2'); add.addEventListener('click', comboBuilder); cg.appendChild(add);
+    if (combos.length) {
+      const ed = document.createElement('button'); ed.className = 'gear tab acb' + (editing ? ' on' : ''); ed.textContent = btnLabel(editing ? '[ готово ]' : '[ изменить ]');
+      ed.classList.add('wide2'); ed.addEventListener('click', () => { editing = !editing; renderCombos(); }); cg.appendChild(ed);
+    }
+  }
+  /** Конструктор: Ctrl / Shift / Alt / Win, клавиша из списка, необязательное имя. */
+  function comboBuilder() {
+    let m = 0;
+    const body = document.createElement('div'); body.className = 'items hcb';
+    const mods = document.createElement('div'); mods.className = 'srow';
+    MODN.forEach(([n, bit]) => {
+      const t = document.createElement('button'); t.type = 'button'; t.className = 'gear tab acb'; t.textContent = n;
+      t.addEventListener('click', () => { m ^= bit; t.classList.toggle('on', !!(m & bit)); upd(); });
+      mods.appendChild(t);
+    });
+    const sel = document.createElement('select'); sel.className = 'hsel';
+    HKEYS.forEach(([n, k], i) => { const o = document.createElement('option'); o.value = i; o.textContent = n; sel.appendChild(o); });
+    const name = document.createElement('input'); name.type = 'text'; name.autocomplete = 'off'; name.spellcheck = false;
+    const upd = () => { name.placeholder = 'имя (по умолчанию — ' + comboName(m, HKEYS[sel.value][1]) + ')'; };
+    sel.addEventListener('change', upd); upd();
+    body.append(mods, sel, name);
+    modal({ title: 'Новое сочетание', body, okText: 'Сохранить', ok: () => {
+      const k = HKEYS[sel.value][1];
+      if (!m && !k) { status('Выберите клавишу или модификатор', 'err'); return; }
+      combos.push({ n: name.value.trim() || comboName(m, k), m, k }); saveCombos();
+    } });
+  }
+  renderCombos();
 
   /* Поле-тачпад. Один палец — курсор (× чувствительность × ускорение по скорости, не чаще раза в 15 мс, дробные остатки копятся);
      короткое касание — левый клик; касание двумя пальцами — правый; два пальца вверх/вниз — прокрутка; удержание 500 мс и движение — перетаскивание. */
@@ -2544,6 +2673,69 @@ function hidText(text) {
     accW = 0;
   };
   tp.addEventListener('pointerup', up); tp.addEventListener('pointercancel', up);
+  /* Подвкладки «тачпад» | «светодиод» (выбор запоминается); строка статуса и «подключить» — общие, над ними. */
+  let sub = 0;
+  try { sub = localStorage.getItem('krisa-hid-sub') === '1' ? 1 : 0; } catch {}
+  const subBox = box.querySelector('.hsub');
+  const showSub = () => {
+    [...subBox.children].forEach((c, i) => c.classList.toggle('on', i === sub));
+    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1;
+    if (sub === 1) ledRender();
+  };
+  chipRow(subBox, ['тачпад', 'светодиод'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
+
+  /* «светодиод»: пакет 0x08 LED [0x08, mode, r, g, b, bright] — 0 авто (статус), 1 цвет, 2 дыхание, 3 радуга (на C3 — мигает), 4 выкл.
+     При движении ползунка — не чаще раза в 60 мс и финальный при отпускании. Состояние хранится и шлётся при каждом подключении (после AUTH), если не «авто». */
+  const LB = box.querySelector('.hled');
+  const LED_PAL = [['красный', 'FF0000'], ['оранжевый', 'FF6000'], ['жёлтый', 'FFC800'], ['лайм', '80FF00'], ['зелёный', '00FF40'], ['бирюзовый', '00FFC0'],
+    ['голубой', '00C0FF'], ['синий', '0040FF'], ['фиолетовый', '8000FF'], ['розовый', 'FF00C0'], ['белый', 'FFFFFF'], ['тёплый белый', 'FFB070']];
+  let ledLast = 0;
+  const ledHex = () => HID.led === 'mono' ? '#2060FF' : hexOf([HID.ledSt.r, HID.ledSt.g, HID.ledSt.b]);
+  const ledSave = () => { try { localStorage.setItem('krisa-hid-led', JSON.stringify(HID.ledSt)); } catch {} };
+  /** Отправить состояние; final — после отпускания/нажатия (без ограничения частоты и с подсказкой, если не подключены). */
+  function ledSend(final) {
+    const now = performance.now();
+    if (!final && now - ledLast < 60) return;
+    if (HID.state !== 'on' || !HID.rx) { if (final) status('> донгл не подключён — цвет применится при подключении'); return; }
+    ledLast = now; hidSend(hidLedPacket());
+  }
+  function ledPreview() {
+    const p = LB.querySelector('.lprev'); if (!p) return;
+    const k = HID.ledSt.bright / 255, off = HID.ledSt.mode === 4, c = off ? '#000000' : mulHex(ledHex(), Math.max(0.08, k));
+    p.querySelector('i').style.background = c;
+    p.querySelector('i').style.boxShadow = off ? 'none' : '0 0 ' + Math.round(6 + 24 * k) + 'px ' + mulHex(ledHex(), Math.max(0.3, k));
+    p.querySelector('span').textContent = (off ? 'выкл' : HID.ledSt.mode === 0 ? 'авто · статус донгла' : ledHex()) + ' · яркость ' + Math.round(k * 100) + '%';
+  }
+  function ledRender() {
+    const st = HID.ledSt, mono = HID.led === 'mono';
+    LB.innerHTML = '<div class="srow lmodes"></div><div class="lprev"><i></i><span></span></div><div class="lpal"></div><div class="lhue"></div><div class="lbr"></div>'
+      + '<p class="xl lhint">Нужна прошивка донгла 1.3 (ESP32-C3 — 1.2). На ESP32-C3 светодиод синий — меняется яркость и режим.</p>';
+    ['авто', 'цвет', 'дыхание', mono ? 'мигает' : 'радуга', 'выкл'].forEach((l, i) => {
+      const b = document.createElement('button'); b.className = 'gear tab acb' + (st.mode === i ? ' on' : ''); b.textContent = l;
+      b.addEventListener('click', () => { st.mode = i; ledSave(); ledSend(true); ledRender(); });
+      LB.querySelector('.lmodes').appendChild(b);
+    });
+    if (!mono) {
+      LED_PAL.forEach(([n, h]) => {
+        const b = document.createElement('button'); b.className = 'lsw'; b.title = n; b.setAttribute('aria-label', n); b.style.background = '#' + h;
+        if (hexOf([st.r, st.g, st.b]) === '#' + h) b.classList.add('on');
+        b.addEventListener('click', () => { [st.r, st.g, st.b] = rgbOf('#' + h); if (st.mode === 0 || st.mode === 4) st.mode = 1; ledSave(); ledSend(true); ledRender(); });
+        LB.querySelector('.lpal').appendChild(b);
+      });
+      const [h] = rgb2hs([st.r, st.g, st.b]);
+      const hue = makeSlider({ name: 'Оттенок', track: rainbow(1, 1), value: h / 360, def: 225 / 360, mark: '#0040FF', labels: ['оттенок', ''],
+        live: v => { [st.r, st.g, st.b] = hsv2rgb(v * 360 % 360, 1, 1).map(Math.round); ledPreview(); ledSend(false); },
+        commit: v => { [st.r, st.g, st.b] = hsv2rgb(v * 360 % 360, 1, 1).map(Math.round); if (st.mode === 0 || st.mode === 4) st.mode = 1; ledSave(); ledSend(true); ledRender(); } });
+      hue.classList.add('cp'); LB.querySelector('.lhue').appendChild(hue);
+    }
+    const br = makeSlider({ name: 'Яркость', track: 'linear-gradient(90deg,#000,' + ledHex() + ')', value: st.bright / 255, def: 40 / 255, mark: 'var(--dim)', labels: ['яркость', ''],
+      live: v => { st.bright = Math.round(v * 255); ledPreview(); ledSend(false); },
+      commit: v => { st.bright = Math.round(v * 255); ledSave(); ledSend(true); ledPreview(); } });
+    br.classList.add('cp'); LB.querySelector('.lbr').appendChild(br);
+    ledPreview();
+  }
+  window.ledRender = () => { if (sub === 1) ledRender(); };
+  showSub();
   hidRender();
 })();
 
@@ -2944,7 +3136,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.33', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.35', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

@@ -9,6 +9,8 @@
  * В INFO «usb=1» значит «доска подключена по Bluetooth».
  * Сброс привязки телефона: удерживать BOOT 3 с. Синий светодиод (GPIO8): мигает медленно — ждёт телефон,
  * горит — телефон подключён, мигает часто — подключился чужой телефон.
+ * 0x08 LED [0x08, mode, r, g, b, bright]: 0 авто, 1 горит, 2 дыхание, 3 мигает, 4 выкл — светодиод тут один (синий),
+ * цвет не важен, только яркость. В INFO — «led=mono».
  */
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -21,7 +23,7 @@
 #include "types.h"
 #include "keymap.h"
 
-#define VERSION "1.0"
+#define VERSION "1.2"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -60,7 +62,7 @@ bool boardConnected() { return server && (int)server->getConnectedCount() > (pho
 void publishInfo() {
   if (!info) return;
   String s = String("krisa37-hid-c3 ") + VERSION + " usb=" + (boardConnected() ? "1" : "0") + " auth=" +
-             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need");
+             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=mono";
   info->setValue(s.c_str());
   if (phoneConn >= 0) info->notify();
 }
@@ -70,7 +72,11 @@ class ServerCb : public BLEServerCallbacks {
     BLEDevice::startAdvertising();              // ещё одно подключение: доска и телефон одновременно
   }
   void onDisconnect(BLEServer *s, esp_ble_gatts_cb_param_t *p) override {
-    if (p->disconnect.conn_id == phoneConn) { phoneConn = -1; auth = AUTH_NEED; }
+    if (p->disconnect.conn_id == phoneConn) {
+      phoneConn = -1; auth = AUTH_NEED;
+      Packet rel = {1, {0x06}};                 // телефон ушёл — ничего не оставляем зажатым
+      xQueueSend(queue, &rel, 0);
+    }
     BLEDevice::startAdvertising();
   }
 };
@@ -89,12 +95,35 @@ class RxCb : public BLECharacteristicCallbacks {
 
 /* ---------- отчёты HID ---------- */
 
+/* Зажатые клавиши (KEYDOWN 0x05 / KEYUP 0x06): держатся, пока телефон их не отпустит. */
+uint8_t heldMods = 0;
+uint8_t heldKeys[6] = {0};
+
 void keyReport(uint8_t mods, uint8_t key) {
-  uint8_t r[8] = {mods, 0, key, 0, 0, 0, 0, 0};
+  uint8_t r[8] = {(uint8_t)(heldMods | mods), 0, 0, 0, 0, 0, 0, 0};
+  int n = 2;
+  for (int i = 0; i < 6; i++) if (heldKeys[i]) r[n++] = heldKeys[i];
+  if (key && n < 8) r[n++] = key;
   kbIn->setValue(r, sizeof(r)); kbIn->notify();
 }
 
 void tap(uint8_t mods, uint8_t key) { keyReport(mods, key); delay(12); keyReport(0, 0); delay(12); }
+
+void keyDown(uint8_t mods, uint8_t key) {
+  heldMods |= mods;
+  if (key) {
+    bool have = false;
+    for (int i = 0; i < 6; i++) if (heldKeys[i] == key) have = true;
+    for (int i = 0; i < 6 && !have; i++) if (!heldKeys[i]) { heldKeys[i] = key; have = true; }
+  }
+  keyReport(0, 0);
+}
+
+void keyUp(uint8_t mods, uint8_t key) {
+  heldMods &= ~mods;
+  if (key) for (int i = 0; i < 6; i++) if (heldKeys[i] == key) heldKeys[i] = 0;
+  keyReport(0, 0);
+}
 
 void mouseReport(int8_t x, int8_t y, int8_t w, int8_t pan) {
   uint8_t r[5] = {mouseButtons, (uint8_t)x, (uint8_t)y, (uint8_t)w, (uint8_t)pan};
@@ -120,6 +149,24 @@ void typeUtf8(const uint8_t *s, size_t n) {
   }
 }
 
+uint8_t ledMode = 0, ledBright = 255;
+uint32_t ledSaveAt = 0;
+int ledLevel = -1;
+
+/* Яркость 0…255 (светодиод горит при LOW, поэтому ШИМ инвертируем). */
+void ledPwm(int v) { if (v == ledLevel) return; ledLevel = v; analogWrite(LED_PIN, 255 - v); }
+void led(bool on) { ledPwm(on ? ledBright : 0); }
+
+bool userLed(uint32_t t) {
+  switch (ledMode) {
+    case 1: ledPwm(ledBright); return true;
+    case 2: { uint16_t ph = (t / 8) % 512; uint16_t k = ph < 256 ? ph : 511 - ph; ledPwm(ledBright * (10 + k * 245 / 255) / 255); return true; }
+    case 3: ledPwm((t / 300) % 2 ? ledBright : 0); return true;
+    case 4: ledPwm(0); return true;
+  }
+  return false;
+}
+
 void handle(const Packet &p) {
   uint8_t t = p.data[0];
   if (t == 0x10) {
@@ -127,6 +174,11 @@ void handle(const Packet &p) {
     if (!hasToken) { memcpy(token, p.data + 1, 8); prefs.putBytes("token", token, 8); hasToken = true; }
     auth = memcmp(token, p.data + 1, 8) == 0 ? AUTH_OK : AUTH_DENIED;
     publishInfo();
+    return;
+  }
+  if (t == 0x06 && p.len < 3) {                 // «отпустить всё» — безопасно всегда
+    heldMods = 0; memset(heldKeys, 0, sizeof(heldKeys)); keyReport(0, 0);
+    if (mouseButtons) { mouseButtons = 0; mouseReport(0, 0, 0, 0); }
     return;
   }
   if (auth != AUTH_OK) return;
@@ -149,11 +201,15 @@ void handle(const Packet &p) {
       break;
     }
     case 0x04: if (p.len >= 3) tap(p.data[1], p.data[2]); break;
+    case 0x05: if (p.len >= 3) keyDown(p.data[1], p.data[2]); break;
+    case 0x06: keyUp(p.data[1], p.data[2]); break;
     case 0x07: typeUtf8(p.data + 1, p.len - 1); break;
+    case 0x08:
+      if (p.len >= 6) { ledMode = p.data[1] > 4 ? 0 : p.data[1]; ledBright = max<uint8_t>(p.data[5], 8); ledSaveAt = millis() + 2000; }
+      break;
   }
 }
 
-void led(bool on) { digitalWrite(LED_PIN, on ? LOW : HIGH); }
 
 void setup() {
   WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);    // слабое питание при включении радио — не перезагружаться
@@ -161,6 +217,8 @@ void setup() {
   pinMode(BOOT_PIN, INPUT_PULLUP);
   prefs.begin("krisa37", false);
   hasToken = prefs.getBytes("token", token, 8) == 8;
+  uint8_t ls[2];
+  if (prefs.getBytes("led", ls, 2) == 2) { ledMode = ls[0] > 4 ? 0 : ls[0]; ledBright = ls[1]; }
   queue = xQueueCreate(64, sizeof(Packet));
 
   BLEDevice::init("krisa37 HID");
@@ -221,8 +279,10 @@ void loop() {
     }
   } else bootDown = 0;
 
+  if (ledSaveAt && millis() > ledSaveAt) { uint8_t ls[2] = {ledMode, ledBright}; prefs.putBytes("led", ls, 2); ledSaveAt = 0; }
   uint32_t t = millis();
-  if (phoneConn < 0) led((t / 600) % 2);
+  if (userLed(t)) {}
+  else if (phoneConn < 0) led((t / 600) % 2);
   else if (auth == AUTH_DENIED) led((t / 120) % 2);
   else led(true);
   delay(5);
