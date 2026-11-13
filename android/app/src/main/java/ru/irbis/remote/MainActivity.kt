@@ -1294,7 +1294,15 @@ class MainActivity : Activity() {
     }
 
     private fun hidLink(): HidLink = hid ?: HidLink(this, hidToken()) { s, msg -> hidRender(s, msg) }
-        .also { it.address = getPreferences(MODE_PRIVATE).getString("hid_addr", null); hid = it }
+        .also { l ->
+            l.address = getPreferences(MODE_PRIVATE).getString("hid_addr", null); hid = l
+            l.onForget = { getPreferences(MODE_PRIVATE).edit().remove("hid_addr").apply(); say("> прежний донгл не отвечает — ищу заново") }
+            l.onChoose = { list ->
+                AlertDialog.Builder(this).setTitle("Рядом несколько донглов — ближний сверху")
+                    .setItems(list.map { it.second }.toTypedArray()) { _, w -> l.choose(list[w].first) }
+                    .setNegativeButton("Отмена", null).showThemed()
+            }
+        }
 
     private fun hidStatusText(s: HidLink.State) = when (s) {
         HidLink.State.OFF -> "не подключён"
@@ -1378,6 +1386,15 @@ class MainActivity : Activity() {
         // статус и «подключить»
         hidStatus = text("не подключён", 14f, Term.FG).apply { typeface = Term.ru; gravity = Gravity.CENTER_VERTICAL }
         hidBtn = small("[ подключить ]") { if (hid?.state?.let { it != HidLink.State.OFF } == true) { hidReleaseAll(); hid?.disconnect() } else hidConnect() }
+        hidBtn.setOnLongClickListener {
+            AlertDialog.Builder(this).setTitle("Забыть донгл?")
+                .setMessage("Приложение забудет запомненную плату и в следующий раз найдёт донгл заново — нужно, если поменяли плату.")
+                .setNegativeButton("Нет", null).setPositiveButton("Забыть") { _, _ ->
+                    hid?.disconnect(); if (hid != null) hidLink().forget() else getPreferences(MODE_PRIVATE).edit().remove("hid_addr").apply()
+                    say("> донгл забыт — нажмите «подключить»", ok = true)
+                }.showThemed()
+            true
+        }
         outer.addView(LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(hidStatus, LinearLayout.LayoutParams(0, dp(48), 1.2f))
