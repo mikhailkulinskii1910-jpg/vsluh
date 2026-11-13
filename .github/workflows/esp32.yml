@@ -26,12 +26,17 @@ jobs:
             --export-binaries --output-dir out firmware/krisa37-hid
           ls -la out
           cp out/krisa37-hid.ino.merged.bin krisa37-hid.bin
+      - name: Build ESP32-S3 N8R8/N16R8 variant (octal PSRAM — иначе такие платы перезагружаются по кругу)
+        run: |
+          arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=default,CDCOnBoot=default,FlashSize=4M,PartitionScheme=default,PSRAM=opi" \
+            --export-binaries --output-dir out-opi firmware/krisa37-hid
+          cp out-opi/krisa37-hid.ino.merged.bin krisa37-hid-opi.bin
       - name: Build diagnostic variant (no HID, log over USB serial)
         run: |
           mkdir -p diag/krisa37-hid-diag
           cp firmware/krisa37-hid/types.h diag/krisa37-hid-diag/
           { echo '#define KRISA_DIAG'; cat firmware/krisa37-hid/krisa37-hid.ino; } > diag/krisa37-hid-diag/krisa37-hid-diag.ino
-          arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default" \
+          arduino-cli compile --fqbn "esp32:esp32:esp32s3:USBMode=hwcdc,CDCOnBoot=cdc,FlashSize=4M,PartitionScheme=default,PSRAM=opi" \
             --export-binaries --output-dir out-diag diag/krisa37-hid-diag
           cp out-diag/krisa37-hid-diag.ino.merged.bin krisa37-hid-diag.bin
       - name: Build ESP32-C3 variant (Bluetooth keyboard/mouse)
@@ -46,3 +51,4 @@ jobs:
             krisa37-hid.bin
             krisa37-hid-diag.bin
             krisa37-hid-c3.bin
+            krisa37-hid-opi.bin
