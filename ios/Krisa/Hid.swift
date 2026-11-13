@@ -24,12 +24,20 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var stickyMods: UInt8 = 0
     /// Светодиод донгла по INFO: "rgb" (S3, цветной), "mono" (C3, синий) или "" — пока неизвестно.
     @Published var ledKind: String = ""
+    /// Найдено несколько донглов — выбор (по уровню сигнала).
+    @Published var choices: [HidChoice] = []
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
     private var rx: CBCharacteristic?
     private var info: CBCharacteristic?
     private var wantConnect = false
+    /// Номер попытки подключения — для таймаута прежнего донгла.
+    private var attempt = 0
+    /// Найденные при поиске донглы и их сигнал.
+    private var scanned: [UUID: CBPeripheral] = [:]
+    private var signal: [UUID: Int] = [:]
+    private var collecting = false
     private var denied = false
 
     /// Токен привязки: 8 случайных байт, создаётся один раз (ключ "hid_token").
@@ -83,14 +91,26 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         guard let c = central, c.state == .poweredOn, wantConnect else { return }
         if let idText = UserDefaults.standard.string(forKey: "hid_last"), let id = UUID(uuidString: idText),
            let p = c.retrievePeripherals(withIdentifiers: [id]).first {
-            attach(p)
+            attach(p, remembered: true)
             return
         }
+        scan()
+    }
+
+    /// Обычный поиск: после первой находки ещё 2.5 с собираем остальные донглы.
+    private func scan() {
+        guard let c = central, c.state == .poweredOn else { return }
+        scanned = [:]
+        signal = [:]
+        choices = []
+        collecting = false
         status = "поиск…"
         c.scanForPeripherals(withServices: [HidLink.service], options: nil)
+        attempt += 1
+        let token: Int = attempt
         DispatchQueue.main.asyncAfter(deadline: .now() + 15) { [weak self] in
-            guard let self = self, let c = self.central else { return }
-            if c.isScanning && self.peripheral == nil {
+            guard let self = self, let c = self.central, token == self.attempt else { return }
+            if c.isScanning && self.scanned.isEmpty {
                 c.stopScan()
                 self.wantConnect = false
                 self.status = "донгл не найден — он вставлен и светится синим?"
@@ -98,11 +118,67 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         }
     }
 
-    private func attach(_ p: CBPeripheral) {
+    /// Поиск закончен: один донгл — подключиться, несколько — спросить, какой.
+    private func finishScan() {
+        central?.stopScan()
+        collecting = false
+        let ids: [UUID] = Array(scanned.keys)
+        if ids.count == 1, let p = scanned[ids[0]] {
+            attach(p, remembered: false)
+            return
+        }
+        var list: [HidChoice] = []
+        for id in ids {
+            let rssi: Int = signal[id] ?? -127
+            let tail: String = String(id.uuidString.suffix(5))
+            list.append(HidChoice(id: id, label: "krisa37 HID · " + tail + " · сигнал " + String(rssi) + " dBm", rssi: rssi))
+        }
+        list.sort { a, b in a.rssi > b.rssi }
+        status = "найдено донглов: " + String(list.count) + " — выберите"
+        choices = list
+    }
+
+    /// Выбран донгл из списка.
+    func pick(_ id: UUID) {
+        guard let p = scanned[id] else { return }
+        choices = []
+        wantConnect = true
+        attach(p, remembered: false)
+    }
+
+    /// Выбор отменён.
+    func cancelPick() {
+        choices = []
+        if peripheral == nil {
+            wantConnect = false
+            status = "не подключён"
+        }
+    }
+
+    /// Забыть донгл: при следующем подключении — обычный поиск.
+    func forget() {
+        UserDefaults.standard.removeObject(forKey: "hid_last")
+        if !connected { status = "донгл забыт — при подключении найду заново" }
+    }
+
+    private func attach(_ p: CBPeripheral, remembered: Bool) {
         peripheral = p
         p.delegate = self
         status = "поиск…"
+        attempt += 1
+        let token: Int = attempt
         central?.connect(p, options: nil)
+        if !remembered { return }
+        // прежний донгл мог исчезнуть (поменяли плату) — не ждать вечно
+        DispatchQueue.main.asyncAfter(deadline: .now() + 8) { [weak self] in
+            guard let self = self, token == self.attempt, !self.ready, let old = self.peripheral else { return }
+            self.peripheral = nil
+            self.central?.cancelPeripheralConnection(old)
+            UserDefaults.standard.removeObject(forKey: "hid_last")
+            self.reset("прежний донгл не отвечает — ищу заново")
+            self.scan()
+            self.status = "прежний донгл не отвечает — ищу заново"
+        }
     }
 
     func centralManagerDidUpdateState(_ c: CBCentralManager) {
@@ -121,8 +197,15 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     }
 
     func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
-        c.stopScan()
-        attach(p)
+        scanned[p.identifier] = p
+        signal[p.identifier] = RSSI.intValue
+        if collecting { return }
+        collecting = true
+        let token: Int = attempt
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self = self, token == self.attempt, self.collecting else { return }
+            self.finishScan()
+        }
     }
 
     func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) {
@@ -134,11 +217,13 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     }
 
     func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) {
+        if p.identifier != peripheral?.identifier { return }   // старая попытка (прежний донгл)
         peripheral = nil
         reset("не подключён")
     }
 
     func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {
+        if p.identifier != peripheral?.identifier { return }   // отменённое подключение к прежнему донглу
         peripheral = nil
         reset(denied ? "донгл привязан к другому телефону — удерживайте BOOT 3 с" : "не подключён")
         wantConnect = false
@@ -587,7 +672,21 @@ struct TouchpadPanel: View {
                 if link.connected { link.disconnect() } else { link.connect() }
             }
             .frame(width: 140)
+            if !link.connected {
+                button("[ забыть ]", on: false, height: 40) { link.forget() }
+                    .frame(width: 84)
+            }
         }
+        .confirmationDialog("Найдено несколько донглов", isPresented: choicesShown, titleVisibility: .visible) {
+            ForEach(link.choices) { c in
+                Button(c.label) { link.pick(c.id) }
+            }
+            Button("Отмена", role: .cancel) { link.cancelPick() }
+        }
+    }
+
+    private var choicesShown: Binding<Bool> {
+        Binding(get: { !link.choices.isEmpty }, set: { v in if !v { link.cancelPick() } })
     }
 
     private var pad: some View {
@@ -1148,4 +1247,11 @@ struct LedPanel: View {
             if model.status != msg { model.say(msg) }
         }
     }
+}
+
+/// Донгл в списке выбора, когда их найдено несколько.
+struct HidChoice: Identifiable {
+    let id: UUID
+    let label: String
+    let rssi: Int
 }
