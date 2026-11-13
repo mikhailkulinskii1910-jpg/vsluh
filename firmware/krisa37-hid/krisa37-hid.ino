@@ -48,7 +48,7 @@
 #ifndef KRISA_DIAG
 USBHIDKeyboard Keyboard;
 USBHIDMouse Mouse;
-#define LOG(...)
+#define LOG(...) Serial0.printf(__VA_ARGS__)    // журнал в UART0: на платах с разъёмом COM его видно в консоли
 #else
 /* Диагностика: вместо USB-клавиатуры и мыши — строки в журнал. */
 #define LOG(...) do { Serial.printf(__VA_ARGS__); Serial0.printf(__VA_ARGS__); } while (0)   // и в USB, и в COM (UART0)
@@ -335,11 +335,13 @@ void setup() {
   brownout = why == ESP_RST_BROWNOUT;
   safeMode = crashes >= 3;
 
+  Serial0.begin(115200);
 #ifdef KRISA_DIAG
   Serial.begin(115200);
-  Serial0.begin(115200);
   delay(1500);
   LOG("\n\nkrisa37-hid %s DIAG, reset reason %d, crashes %u%s\n", VERSION, (int)why, crashes, safeMode ? " -> SAFE MODE" : "");
+#else
+  LOG("\n\nkrisa37-hid %s, reset reason %d, crashes %u%s\n", VERSION, (int)why, crashes, safeMode ? " -> SAFE MODE" : "");
 #endif
   pinMode(BOOT_PIN, INPUT_PULLUP);
   led(0, 0, 40);
