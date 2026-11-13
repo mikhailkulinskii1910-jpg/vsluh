@@ -11,7 +11,11 @@
  *   0x02 BUTTONS [0x02, mask]            — удержание кнопок (1 L, 2 R, 4 M)
  *   0x03 CLICK   [0x03, mask, count]
  *   0x04 KEY     [0x04, mods, keycode]   — нажать и отпустить (mods: 1 Ctrl, 2 Shift, 4 Alt, 8 Win)
+ *   0x05 KEYDOWN [0x05, mods, keycode]   — зажать (держится, пока не придёт KEYUP; до 6 клавиш)
+ *   0x06 KEYUP   [0x06, mods, keycode]   — отпустить; [0x06] — отпустить всё (и кнопки мыши)
  *   0x07 TEXT    [0x07, UTF-8...]        — латиница по раскладке US, кириллица — клавиши ЙЦУКЕН
+ * Зажатые модификаторы действуют и на KEY, TEXT и клики мыши (Shift+клик, Ctrl+колесо).
+ * Телефон отключился — всё зажатое отпускается само.
  * Сброс привязки: удерживать BOOT 3 секунды.
  * Светодиод (RGB на GPIO48): синий мигает — ждёт телефон, зелёный — подключён, красный — чужой телефон.
  * Защита от перезагрузок по кругу: если плата 3 раза подряд упала (просадка питания, сбой), Bluetooth
@@ -32,7 +36,7 @@
 #include <Preferences.h>
 #include "types.h"
 
-#define VERSION "1.1"
+#define VERSION "1.2"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -102,6 +106,8 @@ class ServerCb : public BLEServerCallbacks {
   void onConnect(BLEServer *s) override { connected = true; auth = AUTH_NEED; }
   void onDisconnect(BLEServer *s) override {
     connected = false; auth = AUTH_NEED;
+    Packet rel = {1, {0x06}};                   // ничего не должно остаться зажатым
+    xQueueSend(queue, &rel, 0);
     BLEDevice::startAdvertising();
   }
 };
@@ -166,15 +172,47 @@ KeyStroke cyrillic(uint32_t cp) {
   return k;
 }
 
-void tap(uint8_t mods, uint8_t key) {
+/* Зажатые клавиши (KEYDOWN/KEYUP): модификаторы и до 6 клавиш держатся, пока телефон их не отпустит. */
+uint8_t heldMods = 0;
+uint8_t heldKeys[6] = {0};
+
+void sendHeld(uint8_t mods = 0, uint8_t key = 0) {
   KeyReport r = {};
-  r.modifiers = mods;
-  r.keys[0] = key;
+  r.modifiers = heldMods | mods;
+  int n = 0;
+  for (int i = 0; i < 6; i++) if (heldKeys[i]) r.keys[n++] = heldKeys[i];
+  if (key && n < 6) r.keys[n++] = key;
   Keyboard.sendReport(&r);
+}
+
+void tap(uint8_t mods, uint8_t key) {
+  sendHeld(mods, key);
   delay(8);
-  KeyReport up = {};
-  Keyboard.sendReport(&up);
+  sendHeld();
   delay(8);
+}
+
+void keyDown(uint8_t mods, uint8_t key) {
+  heldMods |= mods;
+  if (key) {
+    bool have = false;
+    for (int i = 0; i < 6; i++) if (heldKeys[i] == key) have = true;
+    for (int i = 0; i < 6 && !have; i++) if (!heldKeys[i]) { heldKeys[i] = key; have = true; }
+  }
+  sendHeld();
+}
+
+void keyUp(uint8_t mods, uint8_t key) {
+  heldMods &= ~mods;
+  if (key) for (int i = 0; i < 6; i++) if (heldKeys[i] == key) heldKeys[i] = 0;
+  sendHeld();
+}
+
+void releaseAll() {
+  heldMods = 0;
+  memset(heldKeys, 0, sizeof(heldKeys));
+  sendHeld();
+  for (uint8_t b : {MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE}) if (Mouse.isPressed(b)) Mouse.release(b);
 }
 
 /* UTF-8 может разрезаться между пакетами — держим незаконченный символ здесь. */
@@ -213,6 +251,7 @@ void handle(const Packet &p) {
     publishInfo();
     return;
   }
+  if (t == 0x06 && p.len < 3) { releaseAll(); return; }   // «отпустить всё» — безопасно всегда
   if (auth != AUTH_OK) return;                       // без привязки команды не выполняем
   switch (t) {
     case 0x01:
@@ -236,6 +275,12 @@ void handle(const Packet &p) {
     }
     case 0x04:
       if (p.len >= 3) tap(p.data[1], p.data[2]);
+      break;
+    case 0x05:
+      if (p.len >= 3) keyDown(p.data[1], p.data[2]);
+      break;
+    case 0x06:
+      keyUp(p.data[1], p.data[2]);
       break;
     case 0x07:
       typeUtf8(p.data + 1, p.len - 1);

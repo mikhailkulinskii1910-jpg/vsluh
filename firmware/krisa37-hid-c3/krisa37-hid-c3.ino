@@ -21,7 +21,7 @@
 #include "types.h"
 #include "keymap.h"
 
-#define VERSION "1.0"
+#define VERSION "1.1"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -70,7 +70,11 @@ class ServerCb : public BLEServerCallbacks {
     BLEDevice::startAdvertising();              // ещё одно подключение: доска и телефон одновременно
   }
   void onDisconnect(BLEServer *s, esp_ble_gatts_cb_param_t *p) override {
-    if (p->disconnect.conn_id == phoneConn) { phoneConn = -1; auth = AUTH_NEED; }
+    if (p->disconnect.conn_id == phoneConn) {
+      phoneConn = -1; auth = AUTH_NEED;
+      Packet rel = {1, {0x06}};                 // телефон ушёл — ничего не оставляем зажатым
+      xQueueSend(queue, &rel, 0);
+    }
     BLEDevice::startAdvertising();
   }
 };
@@ -89,12 +93,35 @@ class RxCb : public BLECharacteristicCallbacks {
 
 /* ---------- отчёты HID ---------- */
 
+/* Зажатые клавиши (KEYDOWN 0x05 / KEYUP 0x06): держатся, пока телефон их не отпустит. */
+uint8_t heldMods = 0;
+uint8_t heldKeys[6] = {0};
+
 void keyReport(uint8_t mods, uint8_t key) {
-  uint8_t r[8] = {mods, 0, key, 0, 0, 0, 0, 0};
+  uint8_t r[8] = {(uint8_t)(heldMods | mods), 0, 0, 0, 0, 0, 0, 0};
+  int n = 2;
+  for (int i = 0; i < 6; i++) if (heldKeys[i]) r[n++] = heldKeys[i];
+  if (key && n < 8) r[n++] = key;
   kbIn->setValue(r, sizeof(r)); kbIn->notify();
 }
 
 void tap(uint8_t mods, uint8_t key) { keyReport(mods, key); delay(12); keyReport(0, 0); delay(12); }
+
+void keyDown(uint8_t mods, uint8_t key) {
+  heldMods |= mods;
+  if (key) {
+    bool have = false;
+    for (int i = 0; i < 6; i++) if (heldKeys[i] == key) have = true;
+    for (int i = 0; i < 6 && !have; i++) if (!heldKeys[i]) { heldKeys[i] = key; have = true; }
+  }
+  keyReport(0, 0);
+}
+
+void keyUp(uint8_t mods, uint8_t key) {
+  heldMods &= ~mods;
+  if (key) for (int i = 0; i < 6; i++) if (heldKeys[i] == key) heldKeys[i] = 0;
+  keyReport(0, 0);
+}
 
 void mouseReport(int8_t x, int8_t y, int8_t w, int8_t pan) {
   uint8_t r[5] = {mouseButtons, (uint8_t)x, (uint8_t)y, (uint8_t)w, (uint8_t)pan};
@@ -129,6 +156,11 @@ void handle(const Packet &p) {
     publishInfo();
     return;
   }
+  if (t == 0x06 && p.len < 3) {                 // «отпустить всё» — безопасно всегда
+    heldMods = 0; memset(heldKeys, 0, sizeof(heldKeys)); keyReport(0, 0);
+    if (mouseButtons) { mouseButtons = 0; mouseReport(0, 0, 0, 0); }
+    return;
+  }
   if (auth != AUTH_OK) return;
   switch (t) {
     case 0x01:
@@ -149,6 +181,8 @@ void handle(const Packet &p) {
       break;
     }
     case 0x04: if (p.len >= 3) tap(p.data[1], p.data[2]); break;
+    case 0x05: if (p.len >= 3) keyDown(p.data[1], p.data[2]); break;
+    case 0x06: keyUp(p.data[1], p.data[2]); break;
     case 0x07: typeUtf8(p.data + 1, p.len - 1); break;
   }
 }
