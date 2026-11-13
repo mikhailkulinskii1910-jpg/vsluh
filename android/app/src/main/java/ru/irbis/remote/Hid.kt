@@ -73,39 +73,81 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
 
     private fun set(s: State, msg: String? = null) { state = s; ui.post { onState(s, msg) } }
 
+    /** Подключаемся к запомненному донглу: не ответит — забываем и ищем заново (например, плату поменяли). */
+    private var fromSaved = false
+    /** Запомненный донгл не ответил и забыт — MainActivity стирает его из настроек. */
+    var onForget: (() -> Unit)? = null
+    /** Рядом несколько донглов — выбрать (адрес → подпись); null — подключиться к первому. */
+    var onChoose: ((List<Pair<BluetoothDevice, String>>) -> Unit)? = null
+
     fun connect() {
         if (bt == null) return set(State.OFF, "в телефоне нет Bluetooth")
         if (!bt.isEnabled) return set(State.OFF, "включите Bluetooth")
         disconnect(quiet = true)
         val a = address
-        if (a != null) open(bt.getRemoteDevice(a)) else scan()
+        if (a != null) { fromSaved = true; open(bt.getRemoteDevice(a)) } else { fromSaved = false; scan() }
     }
+
+    /** Забыть запомненный донгл (следующее «подключить» — поиск). */
+    fun forget() { address = null; fromSaved = false; onForget?.invoke() }
+
+    private val found = LinkedHashMap<String, Pair<BluetoothDevice, Int>>()
 
     private val scanCb = object : ScanCallback() {
         override fun onScanResult(type: Int, r: ScanResult) {
             if (!scanning) return
-            stopScan(); address = r.device.address; open(r.device)
+            val first = found.isEmpty()
+            found[r.device.address] = r.device to r.rssi
+            if (first) ui.postDelayed(pick, 2500)          // ещё 2,5 с ждём — вдруг рядом несколько донглов
         }
         override fun onScanFailed(code: Int) { scanning = false; set(State.OFF, "поиск не удался ($code)") }
     }
 
+    private val pick = Runnable {
+        if (!scanning) return@Runnable
+        stopScan()
+        val list = found.values.sortedByDescending { it.second }
+        if (list.size > 1 && onChoose != null) {
+            set(State.OFF)
+            onChoose?.invoke(list.map { (d, rssi) -> d to "krisa37 HID · ${d.address.takeLast(5)} · сигнал $rssi dBm" })
+        } else list.firstOrNull()?.first?.let { choose(it) }
+    }
+
+    /** Подключиться к выбранному донглу и запомнить его. */
+    fun choose(d: BluetoothDevice) { fromSaved = false; address = d.address; open(d) }
+
+    private val scanTimeout = Runnable { if (scanning && found.isEmpty()) { stopScan(); set(State.OFF, "донгл не найден — он прошит и подключён к питанию?") } }
+
     private fun scan() {
         val sc = bt.bluetoothLeScanner ?: return set(State.OFF, "включите Bluetooth")
+        found.clear(); ui.removeCallbacks(pick); ui.removeCallbacks(scanTimeout)
         scanning = true; set(State.SCANNING)
         sc.startScan(listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()),
             ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(), scanCb)
-        ui.postDelayed({ if (scanning) { stopScan(); set(State.OFF, "донгл не найден — он вставлен в доску и прошит?") } }, 12000)
+        ui.postDelayed(scanTimeout, 12000)
     }
+
+    /** Подключение не удалось: запомненный донгл — забыть и искать; найденный — сообщить. */
+    private fun failed(msg: String) {
+        ui.removeCallbacks(connectTimeout)
+        gatt?.let { runCatching { it.disconnect(); it.close() } }
+        gatt = null; rx = null; ops.clear(); busy = false
+        if (fromSaved) { forget(); scan() } else set(State.OFF, msg)
+    }
+
+    private val connectTimeout = Runnable { if (state == State.CONNECTING) failed("донгл не отвечает — нажмите на нём RST и попробуйте ещё раз") }
 
     private fun stopScan() { if (scanning) { scanning = false; runCatching { bt.bluetoothLeScanner?.stopScan(scanCb) } } }
 
     private fun open(d: BluetoothDevice) {
         set(State.CONNECTING)
+        ui.removeCallbacks(connectTimeout); ui.postDelayed(connectTimeout, 8000)
         gatt = if (Build.VERSION.SDK_INT >= 23) d.connectGatt(c, false, cb, BluetoothDevice.TRANSPORT_LE) else d.connectGatt(c, false, cb)
     }
 
     fun disconnect(quiet: Boolean = false) {
         stopScan()
+        ui.removeCallbacks(connectTimeout); ui.removeCallbacks(pick); ui.removeCallbacks(scanTimeout)
         ops.clear(); busy = false
         gatt?.let { runCatching { it.disconnect(); it.close() } }
         gatt = null; rx = null
@@ -154,7 +196,10 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
             if (newState == BluetoothProfile.STATE_CONNECTED) ui.post { g.discoverServices() }
             else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                 ui.post {
-                    if (gatt === g) { runCatching { g.close() }; gatt = null; rx = null; ops.clear(); busy = false; set(State.OFF, if (status != 0) "связь потеряна" else null) }
+                    if (gatt === g) {
+                        if (state == State.CONNECTING) failed("не удалось подключиться (код $status)")
+                        else { runCatching { g.close() }; gatt = null; rx = null; ops.clear(); busy = false; set(State.OFF, if (status != 0) "связь потеряна" else null) }
+                    }
                 }
             }
         }
@@ -201,6 +246,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
     private fun info(v: ByteArray?) {
         val s = v?.toString(Charsets.UTF_8) ?: return
         c3 = "hid-c3" in s
+        ui.removeCallbacks(connectTimeout)
         if ("led=mono" in s) ledMono = true else if ("led=rgb" in s) ledMono = false
         set(when {
             "auth=denied" in s -> State.DENIED
