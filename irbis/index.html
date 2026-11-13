@@ -447,7 +447,18 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 [data-theme=prism] .hidp .hin{border-radius:14px}
 .hidp .htxt .gear.tab.acb{flex:0 0 34%}
 .hidp .hkeys{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:10px}
-.hidp .hkeys .gear.tab.acb{height:42px;padding:0 2px;font-size:13px;white-space:nowrap}
+.hidp .hkeys .gear.tab.acb{height:42px;padding:0 2px;font-size:13px;white-space:nowrap;touch-action:manipulation}
+.hidp .hmods{margin-top:10px}
+.hidp .hmods .gear.tab.acb{height:42px;font-size:13px;padding:0 2px}
+.hidp .hmods .gear.tab.acb.rel{flex:1.6}
+.hidp .hcombos{margin-top:4px}
+.hidp .hcombos .gear.tab.acb{overflow:hidden;text-overflow:ellipsis}
+.hidp .hcombos .gear.tab.acb.wide2{grid-column:span 2}
+.hidp .hcombos .gear.tab.acb.edit{outline:1px dashed var(--fg);outline-offset:-4px}
+.mdl .hcb .srow{display:flex;gap:6px}
+.mdl .hcb .srow .gear.tab.acb{flex:1;text-align:center;padding:0}
+.mdl .hsel{height:42px;font:15px var(--ru);background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:0;padding:0 8px}
+[data-theme=prism] .mdl .hsel{border-radius:12px}
 .hidp .hflash{display:block;margin:14px 2px 0;font:14px var(--ru);color:var(--fg)}
 [data-theme=prism] .hidp .gear.tab.acb,[data-theme=blueprint] .hidp .gear.tab.acb{font-size:12px}
 [data-theme=thermal] .hidp .hst,[data-theme=thermal] .hidp .xl{text-shadow:0 0 3px #000,0 0 6px #000}
@@ -1479,6 +1490,8 @@ function syncTabs() {
   else if (tab === 'scripts') document.querySelector('.id').textContent = 'сценарий :: ' + scripts[scriptIdx].name;
   else if (tab === 'touch') { document.querySelector('.id').textContent = 'тачпад :: krisa37 HID :: ' + hidStatusText(); hidAuto(); }
   else if (tab !== 'color') document.querySelector('.id').textContent = REMOTES[remote].id;
+  if (tab !== 'touch' && window.hidLastTab === 'touch') hidReleaseAll();   // ушли с «Тачпада» — отпустить зажатое
+  window.hidLastTab = tab;
 }
 /* Меню «доп.»: на экране только основные кнопки (main), остальные — во второй сетке под кнопкой «доп.».
    По умолчанию свёрнуто; смена марки или подвкладки сворачивает. Нумерация сквозная. */
@@ -2368,7 +2381,7 @@ window.irxReady = true;
    INFO (read + notify): «krisa37-hid <версия> usb=<0|1> auth=<ok|need|denied>». */
 const HID = {
   SVC: '6b7e0001-3a1f-4c7e-9d2a-6b72697361a0', RX: '6b7e0002-3a1f-4c7e-9d2a-6b72697361a0', INFO: '6b7e0003-3a1f-4c7e-9d2a-6b72697361a0',
-  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false,
+  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0,
 };
 /** Токен привязки: 8 случайных байт, создаётся один раз. */
 function hidToken() {
@@ -2408,7 +2421,7 @@ function hidSend(bytes) {
 }
 async function hidAttach(dev) {
   HID.dev = dev; HID.state = 'search'; hidRender();
-  if (!dev._krisa) { dev._krisa = 1; dev.addEventListener('gattserverdisconnected', () => { HID.state = 'off'; HID.rx = HID.info = null; hidRender(); }); }
+  if (!dev._krisa) { dev._krisa = 1; dev.addEventListener('gattserverdisconnected', () => { HID.state = 'off'; HID.rx = HID.info = null; HID.sticky = 0; hidStickyRender(); hidRender(); }); }
   const srv = await dev.gatt.connect(), svc = await srv.getPrimaryService(HID.SVC);
   HID.rx = await svc.getCharacteristic(HID.RX); HID.info = await svc.getCharacteristic(HID.INFO);
   // порядок: notify у INFO → AUTH (с ответом) → прочитать INFO
@@ -2428,7 +2441,15 @@ async function hidConnect() {
     await hidAttach(dev);
   } catch (e) { HID.state = 'off'; hidRender(); if (e.name !== 'NotFoundError') status('Bluetooth: ' + (e.message || e), 'err'); }
 }
-function hidDisconnect() { try { HID.dev && HID.dev.gatt.disconnect(); } catch {} HID.state = 'off'; HID.rx = HID.info = null; hidRender(); }
+/** Отпустить всё ([0x06]) и снять подсветку залипших модификаторов — при отключении, уходе с вкладки и сворачивании. */
+function hidReleaseAll() {
+  if (HID.state === 'on' && HID.rx) hidSend([0x06]);
+  HID.sticky = 0; hidStickyRender();
+  document.querySelectorAll('#touch .hkeys .on').forEach(b => b.classList.remove('on'));
+}
+function hidStickyRender() { document.querySelectorAll('#touch .hmods button[data-m]').forEach(b => b.classList.toggle('on', !!(HID.sticky & +b.dataset.m))); }
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') hidReleaseAll(); });
+function hidDisconnect() { hidReleaseAll(); const q = HID.q; HID.state = 'off'; q.finally(() => { try { HID.dev && HID.dev.gatt.disconnect(); } catch {} }); HID.rx = HID.info = null; hidRender(); }
 /** При открытии вкладки — переподключиться к последнему донглу, если разрешение уже есть. */
 async function hidAuto() {
   if (HID.tried || HID.state !== 'off' || !navigator.bluetooth?.getDevices) return;
@@ -2468,7 +2489,7 @@ function hidText(text) {
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="hkeys"></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -2499,8 +2520,97 @@ function hidText(text) {
   const KEYS4 = [['Esc', 0, 0x29], ['Tab', 0, 0x2B], ['Enter', 0, 0x28], ['⌫', 0, 0x2A], ['Win', 8, 0], ['Alt+Tab', 4, 0x2B], ['Alt+F4', 4, 0x3D], ['Del', 0, 0x4C],
     ['Ctrl+C', 1, 0x06], ['Ctrl+V', 1, 0x19], ['Ctrl+Z', 1, 0x1D], ['Ctrl+A', 1, 0x04], ['←', 0, 0x50], ['→', 0, 0x4F], ['↑', 0, 0x52], ['↓', 0, 0x51],
     ['F5', 0, 0x3E], ['Shift+F5', 2, 0x3E], ['PgUp', 0, 0x4B], ['PgDn', 0, 0x4E], ['Home', 0, 0x4A], ['End', 0, 0x4D], ['Win+D', 8, 0x07], ['Ctrl+S', 1, 0x16]];
+  /* Быстрые клавиши «как настоящие» (1.34): палец на кнопке — KEYDOWN [0x05, mods, code], убран / ушёл с кнопки / отмена — KEYUP [0x06, mods, code].
+     Короткое нажатие = обычное нажатие, удержание = клавиша зажата (стрелки и ⌫ повторяет система). Кнопка подсвечена, пока зажата. */
+  const holdKey = (b, get) => {
+    let held = null;
+    const up = () => { if (!held) return; hidSend([0x06, held[0], held[1]]); held = null; b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => {
+      if (e.button > 0 || !get()) return;
+      b.releasePointerCapture?.(e.pointerId);   // чтобы уход пальца с кнопки давал pointerleave
+      const [m, c] = get();
+      if (hidSend([0x05, m, c])) { held = [m, c]; b.classList.add('on'); }
+    });
+    ['pointerup', 'pointercancel', 'pointerleave', 'lostpointercapture'].forEach(n => b.addEventListener(n, up));
+    b.addEventListener('click', e => { if (e.detail === 0 && get()) { const [m, c] = get(); hidKey(m, c); } });   // с клавиатуры — обычное нажатие
+    b.addEventListener('contextmenu', e => e.preventDefault());
+  };
   const kg = box.querySelector('.hkeys');
-  KEYS4.forEach(([l, m, c]) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; b.addEventListener('click', () => hidKey(m, c)); kg.appendChild(b); });
+  KEYS4.forEach(([l, m, c]) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; holdKey(b, () => [m, c]); kg.appendChild(b); });
+
+  /* «Залипающие» модификаторы: касание — зажать [0x05, mod, 0] и подсветить, ещё касание — отпустить [0x06, mod, 0].
+     Пока зажаты, клики, колесо и другие клавиши дают сочетания (Shift+клик, Ctrl+колесо, Win+стрелки). «отпустить всё» — [0x06]. */
+  const sticky = box.querySelector('.hmods');
+  [['Ctrl', 1], ['Shift', 2], ['Alt', 4], ['Win', 8]].forEach(([l, m]) => {
+    const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = l; b.dataset.m = m;
+    b.addEventListener('click', () => {
+      if (HID.sticky & m) { if (hidSend([0x06, m, 0])) HID.sticky &= ~m; }
+      else if (hidSend([0x05, m, 0])) HID.sticky |= m;
+      hidStickyRender();
+    });
+    sticky.appendChild(b);
+  });
+  sBtn(sticky, '[ отпустить всё ]', () => { if (hidSend([0x06])) { HID.sticky = 0; hidStickyRender(); } }).classList.add('rel');
+
+  /* «Мои сочетания»: сетка 4 колонки, работают как быстрые клавиши (зажатие — пока палец на кнопке).
+     «изменить» — режим правки: касание сочетания открывает «Переименовать / Удалить». Хранение: [{n, m, k}]. */
+  const HKEYS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((ch, i) => [ch, 0x04 + i])
+    .concat([...'1234567890'].map((ch, i) => [ch, 0x1E + i]))
+    .concat(Array.from({ length: 12 }, (_, i) => ['F' + (i + 1), 0x3A + i]))
+    .concat([['Esc', 0x29], ['Tab', 0x2B], ['Enter', 0x28], ['Space', 0x2C], ['⌫', 0x2A], ['Del', 0x4C], ['Insert', 0x49], ['Home', 0x4A], ['End', 0x4D],
+      ['PgUp', 0x4B], ['PgDn', 0x4E], ['←', 0x50], ['→', 0x4F], ['↑', 0x52], ['↓', 0x51], ['PrtSc', 0x46], ['Pause', 0x48], ['CapsLock', 0x39],
+      ['-', 0x2D], ['=', 0x2E], ['[', 0x2F], [']', 0x30], [';', 0x33], ["'", 0x34], [',', 0x36], ['.', 0x37], ['/', 0x38], ['`', 0x35], ['нет — только модификаторы', 0]]);
+  const MODN = [['Ctrl', 1], ['Shift', 2], ['Alt', 4], ['Win', 8]];
+  const comboName = (m, k) => MODN.filter(([, b]) => m & b).map(([n]) => n).concat(k ? [(HKEYS.find(x => x[1] === k) || ['?'])[0]] : []).join('+') || '—';
+  let combos = [], editing = false;
+  try { combos = (JSON.parse(localStorage.getItem('krisa-hid-combos') || '[]') || []).filter(c => c && typeof c.n === 'string' && c.m >= 0 && c.k >= 0); } catch {}
+  const saveCombos = () => { try { localStorage.setItem('krisa-hid-combos', JSON.stringify(combos)); } catch {} renderCombos(); };
+  const cg = box.querySelector('.hcombos');
+  function renderCombos() {
+    cg.textContent = '';
+    combos.forEach(c => {
+      const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = c.n;
+      b.classList.toggle('edit', editing);
+      holdKey(b, () => editing ? null : [c.m, c.k]);
+      b.addEventListener('click', () => {
+        if (!editing) return;
+        modal({ title: c.n, items: ['Переименовать', 'Удалить'], pick: a => {
+          if (a === 0) modal({ title: 'Имя сочетания', input: c.n, ok: n => { c.n = n; saveCombos(); } });
+          else { combos.splice(combos.indexOf(c), 1); saveCombos(); }
+        } });
+      });
+      cg.appendChild(b);
+    });
+    const add = document.createElement('button'); add.className = 'gear tab acb'; add.textContent = btnLabel('[ + сочетание ]');
+    add.classList.add('wide2'); add.addEventListener('click', comboBuilder); cg.appendChild(add);
+    if (combos.length) {
+      const ed = document.createElement('button'); ed.className = 'gear tab acb' + (editing ? ' on' : ''); ed.textContent = btnLabel(editing ? '[ готово ]' : '[ изменить ]');
+      ed.classList.add('wide2'); ed.addEventListener('click', () => { editing = !editing; renderCombos(); }); cg.appendChild(ed);
+    }
+  }
+  /** Конструктор: Ctrl / Shift / Alt / Win, клавиша из списка, необязательное имя. */
+  function comboBuilder() {
+    let m = 0;
+    const body = document.createElement('div'); body.className = 'items hcb';
+    const mods = document.createElement('div'); mods.className = 'srow';
+    MODN.forEach(([n, bit]) => {
+      const t = document.createElement('button'); t.type = 'button'; t.className = 'gear tab acb'; t.textContent = n;
+      t.addEventListener('click', () => { m ^= bit; t.classList.toggle('on', !!(m & bit)); upd(); });
+      mods.appendChild(t);
+    });
+    const sel = document.createElement('select'); sel.className = 'hsel';
+    HKEYS.forEach(([n, k], i) => { const o = document.createElement('option'); o.value = i; o.textContent = n; sel.appendChild(o); });
+    const name = document.createElement('input'); name.type = 'text'; name.autocomplete = 'off'; name.spellcheck = false;
+    const upd = () => { name.placeholder = 'имя (по умолчанию — ' + comboName(m, HKEYS[sel.value][1]) + ')'; };
+    sel.addEventListener('change', upd); upd();
+    body.append(mods, sel, name);
+    modal({ title: 'Новое сочетание', body, okText: 'Сохранить', ok: () => {
+      const k = HKEYS[sel.value][1];
+      if (!m && !k) { status('Выберите клавишу или модификатор', 'err'); return; }
+      combos.push({ n: name.value.trim() || comboName(m, k), m, k }); saveCombos();
+    } });
+  }
+  renderCombos();
 
   /* Поле-тачпад. Один палец — курсор (× чувствительность × ускорение по скорости, не чаще раза в 15 мс, дробные остатки копятся);
      короткое касание — левый клик; касание двумя пальцами — правый; два пальца вверх/вниз — прокрутка; удержание 500 мс и движение — перетаскивание. */
@@ -2944,7 +3054,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.33', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.34', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
