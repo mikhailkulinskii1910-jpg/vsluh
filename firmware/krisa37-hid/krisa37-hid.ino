@@ -51,7 +51,7 @@ USBHIDMouse Mouse;
 #define LOG(...)
 #else
 /* Диагностика: вместо USB-клавиатуры и мыши — строки в журнал. */
-#define LOG(...) Serial.printf(__VA_ARGS__)
+#define LOG(...) do { Serial.printf(__VA_ARGS__); Serial0.printf(__VA_ARGS__); } while (0)   // и в USB, и в COM (UART0)
 #define MOUSE_LEFT 1
 #define MOUSE_RIGHT 2
 #define MOUSE_MIDDLE 4
@@ -337,6 +337,7 @@ void setup() {
 
 #ifdef KRISA_DIAG
   Serial.begin(115200);
+  Serial0.begin(115200);
   delay(1500);
   LOG("\n\nkrisa37-hid %s DIAG, reset reason %d, crashes %u%s\n", VERSION, (int)why, crashes, safeMode ? " -> SAFE MODE" : "");
 #endif
