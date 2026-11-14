@@ -32,6 +32,7 @@
 #include "USB.h"
 #include "USBHIDKeyboard.h"
 #include "USBHIDMouse.h"
+#include "USBHIDConsumerControl.h"
 #endif
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
@@ -42,7 +43,7 @@
 #include <Preferences.h>
 #include "types.h"
 
-#define VERSION "1.5"
+#define VERSION "1.6"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -52,6 +53,7 @@
 #ifndef KRISA_DIAG
 USBHIDKeyboard Keyboard;
 USBHIDMouse Mouse;
+USBHIDConsumerControl Consumer;   // медиа-клавиши для ТВ/телефона
 #define LOG(...) Serial0.printf(__VA_ARGS__)    // журнал в UART0: на платах с разъёмом COM его видно в консоли
 #else
 /* Диагностика: вместо USB-клавиатуры и мыши — строки в журнал. */
@@ -64,6 +66,7 @@ struct DiagKeyboard {
   void begin() {}
   void sendReport(KeyReport *r) { if (r->keys[0] || r->modifiers) LOG("key mods=%02x code=%02x\n", r->modifiers, r->keys[0]); }
 } Keyboard;
+struct DiagConsumer { void begin() {} void press(uint16_t u) { LOG("consumer %04x\n", u); } void release() {} } Consumer;
 struct DiagMouse {
   uint8_t b = 0;
   void begin() {}
@@ -356,6 +359,9 @@ void handle(const Packet &p) {
     case 0x07:
       typeUtf8(p.data + 1, p.len - 1);
       break;
+    case 0x09:                                   // ТВ/телефон: медиа-клавиша (16-битный Consumer usage)
+      if (p.len >= 3) { uint16_t u = p.data[1] | (p.data[2] << 8); Consumer.press(u); delay(60); Consumer.release(); }
+      break;
     case 0x20: scriptRecv = 0; break;
     case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }
     case 0x22: scriptAuto = p.len >= 2 && p.data[1]; scriptSave(); publishInfo(); break;
@@ -398,6 +404,7 @@ void setup() {
   USB.manufacturerName("krisa37");
   Keyboard.begin();
   Mouse.begin();
+  Consumer.begin();
   USB.begin();
 #endif
   LOG("usb ok\n");
