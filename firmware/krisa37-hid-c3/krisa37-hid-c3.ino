@@ -23,7 +23,7 @@
 #include "types.h"
 #include "keymap.h"
 
-#define VERSION "1.3"
+#define VERSION "1.4"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -45,10 +45,14 @@ static const uint8_t REPORT_MAP[] = {
   0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38, 0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x03, 0x81, 0x06,
   0x05, 0x0C, 0x0A, 0x38, 0x02, 0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x01, 0x81, 0x06,
   0xC0, 0xC0,
+  // медиа-клавиши ТВ/телефона (отчёт 3): один 16-битный Consumer usage
+  0x05, 0x0C, 0x09, 0x01, 0xA1, 0x01, 0x85, 0x03,
+  0x19, 0x00, 0x2A, 0xFF, 0x03, 0x15, 0x00, 0x26, 0xFF, 0x03, 0x75, 0x10, 0x95, 0x01, 0x81, 0x00,
+  0xC0,
 };
 
 BLEServer *server;
-BLECharacteristic *info, *kbIn, *mouseIn;
+BLECharacteristic *info, *kbIn, *mouseIn, *consumerIn;
 Preferences prefs;
 QueueHandle_t queue;
 
@@ -241,6 +245,9 @@ void handle(const Packet &p) {
     case 0x08:
       if (p.len >= 6) { ledMode = p.data[1] > 4 ? 0 : p.data[1]; ledBright = max<uint8_t>(p.data[5], 8); ledSaveAt = millis() + 2000; }
       break;
+    case 0x09:                                   // ТВ/телефон: медиа-клавиша
+      if (p.len >= 3) { uint8_t r[2] = {p.data[1], p.data[2]}; consumerIn->setValue(r, 2); consumerIn->notify(); delay(60); uint8_t z[2] = {0, 0}; consumerIn->setValue(z, 2); consumerIn->notify(); }
+      break;
     case 0x20: scriptRecv = 0; break;
     case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }
     case 0x22: scriptAuto = p.len >= 2 && p.data[1]; scriptSave(); publishInfo(); break;
@@ -273,6 +280,7 @@ void setup() {
   kbIn = hid->inputReport(1);
   hid->outputReport(1);                         // светодиоды Caps/Num — не используем
   mouseIn = hid->inputReport(2);
+  consumerIn = hid->inputReport(3);
   hid->manufacturer()->setValue("krisa37");
   hid->pnp(0x02, 0x303A, 0x8137, 0x0100);
   hid->hidInfo(0x00, 0x01);

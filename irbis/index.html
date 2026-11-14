@@ -482,6 +482,15 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 .hidp .sname{height:46px}
 .hidp .sr1 .gear.tab.acb,.hidp .sr2 .gear.tab.acb{font-size:13px;padding:0 2px}
 .hidp .recpad{aspect-ratio:3/1;margin-top:4px}
+.hidp .tvr{display:grid;gap:6px;margin-top:8px}
+.hidp .tvtop{grid-template-columns:repeat(4,1fr)}
+.hidp .tvvol{grid-template-columns:repeat(3,1fr)}
+.hidp .tvch{grid-template-columns:repeat(2,1fr)}
+.hidp .tvmedia{grid-template-columns:repeat(4,1fr)}
+.hidp .tvr .gear.tab.acb{height:46px;font-size:14px;padding:0 2px}
+.hidp .tvdpad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px auto 0;max-width:260px}
+.hidp .tvdpad .gear.tab.acb{height:52px;font-size:18px}
+.hidp .tvdpad .up{grid-column:2}.hidp .tvdpad .lf{grid-column:1}.hidp .tvdpad .ok{grid-column:2}.hidp .tvdpad .rt{grid-column:3}.hidp .tvdpad .dn{grid-column:2}
 .hidp .recpad.on{border-color:#FF3B30;box-shadow:inset 0 0 0 2px #FF3B30}
 .hidp .hflash{display:block;margin:14px 2px 0;font:14px var(--ru);color:var(--fg)}
 [data-theme=prism] .hidp .gear.tab.acb,[data-theme=blueprint] .hidp .gear.tab.acb{font-size:12px}
@@ -2520,7 +2529,7 @@ function hidText(text) {
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><div class="htv" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -2689,13 +2698,13 @@ function hidText(text) {
   let sub = 0;
   try { sub = parseInt(localStorage.getItem('krisa-hid-sub'), 10) || 0; } catch {}
   const subBox = box.querySelector('.hsub');
-  sub = Math.max(0, Math.min(2, sub));
+  sub = Math.max(0, Math.min(3, sub));
   const showSub = () => {
     [...subBox.children].forEach((c, i) => c.classList.toggle('on', i === sub));
-    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1; box.querySelector('.hscr').hidden = sub !== 2;
-    if (sub === 1) ledRender(); else if (sub === 2) scrRender();
+    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1; box.querySelector('.hscr').hidden = sub !== 2; box.querySelector('.htv').hidden = sub !== 3;
+    if (sub === 1) ledRender(); else if (sub === 2) scrRender(); else if (sub === 3) tvRender();
   };
-  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
+  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт', 'ТВ'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
 
   /* «светодиод»: пакет 0x08 LED [0x08, mode, r, g, b, bright] — 0 авто (статус), 1 цвет, 2 дыхание, 3 радуга (на C3 — мигает), 4 выкл.
      При движении ползунка — не чаще раза в 60 мс и финальный при отпускании. Состояние хранится и шлётся при каждом подключении (после AUTH), если не «авто». */
@@ -2952,6 +2961,26 @@ function hidText(text) {
     });
     scrStatus();
   }
+
+  /* Подвкладка «ТВ»: медиа-клавиши (Consumer Control) пакетом 0x09 [lo, hi]; стрелки и OK — клавиатурой 0x04. */
+  const TB = box.querySelector('.htv');
+  const hidCons = u => hidSend([0x09, u & 0xff, (u >> 8) & 0xff]);
+  function tvRender() {
+    TB.innerHTML = '<div class="tvr tvtop"></div><div class="tvdpad">'
+      + '<button class="gear tab acb up">↑</button><button class="gear tab acb lf">←</button><button class="gear tab acb ok">OK</button>'
+      + '<button class="gear tab acb rt">→</button><button class="gear tab acb dn">↓</button></div>'
+      + '<div class="tvr tvvol"></div><div class="tvr tvch"></div><div class="tvr tvmedia"></div>'
+      + '<p class="xl lhint">Медиа-клавиши работают на ТВ/телефоне/ПК, подключённом к донглу. Нужна прошивка донгла 1.6 (C3 — 1.4).</p>';
+    const btn = (box2, label, fn) => { const b = document.createElement('button'); b.className = 'gear tab acb'; b.textContent = label; b.addEventListener('click', fn); TB.querySelector(box2).appendChild(b); };
+    btn('.tvtop', 'Power', () => hidCons(0x0030)); btn('.tvtop', 'Home', () => hidCons(0x0223)); btn('.tvtop', 'Back', () => hidCons(0x0224)); btn('.tvtop', 'Menu', () => hidCons(0x0040));
+    TB.querySelector('.up').addEventListener('click', () => hidKey(0, 0x52)); TB.querySelector('.dn').addEventListener('click', () => hidKey(0, 0x51));
+    TB.querySelector('.lf').addEventListener('click', () => hidKey(0, 0x50)); TB.querySelector('.rt').addEventListener('click', () => hidKey(0, 0x4F));
+    TB.querySelector('.ok').addEventListener('click', () => hidKey(0, 0x28));
+    btn('.tvvol', 'Vol+', () => hidCons(0x00E9)); btn('.tvvol', 'Vol-', () => hidCons(0x00EA)); btn('.tvvol', 'Mute', () => hidCons(0x00E2));
+    btn('.tvch', 'Канал+', () => hidCons(0x009C)); btn('.tvch', 'Канал-', () => hidCons(0x009D));
+    btn('.tvmedia', '⏮', () => hidCons(0x00B6)); btn('.tvmedia', '⏯', () => hidCons(0x00CD)); btn('.tvmedia', '⏹', () => hidCons(0x00B7)); btn('.tvmedia', '⏭', () => hidCons(0x00B5));
+  }
+
   window.scrRender = () => { if (sub === 2) scrRender(); };
 
   window.ledRender = () => { if (sub === 1) ledRender(); };
@@ -3356,7 +3385,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.37', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.38', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);

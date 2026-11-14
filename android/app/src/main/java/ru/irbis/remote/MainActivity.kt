@@ -1403,17 +1403,20 @@ class MainActivity : Activity() {
         // подвкладки «тачпад» | «светодиод» | «скрипт»
         val ledPage = buildLedPage()
         val scrPage = buildScriptHidPage()
-        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, 2)
+        val tvPage = buildTvPage()
+        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, 3)
         fun showSub(i: Int) {
             p.visibility = if (i == 0) View.VISIBLE else View.GONE
             ledPage.visibility = if (i == 1) View.VISIBLE else View.GONE
             scrPage.visibility = if (i == 2) View.VISIBLE else View.GONE
+            tvPage.visibility = if (i == 3) View.VISIBLE else View.GONE
         }
-        outer.addView(chipRow(listOf("тачпад", "светодиод", "скрипт"), sub) { i, _ -> showSub(i); prefs.edit().putInt("touch_sub", i).apply() },
+        outer.addView(chipRow(listOf("тачпад", "светодиод", "скрипт", "ТВ"), sub) { i, _ -> showSub(i); prefs.edit().putInt("touch_sub", i).apply() },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         outer.addView(p, LinearLayout.LayoutParams(-1, -2))
         outer.addView(ledPage, LinearLayout.LayoutParams(-1, -2))
         outer.addView(scrPage, LinearLayout.LayoutParams(-1, -2))
+        outer.addView(tvPage, LinearLayout.LayoutParams(-1, -2))
         showSub(sub)
         // поле-тачпад
         val pad = TouchpadView(this, { hidSens }, {
@@ -1485,6 +1488,36 @@ class MainActivity : Activity() {
             setOnClickListener { openExternal(android.net.Uri.parse(FLASH_URL)) }
         })
         return outer
+    }
+
+    /* ---------- «Тачпад» → «ТВ»: медиа-клавиши для ТВ/телефона/ПК ---------- */
+
+    /** Отправить медиа-клавишу; не подключены — подсказка. */
+    private fun tvC(usage: Int) { val l = hid; if (l == null || !l.consumer(usage)) say("> донгл не подключён — [ подключить ]", err = true) }
+    private fun tvK(code: Int) = hidSend { key(0, code) }
+
+    private fun buildTvPage(): View {
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun btn(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 15f else 18f) }
+        fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(h), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+        p.addView(row(54, btn("⏻") { tvC(0x0030) }, btn("🏠") { tvC(0x0223) }, btn("↩") { tvC(0x0224) }, btn("☰") { tvC(0x0040) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        // крестовина
+        p.addView(row(56, View(this), btn("▲") { tvK(0x52) }, View(this)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        p.addView(row(56, btn("◀") { tvK(0x50) }, btn("OK") { tvK(0x28) }, btn("▶") { tvK(0x4F) }), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        p.addView(row(56, View(this), btn("▼") { tvK(0x51) }, View(this)), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        p.addView(row(54, btn("🔉−") { tvC(0x00EA) }, btn("🔇") { tvC(0x00E2) }, btn("🔊＋") { tvC(0x00E9) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        p.addView(row(50, btn("Канал −") { tvC(0x009D) }, btn("Канал ＋") { tvC(0x009C) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(row(50, btn("⏮") { tvC(0x00B6) }, btn("⏯") { tvC(0x00CD) }, btn("⏹") { tvC(0x00B7) }, btn("⏭") { tvC(0x00B5) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        p.addView(text("Медиа-клавиши работают на ТВ, телефоне или ПК, подключённом к донглу. Нужна прошивка донгла 1.6 (ESP32-C3 — 1.4).", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(12), 0, 0) })
+        return p
     }
 
     /* ---------- «Тачпад» → «скрипт»: Ducky Script, автозапвск. Только для своих устройств. ---------- */

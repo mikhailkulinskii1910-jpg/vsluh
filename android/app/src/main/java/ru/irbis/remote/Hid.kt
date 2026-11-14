@@ -309,6 +309,8 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
         }
         send(byteArrayOf(0x22, if (auto) 1 else 0))
     }
+    /** Медиа-клавиша ТВ/телефона (16-бит Consumer usage). Прошивка 1.6 (C3 1.4). */
+    fun consumer(usage: Int) = send(byteArrayOf(0x09, (usage and 0xFF).toByte(), ((usage shr 8) and 0xFF).toByte()))
     fun runStored() = send(byteArrayOf(0x23))
     fun clearScript() = send(byteArrayOf(0x24))
     fun text(t: String): Boolean { var ok = true; chunks(t).forEach { ok = send(byteArrayOf(0x07) + it) && ok }; return ok }
