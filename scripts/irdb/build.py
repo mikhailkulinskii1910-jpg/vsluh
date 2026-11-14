@@ -8,7 +8,7 @@ SRC = sys.argv[1] if len(sys.argv) > 1 else "Flipper-IRDB"
 OUT = sys.argv[2] if len(sys.argv) > 2 else "irbis/lib"
 KEEP = {"NEC", "NECext", "NEC42", "NEC42ext", "Samsung32", "SIRC", "SIRC15", "SIRC20", "Kaseikyo", "RC5", "RC6", "RCA", "Pioneer"}
 # что умеет развернуть приложение (остальные parsed пропускаем):
-ENC = {"NEC", "NECext", "NEC42", "NEC42ext", "Samsung32", "SIRC", "SIRC15", "SIRC20"}
+ENC = {"NEC", "NECext", "Samsung32", "SIRC", "SIRC15", "SIRC20"}
 
 def hx(s):  # "07 00 00 00" -> "0700" (значимые младшие байты, без хвостовых нулей)
     b = [p for p in s.split() if re.fullmatch(r"[0-9A-Fa-f]{2}", p)]
