@@ -26,6 +26,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @Published var ledKind: String = ""
     /// Найдено несколько донглов — выбор (по уровню сигнала).
     @Published var choices: [HidChoice] = []
+    /// На плате сохранён скрипт (scr=1 в INFO).
+    @Published var scrSaved = false
 
     private var central: CBCentralManager?
     private var peripheral: CBPeripheral?
@@ -80,6 +82,7 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     private func reset(_ s: String) {
         stickyMods = 0
         ledKind = ""
+        scrSaved = false
         rx = nil
         info = nil
         connected = false
@@ -260,6 +263,11 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         } else if text.contains("led=mono") {
             ledKind = "mono"
         }
+        if text.contains("scr=1") {
+            scrSaved = true
+        } else if text.contains("scr=0") {
+            scrSaved = false
+        }
         if text.contains("auth=denied") {
             denied = true
             ready = false
@@ -335,6 +343,26 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
         if !keyDown(mod, 0) { return false }
         stickyMods |= mod
         return true
+    }
+
+    // MARK: скрипт на плате (0x20 начать, 0x21 кусок, 0x22 сохранить+auto, 0x23 выполнить, 0x24 стереть)
+
+    @discardableResult func scriptBegin() -> Bool { send([0x20]) }
+    @discardableResult func scriptChunk(_ bytes: [UInt8]) -> Bool { send([0x21] + bytes) }
+    @discardableResult func scriptSave(_ auto: Bool) -> Bool { send([0x22, auto ? 1 : 0]) }
+    @discardableResult func scriptRunSaved() -> Bool { send([0x23]) }
+    @discardableResult func scriptErase() -> Bool { send([0x24]) }
+
+    /// Записать байткод на плату кусками ≤18 байт и сохранить (auto — автозапуск).
+    @discardableResult func uploadScript(_ code: [UInt8], auto: Bool) -> Bool {
+        if !scriptBegin() { return false }
+        var i: Int = 0
+        while i < code.count {
+            let end: Int = min(i + 18, code.count)
+            if !scriptChunk(Array(code[i..<end])) { return false }
+            i = end
+        }
+        return scriptSave(auto)
     }
 
     /// Напечатать текст: куски ≤ 18 байт по границам символов.
@@ -588,6 +616,8 @@ struct TouchpadPanel: View {
             subTabs
             if sub == 1 {
                 LedPanel(model: model)
+            } else if sub == 2 {
+                HidScriptPanel(model: model)
             } else {
                 touchArea
             }
@@ -606,6 +636,7 @@ struct TouchpadPanel: View {
         HStack(spacing: 6) {
             subChip(0, "тачпад")
             subChip(1, "светодиод")
+            subChip(2, "скрипт")
         }
     }
 
@@ -1254,4 +1285,601 @@ struct HidChoice: Identifiable {
     let id: UUID
     let label: String
     let rssi: Int
+}
+
+// MARK: Ducky Script
+
+/// Одно действие скрипта.
+enum DuckyAction {
+    case text(String)
+    case key(UInt8, UInt8)
+    case delay(Int)
+    case move(Int, Int)
+    case click(UInt8, UInt8)
+    case scroll(Int)
+}
+
+struct DuckyError: Error {
+    let line: Int
+    let msg: String
+}
+
+enum Ducky {
+    /// HID-код именованной клавиши или одиночного символа; nil — не клавиша.
+    static func keyCode(_ raw: String) -> UInt8? {
+        let up: String = raw.uppercased()
+        if let c = named[up] { return c }
+        if up.count == 1, let ch = up.first {
+            if ch >= "A" && ch <= "Z" {
+                let base: Int = Int(("A" as Character).asciiValue ?? 65)
+                return UInt8(0x04 + (Int(ch.asciiValue ?? 65) - base))
+            }
+            if let d = digit[ch] { return d }
+            if let s = symbol[ch] { return s }
+        }
+        return nil
+    }
+
+    static func modBit(_ raw: String) -> UInt8? {
+        switch raw.uppercased() {
+        case "CTRL", "CONTROL": return 0x01
+        case "SHIFT": return 0x02
+        case "ALT", "OPTION": return 0x04
+        case "GUI", "WINDOWS", "WIN", "COMMAND", "CMD": return 0x08
+        default: return nil
+        }
+    }
+
+    private static let named: [String: UInt8] = [
+        "ENTER": 0x28, "RETURN": 0x28, "TAB": 0x2B, "ESC": 0x29, "ESCAPE": 0x29, "SPACE": 0x2C,
+        "BACKSPACE": 0x2A, "DELETE": 0x4C, "DEL": 0x4C, "INSERT": 0x49, "HOME": 0x4A, "END": 0x4D,
+        "PAGEUP": 0x4B, "PAGEDOWN": 0x4E, "UP": 0x52, "UPARROW": 0x52, "DOWN": 0x51, "DOWNARROW": 0x51,
+        "LEFT": 0x50, "LEFTARROW": 0x50, "RIGHT": 0x4F, "RIGHTARROW": 0x4F, "PRINTSCREEN": 0x46,
+        "PAUSE": 0x48, "BREAK": 0x48, "CAPSLOCK": 0x39, "MENU": 0x65, "APP": 0x65,
+        "F1": 0x3A, "F2": 0x3B, "F3": 0x3C, "F4": 0x3D, "F5": 0x3E, "F6": 0x3F,
+        "F7": 0x40, "F8": 0x41, "F9": 0x42, "F10": 0x43, "F11": 0x44, "F12": 0x45,
+    ]
+    private static let digit: [Character: UInt8] = [
+        "1": 0x1E, "2": 0x1F, "3": 0x20, "4": 0x21, "5": 0x22, "6": 0x23, "7": 0x24, "8": 0x25, "9": 0x26, "0": 0x27,
+    ]
+    private static let symbol: [Character: UInt8] = [
+        "-": 0x2D, "=": 0x2E, "[": 0x2F, "]": 0x30, "\\": 0x31, ";": 0x33, "'": 0x34,
+        ",": 0x36, ".": 0x37, "/": 0x38, "`": 0x35,
+    ]
+
+    /// Разобрать текст скрипта в список действий (с учётом DEFAULTDELAY и REPEAT).
+    static func parse(_ src: String) throws -> [DuckyAction] {
+        var out: [DuckyAction] = []
+        var def: Int = 0
+        var prev: [DuckyAction] = []
+        let lines: [Substring] = src.split(separator: "\n", omittingEmptySubsequences: false)
+        for (idx, rawLine) in lines.enumerated() {
+            let lineNo: Int = idx + 1
+            let line: String = String(rawLine).trimmingCharacters(in: .whitespaces)
+            if line.isEmpty { continue }
+            let tokens: [String] = line.split(separator: " ").map { t in String(t) }
+            let cmd: String = tokens[0].uppercased()
+            let rest: String = tokens.count > 1 ? String(line.dropFirst(tokens[0].count)).trimmingCharacters(in: .whitespaces) : ""
+
+            if cmd == "REM" || cmd.hasPrefix("#") { continue }
+
+            if cmd == "DEFAULTDELAY" || cmd == "DEFAULT_DELAY" {
+                def = max(0, Int(rest) ?? 0)
+                continue
+            }
+            if cmd == "REPEAT" {
+                let n: Int = max(0, Int(rest) ?? 0)
+                for _ in 0..<n { out.append(contentsOf: prev) }
+                continue
+            }
+
+            var block: [DuckyAction] = []
+            var withDefault: Bool = true
+            if cmd == "STRING" {
+                block.append(.text(rest))
+            } else if cmd == "STRINGLN" {
+                block.append(.text(rest))
+                block.append(.key(0, 0x28))
+            } else if cmd == "DELAY" {
+                block.append(.delay(max(0, Int(rest) ?? 0)))
+                withDefault = false
+            } else if cmd == "MOUSE" {
+                block = try mouse(tokens, lineNo)
+            } else {
+                block.append(try combo(tokens, lineNo))
+            }
+
+            if withDefault && def > 0 { block.append(.delay(def)) }
+            out.append(contentsOf: block)
+            prev = block
+        }
+        return out
+    }
+
+    private static func combo(_ tokens: [String], _ lineNo: Int) throws -> DuckyAction {
+        var mods: UInt8 = 0
+        var code: UInt8 = 0
+        for token in tokens {
+            for part in token.split(separator: "-").map({ p in String(p) }) {
+                if let m = modBit(part) {
+                    mods |= m
+                } else if let c = keyCode(part) {
+                    code = c
+                } else {
+                    throw DuckyError(line: lineNo, msg: "неизвестная клавиша «" + part + "»")
+                }
+            }
+        }
+        return .key(mods, code)
+    }
+
+    private static func mouse(_ tokens: [String], _ lineNo: Int) throws -> [DuckyAction] {
+        if tokens.count < 2 { throw DuckyError(line: lineNo, msg: "после MOUSE нужно действие") }
+        let what: String = tokens[1].uppercased()
+        switch what {
+        case "MOVE":
+            if tokens.count < 4 { throw DuckyError(line: lineNo, msg: "MOUSE MOVE нужны dx и dy") }
+            let dx: Int = Int(tokens[2]) ?? 0
+            let dy: Int = Int(tokens[3]) ?? 0
+            return [.move(dx, dy)]
+        case "LEFT": return [.click(1, 1)]
+        case "RIGHT": return [.click(2, 1)]
+        case "MIDDLE": return [.click(4, 1)]
+        case "DOUBLE": return [.click(1, 2)]
+        case "SCROLL":
+            if tokens.count < 3 { throw DuckyError(line: lineNo, msg: "MOUSE SCROLL нужно число") }
+            return [.scroll(Int(tokens[2]) ?? 0)]
+        default:
+            throw DuckyError(line: lineNo, msg: "неизвестное MOUSE «" + what + "»")
+        }
+    }
+
+    /// Байткод для платы.
+    static func compile(_ acts: [DuckyAction]) -> [UInt8] {
+        var out: [UInt8] = []
+        for a in acts {
+            switch a {
+            case .text(let s):
+                out.append(contentsOf: textBytes(s))
+            case .key(let m, let k):
+                out.append(contentsOf: [0x02, m, k])
+            case .delay(let ms):
+                let v: Int = min(65535, max(0, ms))
+                out.append(contentsOf: [0x03, UInt8(v & 0xFF), UInt8((v >> 8) & 0xFF)])
+            case .move(let dx, let dy):
+                out.append(contentsOf: moveBytes(dx, dy))
+            case .click(let mask, let count):
+                out.append(contentsOf: [0x05, mask, count])
+            case .scroll(let w):
+                out.append(contentsOf: scrollBytes(w))
+            }
+        }
+        return out
+    }
+
+    /// 0x01 len <UTF-8>, куски ≤200 байт по границам символов.
+    private static func textBytes(_ s: String) -> [UInt8] {
+        var out: [UInt8] = []
+        var chunk: [UInt8] = []
+        for ch in s {
+            let b: [UInt8] = Array(String(ch).utf8)
+            if chunk.count + b.count > 200 {
+                out.append(0x01)
+                out.append(UInt8(chunk.count))
+                out.append(contentsOf: chunk)
+                chunk = []
+            }
+            chunk += b
+        }
+        if !chunk.isEmpty {
+            out.append(0x01)
+            out.append(UInt8(chunk.count))
+            out.append(contentsOf: chunk)
+        }
+        return out
+    }
+
+    private static func i8(_ v: Int) -> UInt8 { UInt8(bitPattern: Int8(min(127, max(-127, v)))) }
+
+    private static func moveBytes(_ dx: Int, _ dy: Int) -> [UInt8] {
+        var out: [UInt8] = []
+        var x: Int = dx
+        var y: Int = dy
+        repeat {
+            let sx: Int = min(127, max(-127, x))
+            let sy: Int = min(127, max(-127, y))
+            out.append(contentsOf: [0x04, i8(sx), i8(sy)])
+            x -= sx
+            y -= sy
+        } while x != 0 || y != 0
+        return out
+    }
+
+    private static func scrollBytes(_ w: Int) -> [UInt8] {
+        var out: [UInt8] = []
+        var v: Int = w
+        repeat {
+            let s: Int = min(127, max(-127, v))
+            out.append(contentsOf: [0x08, i8(s)])
+            v -= s
+        } while v != 0
+        return out
+    }
+}
+
+/// Скрипт пользователя: имя, текст Ducky, автозапуск.
+struct HidScript: Codable {
+    var n: String
+    var src: String
+    var auto: Bool
+}
+
+enum HidScriptStore {
+    static func decode(_ json: String) -> [HidScript] {
+        guard let d = json.data(using: .utf8), let arr = try? JSONDecoder().decode([HidScript].self, from: d) else { return [] }
+        return arr
+    }
+
+    static func encode(_ list: [HidScript]) -> String {
+        guard let d = try? JSONEncoder().encode(list) else { return "[]" }
+        return String(data: d, encoding: .utf8) ?? "[]"
+    }
+
+    static func examples() -> [HidScript] {
+        let notepad: String = "GUI r\nDELAY 400\nSTRING notepad\nENTER\nDELAY 600\nSTRING Привет от krisa37!"
+        return [HidScript(n: "Блокнот", src: notepad, auto: false),
+                HidScript(n: "Свернуть всё", src: "GUI d", auto: false),
+                HidScript(n: "Переключить окно", src: "ALT TAB", auto: false)]
+    }
+
+    static func load(_ json: String) -> [HidScript] {
+        let list: [HidScript] = decode(json)
+        return list.isEmpty ? examples() : list
+    }
+}
+
+/// Какое окно открыто в подвкладке «скрипт».
+enum HidScriptDialog: Identifiable {
+    case pick
+    case newName
+    case rename
+    var id: String {
+        switch self {
+        case .pick: return "pick"
+        case .newName: return "new"
+        case .rename: return "rename"
+        }
+    }
+}
+
+/// Подвкладка «скрипт»: редактор Ducky Script, запись движений мыши, запись на плату и автозапуск.
+struct HidScriptPanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+    @AppStorage("hid_scripts") private var json = ""
+    @AppStorage("hid_script_cur") private var cur = 0
+    @State private var scripts: [HidScript]
+    @State private var dialog: HidScriptDialog?
+    @State private var askDelete = false
+    @State private var parseInfo = ""
+    @State private var running = false
+    @State private var recording = false
+    @State private var recorded: [String] = []
+    @State private var lastEvent = Date()
+
+    init(model: RemoteModel) {
+        _model = ObservedObject(wrappedValue: model)
+        let saved: String = UserDefaults.standard.string(forKey: "hid_scripts") ?? ""
+        _scripts = State(initialValue: HidScriptStore.load(saved))
+    }
+
+    private var idx: Int { min(max(cur, 0), scripts.count - 1) }
+    private var script: HidScript { scripts[idx] }
+
+    private static let placeholder: String = "GUI r\nDELAY 400\nSTRING notepad\nENTER"
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Автоввод работает на вашем компьютере. Не подключайте донгл к чужим устройствам без разрешения.")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                nameButton
+                manageRow
+                editor
+                if !parseInfo.isEmpty {
+                    Text(parseInfo).font(Term.ru(12)).foregroundColor(Term.dim)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                actionRows
+                recorder
+                Text("Нужна прошивка донгла 1.5 (ESP32-C3 — 1.3).")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+            }
+            .padding(.bottom, 16)
+        }
+        .sheet(item: $dialog) { d in dialogView(d) }
+        .alert("Удалить «" + script.name + "»?", isPresented: $askDelete) {
+            Button("Нет", role: .cancel) {}
+            Button("Удалить", role: .destructive) { deleteScript() }
+        }
+        .onAppear { if json.isEmpty { save() } }
+    }
+
+    // MARK: имя, управление
+
+    private func label(_ s: String) -> String {
+        if !(Term.prism || Term.blueprint) { return s }
+        var t: String = s
+        if t.hasPrefix("[") { t.removeFirst() }
+        if t.hasSuffix("]") { t.removeLast() }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    private func button(_ title: String, on: Bool, height: CGFloat, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            TabLabel(title: label(title), on: on, height: height, ruSize: 13, forceRu: true)
+        }
+    }
+
+    private var nameButton: some View {
+        Button { dialog = .pick } label: {
+            TabLabel(title: label("[ " + script.name + " ▾ ]"), on: false, height: 46, ruSize: 15, forceRu: true)
+        }
+    }
+
+    private var manageRow: some View {
+        HStack(spacing: 6) {
+            button("[ новый ]", on: false, height: 42) { dialog = .newName }
+            button("[ имя ]", on: false, height: 42) { dialog = .rename }
+            button("[ удалить ]", on: false, height: 42) { askDelete = true }
+        }
+    }
+
+    private var editor: some View {
+        ZStack(alignment: .topLeading) {
+            if script.src.isEmpty {
+                Text(HidScriptPanel.placeholder)
+                    .font(.system(size: 14, design: .monospaced)).foregroundColor(Term.dim.opacity(0.6))
+                    .padding(10)
+            }
+            TextEditor(text: srcBinding)
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(Term.fg)
+                .frame(height: 180)
+                .padding(4)
+        }
+        .background(Term.bg.opacity(0.6))
+        .overlay(Rectangle().strokeBorder(Term.line, lineWidth: 1))
+    }
+
+    private var srcBinding: Binding<String> {
+        Binding(get: { script.src }, set: { v in
+            var s: HidScript = script
+            s.src = v
+            scripts[idx] = s
+            save()
+        })
+    }
+
+    // MARK: кнопки действий
+
+    private var actionRows: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                button(running ? "[ ▶ идёт… ]" : "[ ▶ Выполнить ]", on: running, height: 46) { runLive() }
+                button("[ ⤓ На плату ]", on: false, height: 46) { upload(auto: script.auto) }
+            }
+            HStack(spacing: 6) {
+                button(script.auto ? "[ ⎙ Автозапуск: вкл ]" : "[ ⎙ Автозапуск: выкл ]", on: script.auto, height: 44) { toggleAuto() }
+                button("[ ✖ Стереть с платы ]", on: false, height: 44) { eraseBoard() }
+            }
+        }
+    }
+
+    // MARK: запись мыши
+
+    private var recorder: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("запись мыши").font(Term.ru(13)).foregroundColor(Term.dim).padding(.top, 6)
+            GeometryReader { g in
+                ZStack {
+                    Canvas { ctx, size in HidScriptPanel.dots(ctx, size) }
+                    TouchSurface(sens: 1,
+                                 onMove: { dx, dy in record("MOUSE MOVE " + String(dx) + " " + String(dy)) },
+                                 onWheel: { w in record("MOUSE SCROLL " + String(w)) },
+                                 onClick: { m in record(m == 2 ? "MOUSE RIGHT" : "MOUSE LEFT") },
+                                 onButtons: { _ in })
+                }
+                .frame(width: g.size.width, height: g.size.width * 0.4)
+                .background(Term.bg.opacity(0.6))
+                .overlay(Rectangle().strokeBorder(recording ? Term.fg : Term.line, lineWidth: recording ? 2 : 1))
+            }
+            .aspectRatio(1 / 0.4, contentMode: .fit)
+            HStack(spacing: 6) {
+                button(recording ? "[ ■ стоп ]" : "[ ● запись ]", on: recording, height: 42) { toggleRecord() }
+                button("[ вставить в скрипт ]", on: false, height: 42) { insertRecorded() }
+            }
+        }
+    }
+
+    private static func dots(_ ctx: GraphicsContext, _ size: CGSize) {
+        let step: CGFloat = 18
+        var p = Path()
+        var y: CGFloat = step / 2
+        while y < size.height {
+            var x: CGFloat = step / 2
+            while x < size.width {
+                p.addEllipse(in: CGRect(x: x - 1, y: y - 1, width: 2, height: 2))
+                x += step
+            }
+            y += step
+        }
+        ctx.fill(p, with: .color(Term.line.opacity(0.7)))
+    }
+
+    private func toggleRecord() {
+        recording.toggle()
+        if recording {
+            recorded = []
+            lastEvent = Date()
+        }
+    }
+
+    private func record(_ line: String) {
+        if !recording { return }
+        let gap: Int = Int(Date().timeIntervalSince(lastEvent) * 1000)
+        lastEvent = Date()
+        if gap >= 20 { recorded.append("DELAY " + String(gap)) }
+        recorded.append(line)
+    }
+
+    private func insertRecorded() {
+        if recorded.isEmpty {
+            model.say("> нет записанных движений")
+            return
+        }
+        recording = false
+        var s: HidScript = script
+        let add: String = recorded.joined(separator: "\n")
+        s.src = s.src.isEmpty ? add : s.src + "\n" + add
+        scripts[idx] = s
+        save()
+        recorded = []
+    }
+
+    // MARK: действия со скриптом
+
+    private func save() {
+        json = HidScriptStore.encode(scripts)
+        cur = idx
+    }
+
+    private func change(_ s: HidScript) {
+        scripts[idx] = s
+        save()
+    }
+
+    private func deleteScript() {
+        scripts.remove(at: idx)
+        if scripts.isEmpty { scripts.append(HidScript(n: "Скрипт 1", src: "", auto: false)) }
+        cur = min(idx, scripts.count - 1)
+        save()
+    }
+
+    /// Разобрать текущий текст; при ошибке показать строку.
+    private func parsed() -> [DuckyAction]? {
+        do {
+            let acts: [DuckyAction] = try Ducky.parse(script.src)
+            parseInfo = "OK, " + String(acts.count) + " действий"
+            return acts
+        } catch let e as DuckyError {
+            parseInfo = "ошибка в строке " + String(e.line) + ": " + e.msg
+            return nil
+        } catch {
+            parseInfo = "ошибка разбора"
+            return nil
+        }
+    }
+
+    private func runLive() {
+        if running { return }
+        guard let acts = parsed() else { return }
+        if !link.ready {
+            model.say("> донгл не подключён — [ подключить ]")
+            return
+        }
+        running = true
+        model.say("> скрипт «" + script.name + "»: выполняю")
+        DispatchQueue.global(qos: .userInitiated).async {
+            for a in acts { HidScriptPanel.live(a, link) }
+            DispatchQueue.main.async {
+                running = false
+                model.say("> скрипт выполнен")
+            }
+        }
+    }
+
+    private static func live(_ a: DuckyAction, _ link: HidLink) {
+        switch a {
+        case .text(let s): link.text(s)
+        case .key(let m, let k): link.key(m, k)
+        case .delay(let ms): Thread.sleep(forTimeInterval: Double(ms) / 1000)
+        case .move(let dx, let dy): link.move(dx, dy)
+        case .click(let mask, let count): link.click(mask, count: count)
+        case .scroll(let w): link.move(0, 0, wheel: w)
+        }
+    }
+
+    private func upload(auto: Bool) {
+        guard let acts = parsed() else { return }
+        if !link.ready {
+            model.say("> донгл не подключён — [ подключить ]")
+            return
+        }
+        let code: [UInt8] = Ducky.compile(acts)
+        if link.uploadScript(code, auto: auto) {
+            model.say(auto ? "> скрипт записан на плату · автозапуск включён" : "> скрипт записан на плату")
+        } else {
+            model.say("> не удалось записать скрипт", err: true)
+        }
+    }
+
+    private func toggleAuto() {
+        var s: HidScript = script
+        s.auto.toggle()
+        change(s)
+        if s.auto {
+            upload(auto: true)                 // включили — сразу на плату с автозапуском
+        } else if link.ready {
+            link.scriptSave(false)             // выключили — снять автозапуск
+            model.say("> автозапуск выключен")
+        }
+    }
+
+    private func eraseBoard() {
+        if !link.ready {
+            model.say("> донгл не подключён — [ подключить ]")
+            return
+        }
+        link.scriptErase()
+        var s: HidScript = script
+        if s.auto {
+            s.auto = false
+            change(s)
+        }
+        model.say("> скрипт стёрт с платы")
+    }
+
+    // MARK: окна
+
+    @ViewBuilder private func dialogView(_ d: HidScriptDialog) -> some View {
+        switch d {
+        case .pick:
+            ChoiceSheet(title: "Скрипты", items: scripts.map { s in s.n }, selected: idx) { w in
+                cur = w
+                parseInfo = ""
+                dialog = nil
+            } cancel: { dialog = nil }
+        case .newName:
+            AskSheet(title: "Новый скрипт", value: "Скрипт " + String(scripts.count + 1), numeric: false) { t in
+                dialog = nil
+                scripts.append(HidScript(n: t, src: "", auto: false))
+                cur = scripts.count - 1
+                save()
+            } cancel: { dialog = nil }
+        case .rename:
+            AskSheet(title: "Имя скрипта", value: script.name, numeric: false) { t in
+                dialog = nil
+                var s: HidScript = script
+                s.n = t
+                change(s)
+            } cancel: { dialog = nil }
+        }
+    }
+}
+
+extension HidScript {
+    /// Имя для подписей.
+    var name: String { n }
 }
