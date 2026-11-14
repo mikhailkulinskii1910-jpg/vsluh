@@ -1400,14 +1400,20 @@ class MainActivity : Activity() {
             addView(hidStatus, LinearLayout.LayoutParams(0, dp(48), 1.2f))
             addView(hidBtn, LinearLayout.LayoutParams(0, dp(48), 1f).apply { leftMargin = dp(6) })
         })
-        // подвкладки «тачпад» | «светодиод»
+        // подвкладки «тачпад» | «светодиод» | «скрипт»
         val ledPage = buildLedPage()
-        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, 1)
-        fun showSub(i: Int) { p.visibility = if (i == 0) View.VISIBLE else View.GONE; ledPage.visibility = if (i == 1) View.VISIBLE else View.GONE }
-        outer.addView(chipRow(listOf("тачпад", "светодиод"), sub) { i, _ -> showSub(i); prefs.edit().putInt("touch_sub", i).apply() },
+        val scrPage = buildScriptHidPage()
+        val sub = prefs.getInt("touch_sub", 0).coerceIn(0, 2)
+        fun showSub(i: Int) {
+            p.visibility = if (i == 0) View.VISIBLE else View.GONE
+            ledPage.visibility = if (i == 1) View.VISIBLE else View.GONE
+            scrPage.visibility = if (i == 2) View.VISIBLE else View.GONE
+        }
+        outer.addView(chipRow(listOf("тачпад", "светодиод", "скрипт"), sub) { i, _ -> showSub(i); prefs.edit().putInt("touch_sub", i).apply() },
             LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         outer.addView(p, LinearLayout.LayoutParams(-1, -2))
         outer.addView(ledPage, LinearLayout.LayoutParams(-1, -2))
+        outer.addView(scrPage, LinearLayout.LayoutParams(-1, -2))
         showSub(sub)
         // поле-тачпад
         val pad = TouchpadView(this, { hidSens }, {
@@ -1479,6 +1485,152 @@ class MainActivity : Activity() {
             setOnClickListener { openExternal(android.net.Uri.parse(FLASH_URL)) }
         })
         return outer
+    }
+
+    /* ---------- «Тачпад» → «скрипт»: Ducky Script, автозапвск. Только для своих устройств. ---------- */
+
+    private class HidScript(var name: String, var src: String, var auto: Boolean)
+    private var hidScripts = ArrayList<HidScript>()
+    private var hidScriptIdx = 0
+    private lateinit var scrName: TextView
+    private lateinit var scrEditor: android.widget.EditText
+    private lateinit var scrStatus: TextView
+    private lateinit var scrAutoBtn: TextView
+    @Volatile private var scrRunning = false
+
+    private val SCR_EXAMPLES get() = listOf(
+        HidScript("Блокнот", "REM печатает в Блокноте — проверьте на своём ПК\nGUI r\nDELAY 400\nSTRING notepad\nENTER\nDELAY 600\nSTRING Привет от krisa37!", false),
+        HidScript("Свернуть всё", "GUI d", false),
+        HidScript("Переключить окно", "ALT TAB", false))
+
+    private fun scrLoad() {
+        hidScripts = ArrayList()
+        runCatching {
+            val a = org.json.JSONArray(getPreferences(MODE_PRIVATE).getString("hid_scripts", "[]"))
+            for (i in 0 until a.length()) a.getJSONObject(i).let { hidScripts += HidScript(it.getString("n"), it.getString("src"), it.optBoolean("auto")) }
+        }
+        if (hidScripts.isEmpty()) hidScripts = ArrayList(SCR_EXAMPLES)
+        hidScriptIdx = getPreferences(MODE_PRIVATE).getInt("hid_script_cur", 0).coerceIn(0, hidScripts.size - 1)
+    }
+
+    private fun scrSave() {
+        val cur = hidScripts.getOrNull(hidScriptIdx)
+        if (cur != null && ::scrEditor.isInitialized) cur.src = scrEditor.text.toString()
+        val a = org.json.JSONArray()
+        hidScripts.forEach { a.put(org.json.JSONObject().put("n", it.name).put("src", it.src).put("auto", it.auto)) }
+        getPreferences(MODE_PRIVATE).edit().putString("hid_scripts", a.toString()).putInt("hid_script_cur", hidScriptIdx).apply()
+    }
+
+    private fun scrParse(): Ducky.Result {
+        val r = Ducky.parse(scrEditor.text.toString())
+        scrStatus.text = r.error?.let { "ошибка: $it" } ?: "OK, ${r.acts.size} действий"
+        scrStatus.setTextColor(if (r.error != null) Color.parseColor("#E05050") else Term.DIM)
+        return r
+    }
+
+    /** Проиграть прямо сейчас через подключённый донгл (команды + паузы). */
+    private fun scrRun() {
+        val l = hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
+            ?: return say("> донгл не подключён — [ подключить ]", err = true)
+        val r = scrParse(); if (r.error != null || r.acts.isEmpty()) return
+        if (scrRunning) { scrRunning = false; return }
+        scrRunning = true; say("> скрипт пошёл")
+        io.execute {
+            try {
+                for (a in r.acts) {
+                    if (!scrRunning) break
+                    when (a) {
+                        is Ducky.Act.Text -> l.text(a.s)
+                        is Ducky.Act.Key -> l.key(a.mods, a.code)
+                        is Ducky.Act.Delay -> { var left = a.ms.toLong(); while (left > 0 && scrRunning) { val s2 = minOf(left, 50L); Thread.sleep(s2); left -= s2 } }
+                        is Ducky.Act.Move -> l.move(a.dx.toFloat(), a.dy.toFloat())
+                        is Ducky.Act.Click -> l.click(a.mask, a.count)
+                        is Ducky.Act.Scroll -> l.scroll(a.n.toFloat())
+                    }
+                    Thread.sleep(8)
+                }
+            } catch (e: Exception) {} finally { scrRunning = false; ui.post { say("> скрипт завершён", ok = true) } }
+        }
+    }
+
+    private fun scrUpload(auto: Boolean) {
+        val l = hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }
+            ?: return say("> донгл не подключён — [ подключить ]", err = true)
+        val r = scrParse(); if (r.error != null) return
+        hidScripts.getOrNull(hidScriptIdx)?.auto = auto; scrSave()
+        l.uploadScript(Ducky.bytecode(r.acts), auto)
+        say(if (auto) "> скрипт записан на плату, автозапуск включён" else "> скрипт записан на плату", ok = true)
+        ui.postDelayed({ scrRenderAuto() }, 400)
+    }
+
+    private fun scrRenderAuto() {
+        if (::scrAutoBtn.isInitialized) {
+            val auto = hidScripts.getOrNull(hidScriptIdx)?.auto == true
+            scrAutoBtn.text = btnLabel(if (auto) "[ ⎙ автозапуск: вкл ]" else "[ ⎙ автозапуск: выкл ]"); styleTab(scrAutoBtn, auto)
+        }
+    }
+
+    private fun scrPick() {
+        AlertDialog.Builder(this).setTitle("Скрипты")
+            .setItems(hidScripts.map { it.name }.toTypedArray()) { _, w -> scrSave(); hidScriptIdx = w; scrEditor.setText(hidScripts[w].src); scrName.text = btnLabel("[ ${hidScripts[w].name} ▾ ]"); scrParse(); scrRenderAuto() }
+            .showThemed()
+    }
+
+    private fun buildScriptHidPage(): View {
+        scrLoad()
+        val p = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        fun small(label: String, click: () -> Unit) = mocButton(label) { click() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 12f else 13f) }
+        fun row(h: Int, vararg v: View) = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            v.forEachIndexed { i, x -> addView(x, LinearLayout.LayoutParams(0, dp(h), 1f).apply { if (i > 0) leftMargin = dp(6) }) }
+        }
+        p.addView(text("⚠ Автоввод работает на вашем компьютере. Не подключайте донгл к чужим устройствам без разрешения.", 12f, Color.parseColor("#E0A040")).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(6), dp(4), dp(6)) })
+        scrName = mocButton("") { scrPick() }.apply { typeface = Term.ru; setTextSize(TypedValue.COMPLEX_UNIT_SP, if (clean) 14f else 17f) }
+        p.addView(scrName, LinearLayout.LayoutParams(-1, dp(50)))
+        p.addView(row(44,
+            small("[ новый ]") { scrSave(); askText("Новый скрипт", "Скрипт ${hidScripts.size + 1}") { n -> hidScripts += HidScript(n, "REM новый скрипт\n", false); hidScriptIdx = hidScripts.size - 1; scrEditor.setText(hidScripts.last().src); scrName.text = btnLabel("[ $n ▾ ]"); scrParse(); scrRenderAuto() } },
+            small("[ имя ]") { askText("Имя скрипта", hidScripts[hidScriptIdx].name) { n -> hidScripts[hidScriptIdx].name = n; scrName.text = btnLabel("[ $n ▾ ]"); scrSave() } },
+            small("[ удалить ]") {
+                AlertDialog.Builder(this).setTitle("Удалить «${hidScripts[hidScriptIdx].name}»?").setNegativeButton("Нет", null).setPositiveButton("Удалить") { _, _ ->
+                    hidScripts.removeAt(hidScriptIdx); if (hidScripts.isEmpty()) hidScripts += HidScript("Скрипт 1", "", false)
+                    hidScriptIdx = hidScriptIdx.coerceAtMost(hidScripts.size - 1); scrEditor.setText(hidScripts[hidScriptIdx].src); scrName.text = btnLabel("[ ${hidScripts[hidScriptIdx].name} ▾ ]"); scrSave(); scrParse(); scrRenderAuto()
+                }.showThemed()
+            }), LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        scrEditor = android.widget.EditText(this).apply {
+            setText(hidScripts.getOrNull(hidScriptIdx)?.src ?: "")
+            typeface = android.graphics.Typeface.MONOSPACE; setTextColor(Term.FG); setHintTextColor(Term.DIM)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); gravity = Gravity.TOP or Gravity.START
+            background = Term.boxBg(this@MainActivity); setPadding(dp(10), dp(8), dp(10), dp(8)); isSingleLine = false
+            hint = "STRING привет\nENTER\nGUI r\nDELAY 500\nMOUSE MOVE 40 0"
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(e: android.text.Editable?) {}
+                override fun beforeTextChanged(c: CharSequence?, a: Int, b: Int, d: Int) {}
+                override fun onTextChanged(c: CharSequence?, a: Int, b: Int, d: Int) { if (::scrStatus.isInitialized) scrParse() }
+            })
+        }
+        p.addView(scrEditor, LinearLayout.LayoutParams(-1, dp(220)).apply { topMargin = dp(8) })
+        scrStatus = text("", 12f, Term.DIM).apply { typeface = Term.ru; setPadding(dp(4), dp(4), 0, 0) }
+        p.addView(scrStatus)
+        scrName.text = btnLabel("[ ${hidScripts.getOrNull(hidScriptIdx)?.name ?: "—"} ▾ ]")
+        p.addView(row(50, small("[ ▶ Выполнить ]") { scrSave(); scrRun() }, small("[ ⤓ На плату ]") { scrSave(); scrUpload(hidScripts.getOrNull(hidScriptIdx)?.auto == true) }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        scrAutoBtn = small("") {
+            val now = hidScripts.getOrNull(hidScriptIdx)?.auto == true
+            if (now) { hidScripts[hidScriptIdx].auto = false; scrSave(); hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }?.let { scrUpload(false) } ?: scrRenderAuto() }
+            else {
+                AlertDialog.Builder(this).setTitle("Автозапуск")
+                    .setMessage("Плата будет сама печатать этот скрипт при каждом включении. Подключайте её только к своему компьютеру. Включить?")
+                    .setNegativeButton("Отмена", null).setPositiveButton("Включить") { _, _ -> scrUpload(true) }.showThemed()
+            }
+        }
+        p.addView(row(48, scrAutoBtn, small("[ ✖ стереть с платы ]") { hid?.takeIf { it.state == HidLink.State.READY || it.state == HidLink.State.USB_OFF }?.clearScript(); hidScripts.getOrNull(hidScriptIdx)?.auto = false; scrSave(); scrRenderAuto(); say("> скрипт стёрт с платы") }),
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
+        p.addView(text("Ducky Script: STRING текст · ENTER TAB ESC · GUI/CTRL/ALT/SHIFT [клавиша] · DELAY мс · " +
+            "MOUSE MOVE dx dy · MOUSE LEFT/RIGHT/SCROLL n · REM комментарий. Нужна прошивка донгла 1.5 (ESP32-C3 — 1.3).", 12f, Term.DIM).apply {
+            typeface = Term.ru; setPadding(dp(4), dp(10), 0, 0) })
+        scrParse(); scrRenderAuto()
+        return p
     }
 
     /* ---------- «Тачпад» → «светодиод»: цвет светодиода на донгле ---------- */

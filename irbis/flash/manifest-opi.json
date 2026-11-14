@@ -1,6 +1,6 @@
 {
   "name": "krisa37 HID — ESP32-S3 N8R8/N16R8",
-  "version": "1.4",
+  "version": "1.5",
   "new_install_prompt_erase": true,
   "builds": [
     {

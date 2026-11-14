@@ -238,6 +238,8 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
 
     /** Светодиод донгла: true — один синий (C3), false — цветной (S3), null — прошивка старая или ещё не ответила. */
     var ledMono: Boolean? = null; private set
+    /** На плате сохранён скрипт автозапуска. */
+    var hasScript = false; private set
 
     /** Донгл на ESP32-C3: к доске он подключается по Bluetooth, а не по USB. */
     var c3 = false; private set
@@ -248,6 +250,7 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
         c3 = "hid-c3" in s
         ui.removeCallbacks(connectTimeout)
         if ("led=mono" in s) ledMono = true else if ("led=rgb" in s) ledMono = false
+        if ("scr=1" in s) hasScript = true else if ("scr=0" in s) hasScript = false
         set(when {
             "auth=denied" in s -> State.DENIED
             "auth=ok" in s && "usb=0" in s -> State.USB_OFF
@@ -295,6 +298,19 @@ class HidLink(private val c: Context, private val token: ByteArray, private val 
 
     /** Отпустить всё зажатое (клавиши и кнопки мыши). */
     fun releaseAll() = send(byteArrayOf(0x06))
+
+    /** Записать скрипт на плату: начать → куски ≤18 байт → сохранить (auto — автозапуск). Прошивка 1.5 (C3 1.3). */
+    fun uploadScript(bytecode: ByteArray, auto: Boolean) {
+        send(byteArrayOf(0x20))
+        var i = 0
+        while (i < bytecode.size) {
+            val end = minOf(i + 18, bytecode.size)
+            send(byteArrayOf(0x21) + bytecode.copyOfRange(i, end)); i = end
+        }
+        send(byteArrayOf(0x22, if (auto) 1 else 0))
+    }
+    fun runStored() = send(byteArrayOf(0x23))
+    fun clearScript() = send(byteArrayOf(0x24))
     fun text(t: String): Boolean { var ok = true; chunks(t).forEach { ok = send(byteArrayOf(0x07) + it) && ok }; return ok }
 }
 
