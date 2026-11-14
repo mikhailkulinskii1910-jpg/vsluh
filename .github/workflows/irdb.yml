@@ -1,0 +1,24 @@
+name: IR library (Flipper-IRDB)
+
+on:
+  workflow_dispatch:
+  push:
+    paths: ["scripts/irdb/build.py", ".github/workflows/irdb.yml"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Clone Flipper-IRDB and convert
+        run: |
+          git clone --depth 1 https://github.com/Lucaslhm/Flipper-IRDB.git
+          python3 scripts/irdb/build.py Flipper-IRDB irbis/lib
+          du -sh irbis/lib; find irbis/lib -name '*.json' | wc -l
+      - name: Zip
+        run: cd irbis && zip -qr ../irdb-lib.zip lib
+      - uses: actions/upload-artifact@v4
+        with:
+          name: irdb-lib
+          path: irdb-lib.zip
