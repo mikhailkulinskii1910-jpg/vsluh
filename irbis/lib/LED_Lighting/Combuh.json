@@ -1,0 +1,1 @@
+[{"m":"COM-T070","b":[{"n":"Power_off","p":"NECext","a":"00EF","c":"00FF"},{"n":"Power_on","p":"NECext","a":"00EF","c":"03FC"},{"n":"Night_mode","p":"NECext","a":"00EF","c":"02FD"},{"n":"Warm_light","p":"NECext","a":"00EF","c":"05FA"},{"n":"Cool_light","p":"NECext","a":"00EF","c":"07F8"},{"n":"Natural_light","p":"NECext","a":"00EF","c":"FF"}]}]

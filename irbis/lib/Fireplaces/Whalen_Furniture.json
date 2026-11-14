@@ -1,0 +1,1 @@
+[{"m":"HDFP86-47","b":[{"n":"Power_on_off","p":"NEC","a":"01","c":"14"},{"n":"Flame_control","p":"NEC","a":"01","c":"1D"},{"n":"Heater_on_off","p":"NEC","a":"01","c":"12"},{"n":"Timer","p":"NEC","a":"01","c":"19"},{"n":"Temp_up","p":"NEC","a":"01","c":"1A"},{"n":"Temp_down","p":"NEC","a":"01","c":"05"}]}]

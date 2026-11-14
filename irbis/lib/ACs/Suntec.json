@@ -1,0 +1,1 @@
+[{"m":"Suntec_Transform_AC","b":[{"n":"POWER","p":"NEC","a":"80","c":"9C"},{"n":"SPEED","p":"NEC","a":"80","c":"96"},{"n":"TEMP+","p":"NEC","a":"80","c":"94"},{"n":"TEMP-","p":"NEC","a":"80","c":"95"},{"n":"MODE","p":"NEC","a":"80","c":"9D"},{"n":"TIMER","p":"NEC","a":"80","c":"9F"}]}]

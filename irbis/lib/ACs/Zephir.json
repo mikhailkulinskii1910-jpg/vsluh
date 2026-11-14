@@ -1,0 +1,1 @@
+[{"m":"Zephir_ZPO9001H_AC","b":[{"n":"POWER ON/OFF","p":"NEC","a":"80","c":"9C"},{"n":"TEMP+","p":"NEC","a":"80","c":"94"},{"n":"TEMP-","p":"NEC","a":"80","c":"95"},{"n":"FAN_SPEED","p":"NEC","a":"80","c":"96"},{"n":"MODE","p":"NEC","a":"80","c":"9D"},{"n":"SWING","p":"NEC","a":"80","c":"92"},{"n":"SLEEP","p":"NEC","a":"80","c":"9B"},{"n":"TIMER","p":"NEC","a":"80","c":"9F"}]}]
