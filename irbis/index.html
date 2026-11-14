@@ -472,6 +472,17 @@ body.touch #grid,body.touch #more,body.touch #grid2{display:none}
 .hidp .lsw.on{outline:3px solid var(--fg);outline-offset:2px}
 .hidp .lhue .bps,.hidp .lbr .bps{margin-top:24px}
 .hidp .lhint{font-size:12px}
+.hidp .sed{width:100%;min-height:150px;margin-top:8px;padding:10px;font:14px/1.4 ui-monospace,Menlo,Consolas,monospace;
+  background:color-mix(in srgb,var(--bg) 70%,transparent);color:var(--fg);border:1px solid var(--line);border-radius:0;resize:vertical}
+[data-theme=prism] .hidp .sed{border-radius:14px}
+.hidp .sed::placeholder{color:var(--dim)}
+.hidp .sst{margin:6px 2px 0;font:13px var(--ru);color:var(--dim)}
+.hidp .sst.ok{color:var(--fg)}
+.hidp .swarn{color:var(--dim)}
+.hidp .sname{height:46px}
+.hidp .sr1 .gear.tab.acb,.hidp .sr2 .gear.tab.acb{font-size:13px;padding:0 2px}
+.hidp .recpad{aspect-ratio:3/1;margin-top:4px}
+.hidp .recpad.on{border-color:#FF3B30;box-shadow:inset 0 0 0 2px #FF3B30}
 .hidp .hflash{display:block;margin:14px 2px 0;font:14px var(--ru);color:var(--fg)}
 [data-theme=prism] .hidp .gear.tab.acb,[data-theme=blueprint] .hidp .gear.tab.acb{font-size:12px}
 [data-theme=thermal] .hidp .hst,[data-theme=thermal] .hidp .xl{text-shadow:0 0 3px #000,0 0 6px #000}
@@ -2394,7 +2405,7 @@ window.irxReady = true;
    INFO (read + notify): «krisa37-hid <версия> usb=<0|1> auth=<ok|need|denied>». */
 const HID = {
   SVC: '6b7e0001-3a1f-4c7e-9d2a-6b72697361a0', RX: '6b7e0002-3a1f-4c7e-9d2a-6b72697361a0', INFO: '6b7e0003-3a1f-4c7e-9d2a-6b72697361a0',
-  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '',
+  dev: null, rx: null, info: null, state: 'off', usb: true, auth: '', q: Promise.resolve(), tried: false, sticky: 0, led: '', scr: false,
   ledSt: { mode: 0, r: 0, g: 64, b: 255, bright: 40 },   // светодиод донгла: режим, цвет, яркость (хранится)
 };
 try { const v = JSON.parse(localStorage.getItem('krisa-hid-led') || 'null'); if (v) for (const k in HID.ledSt) if (Number.isFinite(v[k])) HID.ledSt[k] = Math.max(0, Math.min(k === 'mode' ? 4 : 255, v[k] | 0)); } catch {}
@@ -2427,6 +2438,7 @@ function hidParse(v) {
   HID.c3 = s.includes('hid-c3');   // донгл ESP32-C3: к доске он подключается по Bluetooth, не по USB
   const l = /led=(rgb|mono)/.exec(s), led = l ? l[1] : HID.led;   // цветной светодиод (S3) или один синий (C3)
   if (led !== HID.led) { HID.led = led; window.ledRender && ledRender(); }
+  const sc = /scr=(\d)/.exec(s); if (sc) HID.scr = sc[1] === '1';   // на плате сохранён скрипт
   hidRender();
 }
 /** Отправить пакет: по очереди (GATT не умеет параллельно), без ответа. */
@@ -2508,7 +2520,7 @@ function hidText(text) {
     + '<div class="tp" aria-label="Тачпад"><span>один палец — курсор · касание — клик · два пальца — прокрутка и правый клик · удержание — перетащить</span></div>'
     + '<div class="srow hbtn"></div><div class="hsens"></div>'
     + '<div class="srow htxt"><input type="text" class="hin" placeholder="⌨ печатать…" autocomplete="off" spellcheck="false"></div><div class="srow hlang"></div>'
-    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
+    + '<div class="srow hmods"></div><div class="hkeys"></div><p class="xl">мои сочетания</p><div class="hkeys hcombos"></div></div><div class="hled" hidden></div><div class="hscr" hidden></div><a class="hflash" href="https://mikhailkulinskii1910-jpg.github.io/vsluh/irbis/flash/" target="_blank" rel="noopener">Как прошить донгл →</a>';
   box.querySelector('.hcon').addEventListener('click', () => HID.state === 'on' ? hidDisconnect() : hidConnect());
   // клики Л / С / П
   [['[ Л ]', 1], ['[ С ]', 4], ['[ П ]', 2]].forEach(([l, m]) => sBtn(box.querySelector('.hbtn'), l, () => hidClick(m)));
@@ -2675,14 +2687,15 @@ function hidText(text) {
   tp.addEventListener('pointerup', up); tp.addEventListener('pointercancel', up);
   /* Подвкладки «тачпад» | «светодиод» (выбор запоминается); строка статуса и «подключить» — общие, над ними. */
   let sub = 0;
-  try { sub = localStorage.getItem('krisa-hid-sub') === '1' ? 1 : 0; } catch {}
+  try { sub = parseInt(localStorage.getItem('krisa-hid-sub'), 10) || 0; } catch {}
   const subBox = box.querySelector('.hsub');
+  sub = Math.max(0, Math.min(2, sub));
   const showSub = () => {
     [...subBox.children].forEach((c, i) => c.classList.toggle('on', i === sub));
-    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1;
-    if (sub === 1) ledRender();
+    box.querySelector('.hpad').hidden = sub !== 0; box.querySelector('.hled').hidden = sub !== 1; box.querySelector('.hscr').hidden = sub !== 2;
+    if (sub === 1) ledRender(); else if (sub === 2) scrRender();
   };
-  chipRow(subBox, ['тачпад', 'светодиод'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
+  chipRow(subBox, ['тачпад', 'светодиод', 'скрипт'], i => { sub = i; try { localStorage.setItem('krisa-hid-sub', String(i)); } catch {} showSub(); });
 
   /* «светодиод»: пакет 0x08 LED [0x08, mode, r, g, b, bright] — 0 авто (статус), 1 цвет, 2 дыхание, 3 радуга (на C3 — мигает), 4 выкл.
      При движении ползунка — не чаще раза в 60 мс и финальный при отпускании. Состояние хранится и шлётся при каждом подключении (после AUTH), если не «авто». */
@@ -2734,6 +2747,213 @@ function hidText(text) {
     br.classList.add('cp'); LB.querySelector('.lbr').appendChild(br);
     ledPreview();
   }
+
+  /* ---------- Подвкладка «скрипт»: Ducky Script, наборы команд и движений мыши, запись на плату, автозапуск ----------
+     ТОЛЬКО для своих устройств. Прошивка 1.5 (C3 1.3): 0x20 начать · 0x21 <байткод ≤18> дописать · 0x22 <auto> сохранить · 0x23 выполнить · 0x24 стереть.
+     Байткод: 0x01 len <utf8> печать · 0x02 mods key · 0x03 lo hi пауза мс · 0x04 dx dy · 0x05 mask count клик · 0x08 wheel. */
+  const SB = box.querySelector('.hscr');
+  // HID-коды клавиш для Ducky (имя → код); символы — отдельной картой
+  const DK = { ENTER: 0x28, TAB: 0x2B, ESC: 0x29, ESCAPE: 0x29, SPACE: 0x2C, BACKSPACE: 0x2A, DELETE: 0x4C, DEL: 0x4C, INSERT: 0x49, HOME: 0x4A, END: 0x4D,
+    PAGEUP: 0x4B, PAGEDOWN: 0x4E, UP: 0x52, UPARROW: 0x52, DOWN: 0x51, DOWNARROW: 0x51, LEFT: 0x50, LEFTARROW: 0x50, RIGHT: 0x4F, RIGHTARROW: 0x4F,
+    PRINTSCREEN: 0x46, PAUSE: 0x48, BREAK: 0x48, CAPSLOCK: 0x39, MENU: 0x65, APP: 0x65 };
+  for (let i = 1; i <= 12; i++) DK['F' + i] = 0x39 + i;
+  const MODK = { GUI: 8, WINDOWS: 8, WIN: 8, CTRL: 1, CONTROL: 1, ALT: 4, SHIFT: 2 };
+  const CHK = {}; '1234567890'.split('').forEach((c, i) => CHK[c] = 0x1E + i); CHK['0'] = 0x27;
+  Object.assign(CHK, { '-': 0x2D, '=': 0x2E, '[': 0x2F, ']': 0x30, '\\': 0x31, ';': 0x33, "'": 0x34, '`': 0x35, ',': 0x36, '.': 0x37, '/': 0x38 });
+  const charKey = ch => { const u = ch.toUpperCase(); if (u >= 'A' && u <= 'Z') return 0x04 + u.charCodeAt(0) - 65; return CHK[ch] ?? null; };
+
+  /** Разобрать Ducky Script в список действий. Возвращает {actions, err}. */
+  function parseDucky(src) {
+    const out = [], lines = src.split(/\r?\n/);
+    let defDelay = 0, prevLine = null, prevSrc = '';
+    const emitLine = acts => { out.push(...acts); if (defDelay > 0) out.push({ t: 'delay', ms: defDelay }); };
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i], line = raw.trim();
+      if (!line) continue;
+      const up = line.toUpperCase(), sp = line.indexOf(' '), cmd = (sp < 0 ? up : up.slice(0, sp)), rest = sp < 0 ? '' : line.slice(sp + 1);
+      let acts = null;
+      if (cmd === 'REM' || line[0] === '#') continue;
+      else if (cmd === 'DEFAULTDELAY' || cmd === 'DEFAULT_DELAY') { defDelay = parseInt(rest, 10) || 0; continue; }
+      else if (cmd === 'DELAY') { acts = [{ t: 'delay', ms: Math.max(0, Math.min(65535, parseInt(rest, 10) || 0)) }]; }
+      else if (cmd === 'STRING') acts = [{ t: 'text', s: rest }];
+      else if (cmd === 'STRINGLN') acts = [{ t: 'text', s: rest }, { t: 'key', m: 0, k: 0x28 }];
+      else if (cmd === 'REPEAT') {
+        const n = Math.max(1, parseInt(rest, 10) || 1);
+        if (!prevLine) return { err: 'ошибка в строке ' + (i + 1) + ': REPEAT без предыдущей команды' };
+        for (let r = 0; r < n; r++) emitLine(prevLine);
+        continue;
+      } else if (cmd === 'MOUSE') {
+        const a = rest.trim().toUpperCase().split(/[\s]+/);
+        if (a[0] === 'MOVE') acts = [{ t: 'move', dx: parseInt(a[1], 10) || 0, dy: parseInt(a[2], 10) || 0 }];
+        else if (a[0] === 'SCROLL') acts = [{ t: 'scroll', w: parseInt(a[1], 10) || 0 }];
+        else if (a[0] === 'LEFT') acts = [{ t: 'click', mask: 1, count: 1 }];
+        else if (a[0] === 'RIGHT') acts = [{ t: 'click', mask: 2, count: 1 }];
+        else if (a[0] === 'MIDDLE') acts = [{ t: 'click', mask: 4, count: 1 }];
+        else if (a[0] === 'DOUBLE') acts = [{ t: 'click', mask: 1, count: 2 }];
+        else return { err: 'ошибка в строке ' + (i + 1) + ': непонятная MOUSE ' + rest };
+      } else {
+        // клавиши и модификаторы: «CTRL ALT DELETE», «GUI r», «CTRL-SHIFT ESC», одиночная клавиша
+        const toks = line.split(/[\s-]+/).filter(Boolean);
+        let mods = 0, key = 0, bad = null;
+        for (const t of toks) {
+          const tu = t.toUpperCase();
+          if (MODK[tu] !== undefined) mods |= MODK[tu];
+          else if (DK[tu] !== undefined) key = DK[tu];
+          else if (t.length === 1) { const c = charKey(t); if (c == null) bad = t; else key = c; }
+          else bad = t;
+        }
+        if (bad !== null) return { err: 'ошибка в строке ' + (i + 1) + ': непонятно «' + bad + '»' };
+        acts = [{ t: 'key', m: mods, k: key }];
+      }
+      emitLine(acts); prevLine = acts; prevSrc = line;
+    }
+    return { actions: out };
+  }
+
+  /** Действия → байткод (массив чисел). Text ≤200 байт на кусок, move/scroll ≤127. */
+  function compile(actions) {
+    const bc = [], enc = new TextEncoder();
+    for (const a of actions) {
+      if (a.t === 'text') {
+        let cur = [];
+        const flush = () => { if (cur.length) { bc.push(0x01, cur.length, ...cur); cur = []; } };
+        for (const ch of a.s) { const b = [...enc.encode(ch)]; if (cur.length + b.length > 200) flush(); cur.push(...b); }
+        flush();
+      } else if (a.t === 'key') bc.push(0x02, a.m & 0xff, a.k & 0xff);
+      else if (a.t === 'delay') bc.push(0x03, a.ms & 0xff, (a.ms >> 8) & 0xff);
+      else if (a.t === 'move') { let dx = a.dx, dy = a.dy; do { const x = Math.max(-127, Math.min(127, dx)), y = Math.max(-127, Math.min(127, dy)); bc.push(0x04, x & 0xff, y & 0xff); dx -= x; dy -= y; } while (dx || dy); }
+      else if (a.t === 'click') bc.push(0x05, a.mask & 0xff, a.count & 0xff);
+      else if (a.t === 'scroll') { let w = a.w; do { const s = Math.max(-127, Math.min(127, w)); bc.push(0x08, s & 0xff); w -= s; } while (w); }
+    }
+    return bc;
+  }
+
+  /* сохранённые скрипты (как сценарии): [{n, src, auto}] */
+  const SCR_EX = [
+    { n: 'Блокнот', src: 'GUI r\nDELAY 400\nSTRING notepad\nENTER\nDELAY 600\nSTRING Привет от krisa37!', auto: false },
+    { n: 'Свернуть всё', src: 'GUI d', auto: false },
+    { n: 'Переключить окно', src: 'ALT TAB', auto: false },
+  ];
+  let scrs = [], scrIdx = 0, scrRun = false;
+  try { scrs = JSON.parse(localStorage.getItem('krisa-hid-scripts') || 'null') || []; } catch {}
+  if (!Array.isArray(scrs) || !scrs.length) scrs = SCR_EX.map(x => ({ ...x }));
+  scrs = scrs.filter(x => x && typeof x.n === 'string' && typeof x.src === 'string');
+  try { scrIdx = Math.max(0, Math.min(scrs.length - 1, parseInt(localStorage.getItem('krisa-hid-script-cur'), 10) || 0)); } catch {}
+  const scrCur = () => scrs[scrIdx];
+  const scrSave = () => { try { localStorage.setItem('krisa-hid-scripts', JSON.stringify(scrs)); localStorage.setItem('krisa-hid-script-cur', String(scrIdx)); } catch {} };
+  if (!localStorage.getItem('krisa-hid-scripts')) scrSave();   // примеры сохраняются при первом открытии
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  /** Живое выполнение действий через подключённый донгл. */
+  async function scrLiveRun(actions) {
+    if (scrRun) return;
+    scrRun = true; scrSetPlay();
+    for (const a of actions) {
+      if (!scrRun) break;
+      if (a.t === 'text') hidText(a.s);
+      else if (a.t === 'key') hidKey(a.m, a.k);
+      else if (a.t === 'delay') { for (let left = a.ms; left > 0 && scrRun; left -= 80) await sleep(Math.min(80, left)); }
+      else if (a.t === 'move') hidMove(a.dx, a.dy);
+      else if (a.t === 'click') hidClick(a.mask, a.count);
+      else if (a.t === 'scroll') hidMove(0, 0, a.w);
+      if (a.t !== 'delay') await sleep(12);
+    }
+    scrRun = false; scrSetPlay();
+  }
+  function scrSetPlay() { const b = SB.querySelector('.srun'); if (b) { b.textContent = btnLabel(scrRun ? '[ ■ стоп ]' : '[ ▶ Выполнить ]'); b.classList.toggle('on', scrRun); } }
+  /** Запись байткода на плату: 0x20 → куски 0x21 → 0x22 auto. */
+  function scrUpload(auto) {
+    if (HID.state !== 'on' || !HID.rx) { status('> донгл не подключён — [ подключить ]'); return false; }
+    const r = parseDucky(scrCur().src);
+    if (r.err) { status('> ' + r.err, 'err'); return false; }
+    const bc = compile(r.actions);
+    hidSend([0x20]);
+    for (let i = 0; i < bc.length; i += 18) hidSend([0x21, ...bc.slice(i, i + 18)]);
+    hidSend([0x22, auto ? 1 : 0]);
+    status('> скрипт записан на плату' + (auto ? ' · автозапуск вкл' : ''));
+    return true;
+  }
+
+  function scrStatus() {
+    const r = parseDucky(SB.querySelector('.sed').value);
+    const el = SB.querySelector('.sst');
+    if (r.err) { el.textContent = r.err; el.classList.remove('ok'); }
+    else { el.textContent = 'OK, ' + r.actions.filter(a => a.t !== 'delay').length + ' действий'; el.classList.add('ok'); }
+  }
+  // запись движений мыши в мини-поле → строки MOUSE с DELAY по реальному времени
+  let rec = false, recLines = [], recAcc = { x: 0, y: 0, w: 0 }, recT = 0, recLast = 0, recHoldT = null, recDown = 0, recMoved = 0;
+  function recFlushMove() {
+    const dx = Math.round(recAcc.x), dy = Math.round(recAcc.y), w = Math.round(recAcc.w);
+    recAcc.x -= dx; recAcc.y -= dy; recAcc.w -= w;
+    const now = performance.now(), gap = recLast ? Math.round(now - recLast) : 0;
+    if (dx || dy) { if (gap > 20) recLines.push('DELAY ' + gap); recLines.push('MOUSE MOVE ' + dx + ' ' + dy); recLast = now; }
+    if (w) { if (gap > 20) recLines.push('DELAY ' + gap); recLines.push('MOUSE SCROLL ' + w); recLast = now; }
+  }
+
+  function scrRender() {
+    SB.innerHTML = '<p class="projnote swarn">Автоввод работает на вашем компьютере. Не подключайте донгл к чужим устройствам без разрешения.</p>'
+      + '<button class="gear tab acb sname"></button><div class="srow s3"></div>'
+      + '<textarea class="sed" spellcheck="false" placeholder="REM пример&#10;GUI r&#10;DELAY 400&#10;STRING notepad&#10;ENTER"></textarea>'
+      + '<p class="sst"></p><div class="srow sr1"></div><div class="srow sr2"></div>'
+      + '<p class="xl">запись движений мыши</p><div class="tp recpad" aria-label="Запись мыши"><span>водите пальцем — запишутся движения, касание — клик</span></div>'
+      + '<div class="srow sr3"></div>'
+      + '<p class="xl lhint">Нужна прошивка донгла 1.5 (ESP32-C3 — 1.3).</p>';
+    const ed = SB.querySelector('.sed'); ed.value = scrCur().src;
+    ed.addEventListener('input', () => { scrCur().src = ed.value; scrSave(); scrStatus(); });
+    SB.querySelector('.sname').addEventListener('click', () => modal({ title: 'Скрипты', items: scrs.map(s => s.n), sel: scrIdx, pick: i => { scrIdx = i; scrSave(); scrRender(); } }));
+    const s3 = SB.querySelector('.s3');
+    sBtn(s3, '[ новый ]', () => modal({ title: 'Новый скрипт', input: 'Скрипт ' + (scrs.length + 1), ok: n => { scrs.push({ n, src: '', auto: false }); scrIdx = scrs.length - 1; scrSave(); scrRender(); } }));
+    sBtn(s3, '[ имя ]', () => modal({ title: 'Имя скрипта', input: scrCur().n, ok: n => { scrCur().n = n; scrSave(); scrRender(); } }));
+    sBtn(s3, '[ удалить ]', () => modal({ title: 'Удалить «' + scrCur().n + '»?', okText: 'Удалить', ok: () => { scrs.splice(scrIdx, 1); if (!scrs.length) scrs = [{ n: 'Скрипт 1', src: '', auto: false }]; scrIdx = Math.min(scrIdx, scrs.length - 1); scrSave(); scrRender(); } }));
+    const r1 = SB.querySelector('.sr1');
+    const run = document.createElement('button'); run.className = 'gear tab acb srun';
+    run.addEventListener('click', () => { if (scrRun) { scrRun = false; return; } const r = parseDucky(scrCur().src); if (r.err) { status('> ' + r.err, 'err'); return; } if (HID.state !== 'on') { status('> донгл не подключён — [ подключить ]'); return; } scrLiveRun(r.actions); });
+    r1.appendChild(run); scrSetPlay();
+    sBtn(r1, '[ ⤓ На плату ]', () => scrUpload(scrCur().auto));
+    const r2 = SB.querySelector('.sr2');
+    const au = document.createElement('button'); au.className = 'gear tab acb' + (scrCur().auto ? ' on' : '');
+    const auUpd = () => { au.textContent = btnLabel('[ ⎙ Автозапуск: ' + (scrCur().auto ? 'вкл' : 'выкл') + ' ]'); au.classList.toggle('on', scrCur().auto); };
+    au.addEventListener('click', () => {
+      scrCur().auto = !scrCur().auto; scrSave(); auUpd();
+      if (scrCur().auto) scrUpload(true);
+      else if (HID.state === 'on' && HID.rx) { hidSend([0x22, 0]); status('> автозапуск выключен'); }
+    });
+    auUpd(); r2.appendChild(au);
+    sBtn(r2, '[ ✖ Стереть с платы ]', () => { if (HID.state === 'on' && HID.rx) { hidSend([0x24]); status('> скрипт стёрт с платы'); } else status('> донгл не подключён — [ подключить ]'); });
+    // мини-поле записи
+    const rp = SB.querySelector('.recpad'), rpts = new Map();
+    rp.addEventListener('pointerdown', e => {
+      rp.setPointerCapture?.(e.pointerId); rpts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!rec) return;
+      recDown = performance.now(); recMoved = 0;
+    });
+    rp.addEventListener('pointermove', e => {
+      const p = rpts.get(e.pointerId); if (!p || !rec) return;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; recMoved += Math.hypot(dx, dy);
+      if (rpts.size >= 2) recAcc.w += dy / 12; else { recAcc.x += dx; recAcc.y += dy; }
+      if (performance.now() - recT > 60) { recT = performance.now(); recFlushMove(); }
+    });
+    const rpUp = e => {
+      if (!rpts.delete(e.pointerId)) return;
+      if (!rec) return;
+      recFlushMove();
+      if (performance.now() - recDown < 280 && recMoved < 10) { const now = performance.now(), gap = recLast ? Math.round(now - recLast) : 0; if (gap > 20) recLines.push('DELAY ' + gap); recLines.push(rpts.size >= 1 ? 'MOUSE RIGHT' : 'MOUSE LEFT'); recLast = now; }
+    };
+    rp.addEventListener('pointerup', rpUp); rp.addEventListener('pointercancel', rpUp);
+    const r3 = SB.querySelector('.sr3');
+    const rb = document.createElement('button'); rb.className = 'gear tab acb';
+    const rbUpd = () => { rb.textContent = btnLabel(rec ? '[ ■ стоп ]' : '[ ● запись ]'); rb.classList.toggle('on', rec); rp.classList.toggle('on', rec); };
+    rb.addEventListener('click', () => { rec = !rec; if (rec) { recLines = []; recLast = recT = performance.now(); } rbUpd(); });
+    rbUpd(); r3.appendChild(rb);
+    sBtn(r3, '[ вставить в скрипт ]', () => {
+      if (rec) { rec = false; rbUpd(); }
+      if (!recLines.length) { status('> нет записанных движений'); return; }
+      const add = recLines.join('\n'); scrCur().src = (ed.value ? ed.value.replace(/\s*$/, '') + '\n' : '') + add; ed.value = scrCur().src; recLines = []; scrSave(); scrStatus();
+    });
+    scrStatus();
+  }
+  window.scrRender = () => { if (sub === 2) scrRender(); };
+
   window.ledRender = () => { if (sub === 1) ledRender(); };
   showSub();
   hidRender();
@@ -3136,7 +3356,7 @@ function showRemote() {
     setTimeout(() => { sp.remove(); showRemote(); }, 320);
   };
   sp.addEventListener('click', finish);
-  const boot = ['krisa37™ ir-remote v1.35', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
+  const boot = ['krisa37™ ir-remote v1.37', 'loading nec table ........ [ok]', 'audio out ................ [ok]', 'decoding rat.png ......... [ok]'].join('\n');
   let i = 0;
   const tick = setInterval(() => { i += 3; $('boot').textContent = boot.slice(0, i); if (i >= boot.length) clearInterval(tick); }, 20);
   setTimeout(() => sp.classList.add('go'), 650);
