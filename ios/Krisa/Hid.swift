@@ -326,6 +326,8 @@ final class HidLink: NSObject, ObservableObject, CBCentralManagerDelegate, CBPer
     @discardableResult func keyDown(_ mods: UInt8, _ code: UInt8) -> Bool { send([0x05, mods, code]) }
     /// Отпустить то же сочетание.
     @discardableResult func keyUp(_ mods: UInt8, _ code: UInt8) -> Bool { send([0x06, mods, code]) }
+    /// Медиа/ТВ-клавиша (Consumer, 16-бит usage) — нажать и отпустить.
+    @discardableResult func consumer(_ usage: UInt16) -> Bool { send([0x09, UInt8(usage & 0xFF), UInt8((usage >> 8) & 0xFF)]) }
 
     /// Отпустить всё ([0x06]: клавиши и кнопки мыши) и снять залипшие модификаторы.
     func releaseAll() {
@@ -618,6 +620,8 @@ struct TouchpadPanel: View {
                 LedPanel(model: model)
             } else if sub == 2 {
                 HidScriptPanel(model: model)
+            } else if sub == 3 {
+                TvPanel(model: model)
             } else {
                 touchArea
             }
@@ -637,6 +641,7 @@ struct TouchpadPanel: View {
             subChip(0, "тачпад")
             subChip(1, "светодиод")
             subChip(2, "скрипт")
+            subChip(3, "ТВ")
         }
     }
 
@@ -1882,4 +1887,125 @@ struct HidScriptPanel: View {
 extension HidScript {
     /// Имя для подписей.
     var name: String { n }
+}
+
+/// Подвкладка «ТВ»: пульт телевизора/телефона — медиа-клавиши (Consumer) и крестовина навигации.
+struct TvPanel: View {
+    @ObservedObject var model: RemoteModel
+    @ObservedObject private var link = HidLink.shared
+
+    // Consumer usage (16-бит)
+    private static let power: UInt16 = 0x0030
+    private static let volUp: UInt16 = 0x00E9
+    private static let volDown: UInt16 = 0x00EA
+    private static let mute: UInt16 = 0x00E2
+    private static let play: UInt16 = 0x00CD
+    private static let stop: UInt16 = 0x00B7
+    private static let next: UInt16 = 0x00B5
+    private static let prev: UInt16 = 0x00B6
+    private static let home: UInt16 = 0x0223
+    private static let back: UInt16 = 0x0224
+    private static let menu: UInt16 = 0x0040
+    private static let chUp: UInt16 = 0x009C
+    private static let chDown: UInt16 = 0x009D
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 8) {
+                topRow
+                dpad
+                volRow
+                chRow
+                mediaRow
+                Text("Медиа-клавиши работают на ТВ/телефоне/ПК, подключённом к донглу. Нужна прошивка донгла 1.6 (C3 — 1.4).")
+                    .font(Term.ru(12)).foregroundColor(Term.dim)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    private func label(_ s: String) -> String {
+        if !(Term.prism || Term.blueprint) { return s }
+        var t: String = s
+        if t.hasPrefix("[") { t.removeFirst() }
+        if t.hasSuffix("]") { t.removeLast() }
+        return t.trimmingCharacters(in: .whitespaces)
+    }
+
+    private func cButton(_ title: String, _ usage: UInt16, height: CGFloat = 48) -> some View {
+        Button { run(link.consumer(usage)) } label: {
+            TabLabel(title: label(title), on: false, height: height, ruSize: 13, forceRu: true)
+        }
+    }
+
+    private func kButton(_ title: String, _ code: UInt8, height: CGFloat = 48) -> some View {
+        Button { run(link.key(0, code)) } label: {
+            TabLabel(title: label(title), on: false, height: height, ruSize: 15, forceRu: true)
+        }
+    }
+
+    /// Команда без подключения — подсказка в журнал.
+    private func run(_ ok: Bool) {
+        if !ok {
+            let msg: String = "> донгл не подключён — [ подключить ]"
+            if model.status != msg { model.say(msg) }
+        }
+    }
+
+    private var topRow: some View {
+        HStack(spacing: 6) {
+            cButton("[ ⏻ ]", TvPanel.power)
+            cButton("[ Home ]", TvPanel.home)
+            cButton("[ Назад ]", TvPanel.back)
+            cButton("[ Меню ]", TvPanel.menu)
+        }
+    }
+
+    /// Крестовина: ↑ / ← OK → / ↓.
+    private var dpad: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                kButton("↑", 0x52, height: 56).frame(width: 90)
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 6) {
+                kButton("←", 0x50, height: 56).frame(width: 90)
+                kButton("OK", 0x28, height: 56).frame(width: 90)
+                kButton("→", 0x4F, height: 56).frame(width: 90)
+            }
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                kButton("↓", 0x51, height: 56).frame(width: 90)
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var volRow: some View {
+        HStack(spacing: 6) {
+            cButton("[ Громче ]", TvPanel.volUp)
+            cButton("[ Тише ]", TvPanel.volDown)
+            cButton("[ Без звука ]", TvPanel.mute)
+        }
+    }
+
+    private var chRow: some View {
+        HStack(spacing: 6) {
+            cButton("[ Канал + ]", TvPanel.chUp)
+            cButton("[ Канал − ]", TvPanel.chDown)
+        }
+    }
+
+    private var mediaRow: some View {
+        HStack(spacing: 6) {
+            cButton("[ ⏮ ]", TvPanel.prev)
+            cButton("[ ⏯ ]", TvPanel.play)
+            cButton("[ ⏹ ]", TvPanel.stop)
+            cButton("[ ⏭ ]", TvPanel.next)
+        }
+    }
 }
