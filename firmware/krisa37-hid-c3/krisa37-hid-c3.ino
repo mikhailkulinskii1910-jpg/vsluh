@@ -23,7 +23,7 @@
 #include "types.h"
 #include "keymap.h"
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 #define SERVICE_UUID "6b7e0001-3a1f-4c7e-9d2a-6b72697361a0"
 #define RX_UUID      "6b7e0002-3a1f-4c7e-9d2a-6b72697361a0"
 #define INFO_UUID    "6b7e0003-3a1f-4c7e-9d2a-6b72697361a0"
@@ -51,6 +51,12 @@ BLEServer *server;
 BLECharacteristic *info, *kbIn, *mouseIn;
 Preferences prefs;
 QueueHandle_t queue;
+
+/* Скрипт (Ducky/макрос) — хранится на плате, проигрывается по команде или при включении. */
+static const size_t SCRIPT_MAX = 2048;
+uint8_t scriptBuf[SCRIPT_MAX];
+size_t scriptLen = 0, scriptRecv = 0;
+bool scriptAuto = false, scriptRan = false;
 volatile int phoneConn = -1;                    // conn_id телефона, приславшего AUTH
 volatile AuthState auth = AUTH_NEED;
 uint8_t token[8];
@@ -62,7 +68,7 @@ bool boardConnected() { return server && (int)server->getConnectedCount() > (pho
 void publishInfo() {
   if (!info) return;
   String s = String("krisa37-hid-c3 ") + VERSION + " usb=" + (boardConnected() ? "1" : "0") + " auth=" +
-             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=mono";
+             (auth == AUTH_OK ? "ok" : auth == AUTH_DENIED ? "denied" : "need") + " led=mono scr=" + (scriptLen > 0 ? "1" : "0");
   info->setValue(s.c_str());
   if (phoneConn >= 0) info->notify();
 }
@@ -167,6 +173,34 @@ bool userLed(uint32_t t) {
   return false;
 }
 
+void mclick(uint8_t mask, uint8_t cnt) {
+  for (uint8_t k = 0; k < cnt && k < 10; k++) {
+    uint8_t keep = mouseButtons;
+    mouseButtons = keep | (mask & 7); mouseReport(0, 0, 0, 0); delay(20);
+    mouseButtons = keep; mouseReport(0, 0, 0, 0); delay(40);
+  }
+}
+
+void runBytecode(const uint8_t *b, size_t n) {
+  size_t i = 0;
+  while (i < n) {
+    uint8_t op = b[i++];
+    if (op == 0x01) { if (i >= n) break; uint8_t len = b[i++]; if (i + len > n) len = n - i; typeUtf8(b + i, len); i += len; }
+    else if (op == 0x02) { if (i + 2 > n) break; tap(b[i], b[i + 1]); i += 2; }
+    else if (op == 0x03) { if (i + 2 > n) break; uint32_t ms = b[i] | (b[i + 1] << 8); i += 2; uint32_t e = millis() + ms; while (millis() < e) delay(5); }
+    else if (op == 0x04) { if (i + 2 > n) break; mouseReport((int8_t)b[i], (int8_t)b[i + 1], 0, 0); i += 2; delay(6); }
+    else if (op == 0x05) { if (i + 2 > n) break; mclick(b[i], b[i + 1]); i += 2; }
+    else if (op == 0x08) { if (i + 1 > n) break; mouseReport(0, 0, (int8_t)b[i], 0); i += 1; delay(6); }
+    else break;
+  }
+}
+
+void scriptSave() {
+  scriptLen = scriptRecv;
+  prefs.putBytes("scr", scriptBuf, scriptLen);
+  prefs.putUChar("scrauto", scriptAuto ? 1 : 0);
+}
+
 void handle(const Packet &p) {
   uint8_t t = p.data[0];
   if (t == 0x10) {
@@ -207,6 +241,11 @@ void handle(const Packet &p) {
     case 0x08:
       if (p.len >= 6) { ledMode = p.data[1] > 4 ? 0 : p.data[1]; ledBright = max<uint8_t>(p.data[5], 8); ledSaveAt = millis() + 2000; }
       break;
+    case 0x20: scriptRecv = 0; break;
+    case 0x21: { size_t c = p.len - 1; if (scriptRecv + c <= SCRIPT_MAX) { memcpy(scriptBuf + scriptRecv, p.data + 1, c); scriptRecv += c; } break; }
+    case 0x22: scriptAuto = p.len >= 2 && p.data[1]; scriptSave(); publishInfo(); break;
+    case 0x23: runBytecode(scriptBuf, scriptLen); break;
+    case 0x24: scriptLen = scriptRecv = 0; scriptAuto = false; prefs.remove("scr"); prefs.remove("scrauto"); publishInfo(); break;
   }
 }
 
@@ -219,6 +258,9 @@ void setup() {
   hasToken = prefs.getBytes("token", token, 8) == 8;
   uint8_t ls[2];
   if (prefs.getBytes("led", ls, 2) == 2) { ledMode = ls[0] > 4 ? 0 : ls[0]; ledBright = ls[1]; }
+  size_t sl = prefs.getBytesLength("scr");
+  if (sl > 0 && sl <= SCRIPT_MAX) { scriptLen = prefs.getBytes("scr", scriptBuf, sl); scriptRecv = scriptLen; }
+  scriptAuto = prefs.getUChar("scrauto", 0) == 1;
   queue = xQueueCreate(64, sizeof(Packet));
 
   BLEDevice::init("krisa37 HID");
@@ -281,6 +323,7 @@ void loop() {
 
   if (ledSaveAt && millis() > ledSaveAt) { uint8_t ls[2] = {ledMode, ledBright}; prefs.putBytes("led", ls, 2); ledSaveAt = 0; }
   uint32_t t = millis();
+  if (!scriptRan && scriptAuto && scriptLen > 0 && t > 4000) { scriptRan = true; runBytecode(scriptBuf, scriptLen); }
   if (userLed(t)) {}
   else if (phoneConn < 0) led((t / 600) % 2);
   else if (auth == AUTH_DENIED) led((t / 120) % 2);
